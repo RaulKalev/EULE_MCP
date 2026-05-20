@@ -45,7 +45,7 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_list_schedules` | All schedules with category and field names |
 | `revit_get_element_parameters` | All parameters for given element IDs or current selection |
 | `revit_count_elements` | Element counts grouped by Category or FamilyAndType, with optional category filter |
-| `revit_group_by_parameter` | Groups elements by a named parameter value with counts; partial name match (e.g. `ELENEA_Nimetus` hits `ELENEA_ÜLD 001_Nimetus`); checks type parameters with caching |
+| `revit_group_by_parameter` | Groups elements by a named parameter value with counts; partial name match (e.g. `ELENEA_Nimetus` hits `ELENEA_ÜLD 001_Nimetus`); checks instance then type parameters with per-type caching |
 
 ---
 
@@ -71,20 +71,41 @@ The **MCP Connector** window has two tabs:
 ## Build
 
 ```bash
+# Release
 dotnet build RevitMCP.slnx -c Release
+
+# Debug (faster — recommended during development)
+dotnet build RevitMCP.Addin/RevitMCP.Addin.csproj -c Debug
 ```
+
+`RevitMCP.Addin.dll` is a **single self-contained DLL** — all dependencies (MaterialDesignThemes, Newtonsoft.Json, etc.) are embedded via Costura.Fody, so no extra files need to be deployed.
 
 ---
 
-## Install
+## Loading the Add-in
 
-### 1. Revit Add-in
+### Option A — ricaun AppLoader (recommended for development)
+
+Costura.Fody embeds all dependencies, so the addin is a true single-DLL plugin compatible with [ricaun.Revit.AppLoader](https://github.com/ricaun-io/ricaun.Revit.AppLoader) and similar hot-reload tools.
+
+Point AppLoader at:
+```
+RevitMCP.Addin\bin\Debug\net8.0-windows\RevitMCP.Addin.dll
+```
+
+AppLoader shadow-copies the DLL so the file stays writable — rebuild while Revit is running, hit Reload, done. No Revit restart needed.
+
+### Option B — `.addin` manifest (permanent install)
 
 Run `RevitMCP.Config\Install\Install-RevitMCP-Addin.bat`
 
-This creates the `.addin` manifest in `%ProgramData%\Autodesk\Revit\Addins\2026\`.
+This creates a manifest in `%ProgramData%\Autodesk\Revit\Addins\2026\` that points to the Release build output. Revit loads the plugin automatically on startup.
 
-### 2. Claude Code MCP Server
+> **Note:** Don't use both options at the same time — Revit will load the plugin twice.
+
+---
+
+## Claude Code MCP Server
 
 Run `RevitMCP.Config\Install\Install-Claude-MCP.bat`
 
@@ -95,21 +116,23 @@ This registers `RevitMCP.Bridge.exe` as a user-scoped MCP server named `revit-mc
 ## Usage
 
 1. Open Revit 2026 and load a model
-2. On the **RK Tools** ribbon tab, click **MCP Connector**
-3. Click **Start Connector** in the window
-4. In Claude Code, ask anything about your model:
+2. Load the addin (via AppLoader or the `.addin` manifest)
+3. On the **RK Tools** ribbon tab, click **MCP Connector**
+4. Click **Start Connector** in the window
+5. In Claude Code, ask anything about your model:
 
 ```
 How many walls are in this model?
 List all floor plan views on sheets.
 What parameters does element 12345 have?
+Group all fire alarm devices by the ELENEA_Nimetus parameter.
 ```
 
 ---
 
 ## Logging
 
-Activity is logged to `%AppData%\RKTools\RevitMCP\Logs\{date}.jsonl` — one JSON line per tool call.
+Activity is logged to `%AppData%\RKTools\RevitMCP\Logs\{date}.jsonl` — one JSON line per tool call. The **Activity** tab in the MCP window shows a live view; click **Open Log Folder** to browse the raw files.
 
 ---
 
@@ -123,8 +146,8 @@ EULE_MCP/
 │   ├── App.cs           IExternalApplication entry point
 │   ├── Commands/        OpenMcpWindowCommand
 │   ├── Services/        PipeServer, ExternalEventHandler, ConnectorService
-│   ├── Tools/           One file per MCP tool
-│   ├── UI/              WPF window + ViewModels + themes
+│   ├── Tools/           One file per MCP tool (8 tools)
+│   ├── UI/              WPF window (Status + Activity tabs) + ViewModels + themes
 │   └── Interfaces/      IRevitMcpTool
 ├── RevitMCP.Bridge/
 │   ├── Program.cs       MCP host setup
