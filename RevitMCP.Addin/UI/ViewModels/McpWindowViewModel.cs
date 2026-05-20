@@ -1,12 +1,18 @@
+using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Input;
+using RevitMCP.Addin.Logging;
 using RevitMCP.Addin.Services;
+using RevitMCP.Core.Logging;
 
 namespace RevitMCP.Addin.UI.ViewModels;
 
 public class McpWindowViewModel : BaseViewModel
 {
     private readonly ConnectorService _connector;
+    private readonly ActivityLogger _logger;
 
     private bool _isRunning;
     private string _statusText = "Stopped";
@@ -18,17 +24,25 @@ public class McpWindowViewModel : BaseViewModel
     private int _selectedElementCount;
     private bool _isDarkTheme = true;
 
-    public McpWindowViewModel(ConnectorService connector)
+    public McpWindowViewModel(ConnectorService connector, ActivityLogger logger)
     {
         _connector = connector;
+        _logger = logger;
+
         _connector.StatusChanged += OnConnectorStatusChanged;
+        _logger.EntryLogged += OnEntryLogged;
+
+        ActivityLog.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoActivity));
 
         StartCommand = new RelayCommand(_ => _connector.Start(), _ => !_isRunning);
         StopCommand = new RelayCommand(_ => _connector.Stop(), _ => _isRunning);
         PanicStopCommand = new RelayCommand(_ => _connector.PanicStop());
         ToggleThemeCommand = new RelayCommand(_ => ToggleTheme());
+        OpenLogFolderCommand = new RelayCommand(_ => OpenLogFolder());
+        ClearActivityLogCommand = new RelayCommand(_ => ActivityLog.Clear());
     }
 
+    // ── Status tab ────────────────────────────────────────────────────────────
     public bool IsRunning { get => _isRunning; private set => SetProperty(ref _isRunning, value); }
     public string StatusText { get => _statusText; private set => SetProperty(ref _statusText, value); }
     public string PipeName { get => _pipeName; set => SetProperty(ref _pipeName, value); }
@@ -39,11 +53,19 @@ public class McpWindowViewModel : BaseViewModel
     public int SelectedElementCount { get => _selectedElementCount; set => SetProperty(ref _selectedElementCount, value); }
     public bool IsDarkTheme { get => _isDarkTheme; private set => SetProperty(ref _isDarkTheme, value); }
 
+    // ── Activity tab ──────────────────────────────────────────────────────────
+    public ObservableCollection<ActivityLogItem> ActivityLog { get; } = [];
+    public bool HasNoActivity => ActivityLog.Count == 0;
+
+    // ── Commands ──────────────────────────────────────────────────────────────
     public ICommand StartCommand { get; }
     public ICommand StopCommand { get; }
     public ICommand PanicStopCommand { get; }
     public ICommand ToggleThemeCommand { get; }
+    public ICommand OpenLogFolderCommand { get; }
+    public ICommand ClearActivityLogCommand { get; }
 
+    // ── Handlers ──────────────────────────────────────────────────────────────
     private void OnConnectorStatusChanged(bool running)
     {
         Application.Current?.Dispatcher.Invoke(() =>
@@ -51,6 +73,27 @@ public class McpWindowViewModel : BaseViewModel
             IsRunning = running;
             StatusText = running ? "Running" : "Stopped";
             CommandManager.InvalidateRequerySuggested();
+        });
+    }
+
+    private void OnEntryLogged(LogEntry entry)
+    {
+        Application.Current?.Dispatcher.Invoke(() =>
+        {
+            ActivityLog.Insert(0, new ActivityLogItem
+            {
+                Time = entry.Timestamp.ToString("HH:mm:ss"),
+                Tool = entry.Tool,
+                Status = entry.Status,
+                DurationMs = entry.DurationMs,
+                Message = string.IsNullOrWhiteSpace(entry.Message) ? "—" : entry.Message,
+                IsSuccess = entry.Status == "Success",
+                IsError = entry.Status == "Failed"
+            });
+
+            // Keep the list bounded so long sessions don't leak memory.
+            while (ActivityLog.Count > 200)
+                ActivityLog.RemoveAt(ActivityLog.Count - 1);
         });
     }
 
@@ -64,6 +107,13 @@ public class McpWindowViewModel : BaseViewModel
         var existing = resources.FirstOrDefault(d => d.Source?.OriginalString.Contains("Theme.xaml") == true);
         if (existing != null) resources.Remove(existing);
         resources.Add(new System.Windows.ResourceDictionary { Source = themeUri });
+    }
+
+    private void OpenLogFolder()
+    {
+        var dir = _logger.LogDirectory;
+        if (Directory.Exists(dir))
+            Process.Start(new ProcessStartInfo("explorer.exe", dir) { UseShellExecute = true });
     }
 
     public void UpdateFromRevitContext(string modelTitle, string activeView, bool isWorkshared, string username, int selectedCount)

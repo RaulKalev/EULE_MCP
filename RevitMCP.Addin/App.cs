@@ -27,12 +27,13 @@ public class App : IExternalApplication
             handler.RegisterTool(new ListSchedulesTool());
             handler.RegisterTool(new GetElementParametersTool());
             handler.RegisterTool(new CountElementsTool());
+            handler.RegisterTool(new GroupByParameterTool());
 
             var eventService = new ExternalEventService(handler);
             var pipeServer = new PipeServer("RKTools.RevitMCP.2026", eventService, logger);
             var connector = new ConnectorService(pipeServer);
             _connector = connector;
-            _viewModel = new McpWindowViewModel(connector);
+            _viewModel = new McpWindowViewModel(connector, logger);
 
             // Ribbon
             AddRibbonButton(application);

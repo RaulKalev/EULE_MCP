@@ -80,6 +80,22 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    [McpServerTool(Name = "revit_group_by_parameter", ReadOnly = true),
+     Description("Groups model elements by a parameter value and returns counts. parameterName supports partial matching (e.g. 'ELENEA_Nimetus' matches 'ELENEA_ÜLD 001_Nimetus'). Optionally filter by category name.")]
+    public async Task<string> GroupByParameter(
+        [Description("Parameter name or partial name to match (case-insensitive)")] string parameterName,
+        [Description("Optional category name to restrict search (e.g. 'Fire Alarm Devices')")] string? category = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["parameterName"] = parameterName,
+            ["category"] = category ?? string.Empty
+        };
+        var result = await pipeClient.SendAsync("revit_group_by_parameter", args, "Claude Code", cancellationToken);
+        return FormatResult(result);
+    }
+
     private static string FormatResult(McpToolResult result)
     {
         if (result.Success && result.Data != null)

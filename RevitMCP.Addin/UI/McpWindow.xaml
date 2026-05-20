@@ -5,9 +5,9 @@
         xmlns:converters="clr-namespace:RevitMCP.Addin.UI.Converters"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         Title="Revit MCP Connector"
-        Width="300"
+        Width="380"
         SizeToContent="Height"
-        MinWidth="260"
+        MinWidth="300"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
@@ -40,146 +40,272 @@
             <!-- Title Bar -->
             <local:TitleBar Grid.Row="0" />
 
-            <!-- Content -->
-            <StackPanel Grid.Row="1" Margin="12,8,12,12">
+            <!-- Tab Control -->
+            <TabControl Grid.Row="1" Style="{StaticResource McpTabControlStyle}">
 
-                <!-- Status Chip -->
-                <Border CornerRadius="12"
-                        Padding="10,4"
-                        HorizontalAlignment="Left"
-                        Margin="0,0,0,10">
-                    <Border.Style>
-                        <Style TargetType="Border">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsRunning}" Value="True">
-                                    <Setter Property="Background" Value="{DynamicResource StatusRunningBrush}" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding IsRunning}" Value="False">
-                                    <Setter Property="Background" Value="{DynamicResource StatusStoppedBrush}" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-                    <TextBlock Text="{Binding StatusText}"
-                               Foreground="White"
-                               FontSize="11"
-                               FontWeight="SemiBold" />
-                </Border>
+                <!-- ═══════════════════  STATUS TAB  ═══════════════════ -->
+                <TabItem Header="STATUS" Style="{StaticResource McpTabItemStyle}">
+                    <StackPanel Margin="12,10,12,12">
 
-                <!-- Connection Info -->
-                <TextBlock Text="CONNECTION" Style="{StaticResource SectionHeaderStyle}" />
-                <Grid Margin="0,0,0,8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Pipe: " Style="{StaticResource StatusLabelStyle}" />
-                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding PipeName}"
-                               Style="{StaticResource StatusLabelStyle}"
-                               Foreground="{DynamicResource ForegroundBrush}" />
-
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Model: " Style="{StaticResource StatusLabelStyle}" Margin="0,3,0,0" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ModelTitle}"
-                               Style="{StaticResource StatusLabelStyle}"
-                               Foreground="{DynamicResource ForegroundBrush}"
-                               TextTrimming="CharacterEllipsis" Margin="0,3,0,0" />
-
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="View: " Style="{StaticResource StatusLabelStyle}" Margin="0,3,0,0" />
-                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ActiveView}"
-                               Style="{StaticResource StatusLabelStyle}"
-                               Foreground="{DynamicResource ForegroundBrush}"
-                               TextTrimming="CharacterEllipsis" Margin="0,3,0,0" />
-
-                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Workshared: " Style="{StaticResource StatusLabelStyle}" Margin="0,3,0,0" />
-                    <TextBlock Grid.Row="3" Grid.Column="1"
-                               Foreground="{DynamicResource ForegroundBrush}" Margin="0,3,0,0">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock" BasedOn="{StaticResource StatusLabelStyle}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsWorkshared}" Value="True">
-                                        <Setter Property="Text" Value="Yes" />
-                                    </DataTrigger>
-                                    <DataTrigger Binding="{Binding IsWorkshared}" Value="False">
-                                        <Setter Property="Text" Value="No" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-
-                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Selected: " Style="{StaticResource StatusLabelStyle}" Margin="0,3,0,0" />
-                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedElementCount}"
-                               Style="{StaticResource StatusLabelStyle}"
-                               Foreground="{DynamicResource ForegroundBrush}" Margin="0,3,0,0" />
-                </Grid>
-
-                <!-- Permission Mode -->
-                <TextBlock Text="PERMISSION MODE" Style="{StaticResource SectionHeaderStyle}" />
-                <Border Background="{DynamicResource SecondaryBackgroundBrush}"
-                        CornerRadius="4" Padding="8,5" Margin="0,0,0,10">
-                    <StackPanel>
-                        <TextBlock Text="Read-Only: Allowed"
-                                   Foreground="{DynamicResource StatusRunningBrush}"
-                                   FontSize="11" />
-                        <TextBlock Text="Approval Required: Enabled"
-                                   Foreground="{DynamicResource ForegroundBrush}"
-                                   FontSize="11" Margin="0,2,0,0" />
-                        <TextBlock Text="Direct Edit: Disabled"
-                                   Foreground="{DynamicResource StatusStoppedBrush}"
-                                   FontSize="11" Margin="0,2,0,0" />
-                    </StackPanel>
-                </Border>
-
-                <!-- Controls -->
-                <TextBlock Text="CONTROLS" Style="{StaticResource SectionHeaderStyle}" />
-                <UniformGrid Columns="2" Margin="0,0,0,6">
-                    <Button Content="Start Connector"
-                            Command="{Binding StartCommand}"
-                            Style="{StaticResource ActionButtonStyle}"
-                            Margin="0,0,4,0" />
-                    <Button Content="Stop Connector"
-                            Command="{Binding StopCommand}"
-                            Style="{StaticResource ActionButtonStyle}"
-                            Margin="4,0,0,0" />
-                </UniformGrid>
-                <Button Content="⚡ Panic Stop — Reject All &amp; Disconnect"
-                        Command="{Binding PanicStopCommand}"
-                        Style="{StaticResource DangerButtonStyle}"
-                        HorizontalAlignment="Stretch"
-                        Margin="0,0,0,6" />
-
-                <!-- Theme Toggle -->
-                <Button Command="{Binding ToggleThemeCommand}"
-                        Style="{StaticResource ActionButtonStyle}"
-                        HorizontalAlignment="Right"
-                        Padding="8,4">
-                    <Button.Content>
-                        <TextBlock FontSize="10" Foreground="{DynamicResource IconForegroundBrush}">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
+                        <!-- Status Chip -->
+                        <Border CornerRadius="12"
+                                Padding="10,4"
+                                HorizontalAlignment="Left"
+                                Margin="0,0,0,10">
+                            <Border.Style>
+                                <Style TargetType="Border">
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsDarkTheme}" Value="True">
-                                            <Setter Property="Text" Value="Switch to Light" />
+                                        <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource StatusRunningBrush}" />
                                         </DataTrigger>
-                                        <DataTrigger Binding="{Binding IsDarkTheme}" Value="False">
-                                            <Setter Property="Text" Value="Switch to Dark" />
+                                        <DataTrigger Binding="{Binding IsRunning}" Value="False">
+                                            <Setter Property="Background" Value="{DynamicResource StatusStoppedBrush}" />
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                    </Button.Content>
-                </Button>
+                            </Border.Style>
+                            <TextBlock Text="{Binding StatusText}"
+                                       Foreground="White"
+                                       FontSize="11"
+                                       FontWeight="SemiBold" />
+                        </Border>
 
-            </StackPanel>
+                        <!-- Connection Info -->
+                        <TextBlock Text="CONNECTION" Style="{StaticResource SectionHeaderStyle}" />
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Pipe: " Style="{StaticResource StatusLabelStyle}" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding PipeName}"
+                                       Style="{StaticResource StatusLabelStyle}"
+                                       Foreground="{DynamicResource ForegroundBrush}" />
+
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Model: " Style="{StaticResource StatusLabelStyle}" Margin="0,3,0,0" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ModelTitle}"
+                                       Style="{StaticResource StatusLabelStyle}"
+                                       Foreground="{DynamicResource ForegroundBrush}"
+                                       TextTrimming="CharacterEllipsis" Margin="0,3,0,0" />
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="View: " Style="{StaticResource StatusLabelStyle}" Margin="0,3,0,0" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ActiveView}"
+                                       Style="{StaticResource StatusLabelStyle}"
+                                       Foreground="{DynamicResource ForegroundBrush}"
+                                       TextTrimming="CharacterEllipsis" Margin="0,3,0,0" />
+
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Workshared: " Style="{StaticResource StatusLabelStyle}" Margin="0,3,0,0" />
+                            <TextBlock Grid.Row="3" Grid.Column="1"
+                                       Foreground="{DynamicResource ForegroundBrush}" Margin="0,3,0,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource StatusLabelStyle}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsWorkshared}" Value="True">
+                                                <Setter Property="Text" Value="Yes" />
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsWorkshared}" Value="False">
+                                                <Setter Property="Text" Value="No" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+
+                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Selected: " Style="{StaticResource StatusLabelStyle}" Margin="0,3,0,0" />
+                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedElementCount}"
+                                       Style="{StaticResource StatusLabelStyle}"
+                                       Foreground="{DynamicResource ForegroundBrush}" Margin="0,3,0,0" />
+                        </Grid>
+
+                        <!-- Permission Mode -->
+                        <TextBlock Text="PERMISSION MODE" Style="{StaticResource SectionHeaderStyle}" />
+                        <Border Background="{DynamicResource SecondaryBackgroundBrush}"
+                                CornerRadius="4" Padding="8,5" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Text="Read-Only: Allowed"
+                                           Foreground="{DynamicResource StatusRunningBrush}"
+                                           FontSize="11" />
+                                <TextBlock Text="Approval Required: Enabled"
+                                           Foreground="{DynamicResource ForegroundBrush}"
+                                           FontSize="11" Margin="0,2,0,0" />
+                                <TextBlock Text="Direct Edit: Disabled"
+                                           Foreground="{DynamicResource StatusStoppedBrush}"
+                                           FontSize="11" Margin="0,2,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Controls -->
+                        <TextBlock Text="CONTROLS" Style="{StaticResource SectionHeaderStyle}" />
+                        <UniformGrid Columns="2" Margin="0,0,0,6">
+                            <Button Content="Start Connector"
+                                    Command="{Binding StartCommand}"
+                                    Style="{StaticResource ActionButtonStyle}"
+                                    Margin="0,0,4,0" />
+                            <Button Content="Stop Connector"
+                                    Command="{Binding StopCommand}"
+                                    Style="{StaticResource ActionButtonStyle}"
+                                    Margin="4,0,0,0" />
+                        </UniformGrid>
+                        <Button Content="⚡ Panic Stop — Reject All &amp; Disconnect"
+                                Command="{Binding PanicStopCommand}"
+                                Style="{StaticResource DangerButtonStyle}"
+                                HorizontalAlignment="Stretch"
+                                Margin="0,0,0,6" />
+
+                        <!-- Theme Toggle -->
+                        <Button Command="{Binding ToggleThemeCommand}"
+                                Style="{StaticResource ActionButtonStyle}"
+                                HorizontalAlignment="Right"
+                                Padding="8,4">
+                            <Button.Content>
+                                <TextBlock FontSize="10" Foreground="{DynamicResource IconForegroundBrush}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsDarkTheme}" Value="True">
+                                                    <Setter Property="Text" Value="Switch to Light" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsDarkTheme}" Value="False">
+                                                    <Setter Property="Text" Value="Switch to Dark" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Button.Content>
+                        </Button>
+
+                    </StackPanel>
+                </TabItem>
+
+                <!-- ═══════════════════  ACTIVITY TAB  ═══════════════════ -->
+                <TabItem Header="ACTIVITY" Style="{StaticResource McpTabItemStyle}">
+                    <DockPanel Margin="12,10,12,12">
+
+                        <!-- Bottom buttons (declared first so DockPanel fills remaining for DataGrid) -->
+                        <UniformGrid DockPanel.Dock="Bottom" Columns="2" Margin="0,6,0,0">
+                            <Button Content="Open Log Folder"
+                                    Command="{Binding OpenLogFolderCommand}"
+                                    Style="{StaticResource ActionButtonStyle}"
+                                    Margin="0,0,4,0" />
+                            <Button Content="Clear"
+                                    Command="{Binding ClearActivityLogCommand}"
+                                    Style="{StaticResource ActionButtonStyle}"
+                                    Margin="4,0,0,0" />
+                        </UniformGrid>
+
+                        <!-- DataGrid (fills remaining space) -->
+                        <Grid Height="210">
+                            <DataGrid ItemsSource="{Binding ActivityLog}"
+                                      Style="{StaticResource ActivityDataGridStyle}"
+                                      CellStyle="{StaticResource ActivityCellStyle}"
+                                      RowStyle="{StaticResource ActivityRowStyle}"
+                                      ColumnHeaderStyle="{StaticResource ActivityColumnHeaderStyle}"
+                                      AutoGenerateColumns="False"
+                                      IsReadOnly="True">
+                                <DataGrid.Columns>
+
+                                    <!-- Time -->
+                                    <DataGridTextColumn Header="Time"
+                                                        Binding="{Binding Time}"
+                                                        Width="60">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Padding" Value="6,0" />
+                                                <Setter Property="VerticalAlignment" Value="Center" />
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+
+                                    <!-- Tool name -->
+                                    <DataGridTextColumn Header="Tool"
+                                                        Binding="{Binding Tool}"
+                                                        Width="*">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Padding" Value="6,0" />
+                                                <Setter Property="VerticalAlignment" Value="Center" />
+                                                <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                                                <Setter Property="ToolTip" Value="{Binding Message}" />
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+
+                                    <!-- Duration -->
+                                    <DataGridTextColumn Header="ms"
+                                                        Binding="{Binding DurationMs}"
+                                                        Width="40">
+                                        <DataGridTextColumn.ElementStyle>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Padding" Value="0,0,6,0" />
+                                                <Setter Property="VerticalAlignment" Value="Center" />
+                                                <Setter Property="HorizontalAlignment" Value="Right" />
+                                            </Style>
+                                        </DataGridTextColumn.ElementStyle>
+                                    </DataGridTextColumn>
+
+                                    <!-- Status (coloured) -->
+                                    <DataGridTemplateColumn Header="Status" Width="55">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Status}"
+                                                           Padding="6,0"
+                                                           VerticalAlignment="Center">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Foreground" Value="{DynamicResource IconForegroundBrush}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsSuccess}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource StatusRunningBrush}" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsError}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource StatusStoppedBrush}" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <!-- Empty state overlay -->
+                            <TextBlock Text="No activity yet — run a tool to see entries here."
+                                       Foreground="{DynamicResource IconForegroundBrush}"
+                                       FontSize="11"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"
+                                       Margin="20,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasNoActivity}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+
+                    </DockPanel>
+                </TabItem>
+
+            </TabControl>
         </Grid>
     </Border>
 </Window>

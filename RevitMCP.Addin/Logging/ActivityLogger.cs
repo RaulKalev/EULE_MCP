@@ -49,6 +49,12 @@ public class ActivityLogger
         await AppendEntryAsync(entry);
     }
 
+    /// <summary>
+    /// Fired on the thread-pool after each entry is written to disk.
+    /// Subscribers must marshal to the UI thread themselves.
+    /// </summary>
+    public event Action<LogEntry>? EntryLogged;
+
     private async Task AppendEntryAsync(LogEntry entry)
     {
         var filePath = Path.Combine(_logDir, $"{DateTime.Today:yyyy-MM-dd}.jsonl");
@@ -63,5 +69,10 @@ public class ActivityLogger
         {
             _lock.Release();
         }
+
+        // Fire after releasing the lock so subscribers never deadlock the writer.
+        EntryLogged?.Invoke(entry);
     }
+
+    public string LogDirectory => _logDir;
 }
