@@ -1,0 +1,11 @@
+{
+  "tools": [
+    {
+      "name": "revit_get_connection_status",
+      "enabled": true,
+      "permission": "ReadOnly",
+      "category": "Connection",
+      "description": "Returns current Revit connection and document status."
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "pipeName": "RKTools.RevitMCP.2026",
+  "startConnectorOnRevitStartup": false,
+  "defaultPermissionMode": "ApprovalRequired",
+  "allowDirectEdit": false,
+  "logLevel": "Info",
+  "localOnly": true
+}
