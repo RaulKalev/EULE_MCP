@@ -45,6 +45,18 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_list_schedules` | All schedules with category and field names |
 | `revit_get_element_parameters` | All parameters for given element IDs or current selection |
 | `revit_count_elements` | Element counts grouped by Category or FamilyAndType, with optional category filter |
+| `revit_group_by_parameter` | Groups elements by a named parameter value with counts; partial name match (e.g. `ELENEA_Nimetus` hits `ELENEA_ÜLD 001_Nimetus`); checks type parameters with caching |
+
+---
+
+## MCP Window
+
+The **MCP Connector** window has two tabs:
+
+| Tab | Contents |
+|-----|----------|
+| **Status** | Running/Stopped chip, pipe name, active model, active view, worksharing flag, selected element count, Start/Stop/Panic controls, theme toggle |
+| **Activity** | Live DataGrid of tool call history — Time, Tool, Duration (ms), Status (colour-coded); row tooltip shows the result message. "Open Log Folder" and "Clear" buttons at the bottom |
 
 ---
 
