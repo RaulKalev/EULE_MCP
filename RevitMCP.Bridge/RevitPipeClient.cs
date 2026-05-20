@@ -2,6 +2,7 @@ using System.IO;
 using System.IO.Pipes;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
+using RevitMCP.Core.Configuration;
 using RevitMCP.Core.Models;
 
 namespace RevitMCP.Bridge;
@@ -16,25 +17,26 @@ public class RevitPipeClient
     private readonly string _pipeName;
     private readonly int _connectTimeoutMs;
     private readonly int _requestTimeoutMs;
+    private readonly string _clientName;
 
     public RevitPipeClient(IConfiguration config)
     {
-        _pipeName = config["RevitMCP:PipeName"] ?? "RKTools.RevitMCP.2026";
-        _connectTimeoutMs = int.TryParse(config["RevitMCP:ConnectTimeoutMs"], out var ct) ? ct : 5_000;
-        _requestTimeoutMs = int.TryParse(config["RevitMCP:RequestTimeoutMs"], out var rt) ? rt : 30_000;
+        _pipeName = config["RevitMCP:PipeName"] ?? RevitMcpDefaults.PipeName;
+        _connectTimeoutMs = int.TryParse(config["RevitMCP:ConnectTimeoutMs"], out var ct) ? ct : RevitMcpDefaults.ConnectTimeoutMs;
+        _requestTimeoutMs = int.TryParse(config["RevitMCP:RequestTimeoutMs"], out var rt) ? rt : RevitMcpDefaults.RequestTimeoutMs;
+        _clientName = config["RevitMCP:ClientName"] ?? RevitMcpDefaults.ClientName;
     }
 
     public async Task<McpToolResult> SendAsync(
         string toolName,
         Dictionary<string, object?> arguments,
-        string clientName = "Claude Code",
         CancellationToken cancellationToken = default)
     {
         var request = new McpToolRequest
         {
             ToolName = toolName,
             Arguments = arguments,
-            ClientName = clientName
+            ClientName = _clientName
         };
 
         using var pipe = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);

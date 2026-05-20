@@ -3,6 +3,7 @@ using RevitMCP.Addin.Logging;
 using RevitMCP.Addin.Services;
 using RevitMCP.Addin.Tools;
 using RevitMCP.Addin.UI.ViewModels;
+using RevitMCP.Core.Configuration;
 
 namespace RevitMCP.Addin;
 
@@ -30,8 +31,8 @@ public class App : IExternalApplication
             handler.RegisterTool(new GroupByParameterTool());
 
             var eventService = new ExternalEventService(handler);
-            var pipeServer = new PipeServer("RKTools.RevitMCP.2026", eventService, logger);
-            var connector = new ConnectorService(pipeServer);
+            var pipeServer = new PipeServer(RevitMcpDefaults.PipeName, eventService, logger);
+            var connector = new ConnectorService(pipeServer, eventService);
             _connector = connector;
             _viewModel = new McpWindowViewModel(connector, logger);
 

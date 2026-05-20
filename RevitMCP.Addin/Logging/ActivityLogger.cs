@@ -18,7 +18,7 @@ public class ActivityLogger
         Directory.CreateDirectory(_logDir);
     }
 
-    public async Task WriteAsync(McpToolRequest request, McpToolResult result)
+    public async Task WriteAsync(McpToolRequest request, McpToolResult result, RevitDocumentContext? context = null)
     {
         var entry = new LogEntry
         {
@@ -34,6 +34,16 @@ public class ActivityLogger
             Warnings = result.Warnings,
             Errors = result.Errors
         };
+
+        if (context != null)
+        {
+            entry.RevitVersion = context.RevitVersion;
+            entry.Model = context.ModelTitle;
+            entry.CentralPath = context.CentralPath;
+            entry.ActiveView = context.ActiveViewName;
+            entry.IsWorkshared = context.IsWorkshared;
+            entry.RevitUsername = context.RevitUsername;
+        }
 
         await AppendEntryAsync(entry);
     }

@@ -132,7 +132,7 @@ public class PipeServer
                 await writer.WriteLineAsync(JsonConvert.SerializeObject(result));
 
                 if (request != null)
-                    await _logger.WriteAsync(request, result);
+                    await _logger.WriteAsync(request, result, _eventService.GetLastContext());
             }
         }
         catch (OperationCanceledException) { }

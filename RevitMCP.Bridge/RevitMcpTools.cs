@@ -12,7 +12,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
      Description("Returns current Revit connection and document status including model title, worksharing info, active view, and selected element count.")]
     public async Task<string> GetConnectionStatus(CancellationToken cancellationToken)
     {
-        var result = await pipeClient.SendAsync("revit_get_connection_status", [], "Claude Code", cancellationToken);
+        var result = await pipeClient.SendAsync("revit_get_connection_status", [], cancellationToken);
         return FormatResult(result);
     }
 
@@ -20,7 +20,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
      Description("Returns the currently selected elements from the active Revit document with category, family, type, level, location, and bounding box.")]
     public async Task<string> GetSelectedElements(CancellationToken cancellationToken)
     {
-        var result = await pipeClient.SendAsync("revit_get_selected_elements", [], "Claude Code", cancellationToken);
+        var result = await pipeClient.SendAsync("revit_get_selected_elements", [], cancellationToken);
         return FormatResult(result);
     }
 
@@ -28,7 +28,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
      Description("Lists all views in the active Revit document with type, template status, sheet placement, scale, and discipline.")]
     public async Task<string> ListViews(CancellationToken cancellationToken)
     {
-        var result = await pipeClient.SendAsync("revit_list_views", [], "Claude Code", cancellationToken);
+        var result = await pipeClient.SendAsync("revit_list_views", [], cancellationToken);
         return FormatResult(result);
     }
 
@@ -36,7 +36,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
      Description("Lists all sheets in the active Revit document with sheet number, name, and the views placed on each sheet.")]
     public async Task<string> ListSheets(CancellationToken cancellationToken)
     {
-        var result = await pipeClient.SendAsync("revit_list_sheets", [], "Claude Code", cancellationToken);
+        var result = await pipeClient.SendAsync("revit_list_sheets", [], cancellationToken);
         return FormatResult(result);
     }
 
@@ -44,7 +44,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
      Description("Lists all schedules in the active Revit document with name, category, and field names.")]
     public async Task<string> ListSchedules(CancellationToken cancellationToken)
     {
-        var result = await pipeClient.SendAsync("revit_list_schedules", [], "Claude Code", cancellationToken);
+        var result = await pipeClient.SendAsync("revit_list_schedules", [], cancellationToken);
         return FormatResult(result);
     }
 
@@ -60,7 +60,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["elementIds"] = elementIds ?? [],
             ["useSelection"] = useSelection
         };
-        var result = await pipeClient.SendAsync("revit_get_element_parameters", args, "Claude Code", cancellationToken);
+        var result = await pipeClient.SendAsync("revit_get_element_parameters", args, cancellationToken);
         return FormatResult(result);
     }
 
@@ -76,7 +76,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["category"] = category ?? string.Empty,
             ["groupBy"] = string.IsNullOrEmpty(groupBy) ? "Category" : groupBy
         };
-        var result = await pipeClient.SendAsync("revit_count_elements", args, "Claude Code", cancellationToken);
+        var result = await pipeClient.SendAsync("revit_count_elements", args, cancellationToken);
         return FormatResult(result);
     }
 
@@ -92,21 +92,21 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["parameterName"] = parameterName,
             ["category"] = category ?? string.Empty
         };
-        var result = await pipeClient.SendAsync("revit_group_by_parameter", args, "Claude Code", cancellationToken);
+        var result = await pipeClient.SendAsync("revit_group_by_parameter", args, cancellationToken);
         return FormatResult(result);
     }
 
     private static string FormatResult(McpToolResult result)
     {
-        if (result.Success && result.Data != null)
+        var response = new
         {
-            var json = JsonConvert.SerializeObject(result.Data, Formatting.Indented);
-            if (result.Warnings.Count > 0)
-                json += "\n\n// Warnings:\n" + string.Join("\n", result.Warnings.Select(w => $"// {w}"));
-            return json;
-        }
-
-        var error = new { success = false, message = result.Message, errors = result.Errors };
-        return JsonConvert.SerializeObject(error, Formatting.Indented);
+            success = result.Success,
+            message = result.Message,
+            durationMs = result.DurationMs,
+            data = result.Data,
+            warnings = result.Warnings,
+            errors = result.Errors
+        };
+        return JsonConvert.SerializeObject(response, Formatting.Indented);
     }
 }
