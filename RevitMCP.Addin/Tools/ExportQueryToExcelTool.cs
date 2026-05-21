@@ -27,11 +27,19 @@ public class ExportQueryToExcelTool : IRevitMcpTool
             return Task.FromResult(Fail(request, "No active document."));
 
         var doc = uidoc.Document;
-        var groupByKeys = ToolArguments.GetGroupByKeys(request.Arguments);
+        var groupByParsed = ToolArguments.GetGroupByKeysWithWarnings(request.Arguments);
+        var filtersParsed = ToolArguments.GetFiltersWithWarnings(request.Arguments);
+
+        if (filtersParsed.ParseFailed)
+            return Task.FromResult(Fail(request, "filters argument could not be parsed. Export aborted to avoid exporting unfiltered data."));
+        if (groupByParsed.ParseFailed)
+            return Task.FromResult(Fail(request, "groupBy argument could not be parsed. Export aborted to avoid ungrouped export."));
+
+        var groupByKeys = groupByParsed.Items;
+        var filters = filtersParsed.Items;
         var paramCols = ToolArguments.GetStringArray(request.Arguments, "parameters").ToList();
         var outputMode = ToolArguments.GetString(request.Arguments, "outputMode", "Both");
         var fileName = ToolArguments.GetString(request.Arguments, "fileName", "RevitMCP_Export.xlsx");
-        var filters = ToolArguments.GetFilters(request.Arguments);
         var category = ToolArguments.GetString(request.Arguments, "category");
 
         var queryOpts = new ElementQueryOptions
@@ -89,7 +97,10 @@ public class ExportQueryToExcelTool : IRevitMcpTool
         }
 
         sw.Stop();
-        var warnings = queryResult.Warnings.Concat(groupingResult?.Warnings ?? []).ToList();
+        var warnings = queryResult.Warnings
+            .Concat(filtersParsed.Warnings)
+            .Concat(groupByParsed.Warnings)
+            .Concat(groupingResult?.Warnings ?? []).ToList();
 
         return Task.FromResult(new McpToolResult
         {

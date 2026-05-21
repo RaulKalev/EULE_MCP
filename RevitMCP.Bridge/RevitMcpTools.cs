@@ -117,12 +117,15 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_get_elements_info", ReadOnly = true),
-     Description("Returns structured element info and selected parameter values. Accepts: useSelection (bool), elementIds (int[]), category (string), filters (JSON array), parameterNames (string[]), includeInstanceParameters (bool), includeTypeParameters (bool), limit (int).")]
+     Description("Returns structured element info and selected parameter values. Accepts: useSelection (bool), elementIds (int[]), category (string), filters (JSON array of {parameterName, operator, value, matchMode, scope}), parameterNames (string[]), includeInstanceParameters (bool), includeTypeParameters (bool), limit (int).")]
     public async Task<string> GetElementsInfo(
         [Description("If true, use current selection")] bool useSelection = false,
         [Description("List of element IDs")] long[]? elementIds = null,
         [Description("Category name filter")] string? category = null,
+        [Description("JSON array of parameter filters")] string? filters = null,
         [Description("Parameter names to return (partial match)")] string[]? parameterNames = null,
+        [Description("Include instance parameters")] bool includeInstanceParameters = true,
+        [Description("Include type parameters")] bool includeTypeParameters = true,
         [Description("Max elements to return (default 500)")] int limit = 500,
         CancellationToken cancellationToken = default)
     {
@@ -131,7 +134,10 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["useSelection"] = useSelection,
             ["elementIds"] = elementIds ?? [],
             ["category"] = category ?? string.Empty,
+            ["filters"] = filters != null ? Newtonsoft.Json.JsonConvert.DeserializeObject(filters) : new object[] { },
             ["parameterNames"] = parameterNames ?? [],
+            ["includeInstanceParameters"] = includeInstanceParameters,
+            ["includeTypeParameters"] = includeTypeParameters,
             ["limit"] = limit
         };
         var result = await pipeClient.SendAsync("revit_get_elements_info", args, cancellationToken);

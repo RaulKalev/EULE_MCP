@@ -22,12 +22,14 @@ public class GetElementsInfoTool : IRevitMcpTool
         if (uidoc?.Document == null)
             return Task.FromResult(Fail(request, "No active document."));
 
+        var filtersParsed = ToolArguments.GetFiltersWithWarnings(request.Arguments);
+
         var opts = new ElementQueryOptions
         {
             UseSelection = ToolArguments.GetBool(request.Arguments, "useSelection"),
             ElementIds = ToolArguments.GetLongArray(request.Arguments, "elementIds").ToList(),
             Category = ToolArguments.GetString(request.Arguments, "category"),
-            Filters = ToolArguments.GetFilters(request.Arguments),
+            Filters = filtersParsed.Items,
             ReturnParameters = ToolArguments.GetStringArray(request.Arguments, "parameterNames").ToList(),
             IncludeInstanceParameters = ToolArguments.GetBool(request.Arguments, "includeInstanceParameters", true),
             IncludeTypeParameters = ToolArguments.GetBool(request.Arguments, "includeTypeParameters", true),
@@ -41,6 +43,8 @@ public class GetElementsInfoTool : IRevitMcpTool
         if (!result.Success)
             return Task.FromResult(Fail(request, result.Message));
 
+        var warnings = result.Warnings.Concat(filtersParsed.Warnings).ToList();
+
         sw.Stop();
         return Task.FromResult(new McpToolResult
         {
@@ -53,7 +57,7 @@ public class GetElementsInfoTool : IRevitMcpTool
                 returned = result.Elements.Count,
                 elements = result.Elements
             },
-            Warnings = result.Warnings,
+            Warnings = warnings,
             DurationMs = sw.ElapsedMilliseconds
         });
     }

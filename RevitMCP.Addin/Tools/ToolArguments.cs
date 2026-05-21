@@ -67,26 +67,101 @@ internal static class ToolArguments
 
     public static List<ParameterFilterDto> GetFilters(Dictionary<string, object?> args, string key = "filters")
     {
-        if (!args.TryGetValue(key, out var val) || val is not JArray ja) return new();
-        return ja.Select(token => new ParameterFilterDto
+        return GetFiltersWithWarnings(args, key).Items;
+    }
+
+    public static ParsedArgumentList<ParameterFilterDto> GetFiltersWithWarnings(Dictionary<string, object?> args, string key = "filters")
+    {
+        var result = new ParsedArgumentList<ParameterFilterDto>();
+        if (!args.TryGetValue(key, out var val) || val == null)
+            return result;
+
+        result.HadInput = true;
+        var ja = ToJArray(val);
+        if (ja == null)
+        {
+            result.ParseFailed = true;
+            result.Warnings.Add($"'{key}' argument was provided but could not be parsed as a JSON array. Query ran without filters.");
+            return result;
+        }
+
+        result.Items = ja.Select(token => new ParameterFilterDto
         {
             ParameterName = token["parameterName"]?.Value<string>() ?? string.Empty,
-            MatchMode = token["matchMode"]?.Value<string>() ?? "Contains",
+            MatchMode = token["matchMode"]?.Value<string>() ?? "ContainsNormalized",
             Operator = token["operator"]?.Value<string>() ?? "equals",
             Value = token["value"]?.Value<string>() ?? string.Empty,
             Scope = token["scope"]?.Value<string>() ?? "InstanceAndType"
         }).Where(f => !string.IsNullOrEmpty(f.ParameterName)).ToList();
+        return result;
     }
 
     public static List<GroupKeyOptions> GetGroupByKeys(Dictionary<string, object?> args, string key = "groupBy")
     {
-        if (!args.TryGetValue(key, out var val) || val is not JArray ja) return new();
-        return ja.Select(token => new GroupKeyOptions
+        return GetGroupByKeysWithWarnings(args, key).Items;
+    }
+
+    public static ParsedArgumentList<GroupKeyOptions> GetGroupByKeysWithWarnings(Dictionary<string, object?> args, string key = "groupBy")
+    {
+        var result = new ParsedArgumentList<GroupKeyOptions>();
+        if (!args.TryGetValue(key, out var val) || val == null)
+            return result;
+
+        result.HadInput = true;
+        var ja = ToJArray(val);
+        if (ja == null)
+        {
+            result.ParseFailed = true;
+            result.Warnings.Add($"'{key}' argument was provided but could not be parsed as a JSON array. Query ran without grouping.");
+            return result;
+        }
+
+        result.Items = ja.Select(token => new GroupKeyOptions
         {
             Type = token["type"]?.Value<string>() ?? "Parameter",
             ParameterName = token["parameterName"]?.Value<string>() ?? string.Empty,
-            ParameterMatchMode = token["matchMode"]?.Value<string>() ?? "Contains",
+            ParameterMatchMode = token["matchMode"]?.Value<string>() ?? "ContainsNormalized",
             Scope = token["scope"]?.Value<string>() ?? "InstanceAndType"
         }).ToList();
+        return result;
     }
+
+    private static JArray? ToJArray(object? value)
+    {
+        if (value == null)
+            return null;
+
+        if (value is JArray ja)
+            return ja;
+
+        if (value is string s)
+        {
+            try
+            {
+                var parsed = JToken.Parse(s);
+                return parsed as JArray;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        if (value is IEnumerable<object> enumerable)
+        {
+            try { return JArray.FromObject(enumerable); }
+            catch { return null; }
+        }
+
+        try { return JArray.FromObject(value); }
+        catch { return null; }
+    }
+}
+
+public class ParsedArgumentList<T>
+{
+    public List<T> Items { get; set; } = new();
+    public List<string> Warnings { get; set; } = new();
+    public bool HadInput { get; set; }
+    public bool ParseFailed { get; set; }
 }

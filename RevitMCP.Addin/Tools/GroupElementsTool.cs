@@ -23,8 +23,12 @@ public class GroupElementsTool : IRevitMcpTool
         if (uidoc?.Document == null)
             return Task.FromResult(Fail(request, "No active document."));
 
-        var groupByKeys = ToolArguments.GetGroupByKeys(request.Arguments);
-        if (groupByKeys.Count == 0)
+        var groupByParsed = ToolArguments.GetGroupByKeysWithWarnings(request.Arguments);
+        var filtersParsed = ToolArguments.GetFiltersWithWarnings(request.Arguments);
+
+        if (groupByParsed.ParseFailed)
+            return Task.FromResult(Fail(request, "groupBy argument could not be parsed as a JSON array."));
+        if (groupByParsed.Items.Count == 0)
             return Task.FromResult(Fail(request, "At least one groupBy key is required."));
 
         var queryOpts = new ElementQueryOptions
@@ -32,7 +36,7 @@ public class GroupElementsTool : IRevitMcpTool
             Category = ToolArguments.GetString(request.Arguments, "category"),
             UseSelection = ToolArguments.GetBool(request.Arguments, "useSelection"),
             ElementIds = ToolArguments.GetLongArray(request.Arguments, "elementIds").ToList(),
-            Filters = ToolArguments.GetFilters(request.Arguments),
+            Filters = filtersParsed.Items,
             IncludeInstanceParameters = true,
             IncludeTypeParameters = true,
             Limit = ToolArguments.GetInt(request.Arguments, "limit", 5000)
@@ -44,7 +48,7 @@ public class GroupElementsTool : IRevitMcpTool
 
         var groupOpts = new GroupingOptions
         {
-            GroupBy = groupByKeys,
+            GroupBy = groupByParsed.Items,
             IncludeElements = ToolArguments.GetBool(request.Arguments, "includeElements"),
             Limit = queryOpts.Limit
         };
@@ -63,7 +67,10 @@ public class GroupElementsTool : IRevitMcpTool
         }).ToList();
 
         sw.Stop();
-        var warnings = queryResult.Warnings.Concat(groupResult.Warnings).ToList();
+        var warnings = queryResult.Warnings
+            .Concat(filtersParsed.Warnings)
+            .Concat(groupByParsed.Warnings)
+            .Concat(groupResult.Warnings).ToList();
 
         return Task.FromResult(new McpToolResult
         {

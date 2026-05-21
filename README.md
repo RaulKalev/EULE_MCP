@@ -55,9 +55,96 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_list_views` | All non-template printable views with type, scale, discipline, sheet placement |
 | `revit_list_sheets` | All sheets with number, name, and placed view names |
 | `revit_list_schedules` | All schedules with category and field names |
-| `revit_get_element_parameters` | All parameters for given element IDs or current selection |
+| `revit_get_element_parameters` | Reads instance/type parameters for element IDs or selection, including shared parameter metadata |
 | `revit_count_elements` | Element counts grouped by Category or FamilyAndType, with optional category filter |
-| `revit_group_by_parameter` | Groups elements by a named parameter value with counts; partial name match (e.g. `ELENEA_Nimetus` hits `ELENEA_ÜLD 001_Nimetus`); checks instance then type parameters with per-type caching |
+| `revit_group_by_parameter` | Convenience tool for grouping elements by one parameter |
+| `revit_find_elements_by_parameter` | Finds elements using one or more parameter filters |
+| `revit_get_elements_info` | Returns structured element info with selected parameter values |
+| `revit_group_elements` | Groups elements by category, family, type, level, or multiple parameters |
+| `revit_export_query_to_excel` | Exports query/grouping results to a formatted `.xlsx` file |
+
+Advanced tools (`revit_find_elements_by_parameter`, `revit_get_elements_info`, `revit_group_elements`, `revit_export_query_to_excel`) accept `filters` and `groupBy` as JSON arrays. See [Example JSON Arguments](#example-json-arguments) below.
+
+Parameter name matching uses `ContainsNormalized` mode by default — partial names like `ELENEA_Nimetus` match full shared parameter names like `ELENEA_ÜLD 001_Nimetus`.
+
+---
+
+## Example Prompts
+
+```
+How many fire alarm devices are in the model?
+
+Group fire alarm devices by ELENEA_Nimetus and ELENEA_Tootja.
+
+Find all elements where ELENEA_Nimetus contains "andur".
+
+Get element info for Fire Alarm Devices and return Nimetus, Tähis, Tootja, and Mudel.
+
+Export all Fire Alarm Devices grouped by ELENEA_Nimetus and ELENEA_Tootja to Excel.
+```
+
+---
+
+## Example JSON Arguments
+
+### `revit_find_elements_by_parameter`
+
+```json
+{
+  "category": "Fire Alarm Devices",
+  "filters": [
+    {
+      "parameterName": "ELENEA_Nimetus",
+      "operator": "contains",
+      "value": "andur",
+      "matchMode": "ContainsNormalized",
+      "scope": "InstanceAndType"
+    }
+  ],
+  "returnParameters": ["ELENEA_Nimetus", "ELENEA_Tootja", "ELENEA_Mudel"],
+  "limit": 200
+}
+```
+
+### `revit_group_elements`
+
+```json
+{
+  "category": "Fire Alarm Devices",
+  "groupBy": [
+    {
+      "type": "Parameter",
+      "parameterName": "ELENEA_Nimetus",
+      "scope": "InstanceAndType",
+      "matchMode": "ContainsNormalized"
+    },
+    {
+      "type": "Parameter",
+      "parameterName": "ELENEA_Tootja",
+      "scope": "InstanceAndType",
+      "matchMode": "ContainsNormalized"
+    }
+  ],
+  "includeElements": false,
+  "limit": 5000
+}
+```
+
+### `revit_export_query_to_excel`
+
+```json
+{
+  "category": "Fire Alarm Devices",
+  "groupBy": [
+    { "type": "Parameter", "parameterName": "ELENEA_Nimetus" },
+    { "type": "Parameter", "parameterName": "ELENEA_Tootja" }
+  ],
+  "parameters": ["ELENEA_Nimetus", "ELENEA_Tähis", "ELENEA_Tootja", "ELENEA_Mudel"],
+  "outputMode": "Both",
+  "fileName": "FireAlarm_Device_Report.xlsx",
+  "limit": 5000
+}
+```
 
 ---
 
@@ -166,7 +253,7 @@ EULE_MCP/
 │   ├── App.cs           IExternalApplication entry point
 │   ├── Commands/        OpenMcpWindowCommand
 │   ├── Services/        PipeServer, ExternalEventHandler, ConnectorService
-│   ├── Tools/           One file per MCP tool (8 tools)
+│   ├── Tools/           One file per MCP tool (12 tools)
 │   ├── UI/              WPF window (Status + Activity tabs) + ViewModels + themes
 │   └── Interfaces/      IRevitMcpTool
 ├── RevitMCP.Bridge/
