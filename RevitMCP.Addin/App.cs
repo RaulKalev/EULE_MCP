@@ -69,6 +69,11 @@ public class App : IExternalApplication
             handler.RegisterTool(new ReassignCircuitPanelTool());
             handler.RegisterTool(new ChangeCircuitCableOrWireTypeTool());
             handler.RegisterTool(new SetCircuitParameterTool());
+            handler.RegisterTool(new FindUncircuitedElementsTool());
+            handler.RegisterTool(new CheckCircuitHealthTool());
+            handler.RegisterTool(new ExportPanelCircuitListToExcelTool());
+            handler.RegisterTool(new FindCircuitsByElementParameterTool());
+            handler.RegisterTool(new TraceCircuitTool());
 
             var eventService = new ExternalEventService(handler);
 

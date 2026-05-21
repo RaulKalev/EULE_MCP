@@ -88,6 +88,11 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_reassign_circuit_panel` | Reassigns a circuit to a different panel *(requires approval)* |
 | `revit_change_circuit_cable_or_wire_type` | Changes the cable/wire type on a circuit; prefers cable type, falls back to wire type *(requires approval)* |
 | `revit_set_circuit_parameter` | Sets **any** parameter on one or more circuits — fully handles `ElementId` storage type (Cable Type and similar) by resolving a numeric element ID or an exact element name *(requires approval)* |
+| `revit_find_uncircuited_elements` | Finds elements in electrical/lighting/data/fire/security categories that are not assigned to any circuit; supports category lists, parameter filters, and parameter return |
+| `revit_check_circuit_health` | Central circuit QA tool — checks for missing panel, empty/duplicate circuit numbers, missing cable/wire type, missing load name, and circuits with no connected elements |
+| `revit_export_panel_circuit_list_to_excel` | Exports a panel-organized circuit report to `.xlsx` with Summary, Panel Circuits, Circuit Elements, and Health Issues sheets |
+| `revit_find_circuits_by_element_parameter` | Finds circuits containing elements matching category and parameter filters (e.g. circuits in room 201, circuits with specific device types) |
+| `revit_trace_circuit` | Traces an element or circuit back to its panel — returns circuit number, load name, wire type, apparent load, and panel details |
 
 Advanced tools that accept `filters` and `groupBy` expect valid JSON arrays. See [Example JSON Arguments](#example-json-arguments) below.
 
@@ -360,7 +365,7 @@ EULE_MCP/
 │   ├── Commands/        OpenMcpWindowCommand
 │   ├── Electrical/      Circuit query/mutation services, WireTypeResolver, CircuitDtoBuilder
 │   ├── Services/        PipeServer, ExternalEventHandler, ConnectorService
-│   ├── Tools/           One file per MCP tool (33 tools)
+│   ├── Tools/           One file per MCP tool (38 tools)
 │   ├── UI/              WPF window (Status + Pending + Activity tabs) + ViewModels + themes
 │   └── Interfaces/      IRevitMcpTool
 ├── RevitMCP.Bridge/

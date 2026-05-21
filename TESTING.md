@@ -356,3 +356,96 @@ Direct Edit mode bypasses approval and should only be used for development/testi
 1. Enable Direct Edit.
 2. Close and reopen Revit (or reload the add-in).
 3. Confirm Direct Edit starts **disabled** again.
+
+---
+
+## 18. Electrical QA and Inspection Tools (Phase 3 + 5)
+
+### 18.1 Find Uncircuited Elements
+
+```
+Find all electrical fixtures that are not on any circuit.
+
+Find all fire alarm devices with no circuit assigned.
+
+Find all uncircuited elements in the current selection.
+```
+
+Verify:
+- `revit_find_uncircuited_elements` returns elements not in any circuit.
+- `categoriesChecked` in response lists scanned categories.
+- `returnParameters` returns specific parameter values per element.
+- `filters` narrow results (e.g. by ELENEA_Osasüsteem).
+- Default categories cover: Electrical Fixtures, Lighting Fixtures, Electrical Equipment, Data Devices, Fire Alarm Devices, Security Devices, Communication Devices.
+- Elements already on circuits are not returned.
+- No Revit transaction is created.
+
+### 18.2 Check Circuit Health
+
+```
+Run a full circuit health check on the model.
+
+Check circuits on panel "DB-L1" for missing cable type.
+
+Check all circuits for duplicate circuit numbers.
+```
+
+Verify:
+- `revit_check_circuit_health` returns `issueSummary` and per-circuit issue list.
+- `panelName` filter narrows results.
+- `systemType` filter narrows results.
+- `checks` parameter allows requesting specific checks only.
+- `MissingPanel`, `EmptyCircuitNumber`, `DuplicateCircuitNumbers`, `MissingCableType`, `MissingWireType`, `MissingLoadName`, `NoConnectedElements` are detected.
+- `circuitId` is returned for each issue so it can be used in follow-up tools.
+- No Revit transaction is created.
+
+### 18.3 Export Panel Circuit List to Excel
+
+```
+Export all circuits to Excel.
+
+Export circuits for panel "DB-L1" to Excel.
+```
+
+Verify:
+- `revit_export_panel_circuit_list_to_excel` returns a file path.
+- File is created in `Documents\RKTools\RevitMCP\Exports`.
+- File opens successfully in Excel.
+- `Summary` sheet includes export time, model name, circuit count.
+- `Panel Circuits` sheet has frozen header, autofilter, autosized columns.
+- `Circuit Elements` sheet (when `includeElements=true`) lists each element per circuit.
+- `Health Issues` sheet (when `includeHealthCheck=true`) lists issue rows.
+- `panelName` filter produces a smaller export covering only those circuits.
+
+### 18.4 Find Circuits by Element Parameter
+
+```
+Find circuits containing fire alarm devices in room 201.
+
+Find circuits containing elements where ELENEA_Osasüsteem = "ATS".
+```
+
+Verify:
+- `revit_find_circuits_by_element_parameter` returns distinct circuits.
+- `matchedElementIds` are correct.
+- `circuitCount` matches the circuits returned.
+- Works with category + filters combination.
+- No Revit transaction is created.
+
+### 18.5 Trace Circuit
+
+```
+Trace the selected element back to its circuit and panel.
+
+Trace circuit 2520343 to its panel.
+```
+
+Verify:
+- `revit_trace_circuit` returns circuit number, load name, panel name, panel element ID.
+- `useSelection=true` traces the currently selected element.
+- `circuitId` traces a circuit directly.
+- `elementId` traces a specific element.
+- `connectedElements` lists elements when `includeConnectedElements=true`.
+- An element on multiple circuits returns all circuits.
+- An uncircuited element returns `circuitCount=0` with `success=true`.
+- A non-FamilyInstance or element without MEP model returns a clear error.
