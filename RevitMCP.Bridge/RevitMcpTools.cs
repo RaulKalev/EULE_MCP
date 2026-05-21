@@ -96,6 +96,214 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    [McpServerTool(Name = "revit_get_available_parameters", ReadOnly = true),
+     Description("Discovers available parameters for a category, selection, or element IDs. Returns parameter metadata, fill statistics, and example values.")]
+    public async Task<string> GetAvailableParameters(
+        [Description("Category name to scan")] string? category = null,
+        [Description("If true, scan current selection")] bool useSelection = false,
+        [Description("Explicit element IDs to scan")] long[]? elementIds = null,
+        [Description("Include instance parameters")] bool includeInstanceParameters = true,
+        [Description("Include type parameters")] bool includeTypeParameters = true,
+        [Description("Max elements to sample (default 500)")] int sampleLimit = 500,
+        [Description("Max example values per parameter (default 5)")] int exampleValueLimit = 5,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["category"] = category ?? string.Empty,
+            ["useSelection"] = useSelection,
+            ["elementIds"] = elementIds ?? [],
+            ["includeInstanceParameters"] = includeInstanceParameters,
+            ["includeTypeParameters"] = includeTypeParameters,
+            ["sampleLimit"] = sampleLimit,
+            ["exampleValueLimit"] = exampleValueLimit
+        };
+        var result = await pipeClient.SendAsync("revit_get_available_parameters", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_list_query_presets", ReadOnly = true),
+     Description("Lists available reusable query presets.")]
+    public async Task<string> ListQueryPresets(CancellationToken cancellationToken)
+    {
+        var result = await pipeClient.SendAsync("revit_list_query_presets", [], cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_run_query_preset", ReadOnly = true),
+     Description("Runs a saved query preset by name. Can return JSON results or export to Excel.")]
+    public async Task<string> RunQueryPreset(
+        [Description("Name of the preset to run")] string presetName,
+        [Description("If true, export results to Excel")] bool exportToExcel = false,
+        [Description("Output file name for Excel export")] string? fileName = null,
+        [Description("Max elements (default 5000)")] int limit = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["presetName"] = presetName,
+            ["exportToExcel"] = exportToExcel,
+            ["fileName"] = fileName ?? string.Empty,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_run_query_preset", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_check_parameter_completeness", ReadOnly = true),
+     Description("Checks whether required parameters exist and are filled for elements. Useful for model QA.")]
+    public async Task<string> CheckParameterCompleteness(
+        [Description("Category name")] string? category = null,
+        [Description("If true, check current selection")] bool useSelection = false,
+        [Description("Explicit element IDs")] long[]? elementIds = null,
+        [Description("List of parameter names to check")] string[] requiredParameters = default!,
+        [Description("Include instance parameters")] bool includeInstanceParameters = true,
+        [Description("Include type parameters")] bool includeTypeParameters = true,
+        [Description("Treat whitespace-only values as empty")] bool treatWhitespaceAsEmpty = true,
+        [Description("Include problem element details")] bool includeElementIds = true,
+        [Description("Max elements to check (default 5000)")] int limit = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["category"] = category ?? string.Empty,
+            ["useSelection"] = useSelection,
+            ["elementIds"] = elementIds ?? [],
+            ["requiredParameters"] = requiredParameters ?? [],
+            ["includeInstanceParameters"] = includeInstanceParameters,
+            ["includeTypeParameters"] = includeTypeParameters,
+            ["treatWhitespaceAsEmpty"] = treatWhitespaceAsEmpty,
+            ["includeElementIds"] = includeElementIds,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_check_parameter_completeness", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_export_view_list_to_excel", ReadOnly = true),
+     Description("Exports all views to a formatted .xlsx file.")]
+    public async Task<string> ExportViewListToExcel(
+        [Description("Include template views")] bool includeTemplates = false,
+        [Description("Include views not placed on sheets")] bool includeUnplacedViews = true,
+        [Description("Output file name")] string fileName = "Revit_View_List.xlsx",
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["includeTemplates"] = includeTemplates,
+            ["includeUnplacedViews"] = includeUnplacedViews,
+            ["fileName"] = fileName
+        };
+        var result = await pipeClient.SendAsync("revit_export_view_list_to_excel", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_export_sheet_list_to_excel", ReadOnly = true),
+     Description("Exports all sheets to a formatted .xlsx file.")]
+    public async Task<string> ExportSheetListToExcel(
+        [Description("Include list of placed views per sheet")] bool includePlacedViews = true,
+        [Description("Output file name")] string fileName = "Revit_Sheet_List.xlsx",
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["includePlacedViews"] = includePlacedViews,
+            ["fileName"] = fileName
+        };
+        var result = await pipeClient.SendAsync("revit_export_sheet_list_to_excel", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_export_schedule_list_to_excel", ReadOnly = true),
+     Description("Exports all schedules to a formatted .xlsx file.")]
+    public async Task<string> ExportScheduleListToExcel(
+        [Description("Include field names")] bool includeFields = true,
+        [Description("Output file name")] string fileName = "Revit_Schedule_List.xlsx",
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["includeFields"] = includeFields,
+            ["fileName"] = fileName
+        };
+        var result = await pipeClient.SendAsync("revit_export_schedule_list_to_excel", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_select_elements"),
+     Description("Selects elements in the active Revit UI by explicit element IDs. Does not modify model data.")]
+    public async Task<string> SelectElements(
+        [Description("List of element IDs to select")] long[] elementIds,
+        [Description("Replace current selection (true) or add to it (false)")] bool replaceSelection = true,
+        [Description("Zoom to selected elements")] bool zoomToSelection = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["elementIds"] = elementIds ?? [],
+            ["replaceSelection"] = replaceSelection,
+            ["zoomToSelection"] = zoomToSelection
+        };
+        var result = await pipeClient.SendAsync("revit_select_elements", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_select_elements_by_query"),
+     Description("Selects elements in the active Revit UI based on category and parameter filters.")]
+    public async Task<string> SelectElementsByQuery(
+        [Description("Category name")] string? category = null,
+        [Description("JSON array of parameter filters")] string? filters = null,
+        [Description("Replace current selection")] bool replaceSelection = true,
+        [Description("Zoom to selected elements")] bool zoomToSelection = false,
+        [Description("Max elements to select (default 500)")] int limit = 500,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
+            return FormatBridgeError(filtersError!);
+
+        var args = new Dictionary<string, object?>
+        {
+            ["category"] = category ?? string.Empty,
+            ["filters"] = parsedFilters,
+            ["replaceSelection"] = replaceSelection,
+            ["zoomToSelection"] = zoomToSelection,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_select_elements_by_query", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_set_parameter"),
+     Description("Sets a parameter value on elements. Requires approval. Runs inside a Revit Transaction.")]
+    public async Task<string> SetParameter(
+        [Description("Parameter name to set (partial match supported)")] string parameterName,
+        [Description("Value to set")] string value,
+        [Description("Parameter scope: Instance or Type")] string scope = "Instance",
+        [Description("If true, modify current selection")] bool useSelection = false,
+        [Description("Explicit element IDs")] long[]? elementIds = null,
+        [Description("Category name")] string? category = null,
+        [Description("JSON array of parameter filters")] string? filters = null,
+        [Description("Max elements to modify (default 500)")] int limit = 500,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
+            return FormatBridgeError(filtersError!);
+
+        var args = new Dictionary<string, object?>
+        {
+            ["parameterName"] = parameterName,
+            ["value"] = value,
+            ["scope"] = scope,
+            ["useSelection"] = useSelection,
+            ["elementIds"] = elementIds ?? [],
+            ["category"] = category ?? string.Empty,
+            ["filters"] = parsedFilters,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_set_parameter", args, cancellationToken);
+        return FormatResult(result);
+    }
+
     [McpServerTool(Name = "revit_find_elements_by_parameter", ReadOnly = true),
      Description("Finds model elements matching one or more parameter filters. Each filter specifies: parameterName (partial match), operator (equals/contains/startsWith/isEmpty/greaterThan/lessThan/notEquals/notContains/endsWith/isNotEmpty), value, matchMode (Contains/ContainsNormalized/Exact/ExactNormalized), scope (InstanceAndType/Instance/Type). Also accepts category, useSelection, elementIds, returnParameters, includeInstanceParameters, includeTypeParameters, limit.")]
     public async Task<string> FindElementsByParameter(

@@ -62,8 +62,20 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_get_elements_info` | Returns structured element info with selected parameter values |
 | `revit_group_elements` | Groups elements by category, family, type, level, or multiple parameters |
 | `revit_export_query_to_excel` | Exports query/grouping results to a formatted `.xlsx` file |
+| `revit_get_available_parameters` | Discovers available parameters with fill stats and example values |
+| `revit_list_query_presets` | Lists reusable query presets from config |
+| `revit_run_query_preset` | Runs a saved preset by name, optionally exports to Excel |
+| `revit_check_parameter_completeness` | Checks required parameters exist and are filled (model QA) |
+| `revit_export_view_list_to_excel` | Exports all views to `.xlsx` with type, scale, sheet placement |
+| `revit_export_sheet_list_to_excel` | Exports all sheets to `.xlsx` with placed views |
+| `revit_export_schedule_list_to_excel` | Exports all schedules to `.xlsx` with fields |
+| `revit_select_elements` | Selects elements by IDs in Revit UI *(requires approval)* |
+| `revit_select_elements_by_query` | Selects elements by query in Revit UI *(requires approval)* |
+| `revit_set_parameter` | Sets a parameter value on elements *(requires approval, runs in transaction)* |
 
-Advanced tools (`revit_find_elements_by_parameter`, `revit_get_elements_info`, `revit_group_elements`, `revit_export_query_to_excel`) accept `filters` and `groupBy` as JSON arrays. See [Example JSON Arguments](#example-json-arguments) below.
+Advanced tools that accept `filters` and `groupBy` expect valid JSON arrays. See [Example JSON Arguments](#example-json-arguments) below.
+
+Selection tools affect the active Revit UI selection. Write tools require approval inside Revit before changes are applied.
 
 Parameter name matching uses `ContainsNormalized` mode by default — partial names like `ELENEA_Nimetus` match full shared parameter names like `ELENEA_ÜLD 001_Nimetus`.
 
@@ -81,6 +93,18 @@ Find all elements where ELENEA_Nimetus contains "andur".
 Get element info for Fire Alarm Devices and return Nimetus, Tähis, Tootja, and Mudel.
 
 Export all Fire Alarm Devices grouped by ELENEA_Nimetus and ELENEA_Tootja to Excel.
+
+What parameters are available for Fire Alarm Devices?
+
+Run the Fire Alarm Device Report preset and export it to Excel.
+
+Check Fire Alarm Devices for missing ELENEA_Nimetus, ELENEA_Tootja, and ELENEA_Mudel.
+
+Export all sheets to Excel.
+
+Find all Fire Alarm Devices missing ELENEA_Tootja and select them in Revit.
+
+Set Comments to "Checked by AI" for the current selection.
 ```
 
 ---
@@ -259,7 +283,7 @@ EULE_MCP/
 │   ├── App.cs           IExternalApplication entry point
 │   ├── Commands/        OpenMcpWindowCommand
 │   ├── Services/        PipeServer, ExternalEventHandler, ConnectorService
-│   ├── Tools/           One file per MCP tool (12 tools)
+│   ├── Tools/           One file per MCP tool (22 tools)
 │   ├── UI/              WPF window (Status + Activity tabs) + ViewModels + themes
 │   └── Interfaces/      IRevitMcpTool
 ├── RevitMCP.Bridge/

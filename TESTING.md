@@ -108,3 +108,94 @@ All parse errors return valid JSON matching the standard response shape:
   "errors": ["filters could not be parsed as JSON array: ..."]
 }
 ```
+
+---
+
+## 8. Parameter Discovery
+
+```
+What parameters are available for Fire Alarm Devices?
+```
+
+Verify:
+- `revit_get_available_parameters` returns parameter metadata.
+- Response includes `name`, `scope`, `storageType`, `isShared`, `exampleValues`.
+- Fill statistics (`existsOnCount`, `emptyCount`, `nonEmptyCount`) are correct.
+
+---
+
+## 9. Query Presets
+
+```
+List available query presets.
+Run the Fire Alarm Device Report preset.
+Run the Fire Alarm Device Report preset and export to Excel.
+```
+
+Verify:
+- `revit_list_query_presets` lists presets from `%AppData%\RKTools\RevitMCP\query-presets.json`.
+- `revit_run_query_preset` runs a preset by name.
+- Missing preset name returns available preset names.
+- Excel export works when `exportToExcel = true`.
+
+---
+
+## 10. Parameter Completeness Check
+
+```
+Check Fire Alarm Devices for missing ELENEA_Nimetus, ELENEA_Tootja, and ELENEA_Mudel.
+```
+
+Verify:
+- `revit_check_parameter_completeness` returns completionPercent.
+- Missing and empty parameters are detected.
+- Problem elements list includes element IDs and issue descriptions.
+
+---
+
+## 11. View/Sheet/Schedule Exports
+
+```
+Export all views to Excel.
+Export all sheets to Excel.
+Export all schedules to Excel.
+```
+
+Verify:
+- Files created in `Documents\RKTools\RevitMCP\Exports`.
+- Each file has frozen header row, autofilter, and autosized columns.
+- `revit_export_view_list_to_excel` includes sheet placement info.
+- `revit_export_sheet_list_to_excel` includes placed view names.
+- `revit_export_schedule_list_to_excel` includes field names.
+
+---
+
+## 12. Selection Tools
+
+```
+Select elements 12345 and 67890 in Revit.
+Find Fire Alarm Devices missing ELENEA_Tootja and select them in Revit.
+```
+
+Verify:
+- `revit_select_elements` selects by explicit IDs.
+- `revit_select_elements_by_query` selects by category/filter query.
+- Invalid element IDs are reported in warnings.
+- Selection does not modify model data.
+
+---
+
+## 13. Write Tool (Set Parameter)
+
+```
+Set Comments to "Checked by AI" for the current selection.
+```
+
+Verify:
+- `revit_set_parameter` modifies parameter values inside a Transaction.
+- Transaction name is "Revit MCP - Set Parameter".
+- Read-only parameters are reported as failures.
+- Missing parameters are reported as failures.
+- Revit Undo shows the transaction.
+- Modified and failed element counts are returned.
+```

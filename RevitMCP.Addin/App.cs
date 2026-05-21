@@ -33,6 +33,16 @@ public class App : IExternalApplication
             handler.RegisterTool(new GetElementsInfoTool());
             handler.RegisterTool(new GroupElementsTool());
             handler.RegisterTool(new ExportQueryToExcelTool());
+            handler.RegisterTool(new GetAvailableParametersTool());
+            handler.RegisterTool(new ListQueryPresetsTool());
+            handler.RegisterTool(new RunQueryPresetTool());
+            handler.RegisterTool(new CheckParameterCompletenessTool());
+            handler.RegisterTool(new ExportViewListToExcelTool());
+            handler.RegisterTool(new ExportSheetListToExcelTool());
+            handler.RegisterTool(new ExportScheduleListToExcelTool());
+            handler.RegisterTool(new SelectElementsTool());
+            handler.RegisterTool(new SelectElementsByQueryTool());
+            handler.RegisterTool(new SetParameterTool());
 
             var eventService = new ExternalEventService(handler);
             var pipeServer = new PipeServer(RevitMcpDefaults.PipeName, eventService, logger);
