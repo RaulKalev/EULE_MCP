@@ -105,10 +105,13 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Max elements to return (default 500)")] int limit = 500,
         CancellationToken cancellationToken = default)
     {
+        if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
+            return FormatBridgeError(filtersError!);
+
         var args = new Dictionary<string, object?>
         {
             ["category"] = category ?? string.Empty,
-            ["filters"] = filters != null ? Newtonsoft.Json.JsonConvert.DeserializeObject(filters) : new object[] { },
+            ["filters"] = parsedFilters,
             ["returnParameters"] = returnParameters ?? [],
             ["limit"] = limit
         };
@@ -129,12 +132,15 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Max elements to return (default 500)")] int limit = 500,
         CancellationToken cancellationToken = default)
     {
+        if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
+            return FormatBridgeError(filtersError!);
+
         var args = new Dictionary<string, object?>
         {
             ["useSelection"] = useSelection,
             ["elementIds"] = elementIds ?? [],
             ["category"] = category ?? string.Empty,
-            ["filters"] = filters != null ? Newtonsoft.Json.JsonConvert.DeserializeObject(filters) : new object[] { },
+            ["filters"] = parsedFilters,
             ["parameterNames"] = parameterNames ?? [],
             ["includeInstanceParameters"] = includeInstanceParameters,
             ["includeTypeParameters"] = includeTypeParameters,
@@ -154,11 +160,17 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Max elements to scan (default 5000)")] int limit = 5000,
         CancellationToken cancellationToken = default)
     {
+        if (!TryParseJsonArray(groupBy, "groupBy", out var parsedGroupBy, out var groupByError))
+            return FormatBridgeError(groupByError!);
+
+        if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
+            return FormatBridgeError(filtersError!);
+
         var args = new Dictionary<string, object?>
         {
-            ["groupBy"] = Newtonsoft.Json.JsonConvert.DeserializeObject(groupBy) ?? new object[] { },
+            ["groupBy"] = parsedGroupBy,
             ["category"] = category ?? string.Empty,
-            ["filters"] = filters != null ? Newtonsoft.Json.JsonConvert.DeserializeObject(filters) : new object[] { },
+            ["filters"] = parsedFilters,
             ["includeElements"] = includeElements,
             ["limit"] = limit
         };
@@ -178,11 +190,17 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Max elements (default 5000)")] int limit = 5000,
         CancellationToken cancellationToken = default)
     {
+        if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
+            return FormatBridgeError(filtersError!);
+
+        if (!TryParseJsonArray(groupBy, "groupBy", out var parsedGroupBy, out var groupByError))
+            return FormatBridgeError(groupByError!);
+
         var args = new Dictionary<string, object?>
         {
             ["category"] = category ?? string.Empty,
-            ["filters"] = filters != null ? Newtonsoft.Json.JsonConvert.DeserializeObject(filters) : new object[] { },
-            ["groupBy"] = groupBy != null ? Newtonsoft.Json.JsonConvert.DeserializeObject(groupBy) : new object[] { },
+            ["filters"] = parsedFilters,
+            ["groupBy"] = parsedGroupBy,
             ["parameters"] = parameters ?? [],
             ["outputMode"] = outputMode,
             ["fileName"] = fileName,
@@ -190,6 +208,54 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         };
         var result = await pipeClient.SendAsync("revit_export_query_to_excel", args, cancellationToken);
         return FormatResult(result);
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────
+
+    private static bool TryParseJsonArray(
+        string? json,
+        string argumentName,
+        out object parsed,
+        out string? error)
+    {
+        parsed = new object[] { };
+        error = null;
+
+        if (string.IsNullOrWhiteSpace(json))
+            return true;
+
+        try
+        {
+            var token = Newtonsoft.Json.Linq.JToken.Parse(json);
+
+            if (token is not Newtonsoft.Json.Linq.JArray)
+            {
+                error = $"{argumentName} must be a JSON array.";
+                return false;
+            }
+
+            parsed = token;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = $"{argumentName} could not be parsed as JSON array: {ex.Message}";
+            return false;
+        }
+    }
+
+    private static string FormatBridgeError(string message)
+    {
+        var response = new
+        {
+            success = false,
+            message,
+            durationMs = 0,
+            data = (object?)null,
+            warnings = Array.Empty<string>(),
+            errors = new[] { message }
+        };
+        return JsonConvert.SerializeObject(response, Formatting.Indented);
     }
 
     private static string FormatResult(McpToolResult result)

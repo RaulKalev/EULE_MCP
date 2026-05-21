@@ -146,6 +146,12 @@ Export all Fire Alarm Devices grouped by ELENEA_Nimetus and ELENEA_Tootja to Exc
 }
 ```
 
+### Invalid JSON Handling
+
+Advanced tools that accept `filters` or `groupBy` expect valid JSON arrays. If malformed JSON is provided, the bridge returns a structured JSON error response and does not forward the request to Revit.
+
+For Excel export (`revit_export_query_to_excel`), invalid `filters` or `groupBy` will abort the export to avoid accidentally exporting unfiltered model data.
+
 ---
 
 ## MCP Window

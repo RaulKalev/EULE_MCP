@@ -80,6 +80,31 @@ Verify:
 
 ## 7. Error Handling
 
-- Send invalid `filters` JSON (e.g. `"filters": "not json"`) to `revit_export_query_to_excel` — should return `"success": false` with a parse error, not silently export unfiltered data.
-- Send invalid `groupBy` JSON to `revit_group_elements` — should return `"success": false`.
+### Bridge-level JSON parsing
+
+Invalid JSON is caught at the bridge before it reaches the Revit add-in. All error responses are valid JSON with `"success": false`.
+
+1. Send invalid `filters` JSON (e.g. `filters = "not json"`) to `revit_find_elements_by_parameter` — expected: `"success": false`, clear filters parse error.
+2. Send invalid `filters` JSON to `revit_get_elements_info` — expected: `"success": false`, clear filters parse error.
+3. Send invalid `groupBy` JSON (e.g. `groupBy = "{ invalid"`) to `revit_group_elements` — expected: `"success": false`, clear groupBy parse error.
+4. Send invalid `filters` JSON to `revit_export_query_to_excel` — expected: `"success": false`, no Excel file created.
+5. Send invalid `groupBy` JSON to `revit_export_query_to_excel` — expected: `"success": false`, no Excel file created.
+
+### Add-in-level validation
+
 - Call `revit_get_elements_info` with no category, no selection, no element IDs — should return a clear error message.
+
+### Expected error response shape
+
+All parse errors return valid JSON matching the standard response shape:
+
+```json
+{
+  "success": false,
+  "message": "filters could not be parsed as JSON array: ...",
+  "durationMs": 0,
+  "data": null,
+  "warnings": [],
+  "errors": ["filters could not be parsed as JSON array: ..."]
+}
+```
