@@ -30,18 +30,26 @@ public static class ApprovalSummaryBuilder
     private static string BuildSelectElements(McpToolRequest request)
     {
         var ids = ToolArguments.GetLongArray(request.Arguments, "elementIds");
-        return $"Select {ids.Length} element{(ids.Length == 1 ? "" : "s")} by ID";
+        var replace = ToolArguments.GetBool(request.Arguments, "replaceSelection", true);
+        var zoom = ToolArguments.GetBool(request.Arguments, "zoomToSelection");
+        return $"Select {ids.Length} element{(ids.Length == 1 ? "" : "s")} in Revit UI. " +
+               $"Replace selection: {(replace ? "yes" : "no")}. Zoom: {(zoom ? "yes" : "no")}";
     }
 
     private static string BuildSelectByQuery(McpToolRequest request)
     {
         var category = ToolArguments.GetString(request.Arguments, "category");
         var filters = ToolArguments.GetFiltersWithWarnings(request.Arguments);
+        var replace = ToolArguments.GetBool(request.Arguments, "replaceSelection", true);
+        var zoom = ToolArguments.GetBool(request.Arguments, "zoomToSelection");
+        var limit = ToolArguments.GetInt(request.Arguments, "limit", 500);
+
+        var catDesc = !string.IsNullOrWhiteSpace(category) ? $"'{category}'" : "elements";
         var filterDesc = filters.Items.Count > 0
-            ? $" matching {filters.Items.Count} filter{(filters.Items.Count == 1 ? "" : "s")}"
-            : "";
-        var catDesc = !string.IsNullOrWhiteSpace(category) ? category : "elements";
-        return $"Select {catDesc}{filterDesc}";
+            ? $" with {filters.Items.Count} filter{(filters.Items.Count == 1 ? "" : "s")}"
+            : string.Empty;
+        return $"Select elements by query in category {catDesc}{filterDesc}. " +
+               $"Replace: {(replace ? "yes" : "no")}. Zoom: {(zoom ? "yes" : "no")}. Limit: {limit}";
     }
 
     private static string BuildSetParameter(McpToolRequest request)
@@ -51,15 +59,15 @@ public static class ApprovalSummaryBuilder
         var useSelection = ToolArguments.GetBool(request.Arguments, "useSelection");
         var category = ToolArguments.GetString(request.Arguments, "category");
         var elementIds = ToolArguments.GetLongArray(request.Arguments, "elementIds");
+        var limit = ToolArguments.GetInt(request.Arguments, "limit", 500);
 
         var target = useSelection ? "current selection"
-            : elementIds.Length > 0 ? $"{elementIds.Length} element{(elementIds.Length == 1 ? "" : "s")}"
-            : !string.IsNullOrWhiteSpace(category) ? category
+            : elementIds.Length > 0 ? $"{elementIds.Length} explicit element{(elementIds.Length == 1 ? "" : "s")}"
+            : !string.IsNullOrWhiteSpace(category) ? $"category '{category}'"
             : "specified elements";
 
-        // Truncate long values for display
         var displayValue = value.Length > 30 ? value[..27] + "..." : value;
-        return $"Set '{paramName}' to \"{displayValue}\" on {target}";
+        return $"Set parameter '{paramName}' to \"{displayValue}\" on {target}. Limit: {limit}";
     }
 
     private static string BuildSetCircuitParameter(McpToolRequest request)
@@ -70,6 +78,6 @@ public static class ApprovalSummaryBuilder
 
         var displayValue = value.Length > 30 ? value[..27] + "..." : value;
         var circuitDesc = circuitIds.Length == 1 ? "1 circuit" : $"{circuitIds.Length} circuits";
-        return $"Set '{paramName}' to \"{displayValue}\" on {circuitDesc}";
+        return $"Set circuit parameter '{paramName}' to \"{displayValue}\" on {circuitDesc}";
     }
 }

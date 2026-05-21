@@ -30,7 +30,7 @@ public class GetCircuitCompatibleElementsTool : IRevitMcpTool
         var elementIds = ToolArguments.GetLongArray(request.Arguments, "elementIds");
         var filtersParsed = ToolArguments.GetFiltersWithWarnings(request.Arguments);
         var category = ToolArguments.GetString(request.Arguments, "category");
-        var targetCircuitId = ToolArguments.GetInt(request.Arguments, "targetCircuitId", 0);
+        var targetCircuitId = ToolArguments.GetLong(request.Arguments, "targetCircuitId");
         var limit = ToolArguments.GetInt(request.Arguments, "limit", 500);
 
         if (!useSelection && elementIds.Length == 0 && string.IsNullOrWhiteSpace(category))
@@ -55,7 +55,7 @@ public class GetCircuitCompatibleElementsTool : IRevitMcpTool
         ElectricalSystem? targetCircuit = null;
         if (targetCircuitId > 0)
         {
-            var elem = doc.GetElement(new ElementId((long)targetCircuitId));
+            var elem = doc.GetElement(new ElementId(targetCircuitId));
             targetCircuit = elem as ElectricalSystem;
             if (targetCircuit == null)
                 return Task.FromResult(Fail(request, $"No electrical circuit found with ID {targetCircuitId}."));

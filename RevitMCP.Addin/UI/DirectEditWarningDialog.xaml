@@ -37,7 +37,7 @@
                                          VerticalAlignment="Center"
                                          Foreground="#FFDC6B6B"
                                          Margin="0,0,8,0" />
-                <TextBlock Text="Enable Direct Edit Mode"
+                <TextBlock Text="Enable Direct Edit Mode — Dev/Admin Only"
                            FontSize="13"
                            FontWeight="SemiBold"
                            Foreground="{DynamicResource ForegroundBrush}"
@@ -51,12 +51,14 @@
                        Margin="0,0,0,6">
                 Enabling Direct Edit allows AI agents to modify your Revit model
                 <Run FontWeight="SemiBold">without approval prompts</Run>.
+                All write operations will execute immediately and
+                <Run FontWeight="SemiBold">bypass the approval queue</Run>.
             </TextBlock>
             <TextBlock FontSize="11"
                        Foreground="{DynamicResource IconForegroundBrush}"
                        TextWrapping="Wrap"
                        Margin="0,0,0,16">
-                Only enable this when you trust the current agent and can review changes in real time. You can disable it at any time from the STATUS tab.
+                This is intended for development and admin testing only. For normal company use, keep approval enabled so every write action appears in the Pending tab before execution. You can disable Direct Edit at any time from the STATUS tab.
             </TextBlock>
 
             <!-- Don't show again -->

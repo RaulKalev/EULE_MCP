@@ -10,7 +10,7 @@ namespace RevitMCP.Addin.Tools;
 public class SetParameterTool : IRevitMcpTool
 {
     public string Name => "revit_set_parameter";
-    public string Description => "Sets a parameter value on elements. Requires approval. Supports String, Integer, and Double storage types. Runs inside a Revit Transaction.";
+    public string Description => "Sets a parameter value on elements. Requires approval. Supports String, Integer, Double, and ElementId storage types. ElementId values can be provided as a numeric element ID or exact element/type name. Runs inside a Revit Transaction.";
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Parameters;
 

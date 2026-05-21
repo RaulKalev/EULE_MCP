@@ -26,11 +26,11 @@ public class AddElementsToCircuitTool : IRevitMcpTool
         if (uidoc?.Document == null) return Task.FromResult(Fail(request, "No active document."));
         var doc = uidoc.Document;
 
-        var targetCircuitId = ToolArguments.GetInt(request.Arguments, "targetCircuitId", 0);
+        var targetCircuitId = ToolArguments.GetLong(request.Arguments, "targetCircuitId");
         if (targetCircuitId == 0)
             return Task.FromResult(Fail(request, "targetCircuitId is required."));
 
-        var circuitElem = doc.GetElement(new ElementId((long)targetCircuitId));
+        var circuitElem = doc.GetElement(new ElementId(targetCircuitId));
         if (circuitElem is not ElectricalSystem circuit)
             return Task.FromResult(Fail(request, $"No electrical circuit found with ID {targetCircuitId}."));
 

@@ -198,4 +198,161 @@ Verify:
 - Missing parameters are reported as failures.
 - Revit Undo shows the transaction.
 - Modified and failed element counts are returned.
+
+---
+
+## 14. Electrical Circuit Discovery Tools
+
+Test each read-only tool from Claude Code or Codex.
+
+### Prompts
+
 ```
+List all electrical circuits in the model.
+
+List all electrical circuits on panel "DB-L1".
+
+Get detailed info for circuit 2520343.
+
+List available panels.
+
+List available wire types.
+
+List available cable types.
+
+Check whether the current selection can be added to circuit 2520343.
+```
+
+### Verify
+
+- Response is valid JSON with `"success": true`.
+- `revit_get_electrical_circuits` returns circuit list; `panelName` filter narrows results.
+- `revit_get_circuit_info` returns connected elements, load, wire type, and parameters.
+- `revit_get_available_panels` returns electrical equipment with names and IDs.
+- `revit_get_available_wire_types` and `revit_get_available_cable_types` return wire/cable types.
+- `revit_get_circuit_compatible_elements` checks compatibility and reports per-element reasons.
+- Read-only tools do not create Revit Transactions (no entry in Undo history).
+- Panel/circuit filters work; supplying a non-existent panel returns an empty or filtered result.
+- Invalid circuit IDs (e.g. `circuitId = 99999999`) return `"success": false` with a clear error message.
+- No active document returns `"success": false` with a clear error message.
+
+---
+
+## 15. Electrical Circuit Modification Tools
+
+Test each write tool from Claude Code or Codex.
+
+### Prompts
+
+```
+Create a new power circuit from the currently selected devices and assign it to panel "DB-L1".
+
+Add the current selection to circuit 2520343.
+
+Reassign circuit 2520343 to panel "DB-L2".
+
+Change the wire type of circuit 2520343 to "XX_EN_IT_Cat6a".
+
+Set circuit parameter "Cable Type" to "XX_EN_IT_Cat6a" on circuits 2520343 and 2520353.
+```
+
+### Verify per write tool
+
+For each tool (`revit_create_electrical_circuit`, `revit_add_elements_to_circuit`, `revit_reassign_circuit_panel`, `revit_change_circuit_cable_or_wire_type`, `revit_set_circuit_parameter`):
+
+1. Trigger the tool from Claude Code or Codex.
+2. Confirm response status is `"approval_required"` (not yet executed).
+3. Confirm a pending item appears in the **Pending** tab of the Revit MCP window.
+4. Confirm the pending item summary clearly identifies the operation (circuit ID, target panel, value, etc.).
+5. **Reject** the pending item.
+6. Confirm the model was **not** changed (check Revit Undo — no new entry).
+7. Repeat and **approve** the pending item.
+8. Confirm the model was changed (parameters/assignment visible in Revit).
+9. Confirm the change appears in **Revit Undo** history.
+10. Undo the change and confirm the model returns to its previous state.
+
+---
+
+## 16. Approval / Reject / Undo Tests
+
+Full approval workflow verification.
+
+### Test: Approve flow
+
+1. With Direct Edit disabled, call a write tool (e.g. `revit_set_circuit_parameter`).
+2. Response status must be `"approval_required"`.
+3. Pending tab auto-selects and shows the request.
+4. Click **Approve**.
+5. Confirm model is modified.
+6. Confirm Revit Undo shows the transaction name (e.g. `"Revit MCP - Set Circuit Parameter"`).
+7. Confirm the Activity tab logs the operation as Success.
+
+### Test: Reject flow
+
+1. Call a write tool.
+2. Click **Reject** in Pending tab.
+3. Confirm model is **not** modified.
+4. Confirm Activity tab logs the operation as Rejected.
+5. Confirm Revit Undo has no new entry.
+
+### Test: Reject All
+
+1. Queue multiple write tools in sequence.
+2. Click **Reject All**.
+3. Confirm all pending items are cleared.
+4. Confirm the model was not changed.
+
+### Test: Undo after approval
+
+1. Approve a write tool that changes a parameter.
+2. Press `Ctrl+Z` in Revit.
+3. Confirm the parameter reverts to its previous value.
+4. Confirm Undo stack shows the MCP transaction name.
+
+---
+
+## 17. Direct Edit Safety Tests
+
+Direct Edit mode bypasses approval and should only be used for development/testing. These tests verify that the feature behaves correctly and is safe by default.
+
+### Test: Default state
+
+1. Start Revit with the add-in loaded.
+2. Open the MCP Connector window.
+3. Confirm the **Approval Required** button shows **Enabled** (Direct Edit is disabled by default).
+4. Confirm no confirmation dialog has appeared.
+
+### Test: Enabling Direct Edit
+
+1. With Approval Required enabled, call a write tool.
+2. Confirm approval appears in Pending tab (not executed).
+3. Reject the pending item.
+4. Click the **Approval Required: Enabled** button to toggle Direct Edit on.
+5. Confirm a confirmation dialog appears.
+6. Confirm the dialog clearly states that write tools will execute **immediately** without queuing.
+7. Confirm the dialog clearly labels this as **Dev/Admin Only**.
+8. Confirm the default focused button is **Cancel** (not Enable).
+9. Click **Cancel** — confirm Direct Edit is still disabled.
+10. Click the button again, confirm the dialog appears.
+11. Click **Enable Direct Edit**.
+12. Confirm the button now shows **Approval Required: Disabled** (red/warning color).
+
+### Test: Write tool with Direct Edit enabled
+
+1. With Direct Edit enabled, call a write tool (e.g. `revit_set_circuit_parameter`).
+2. Confirm the tool executes **immediately** — no pending approval appears.
+3. Confirm the model is changed.
+4. Confirm Revit Undo shows the transaction.
+
+### Test: Disabling Direct Edit
+
+1. Click the **Approval Required: Disabled** button.
+2. Confirm Direct Edit is disabled **without** a confirmation dialog.
+3. Call a write tool.
+4. Confirm approval appears in Pending tab (approval required again).
+
+### Test: Restart resets Direct Edit
+
+1. Enable Direct Edit.
+2. Close and reopen Revit (or reload the add-in).
+3. Confirm Direct Edit starts **disabled** again.

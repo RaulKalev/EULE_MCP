@@ -261,6 +261,8 @@ The **Approval Required** button in the title bar controls whether write tools (
 - **Enabled** (default) — all write operations queue for manual approval inside Revit
 - **Disabled** (Direct Edit mode) — write operations execute immediately without queuing; a confirmation dialog warns before enabling this mode
 
+> **Safety note:** Direct Edit mode is intended for development and admin testing only. In normal company use, keep Approval Required enabled so every write action appears in the Pending tab before execution. Direct Edit always starts disabled when Revit loads. A confirmation dialog must be acknowledged before it can be enabled.
+
 ---
 
 ## Requirements
