@@ -49,21 +49,30 @@ public class ExternalEventService
         if (status == ExternalEventRequest.TimedOut)
         {
             _handler.CancelPending(request.RequestId);
-            return new McpToolResult
+            var busyResult = new McpToolResult
             {
                 RequestId = request.RequestId,
                 Success = false,
-                Message = "Revit external event timed out. Revit may be busy or in an invalid state."
+                Message = "Revit is busy — external event timed out. Revit may be in a modal dialog or processing another operation. Try again when Revit is idle."
             };
+            // Set Status separately; defensive try/catch guards against assembly version
+            // mismatch during hot-reload (MissingMethodException on set_Status).
+            try { busyResult.Status = "revit_busy"; } catch (MissingMethodException) { }
+            return busyResult;
         }
 
         using var cts = new CancellationTokenSource(timeoutMs);
-        cts.Token.Register(() => tcs.TrySetResult(new McpToolResult
+        cts.Token.Register(() =>
         {
-            RequestId = request.RequestId,
-            Success = false,
-            Message = "Request timed out waiting for Revit API thread."
-        }));
+            var timeoutResult = new McpToolResult
+            {
+                RequestId = request.RequestId,
+                Success = false,
+                Message = $"Request timed out after {timeoutMs / 1000}s waiting for the Revit API thread. Revit may be unresponsive."
+            };
+            try { timeoutResult.Status = "revit_busy"; } catch (MissingMethodException) { }
+            tcs.TrySetResult(timeoutResult);
+        });
 
         return await tcs.Task;
     }

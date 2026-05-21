@@ -41,35 +41,52 @@ public class ChangeCircuitCableOrWireTypeTool : IRevitMcpTool
         string currentWireType = CircuitDtoBuilder.GetWireTypeName(doc, circuit);
         var warnings = new List<string>();
 
-        // Determine which name to resolve: prefer cableTypeName, then wireTypeName
-        string targetTypeName = preferCableType && !string.IsNullOrWhiteSpace(cableTypeName)
-            ? cableTypeName
-            : wireTypeName;
+        // Resolve the target type element (CableType or WireType)
+        Element? resolvedTypeElem = null;
 
-        // If preferCableType is set but no cable types exist, try wire type name
         if (preferCableType && !string.IsNullOrWhiteSpace(cableTypeName))
         {
-            var (wt, wtError) = WireTypeResolver.Resolve(doc, cableTypeName);
-            if (wt == null)
+            // Try CableType class first (data/communication circuits)
+            var (cableElem, _) = CableTypeResolver.Resolve(doc, cableTypeName);
+            if (cableElem != null)
             {
-                if (fallbackToWireType && !string.IsNullOrWhiteSpace(wireTypeName))
+                resolvedTypeElem = cableElem;
+            }
+            else
+            {
+                // Fall back: maybe it's stored as a WireType with that name
+                var (wt, _) = WireTypeResolver.Resolve(doc, cableTypeName);
+                if (wt != null)
                 {
-                    warnings.Add($"Cable type '{cableTypeName}' not found as a Revit WireType. Falling back to wireTypeName.");
-                    targetTypeName = wireTypeName;
+                    resolvedTypeElem = wt;
+                    warnings.Add($"'{cableTypeName}' resolved as a WireType (not a CableType).");
+                }
+                else if (fallbackToWireType && !string.IsNullOrWhiteSpace(wireTypeName))
+                {
+                    warnings.Add($"Cable type '{cableTypeName}' not found. Falling back to wireTypeName.");
                 }
                 else
                 {
-                    warnings.Add($"'{cableTypeName}' not found. Available wire types: use revit_get_available_wire_types.");
-                    return Task.FromResult(Fail(request, wtError));
+                    return Task.FromResult(Fail(request,
+                        $"No cable type or wire type found matching '{cableTypeName}'. " +
+                        "Use revit_get_available_cable_types or revit_get_available_wire_types to list available types."));
                 }
             }
         }
 
-        var (resolvedType, resolveError) = WireTypeResolver.Resolve(doc, targetTypeName);
-        if (resolvedType == null)
-            return Task.FromResult(Fail(request, resolveError));
+        // Resolve wire type if we still don't have a match
+        if (resolvedTypeElem == null && !string.IsNullOrWhiteSpace(wireTypeName))
+        {
+            var (wt, wtError) = WireTypeResolver.Resolve(doc, wireTypeName);
+            if (wt == null)
+                return Task.FromResult(Fail(request, wtError));
+            resolvedTypeElem = wt;
+        }
 
-        var result = CircuitMutationService.ChangeWireType(doc, circuit, resolvedType);
+        if (resolvedTypeElem == null)
+            return Task.FromResult(Fail(request, "Could not resolve a cable or wire type."));
+
+        var result = CircuitMutationService.ChangeWireType(doc, circuit, resolvedTypeElem);
         warnings.AddRange(result.Warnings);
 
         sw.Stop();

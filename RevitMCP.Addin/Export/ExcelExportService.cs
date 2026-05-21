@@ -145,6 +145,14 @@ public class ExcelExportService
         var qr = req.QueryResult;
         if (qr == null || qr.Elements.Count == 0) return;
 
+        // Skip the parameters detail sheet when all parameters were returned (no specific columns
+        // requested) because the cross-product of elements × params can reach hundreds of thousands
+        // of rows and cause timeouts or OOM.  When the caller has filtered to specific columns the
+        // sheet is small and genuinely useful.
+        if (req.ParameterColumns.Count == 0) return;
+
+        const int maxRows = 10_000;
+
         var ws = wb.Worksheets.Add("Parameters");
         var headers = new[] { "ElementId", "ParameterName", "Scope", "Value", "IsShared", "Guid", "StorageType", "IsReadOnly" };
 
@@ -155,10 +163,16 @@ public class ExcelExportService
         }
 
         var row = 2;
+        var capped = false;
         foreach (var elem in qr.Elements)
         {
             foreach (var kv in elem.Parameters)
             {
+                if (row - 1 > maxRows)
+                {
+                    capped = true;
+                    break;
+                }
                 var p = kv.Value;
                 ws.Cell(row, 1).Value = elem.ElementId;
                 ws.Cell(row, 2).Value = p.Name;
@@ -170,6 +184,14 @@ public class ExcelExportService
                 ws.Cell(row, 8).Value = p.IsReadOnly;
                 row++;
             }
+            if (capped) break;
+        }
+
+        if (capped)
+        {
+            var noteRow = row;
+            ws.Cell(noteRow, 1).Value = "(truncated)";
+            ws.Cell(noteRow, 2).Value = $"Parameters sheet capped at {maxRows} rows. Request fewer elements or specific parameter columns.";
         }
 
         if (row > 2)

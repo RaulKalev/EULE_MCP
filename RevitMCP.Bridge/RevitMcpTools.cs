@@ -471,6 +471,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         var response = new
         {
             success = result.Success,
+            status = result.Status,
             message = result.Message,
             durationMs = result.DurationMs,
             data = result.Data,

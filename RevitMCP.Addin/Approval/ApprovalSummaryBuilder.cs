@@ -18,6 +18,7 @@ public static class ApprovalSummaryBuilder
             "revit_select_elements" => BuildSelectElements(request),
             "revit_select_elements_by_query" => BuildSelectByQuery(request),
             "revit_set_parameter" => BuildSetParameter(request),
+            "revit_set_circuit_parameter" => BuildSetCircuitParameter(request),
             "revit_create_electrical_circuit" => CircuitPreviewBuilder.BuildCreateCircuit(request),
             "revit_add_elements_to_circuit" => CircuitPreviewBuilder.BuildAddElements(request),
             "revit_reassign_circuit_panel" => CircuitPreviewBuilder.BuildReassignPanel(request),
@@ -59,5 +60,16 @@ public static class ApprovalSummaryBuilder
         // Truncate long values for display
         var displayValue = value.Length > 30 ? value[..27] + "..." : value;
         return $"Set '{paramName}' to \"{displayValue}\" on {target}";
+    }
+
+    private static string BuildSetCircuitParameter(McpToolRequest request)
+    {
+        var paramName = ToolArguments.GetString(request.Arguments, "parameterName");
+        var value = ToolArguments.GetString(request.Arguments, "value");
+        var circuitIds = ToolArguments.GetLongArray(request.Arguments, "circuitIds");
+
+        var displayValue = value.Length > 30 ? value[..27] + "..." : value;
+        var circuitDesc = circuitIds.Length == 1 ? "1 circuit" : $"{circuitIds.Length} circuits";
+        return $"Set '{paramName}' to \"{displayValue}\" on {circuitDesc}";
     }
 }

@@ -11,6 +11,45 @@ namespace RevitMCP.Addin.Electrical;
 public static class CableTypeResolver
 {
     /// <summary>
+    /// Resolves a single CableType element by exact or partial name match.
+    /// Returns null if the class is unavailable in this Revit version or no match found.
+    /// </summary>
+    public static (Element? Elem, string Error) Resolve(Document doc, string name)
+    {
+        var cableTypeClass = typeof(Element).Assembly
+            .GetType("Autodesk.Revit.DB.Electrical.CableType");
+        if (cableTypeClass == null)
+            return (null, "CableType class not available in this Revit version.");
+
+        try
+        {
+            var all = new FilteredElementCollector(doc)
+                .OfClass(cableTypeClass)
+                .ToList();
+
+            var exact = all.FirstOrDefault(e =>
+                e.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (exact != null) return (exact, "");
+
+            var contains = all
+                .Where(e => e.Name.Contains(name, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (contains.Count == 1) return (contains[0], "");
+            if (contains.Count > 1)
+            {
+                var names = string.Join(", ", contains.Select(e => e.Name));
+                return (null, $"Multiple cable types match '{name}': {names}. Use exact name.");
+            }
+
+            return (null, $"No cable type found matching '{name}'.");
+        }
+        catch (Exception ex)
+        {
+            return (null, $"Error resolving cable type: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Returns cable types found in the project, with warnings if not available.
     /// </summary>
     public static (List<object> Types, List<string> Warnings) GetAll(Document doc)

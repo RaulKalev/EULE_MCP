@@ -13,17 +13,23 @@ public class GroupingEngine
 
         var keyNames = options.GroupBy.Select(GetKeyLabel).ToList();
 
-        // Group elements by their composite key
+        // Group elements by a string composite key.
+        // Dictionary<string,string> does NOT override Equals/GetHashCode, so it cannot be
+        // used directly as a GroupBy key — every instance would be treated as unique.
         var grouped = elements
-            .GroupBy(e => BuildCompositeKey(e, options.GroupBy))
+            .GroupBy(e => string.Join("\x1F", options.GroupBy.Select(g => GetKeyValue(e, g))))
             .OrderByDescending(g => g.Count())
             .ToList();
 
         var flat = grouped.Select(g =>
         {
+            // Rebuild the key dictionary from the first element in the group
+            var first = g.First();
             var row = new GroupRow
             {
-                Keys = g.Key,
+                Keys = keyNames
+                    .Zip(options.GroupBy, (name, gk) => (name, val: GetKeyValue(first, gk)))
+                    .ToDictionary(x => x.name, x => x.val),
                 Count = g.Count()
             };
             if (options.IncludeElements)
@@ -59,17 +65,21 @@ public class GroupingEngine
     {
         switch (g.Type)
         {
-            case "Category": return element.Category;
-            case "Family": return element.Family;
-            case "Type": return element.Type;
-            case "Level": return element.Level;
+            case "Category": return element.Category?.Trim() ?? string.Empty;
+            case "Family":   return element.Family?.Trim()   ?? string.Empty;
+            case "Type":     return element.Type?.Trim()     ?? string.Empty;
+            case "Level":    return element.Level?.Trim()    ?? string.Empty;
             default: // Parameter
                 foreach (var kv in element.Parameters)
                 {
                     var p = kv.Value;
                     if (ScopeMatches(p.Scope, g.Scope) &&
                         ParameterMatcher.Matches(p.Name, g.ParameterName, g.ParameterMatchMode))
-                        return p.Value;
+                    {
+                        // Trim to prevent whitespace-only differences from producing duplicate groups
+                        var val = p.Value?.Trim() ?? string.Empty;
+                        return string.IsNullOrEmpty(val) ? "(empty)" : val;
+                    }
                 }
                 return "(not found)";
         }

@@ -81,6 +81,11 @@ public class App : IExternalApplication
             _connector = connector;
             _viewModel = new McpWindowViewModel(connector, logger, approvalService);
 
+            // Startup validation: log all registered tool names so mismatches (e.g. after a
+            // partial rebuild before Revit restart) are visible in the diagnostic log.
+            var registeredTools = handler.GetRegisteredToolNames();
+            DiagLog($"Registered tools ({registeredTools.Count}): {string.Join(", ", registeredTools)}");
+
             // Ribbon
             DiagLog("Calling AddRibbonButton");
             AddRibbonButton(application);
@@ -116,7 +121,7 @@ public class App : IExternalApplication
                     ?? application.CreateRibbonPanel(tabName, "MCP");
 
         var isDark = Autodesk.Revit.UI.UIThemeManager.CurrentTheme == Autodesk.Revit.UI.UITheme.Dark;
-        var iconName = isDark ? "Light - RevitMCP.tiff" : "Dark - RevitMCP.tiff";
+        var iconName = isDark ? "Light - AI1.tiff" : "Dark - AI1.tiff";
 
         var buttonData = new PushButtonData(
             "RevitMCPConnector",

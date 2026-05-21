@@ -18,29 +18,35 @@ public static class CircuitDtoBuilder
 
         int elementCount = 0;
         List<object>? elements = null;
-        try
+        // Only access circuit.Elements when needed — this property can hang the Revit UI thread
+        // for circuits with large or complex element sets, causing all subsequent ExternalEvent
+        // Raise() calls to return TimedOut. Skip it entirely when includeElements is false.
+        if (includeElements)
         {
-            var elemSet = circuit.Elements;
-            elementCount = elemSet?.Size ?? 0;
-            if (includeElements && elemSet != null)
+            try
             {
-                elements = new List<object>();
-                foreach (Element e in elemSet)
+                var elemSet = circuit.Elements;
+                elementCount = elemSet?.Size ?? 0;
+                if (elemSet != null)
                 {
-                    var typeId = e.GetTypeId();
-                    var typeElem = typeId != null && typeId != ElementId.InvalidElementId
-                        ? doc.GetElement(typeId) : null;
-                    elements.Add(new
+                    elements = new List<object>();
+                    foreach (Element e in elemSet)
                     {
-                        elementId = e.Id.Value,
-                        category = e.Category?.Name ?? "",
-                        family = e is FamilyInstance fi2 ? fi2.Symbol?.Family?.Name ?? "" : "",
-                        type = typeElem?.Name ?? e.Name
-                    });
+                        var typeId = e.GetTypeId();
+                        var typeElem = typeId != null && typeId != ElementId.InvalidElementId
+                            ? doc.GetElement(typeId) : null;
+                        elements.Add(new
+                        {
+                            elementId = e.Id.Value,
+                            category = e.Category?.Name ?? "",
+                            family = e is FamilyInstance fi2 ? fi2.Symbol?.Family?.Name ?? "" : "",
+                            type = typeElem?.Name ?? e.Name
+                        });
+                    }
                 }
             }
+            catch { /* Elements may throw on certain system types */ }
         }
-        catch { /* Elements may throw on certain system types */ }
 
         List<object>? parameters = null;
         if (includeParameters)

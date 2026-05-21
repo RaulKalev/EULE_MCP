@@ -203,7 +203,7 @@ public static class CircuitMutationService
     public static ChangeTypeResult ChangeWireType(
         Document doc,
         ElectricalSystem circuit,
-        WireType newWireType)
+        Element newTypeElement)
     {
         string oldWireType = CircuitDtoBuilder.GetWireTypeName(doc, circuit);
         var warnings = new List<string>();
@@ -212,12 +212,12 @@ public static class CircuitMutationService
         trans.Start();
         try
         {
-            circuit.CableType = newWireType.Id;
+            circuit.CableType = newTypeElement.Id;
             trans.Commit();
             return new ChangeTypeResult(
                 true,
-                $"Changed wire type from '{oldWireType}' to '{newWireType.Name}'.",
-                oldWireType, newWireType.Name, warnings);
+                $"Changed wire type from '{oldWireType}' to '{newTypeElement.Name}'.",
+                oldWireType, newTypeElement.Name, warnings);
         }
         catch (Exception ex)
         {

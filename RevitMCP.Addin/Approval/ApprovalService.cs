@@ -67,6 +67,7 @@ public class ApprovalService
         {
             RequestId = request.OriginalRequest.RequestId,
             Success = false,
+            Status = "approval_rejected",
             Message = "Action rejected by user."
         });
         PendingChanged?.Invoke();

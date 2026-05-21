@@ -11,7 +11,7 @@ public class SelectElementsByQueryTool : IRevitMcpTool
 {
     public string Name => "revit_select_elements_by_query";
     public string Description => "Selects elements in the active Revit UI based on category and parameter filters. Does not modify model data.";
-    public ToolPermission Permission => ToolPermission.RequiresApproval;
+    public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Selection;
 
     private static readonly ElementQueryEngine _engine = new();

@@ -10,7 +10,7 @@ public class SelectElementsTool : IRevitMcpTool
 {
     public string Name => "revit_select_elements";
     public string Description => "Selects elements in the active Revit UI by explicit element IDs. Does not modify model data.";
-    public ToolPermission Permission => ToolPermission.RequiresApproval;
+    public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Selection;
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)

@@ -28,6 +28,9 @@ public class ExternalEventHandler : IExternalEventHandler
     public void RegisterTool(IRevitMcpTool tool)
         => _tools[tool.Name] = tool;
 
+    public IReadOnlyList<string> GetRegisteredToolNames()
+        => _tools.Keys.OrderBy(k => k).ToList();
+
     public void Enqueue(McpToolRequest request, TaskCompletionSource<McpToolResult> tcs)
         => _queue.Enqueue((request, tcs));
 
@@ -77,6 +80,7 @@ public class ExternalEventHandler : IExternalEventHandler
                 {
                     RequestId = request.RequestId,
                     Success = false,
+                    Status = "unknown_tool",
                     Message = $"Unknown tool: {request.ToolName}"
                 });
                 continue;
@@ -92,15 +96,30 @@ public class ExternalEventHandler : IExternalEventHandler
                 && !isDirectEditEnabled)
             {
                 var summary = ApprovalSummaryBuilder.Build(request);
+
+                // Use a fresh TCS for the actual post-approval execution so we can log the result
+                // without keeping the pipe connection open. The original TCS is resolved immediately
+                // so the LLM sees approval_required instead of waiting 5 minutes.
+                var executionTcs = new TaskCompletionSource<McpToolResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+
                 _approvalService.Add(new PendingApprovalRequest
                 {
                     OriginalRequest = request,
-                    Completion = tcs,
+                    Completion = executionTcs,
                     ToolName = tool.Name,
                     Summary = summary,
                     ClientName = request.ClientName
                 });
-                continue; // don't resolve TCS — pipe client waits for approval
+                // Return approval_required immediately — don't make the pipe wait 5 minutes.
+                // The user approves in the Revit MCP window; execution happens asynchronously.
+                tcs.TrySetResult(new McpToolResult
+                {
+                    RequestId = request.RequestId,
+                    Success = false,
+                    Status = "approval_required",
+                    Message = $"'{summary}' is pending approval in Revit. Open the RevitMCP window and click Approve on the Pending tab to execute, or Reject to cancel."
+                });
+                continue; // pipe connection is now resolved; execution proceeds after user approves
             }
 
             try
@@ -116,6 +135,7 @@ public class ExternalEventHandler : IExternalEventHandler
                 {
                     RequestId = request.RequestId,
                     Success = false,
+                    Status = "transaction_failed",
                     Message = $"Tool execution failed: {ex.Message}",
                     Errors = new List<string> { ex.ToString() }
                 });
