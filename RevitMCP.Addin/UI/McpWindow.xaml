@@ -139,7 +139,7 @@
                                         Margin="0,2,0,0"
                                         Padding="0"
                                         Cursor="Hand"
-                                        ToolTip="Click to toggle — when disabled, mutations run without approval prompts">
+                                        ToolTip="Direct Edit (Dev/Admin Only) — when enabled, write tools execute immediately without queuing for approval. Recommended: keep approval enabled for normal company use.">
                                     <Button.Style>
                                         <Style TargetType="Button">
                                             <Setter Property="Background" Value="Transparent" />

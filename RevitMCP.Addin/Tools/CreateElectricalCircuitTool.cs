@@ -31,7 +31,7 @@ public class CreateElectricalCircuitTool : IRevitMcpTool
         var filtersParsed = ToolArguments.GetFiltersWithWarnings(request.Arguments);
         var category = ToolArguments.GetString(request.Arguments, "category");
         var systemTypeStr = ToolArguments.GetString(request.Arguments, "systemType", "PowerCircuit");
-        var panelElementId = ToolArguments.GetInt(request.Arguments, "panelElementId", 0);
+        var panelElementId = ToolArguments.GetLong(request.Arguments, "panelElementId");
         var panelName = ToolArguments.GetString(request.Arguments, "panelName");
         var wireTypeName = ToolArguments.GetString(request.Arguments, "wireTypeName");
         var limit = ToolArguments.GetInt(request.Arguments, "limit", 500);

@@ -274,7 +274,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_set_parameter"),
-     Description("Sets a parameter value on elements. Requires approval. Runs inside a Revit Transaction.")]
+     Description("Sets a parameter value on elements. Requires approval. Supports String, Integer, Double, and ElementId storage types. ElementId values can be provided as a numeric element ID or exact element/type name. Runs inside a Revit Transaction.")]
     public async Task<string> SetParameter(
         [Description("Parameter name to set (partial match supported)")] string parameterName,
         [Description("Value to set")] string value,
@@ -517,7 +517,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     {
         var args = new Dictionary<string, object?>
         {
-            ["circuitId"] = (int)circuitId,
+            ["circuitId"] = circuitId,
             ["includeElements"] = includeElements,
             ["includeCircuitParameters"] = includeCircuitParameters
         };
@@ -577,7 +577,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["elementIds"] = elementIds ?? [],
             ["category"] = category ?? string.Empty,
             ["filters"] = parsedFilters,
-            ["targetCircuitId"] = (int)targetCircuitId,
+            ["targetCircuitId"] = targetCircuitId,
             ["limit"] = limit
         };
         var result = await pipeClient.SendAsync("revit_get_circuit_compatible_elements", args, cancellationToken);
@@ -608,7 +608,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["category"] = category ?? string.Empty,
             ["filters"] = parsedFilters,
             ["systemType"] = systemType,
-            ["panelElementId"] = (int)panelElementId,
+            ["panelElementId"] = panelElementId,
             ["panelName"] = panelName ?? string.Empty,
             ["wireTypeName"] = wireTypeName ?? string.Empty,
             ["limit"] = limit
@@ -633,7 +633,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
 
         var args = new Dictionary<string, object?>
         {
-            ["targetCircuitId"] = (int)targetCircuitId,
+            ["targetCircuitId"] = targetCircuitId,
             ["useSelection"] = useSelection,
             ["elementIds"] = elementIds ?? [],
             ["category"] = category ?? string.Empty,
@@ -654,8 +654,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     {
         var args = new Dictionary<string, object?>
         {
-            ["circuitId"] = (int)circuitId,
-            ["targetPanelElementId"] = (int)targetPanelElementId,
+            ["circuitId"] = circuitId,
+            ["targetPanelElementId"] = targetPanelElementId,
             ["targetPanelName"] = targetPanelName ?? string.Empty
         };
         var result = await pipeClient.SendAsync("revit_reassign_circuit_panel", args, cancellationToken);
@@ -674,7 +674,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     {
         var args = new Dictionary<string, object?>
         {
-            ["circuitId"] = (int)circuitId,
+            ["circuitId"] = circuitId,
             ["cableTypeName"] = cableTypeName ?? string.Empty,
             ["wireTypeName"] = wireTypeName ?? string.Empty,
             ["preferCableType"] = preferCableType,

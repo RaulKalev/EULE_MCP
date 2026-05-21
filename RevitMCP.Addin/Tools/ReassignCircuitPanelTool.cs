@@ -24,15 +24,15 @@ public class ReassignCircuitPanelTool : IRevitMcpTool
         var doc = uiapp.ActiveUIDocument?.Document;
         if (doc == null) return Task.FromResult(Fail(request, "No active document."));
 
-        var circuitId = ToolArguments.GetInt(request.Arguments, "circuitId", 0);
+        var circuitId = ToolArguments.GetLong(request.Arguments, "circuitId");
         if (circuitId == 0)
             return Task.FromResult(Fail(request, "circuitId is required."));
 
-        var circuitElem = doc.GetElement(new ElementId((long)circuitId));
+        var circuitElem = doc.GetElement(new ElementId(circuitId));
         if (circuitElem is not ElectricalSystem circuit)
             return Task.FromResult(Fail(request, $"No electrical circuit found with ID {circuitId}."));
 
-        var panelElementId = ToolArguments.GetInt(request.Arguments, "targetPanelElementId", 0);
+        var panelElementId = ToolArguments.GetLong(request.Arguments, "targetPanelElementId");
         var panelName = ToolArguments.GetString(request.Arguments, "targetPanelName");
 
         var (panel, panelError) = _panelResolver.Resolve(doc, panelElementId, panelName);
