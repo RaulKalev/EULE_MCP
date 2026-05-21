@@ -1,0 +1,117 @@
+<Window x:Class="RevitMCP.Addin.UI.DirectEditWarningDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="Enable Direct Edit"
+        Width="340"
+        SizeToContent="Height"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesign2.Defaults.xaml" />
+                <ResourceDictionary Source="Themes/DarkTheme.xaml" />
+                <ResourceDictionary Source="Themes/ElementStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Border Background="{DynamicResource PrimaryBackgroundBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="2"
+            CornerRadius="10"
+            MouseDown="Border_MouseDown">
+
+        <StackPanel Margin="20">
+
+            <!-- Header -->
+            <DockPanel Margin="0,0,0,14">
+                <materialDesign:PackIcon Kind="AlertCircleOutline"
+                                         Width="18" Height="18"
+                                         VerticalAlignment="Center"
+                                         Foreground="#FFDC6B6B"
+                                         Margin="0,0,8,0" />
+                <TextBlock Text="Enable Direct Edit Mode"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource ForegroundBrush}"
+                           VerticalAlignment="Center" />
+            </DockPanel>
+
+            <!-- Warning message -->
+            <TextBlock FontSize="11"
+                       Foreground="{DynamicResource ForegroundBrush}"
+                       TextWrapping="Wrap"
+                       Margin="0,0,0,6">
+                Enabling Direct Edit allows AI agents to modify your Revit model
+                <Run FontWeight="SemiBold">without approval prompts</Run>.
+            </TextBlock>
+            <TextBlock FontSize="11"
+                       Foreground="{DynamicResource IconForegroundBrush}"
+                       TextWrapping="Wrap"
+                       Margin="0,0,0,16">
+                Only enable this when you trust the current agent and can review changes in real time. You can disable it at any time from the STATUS tab.
+            </TextBlock>
+
+            <!-- Don't show again -->
+            <CheckBox x:Name="DontShowAgainCheckBox"
+                      Margin="0,0,0,16">
+                <CheckBox.Template>
+                    <ControlTemplate TargetType="CheckBox">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Cursor="Hand">
+                            <Border x:Name="CheckBorder"
+                                    Width="14" Height="14"
+                                    BorderBrush="{DynamicResource IconForegroundBrush}"
+                                    BorderThickness="1.5"
+                                    CornerRadius="2"
+                                    Background="Transparent"
+                                    Margin="0,0,8,0"
+                                    VerticalAlignment="Center">
+                                <materialDesign:PackIcon x:Name="CheckMark"
+                                                         Kind="Check"
+                                                         Width="10" Height="10"
+                                                         Foreground="{DynamicResource PrimaryBackgroundBrush}"
+                                                         Visibility="Collapsed" />
+                            </Border>
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="CheckMark" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="CheckBorder" Property="Background" Value="{DynamicResource IconForegroundBrush}" />
+                                <Setter TargetName="CheckBorder" Property="BorderBrush" Value="{DynamicResource IconForegroundBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="CheckBorder" Property="BorderBrush" Value="{DynamicResource ForegroundBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </CheckBox.Template>
+                <CheckBox.Content>
+                    <TextBlock Text="Don't show this warning again"
+                               Foreground="{DynamicResource IconForegroundBrush}"
+                               FontSize="11" />
+                </CheckBox.Content>
+            </CheckBox>
+
+            <!-- Buttons -->
+            <UniformGrid Columns="2">
+                <Button Content="Enable Direct Edit"
+                        Click="EnableButton_Click"
+                        Style="{StaticResource DangerButtonStyle}"
+                        Margin="0,0,4,0" />
+                <Button Content="Cancel"
+                        Click="CancelButton_Click"
+                        Style="{StaticResource ActionButtonStyle}"
+                        Margin="4,0,0,0" />
+            </UniformGrid>
+
+        </StackPanel>
+    </Border>
+</Window>

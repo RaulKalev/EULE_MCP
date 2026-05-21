@@ -10,5 +10,6 @@ public enum ToolCategory
     Parameters,
     Reports,
     Elements,
-    Worksharing
+    Worksharing,
+    Electrical
 }

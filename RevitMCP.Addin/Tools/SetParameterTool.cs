@@ -166,13 +166,15 @@ public class SetParameterTool : IRevitMcpTool
 
                 try
                 {
-                    bool set = param.StorageType switch
-                    {
-                        StorageType.String => SetString(param, value),
-                        StorageType.Integer => SetInteger(param, value),
-                        StorageType.Double => SetDouble(param, value),
-                        _ => false
-                    };
+                    bool set = param.StorageType == StorageType.ElementId
+                        ? SetElementId(doc, param, value)
+                        : param.StorageType switch
+                        {
+                            StorageType.String => SetString(param, value),
+                            StorageType.Integer => SetInteger(param, value),
+                            StorageType.Double => SetDouble(param, value),
+                            _ => false
+                        };
 
                     if (set)
                         modifiedIds.Add(eid.Value);
@@ -229,6 +231,33 @@ public class SetParameterTool : IRevitMcpTool
             System.Globalization.CultureInfo.InvariantCulture, out var dblVal)) return false;
         p.Set(dblVal);
         return true;
+    }
+
+    private static bool SetElementId(Document doc, Parameter p, string value)
+    {
+        // 1. Direct numeric element ID
+        if (long.TryParse(value, out var numId))
+        {
+            var elemById = doc.GetElement(new ElementId(numId));
+            if (elemById == null) return false;
+            p.Set(new ElementId(numId));
+            return true;
+        }
+
+        // 2. Name search — types first (wire types, cable types, etc.), then instances
+        var typeMatch = new FilteredElementCollector(doc)
+            .WhereElementIsElementType()
+            .FirstOrDefault(e => string.Equals(e.Name, value, StringComparison.OrdinalIgnoreCase));
+
+        if (typeMatch != null) { p.Set(typeMatch.Id); return true; }
+
+        var instMatch = new FilteredElementCollector(doc)
+            .WhereElementIsNotElementType()
+            .FirstOrDefault(e => string.Equals(e.Name, value, StringComparison.OrdinalIgnoreCase));
+
+        if (instMatch != null) { p.Set(instMatch.Id); return true; }
+
+        return false;
     }
 
     private static bool PassesFilters(IReadOnlyList<ParameterValueDto> parameters, List<ParameterFilterDto> filters)

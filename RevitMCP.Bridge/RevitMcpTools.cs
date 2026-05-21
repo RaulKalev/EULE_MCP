@@ -479,4 +479,232 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         };
         return JsonConvert.SerializeObject(response, Formatting.Indented);
     }
+
+    // ── Electrical Circuit Tools ──────────────────────────────────────────────
+
+    [McpServerTool(Name = "revit_get_electrical_circuits", ReadOnly = true),
+     Description("Lists electrical circuits (systems) in the active Revit document. Filter by panelName, circuitNumber, systemType (e.g. PowerCircuit). Options: includeElements (bool), includeParameters (bool), limit (int).")]
+    public async Task<string> GetElectricalCircuits(
+        [Description("Optional panel name filter (partial match)")] string? panelName = null,
+        [Description("Optional circuit number filter (partial match)")] string? circuitNumber = null,
+        [Description("Optional system type filter (e.g. PowerCircuit, Data, FireAlarm)")] string? systemType = null,
+        [Description("Include connected elements in response")] bool includeElements = true,
+        [Description("Include circuit parameters in response")] bool includeParameters = false,
+        [Description("Max circuits to return (default 500)")] int limit = 500,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panelName"] = panelName ?? string.Empty,
+            ["circuitNumber"] = circuitNumber ?? string.Empty,
+            ["systemType"] = systemType ?? string.Empty,
+            ["includeElements"] = includeElements,
+            ["includeParameters"] = includeParameters,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_get_electrical_circuits", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_circuit_info", ReadOnly = true),
+     Description("Returns detailed information for one electrical circuit by element ID.")]
+    public async Task<string> GetCircuitInfo(
+        [Description("Element ID of the circuit")] long circuitId,
+        [Description("Include connected elements")] bool includeElements = true,
+        [Description("Include circuit parameters")] bool includeCircuitParameters = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["circuitId"] = (int)circuitId,
+            ["includeElements"] = includeElements,
+            ["includeCircuitParameters"] = includeCircuitParameters
+        };
+        var result = await pipeClient.SendAsync("revit_get_circuit_info", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_available_panels", ReadOnly = true),
+     Description("Lists electrical equipment elements (panels/distribution boards) that circuits can be assigned to.")]
+    public async Task<string> GetAvailablePanels(
+        [Description("Optional name filter (partial match)")] string? nameContains = null,
+        [Description("Max panels to return (default 500)")] int limit = 500,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["nameContains"] = nameContains ?? string.Empty,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_get_available_panels", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_available_cable_types", ReadOnly = true),
+     Description("Lists cable types in the project if available. Returns a warning if cable types are not separately defined — use revit_get_available_wire_types in that case.")]
+    public async Task<string> GetAvailableCableTypes(CancellationToken cancellationToken = default)
+    {
+        var result = await pipeClient.SendAsync("revit_get_available_cable_types", [], cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_available_wire_types", ReadOnly = true),
+     Description("Lists all wire types available in the active Revit document.")]
+    public async Task<string> GetAvailableWireTypes(CancellationToken cancellationToken = default)
+    {
+        var result = await pipeClient.SendAsync("revit_get_available_wire_types", [], cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_circuit_compatible_elements", ReadOnly = true),
+     Description("Finds elements and checks whether they can be added to an electrical circuit. Supports useSelection, elementIds, or category+filters query. Optionally validates against a targetCircuitId.")]
+    public async Task<string> GetCircuitCompatibleElements(
+        [Description("If true, check current Revit selection")] bool useSelection = false,
+        [Description("Explicit element IDs to check")] long[]? elementIds = null,
+        [Description("Category name for query")] string? category = null,
+        [Description("JSON array of parameter filters")] string? filters = null,
+        [Description("Target circuit ID to validate membership against (optional)")] long targetCircuitId = 0,
+        [Description("Max elements (default 500)")] int limit = 500,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
+            return FormatBridgeError(filtersError!);
+
+        var args = new Dictionary<string, object?>
+        {
+            ["useSelection"] = useSelection,
+            ["elementIds"] = elementIds ?? [],
+            ["category"] = category ?? string.Empty,
+            ["filters"] = parsedFilters,
+            ["targetCircuitId"] = (int)targetCircuitId,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_get_circuit_compatible_elements", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_create_electrical_circuit"),
+     Description("Creates a new electrical circuit. Requires approval. Source: useSelection, elementIds, or category+filters. Optional: systemType (PowerCircuit/Data/FireAlarm/etc), panelElementId, panelName, wireTypeName.")]
+    public async Task<string> CreateElectricalCircuit(
+        [Description("If true, use current Revit selection")] bool useSelection = false,
+        [Description("Explicit element IDs to add")] long[]? elementIds = null,
+        [Description("Category name for query")] string? category = null,
+        [Description("JSON array of parameter filters")] string? filters = null,
+        [Description("Electrical system type (default PowerCircuit)")] string systemType = "PowerCircuit",
+        [Description("Panel element ID (preferred over panelName)")] long panelElementId = 0,
+        [Description("Panel name (fallback if panelElementId not provided)")] string? panelName = null,
+        [Description("Wire type name to assign to the new circuit")] string? wireTypeName = null,
+        [Description("Max elements (default 500)")] int limit = 500,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
+            return FormatBridgeError(filtersError!);
+
+        var args = new Dictionary<string, object?>
+        {
+            ["useSelection"] = useSelection,
+            ["elementIds"] = elementIds ?? [],
+            ["category"] = category ?? string.Empty,
+            ["filters"] = parsedFilters,
+            ["systemType"] = systemType,
+            ["panelElementId"] = (int)panelElementId,
+            ["panelName"] = panelName ?? string.Empty,
+            ["wireTypeName"] = wireTypeName ?? string.Empty,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_create_electrical_circuit", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_add_elements_to_circuit"),
+     Description("Adds elements to an existing electrical circuit. Requires approval. Provide targetCircuitId and source: useSelection, elementIds, or category+filters.")]
+    public async Task<string> AddElementsToCircuit(
+        [Description("Target circuit element ID")] long targetCircuitId,
+        [Description("If true, use current Revit selection")] bool useSelection = false,
+        [Description("Explicit element IDs to add")] long[]? elementIds = null,
+        [Description("Category name for query")] string? category = null,
+        [Description("JSON array of parameter filters")] string? filters = null,
+        [Description("Max elements (default 500)")] int limit = 500,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
+            return FormatBridgeError(filtersError!);
+
+        var args = new Dictionary<string, object?>
+        {
+            ["targetCircuitId"] = (int)targetCircuitId,
+            ["useSelection"] = useSelection,
+            ["elementIds"] = elementIds ?? [],
+            ["category"] = category ?? string.Empty,
+            ["filters"] = parsedFilters,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_add_elements_to_circuit", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_reassign_circuit_panel"),
+     Description("Reassigns an electrical circuit to another panel. Requires approval. Provide circuitId and targetPanelElementId (preferred) or targetPanelName.")]
+    public async Task<string> ReassignCircuitPanel(
+        [Description("Circuit element ID")] long circuitId,
+        [Description("Target panel element ID (preferred)")] long targetPanelElementId = 0,
+        [Description("Target panel name (fallback)")] string? targetPanelName = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["circuitId"] = (int)circuitId,
+            ["targetPanelElementId"] = (int)targetPanelElementId,
+            ["targetPanelName"] = targetPanelName ?? string.Empty
+        };
+        var result = await pipeClient.SendAsync("revit_reassign_circuit_panel", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_change_circuit_cable_or_wire_type"),
+     Description("Changes the cable/wire type of a circuit. Requires approval. Provide cableTypeName and/or wireTypeName. preferCableType=true tries cable type first and falls back to wire type if fallbackToWireType=true.")]
+    public async Task<string> ChangeCircuitCableOrWireType(
+        [Description("Circuit element ID")] long circuitId,
+        [Description("Cable type name to assign (resolved as WireType)")] string? cableTypeName = null,
+        [Description("Wire type name to assign")] string? wireTypeName = null,
+        [Description("Try cable type first (default true)")] bool preferCableType = true,
+        [Description("Fall back to wire type if cable type not found (default true)")] bool fallbackToWireType = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["circuitId"] = (int)circuitId,
+            ["cableTypeName"] = cableTypeName ?? string.Empty,
+            ["wireTypeName"] = wireTypeName ?? string.Empty,
+            ["preferCableType"] = preferCableType,
+            ["fallbackToWireType"] = fallbackToWireType
+        };
+        var result = await pipeClient.SendAsync("revit_change_circuit_cable_or_wire_type", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_set_circuit_parameter"),
+     Description(
+         "Sets a parameter value on one or more electrical circuits. Handles ALL storage types including " +
+         "ElementId (e.g. 'Cable Type' parameters that reference a wire/cable type element). " +
+         "'value' accepts: a numeric element ID (as string) for ElementId params, or a literal string/number. " +
+         "Requires approval. Transaction-wrapped. Returns per-circuit success/failure detail.")]
+    public async Task<string> SetCircuitParameter(
+        [Description("Element IDs of the target circuits")] long[] circuitIds,
+        [Description("Parameter name to set (partial match supported)")] string parameterName,
+        [Description(
+            "Value to assign. For ElementId parameters: provide the numeric element ID (e.g. '2518789') " +
+            "or the exact element name (e.g. 'XX_EN_IT_Cat6a'). For String/Integer/Double: provide the value directly.")]
+        string value,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["circuitIds"] = circuitIds ?? [],
+            ["parameterName"] = parameterName,
+            ["value"] = value
+        };
+        var result = await pipeClient.SendAsync("revit_set_circuit_parameter", args, cancellationToken);
+        return FormatResult(result);
+    }
 }

@@ -58,6 +58,17 @@ public class App : IExternalApplication
             handler.RegisterTool(new SelectElementsTool());
             handler.RegisterTool(new SelectElementsByQueryTool());
             handler.RegisterTool(new SetParameterTool());
+            handler.RegisterTool(new GetElectricalCircuitsTool());
+            handler.RegisterTool(new GetCircuitInfoTool());
+            handler.RegisterTool(new GetAvailablePanelsTool());
+            handler.RegisterTool(new GetAvailableCableTypesTool());
+            handler.RegisterTool(new GetAvailableWireTypesTool());
+            handler.RegisterTool(new GetCircuitCompatibleElementsTool());
+            handler.RegisterTool(new CreateElectricalCircuitTool());
+            handler.RegisterTool(new AddElementsToCircuitTool());
+            handler.RegisterTool(new ReassignCircuitPanelTool());
+            handler.RegisterTool(new ChangeCircuitCableOrWireTypeTool());
+            handler.RegisterTool(new SetCircuitParameterTool());
 
             var eventService = new ExternalEventService(handler);
 
@@ -101,7 +112,8 @@ public class App : IExternalApplication
 
         try { application.CreateRibbonTab(tabName); } catch { }
 
-        var panel = application.CreateRibbonPanel(tabName, "MCP");
+        var panel = application.GetRibbonPanels(tabName).FirstOrDefault(p => p.Name == "MCP")
+                    ?? application.CreateRibbonPanel(tabName, "MCP");
 
         var isDark = Autodesk.Revit.UI.UIThemeManager.CurrentTheme == Autodesk.Revit.UI.UITheme.Dark;
         var iconName = isDark ? "Light - RevitMCP.tiff" : "Dark - RevitMCP.tiff";
@@ -126,6 +138,8 @@ public class App : IExternalApplication
             // Icon loading failure is non-fatal
         }
 
-        panel.AddItem(buttonData);
+        // Only add the button if it doesn't already exist (guard against reloads)
+        if (!panel.GetItems().Any(i => i.Name == "RevitMCPConnector"))
+            panel.AddItem(buttonData);
     }
 }

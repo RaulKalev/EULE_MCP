@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Interop;
 using RevitMCP.Addin.UI.ViewModels;
@@ -6,6 +7,10 @@ namespace RevitMCP.Addin.UI;
 
 public partial class McpWindow : Window
 {
+    private static readonly string SuppressFilePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "RevitMCP", "direct_edit_suppress.flag");
+
     public McpWindowViewModel ViewModel { get; }
 
     public McpWindow(McpWindowViewModel viewModel)
@@ -13,11 +18,70 @@ public partial class McpWindow : Window
         InitializeComponent();
         ViewModel = viewModel;
         DataContext = viewModel;
+        ViewModel.RequestDirectEditConfirmation = ShowDirectEditWarning;
     }
 
     public void SetRevitOwner(IntPtr revitHandle)
     {
         var helper = new WindowInteropHelper(this);
         helper.Owner = revitHandle;
+    }
+
+    // Enable edge/corner resize for WindowStyle=None + AllowsTransparency windows
+    // by intercepting WM_NCHITTEST and returning the correct hit-test code.
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(ResizeHook);
+    }
+
+    private IntPtr ResizeHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == 0x0084) // WM_NCHITTEST
+        {
+            try
+            {
+                int screenX = unchecked((short)(lParam.ToInt32() & 0xFFFF));
+                int screenY = unchecked((short)(lParam.ToInt32() >> 16));
+                var src = HwndSource.FromHwnd(hwnd);
+                if (src?.CompositionTarget == null) return IntPtr.Zero;
+                var pt = src.CompositionTarget.TransformFromDevice.Transform(new Point(screenX, screenY));
+                pt = new Point(pt.X - Left, pt.Y - Top);
+                const double B = 6;
+                double w = ActualWidth, h = ActualHeight;
+                bool left = pt.X < B, right = pt.X > w - B;
+                bool top  = pt.Y < B, bottom = pt.Y > h - B;
+                if (top    && left)  { handled = true; return new IntPtr(13); } // HTTOPLEFT
+                if (top    && right) { handled = true; return new IntPtr(14); } // HTTOPRIGHT
+                if (bottom && left)  { handled = true; return new IntPtr(16); } // HTBOTTOMLEFT
+                if (bottom && right) { handled = true; return new IntPtr(17); } // HTBOTTOMRIGHT
+                if (left)            { handled = true; return new IntPtr(10); } // HTLEFT
+                if (right)           { handled = true; return new IntPtr(11); } // HTRIGHT
+                if (top)             { handled = true; return new IntPtr(12); } // HTTOP
+                if (bottom)          { handled = true; return new IntPtr(15); } // HTBOTTOM
+            }
+            catch { }
+        }
+        return IntPtr.Zero;
+    }
+
+    private bool ShowDirectEditWarning()
+    {
+        if (File.Exists(SuppressFilePath)) return true;
+
+        var dialog = new DirectEditWarningDialog { Owner = this };
+        var result = dialog.ShowDialog();
+
+        if (result == true && dialog.DontShowAgain)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(SuppressFilePath)!);
+                File.WriteAllText(SuppressFilePath, string.Empty);
+            }
+            catch { }
+        }
+
+        return result == true;
     }
 }

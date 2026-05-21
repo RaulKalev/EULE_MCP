@@ -24,7 +24,7 @@ echo Registering revit-mcp MCP server with Claude Code...
 echo Bridge path: %BRIDGE_ABS%
 echo.
 
-claude mcp add --scope user revit-mcp "%BRIDGE_ABS%" -- --client "Claude Code"
+claude mcp add --scope user revit-mcp "%BRIDGE_ABS%"
 
 if %ERRORLEVEL% == 0 (
     echo.

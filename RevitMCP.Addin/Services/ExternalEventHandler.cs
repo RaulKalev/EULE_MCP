@@ -84,9 +84,12 @@ public class ExternalEventHandler : IExternalEventHandler
 
             // Intercept RequiresApproval tools — defer execution until user approves in the UI.
             // Approved requests (re-dispatched after user clicks Approve) skip this check.
+            // Direct Edit mode bypasses approval entirely.
+            var isDirectEditEnabled = RevitMCP.Addin.App.GetViewModel()?.IsDirectEditEnabled ?? false;
             if (tool.Permission == ToolPermission.RequiresApproval
                 && !request.IsApproved
-                && _approvalService != null)
+                && _approvalService != null
+                && !isDirectEditEnabled)
             {
                 var summary = ApprovalSummaryBuilder.Build(request);
                 _approvalService.Add(new PendingApprovalRequest

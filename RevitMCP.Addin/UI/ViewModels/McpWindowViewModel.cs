@@ -26,6 +26,8 @@ public class McpWindowViewModel : BaseViewModel
     private int _selectedElementCount;
     private bool _isDarkTheme = true;
     private string _pendingTabHeader = "PENDING";
+    private bool _isDirectEditEnabled;
+    private int _selectedTabIndex;
 
     public McpWindowViewModel(ConnectorService connector, ActivityLogger logger, ApprovalService? approvalService = null)
     {
@@ -57,6 +59,7 @@ public class McpWindowViewModel : BaseViewModel
         ApproveCommand = new RelayCommand(id => ApproveItem(id as string));
         RejectCommand = new RelayCommand(id => RejectItem(id as string));
         RejectAllCommand = new RelayCommand(_ => _approvalService?.RejectAll(), _ => PendingApprovals.Count > 0);
+        ToggleDirectEditCommand = new RelayCommand(_ => ToggleDirectEdit());
     }
 
     // ── Status tab ────────────────────────────────────────────────────────────
@@ -78,6 +81,9 @@ public class McpWindowViewModel : BaseViewModel
     public ObservableCollection<PendingApprovalItem> PendingApprovals { get; } = [];
     public bool HasNoPendingApprovals => PendingApprovals.Count == 0;
     public string PendingTabHeader { get => _pendingTabHeader; private set => SetProperty(ref _pendingTabHeader, value); }
+    public bool IsDirectEditEnabled { get => _isDirectEditEnabled; private set => SetProperty(ref _isDirectEditEnabled, value); }
+    public int SelectedTabIndex { get => _selectedTabIndex; set => SetProperty(ref _selectedTabIndex, value); }
+    public Func<bool>? RequestDirectEditConfirmation { get; set; }
 
     // ── Commands ──────────────────────────────────────────────────────────────
     public ICommand StartCommand { get; }
@@ -89,6 +95,7 @@ public class McpWindowViewModel : BaseViewModel
     public ICommand ApproveCommand { get; }
     public ICommand RejectCommand { get; }
     public ICommand RejectAllCommand { get; }
+    public ICommand ToggleDirectEditCommand { get; }
 
     // ── Handlers ──────────────────────────────────────────────────────────────
     private void OnConnectorStatusChanged(bool running)
@@ -127,6 +134,7 @@ public class McpWindowViewModel : BaseViewModel
     {
         Application.Current?.Dispatcher.Invoke(() =>
         {
+            var previousCount = PendingApprovals.Count;
             PendingApprovals.Clear();
             if (_approvalService == null) return;
 
@@ -142,6 +150,10 @@ public class McpWindowViewModel : BaseViewModel
                 });
             }
 
+            // Auto-switch to PENDING tab when new approval requests arrive
+            if (PendingApprovals.Count > previousCount)
+                SelectedTabIndex = 1;
+
             CommandManager.InvalidateRequerySuggested();
         });
     }
@@ -156,6 +168,20 @@ public class McpWindowViewModel : BaseViewModel
     {
         if (approvalId != null)
             _approvalService?.Reject(approvalId);
+    }
+
+    private void ToggleDirectEdit()
+    {
+        if (!_isDirectEditEnabled)
+        {
+            var confirmed = RequestDirectEditConfirmation == null || RequestDirectEditConfirmation();
+            if (!confirmed) return;
+            IsDirectEditEnabled = true;
+        }
+        else
+        {
+            IsDirectEditEnabled = false;
+        }
     }
 
     private void ToggleTheme()

@@ -6,12 +6,13 @@
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         Title="Revit MCP Connector"
         Width="380"
-        SizeToContent="Height"
+        Height="460"
         MinWidth="300"
+        MinHeight="350"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
-        ResizeMode="CanResizeWithGrip"
+        ResizeMode="CanResize"
         ShowInTaskbar="False"
         Topmost="False">
 
@@ -41,7 +42,7 @@
             <local:TitleBar Grid.Row="0" />
 
             <!-- Tab Control -->
-            <TabControl Grid.Row="1" Style="{StaticResource McpTabControlStyle}">
+            <TabControl Grid.Row="1" Style="{StaticResource McpTabControlStyle}" SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}">
 
                 <!-- ═══════════════════  STATUS TAB  ═══════════════════ -->
                 <TabItem Header="STATUS" Style="{StaticResource McpTabItemStyle}">
@@ -133,12 +134,42 @@
                                 <TextBlock Text="Read-Only: Allowed"
                                            Foreground="{DynamicResource StatusRunningBrush}"
                                            FontSize="11" />
-                                <TextBlock Text="Approval Required: Enabled"
-                                           Foreground="{DynamicResource ForegroundBrush}"
-                                           FontSize="11" Margin="0,2,0,0" />
-                                <TextBlock Text="Direct Edit: Disabled"
-                                           Foreground="{DynamicResource StatusStoppedBrush}"
-                                           FontSize="11" Margin="0,2,0,0" />
+                                <Button Command="{Binding ToggleDirectEditCommand}"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,2,0,0"
+                                        Padding="0"
+                                        Cursor="Hand"
+                                        ToolTip="Click to toggle — when disabled, mutations run without approval prompts">
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Setter Property="BorderThickness" Value="0" />
+                                            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <ContentPresenter />
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </Button.Style>
+                                    <TextBlock FontSize="11">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Text" Value="Approval Required: Enabled" />
+                                                <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsDirectEditEnabled}" Value="True">
+                                                        <Setter Property="Text" Value="Approval Required: Disabled" />
+                                                        <Setter Property="Foreground" Value="{DynamicResource StatusStoppedBrush}" />
+                                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Button>
                             </StackPanel>
                         </Border>
 
@@ -159,29 +190,6 @@
                                 Style="{StaticResource DangerButtonStyle}"
                                 HorizontalAlignment="Stretch"
                                 Margin="0,0,0,6" />
-
-                        <!-- Theme Toggle -->
-                        <Button Command="{Binding ToggleThemeCommand}"
-                                Style="{StaticResource ActionButtonStyle}"
-                                HorizontalAlignment="Right"
-                                Padding="8,4">
-                            <Button.Content>
-                                <TextBlock FontSize="10" Foreground="{DynamicResource IconForegroundBrush}">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsDarkTheme}" Value="True">
-                                                    <Setter Property="Text" Value="Switch to Light" />
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding IsDarkTheme}" Value="False">
-                                                    <Setter Property="Text" Value="Switch to Dark" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </Button.Content>
-                        </Button>
 
                     </StackPanel>
                 </TabItem>

@@ -1,3 +1,4 @@
+using RevitMCP.Addin.Electrical;
 using RevitMCP.Addin.Tools;
 using RevitMCP.Core.Models;
 
@@ -17,6 +18,10 @@ public static class ApprovalSummaryBuilder
             "revit_select_elements" => BuildSelectElements(request),
             "revit_select_elements_by_query" => BuildSelectByQuery(request),
             "revit_set_parameter" => BuildSetParameter(request),
+            "revit_create_electrical_circuit" => CircuitPreviewBuilder.BuildCreateCircuit(request),
+            "revit_add_elements_to_circuit" => CircuitPreviewBuilder.BuildAddElements(request),
+            "revit_reassign_circuit_panel" => CircuitPreviewBuilder.BuildReassignPanel(request),
+            "revit_change_circuit_cable_or_wire_type" => CircuitPreviewBuilder.BuildChangeWireType(request),
             _ => $"Execute {request.ToolName}"
         };
     }
