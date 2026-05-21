@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RevitMCP.Addin.Interfaces;
+using RevitMCP.Addin.Query;
 using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Tools;
@@ -13,40 +14,39 @@ public class CountElementsTool : IRevitMcpTool
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Elements;
 
+    private static readonly CategoryResolver _resolver = new();
+
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
         var doc = uiapp.ActiveUIDocument?.Document;
         if (doc == null)
-            return Task.FromResult(new McpToolResult { RequestId = request.RequestId, Success = false, Message = "No active document." });
+            return Task.FromResult(Fail(request, "No active document."));
 
         var filterCategory = ToolArguments.GetString(request.Arguments, "category");
         var groupBy = ToolArguments.GetString(request.Arguments, "groupBy", "Category");
+        var warnings = new List<string>();
 
-        var collector = new FilteredElementCollector(doc)
-            .WhereElementIsNotElementType();
+        var collector = new FilteredElementCollector(doc).WhereElementIsNotElementType();
 
-        // Apply category filter if specified
         if (!string.IsNullOrWhiteSpace(filterCategory))
         {
-            var cat = FindCategory(doc, filterCategory);
-            if (cat == null)
-                return Task.FromResult(new McpToolResult
-                {
-                    RequestId = request.RequestId,
-                    Success = false,
-                    Message = $"Category not found: '{filterCategory}'. Check spelling."
-                });
-
-            collector = collector.OfCategoryId(cat.Id);
+            var resolve = _resolver.Resolve(doc, filterCategory);
+            if (resolve.Category == null)
+            {
+                var sug = resolve.Suggestions.Count > 0
+                    ? $" Did you mean: {string.Join(", ", resolve.Suggestions)}?"
+                    : string.Empty;
+                return Task.FromResult(Fail(request, resolve.Message + sug));
+            }
+            if (resolve.Message.Contains("Resolved") && resolve.Category.Name != filterCategory)
+                warnings.Add($"Category resolved to '{resolve.Category.Name}'.");
+            collector = collector.OfCategoryId(resolve.Category.Id);
         }
 
-        var elements = collector
-            .Where(e => e.Category != null)
-            .ToList();
-
-        object data;
+        var elements = collector.Where(e => e.Category != null).ToList();
         int totalCount = elements.Count;
+        object data;
 
         if (groupBy.Equals("FamilyAndType", StringComparison.OrdinalIgnoreCase))
         {
@@ -62,13 +62,7 @@ public class CountElementsTool : IRevitMcpTool
                 .Select(g => new { type = g.Key, count = g.Count() })
                 .ToList();
 
-            data = new
-            {
-                totalCount,
-                groupBy = "FamilyAndType",
-                categoryFilter = filterCategory,
-                groups = grouped
-            };
+            data = new { totalCount, groupBy = "FamilyAndType", categoryFilter = filterCategory, groups = grouped };
         }
         else
         {
@@ -78,13 +72,7 @@ public class CountElementsTool : IRevitMcpTool
                 .Select(g => new { category = g.Key, count = g.Count() })
                 .ToList();
 
-            data = new
-            {
-                totalCount,
-                groupBy = "Category",
-                categoryFilter = filterCategory,
-                groups = grouped
-            };
+            data = new { totalCount, groupBy = "Category", categoryFilter = filterCategory, groups = grouped };
         }
 
         sw.Stop();
@@ -94,17 +82,11 @@ public class CountElementsTool : IRevitMcpTool
             Success = true,
             Message = $"Counted {totalCount} elements.",
             Data = data,
+            Warnings = warnings,
             DurationMs = sw.ElapsedMilliseconds
         });
     }
 
-    private static Autodesk.Revit.DB.Category? FindCategory(Document doc, string name)
-    {
-        foreach (Autodesk.Revit.DB.Category cat in doc.Settings.Categories)
-        {
-            if (string.Equals(cat.Name, name, StringComparison.OrdinalIgnoreCase))
-                return cat;
-        }
-        return null;
-    }
+    private static McpToolResult Fail(McpToolRequest r, string msg) =>
+        new() { RequestId = r.RequestId, Success = false, Message = msg };
 }

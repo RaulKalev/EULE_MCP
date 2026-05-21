@@ -29,6 +29,10 @@ public class App : IExternalApplication
             handler.RegisterTool(new GetElementParametersTool());
             handler.RegisterTool(new CountElementsTool());
             handler.RegisterTool(new GroupByParameterTool());
+            handler.RegisterTool(new FindElementsByParameterTool());
+            handler.RegisterTool(new GetElementsInfoTool());
+            handler.RegisterTool(new GroupElementsTool());
+            handler.RegisterTool(new ExportQueryToExcelTool());
 
             var eventService = new ExternalEventService(handler);
             var pipeServer = new PipeServer(RevitMcpDefaults.PipeName, eventService, logger);

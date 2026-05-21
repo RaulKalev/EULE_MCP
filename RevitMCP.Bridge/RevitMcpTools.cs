@@ -96,6 +96,96 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    [McpServerTool(Name = "revit_find_elements_by_parameter", ReadOnly = true),
+     Description("Finds model elements matching one or more parameter filters. Each filter specifies: parameterName (partial match), operator (equals/contains/startsWith/isEmpty/greaterThan/lessThan/notEquals/notContains/endsWith/isNotEmpty), value, matchMode (Contains/ContainsNormalized/Exact/ExactNormalized), scope (InstanceAndType/Instance/Type). Also accepts category, useSelection, elementIds, returnParameters, includeInstanceParameters, includeTypeParameters, limit.")]
+    public async Task<string> FindElementsByParameter(
+        [Description("JSON array of filter objects: [{parameterName, operator, value, matchMode, scope}]")] string? filters = null,
+        [Description("Optional category name to restrict search (e.g. 'Fire Alarm Devices')")] string? category = null,
+        [Description("Optional list of parameter names to include in returned elements")] string[]? returnParameters = null,
+        [Description("Max elements to return (default 500)")] int limit = 500,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["category"] = category ?? string.Empty,
+            ["filters"] = filters != null ? Newtonsoft.Json.JsonConvert.DeserializeObject(filters) : new object[] { },
+            ["returnParameters"] = returnParameters ?? [],
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_find_elements_by_parameter", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_elements_info", ReadOnly = true),
+     Description("Returns structured element info and selected parameter values. Accepts: useSelection (bool), elementIds (int[]), category (string), filters (JSON array), parameterNames (string[]), includeInstanceParameters (bool), includeTypeParameters (bool), limit (int).")]
+    public async Task<string> GetElementsInfo(
+        [Description("If true, use current selection")] bool useSelection = false,
+        [Description("List of element IDs")] long[]? elementIds = null,
+        [Description("Category name filter")] string? category = null,
+        [Description("Parameter names to return (partial match)")] string[]? parameterNames = null,
+        [Description("Max elements to return (default 500)")] int limit = 500,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["useSelection"] = useSelection,
+            ["elementIds"] = elementIds ?? [],
+            ["category"] = category ?? string.Empty,
+            ["parameterNames"] = parameterNames ?? [],
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_get_elements_info", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_group_elements", ReadOnly = true),
+     Description("Groups model elements by one or more keys: Category, Family, Type, Level, or Parameter. groupBy is a JSON array of {type, parameterName, scope}. Returns flat rows (for Excel) and nested dict (for AI). Also accepts: category, filters, useSelection, elementIds, includeElements (bool), limit.")]
+    public async Task<string> GroupElements(
+        [Description("JSON array of groupBy keys: [{type, parameterName, scope}]")] string groupBy,
+        [Description("Optional category name to restrict search")] string? category = null,
+        [Description("JSON array of parameter filters")] string? filters = null,
+        [Description("If true, include element IDs in each group")] bool includeElements = false,
+        [Description("Max elements to scan (default 5000)")] int limit = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["groupBy"] = Newtonsoft.Json.JsonConvert.DeserializeObject(groupBy) ?? new object[] { },
+            ["category"] = category ?? string.Empty,
+            ["filters"] = filters != null ? Newtonsoft.Json.JsonConvert.DeserializeObject(filters) : new object[] { },
+            ["includeElements"] = includeElements,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_group_elements", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_export_query_to_excel", ReadOnly = true),
+     Description("Queries model elements and exports results to an .xlsx file. Returns the file path. Accepts: category, filters (JSON array), groupBy (JSON array), parameters (string[] of param names to include), outputMode (Elements/Groups/Both), fileName, useSelection, elementIds, limit.")]
+    public async Task<string> ExportQueryToExcel(
+        [Description("Optional category name")] string? category = null,
+        [Description("JSON array of parameter filters")] string? filters = null,
+        [Description("JSON array of groupBy keys")] string? groupBy = null,
+        [Description("Parameter names to include as columns")] string[]? parameters = null,
+        [Description("What to export: Elements, Groups, or Both")] string outputMode = "Both",
+        [Description("Output file name (default RevitMCP_Export.xlsx)")] string fileName = "RevitMCP_Export.xlsx",
+        [Description("Max elements (default 5000)")] int limit = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["category"] = category ?? string.Empty,
+            ["filters"] = filters != null ? Newtonsoft.Json.JsonConvert.DeserializeObject(filters) : new object[] { },
+            ["groupBy"] = groupBy != null ? Newtonsoft.Json.JsonConvert.DeserializeObject(groupBy) : new object[] { },
+            ["parameters"] = parameters ?? [],
+            ["outputMode"] = outputMode,
+            ["fileName"] = fileName,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_export_query_to_excel", args, cancellationToken);
+        return FormatResult(result);
+    }
+
     private static string FormatResult(McpToolResult result)
     {
         var response = new
