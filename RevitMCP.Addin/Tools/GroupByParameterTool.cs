@@ -49,7 +49,7 @@ public class GroupByParameterTool : IRevitMcpTool
         {
             GroupBy = new List<GroupKeyOptions>
             {
-                new() { Type = "Parameter", ParameterName = parameterName, ParameterMatchMode = "Contains" }
+                new() { Type = "Parameter", ParameterName = parameterName, ParameterMatchMode = "ContainsNormalized" }
             }
         };
 
