@@ -17,6 +17,7 @@
     <PackageReference Include="Autodesk.Revit.SDK" Version="2026.*" IncludeAssets="build; compile" PrivateAssets="All" />
     <PackageReference Include="MaterialDesignColors" Version="5.2.1" />
     <PackageReference Include="MaterialDesignThemes" Version="5.2.1" />
+    <PackageReference Include="ClosedXML" Version="0.104.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="ricaun.Revit.UI" Version="0.7.1" />
     <PackageReference Include="Fody" Version="6.8.2">

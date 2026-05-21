@@ -6,13 +6,15 @@ namespace RevitMCP.Addin.Services;
 public class ConnectorService
 {
     private readonly PipeServer _pipeServer;
+    private readonly ExternalEventService _eventService;
 
     public event Action<bool>? StatusChanged;
     public bool IsRunning { get; private set; }
 
-    public ConnectorService(PipeServer pipeServer)
+    public ConnectorService(PipeServer pipeServer, ExternalEventService eventService)
     {
         _pipeServer = pipeServer;
+        _eventService = eventService;
     }
 
     public void Start()
@@ -33,6 +35,7 @@ public class ConnectorService
 
     public void PanicStop()
     {
+        _eventService.CancelAllPending("Request cancelled by Panic Stop.");
         _pipeServer.Stop();
         IsRunning = false;
         StatusChanged?.Invoke(false);

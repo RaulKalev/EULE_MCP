@@ -1,13 +1,25 @@
 # EULE MCP — Revit MCP Connector
 
-A local [Model Context Protocol](https://modelcontextprotocol.io) connector that lets **Claude Code** (and other MCP-compatible AI agents) interrogate and work with a live **Autodesk Revit 2026** model in real time.
+A local [Model Context Protocol](https://modelcontextprotocol.io) connector that lets **Claude Code** and **Codex** interrogate and work with a live **Autodesk Revit 2026** model in real time.
+
+---
+
+## Supported Clients
+
+| Client | Status | Setup |
+|--------|--------|-------|
+| [Claude Code](https://claude.ai/code) | Supported | `Install-Claude-MCP.bat` |
+| [Codex CLI](https://github.com/openai/codex) | Supported | `Install-Codex-MCP.bat` |
+| ChatGPT / other | Not targeted | — |
+
+Both clients connect through the same `RevitMCP.Bridge.exe`. The bridge is started by the AI client over STDIO; client identity is passed via `--client` argument so logs correctly identify who made each request.
 
 ---
 
 ## Architecture
 
 ```
-Claude Code
+Claude Code / Codex
     │  MCP JSON-RPC 2.0 over STDIO
     ▼
 RevitMCP.Bridge.exe          ← .NET 8 console app
@@ -64,7 +76,7 @@ The **MCP Connector** window has two tabs:
 
 - Revit 2026
 - .NET 8 SDK
-- Claude Code CLI (`claude`)
+- Claude Code CLI (`claude`) **or** Codex CLI (`codex`)
 
 ---
 
@@ -105,11 +117,19 @@ This creates a manifest in `%ProgramData%\Autodesk\Revit\Addins\2026\` that poin
 
 ---
 
-## Claude Code MCP Server
+## MCP Server Setup
+
+### Claude Code
 
 Run `RevitMCP.Config\Install\Install-Claude-MCP.bat`
 
-This registers `RevitMCP.Bridge.exe` as a user-scoped MCP server named `revit-mcp`.
+This registers `RevitMCP.Bridge.exe` as a user-scoped MCP server named `revit-mcp` with `--client "Claude Code"` so logs show the correct client name.
+
+### Codex
+
+Run `RevitMCP.Config\Install\Install-Codex-MCP.bat`
+
+This generates `RevitMCP.Config\Install\codex-mcp-snippet.toml` with the absolute bridge path already filled in. Paste its contents into `%USERPROFILE%\.codex\config.toml` and restart Codex.
 
 ---
 
@@ -119,7 +139,7 @@ This registers `RevitMCP.Bridge.exe` as a user-scoped MCP server named `revit-mc
 2. Load the addin (via AppLoader or the `.addin` manifest)
 3. On the **RK Tools** ribbon tab, click **MCP Connector**
 4. Click **Start Connector** in the window
-5. In Claude Code, ask anything about your model:
+5. Ask anything about your model from Claude Code or Codex:
 
 ```
 How many walls are in this model?

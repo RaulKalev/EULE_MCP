@@ -25,6 +25,15 @@ public class LogEntry
     [JsonProperty("centralPath")]
     public string CentralPath { get; set; } = string.Empty;
 
+    [JsonProperty("activeView")]
+    public string ActiveView { get; set; } = string.Empty;
+
+    [JsonProperty("isWorkshared")]
+    public bool IsWorkshared { get; set; }
+
+    [JsonProperty("revitUsername")]
+    public string RevitUsername { get; set; } = string.Empty;
+
     [JsonProperty("tool")]
     public string Tool { get; set; } = string.Empty;
 

@@ -18,6 +18,10 @@ public class ExternalEventService
         _externalEvent = ExternalEvent.Create(handler);
     }
 
+    public RevitDocumentContext? GetLastContext() => _handler.GetLastContext();
+
+    public void CancelAllPending(string reason) => _handler.CancelAllPending(reason);
+
     /// <summary>
     /// Enqueues a tool request and raises ExternalEvent. Returns when Revit executes it.
     /// Times out after <paramref name="timeoutMs"/> if Revit never processes the event.

@@ -1,182 +1,91 @@
 using System.Diagnostics;
-using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RevitMCP.Addin.Interfaces;
+using RevitMCP.Addin.Query;
 using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Tools;
 
 /// <summary>
-/// Groups model elements by the value of a named parameter and returns counts.
-/// Supports partial name matching so "ELENEA_Nimetus" matches "ELENEA_ÜLD 001_Nimetus" etc.
+/// Convenience wrapper around revit_group_elements for single-parameter grouping.
+/// Kept for backwards compatibility — prompts that worked before still work.
 /// </summary>
 public class GroupByParameterTool : IRevitMcpTool
 {
     public string Name => "revit_group_by_parameter";
-    public string Description => "Groups elements by a parameter value and returns counts. parameterName supports partial matching (e.g. 'ELENEA_Nimetus' matches 'ELENEA_ÜLD 001_Nimetus'). Optionally filter by category.";
+    public string Description => "Groups elements by a parameter value and returns counts. parameterName supports partial matching (e.g. 'Nimetus' matches 'ELENEA_ÜLD 001_Nimetus'). Optionally filter by category.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Elements;
+
+    private static readonly ElementQueryEngine _queryEngine = new();
+    private static readonly GroupingEngine _groupingEngine = new();
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null)
-            return Task.FromResult(new McpToolResult { RequestId = request.RequestId, Success = false, Message = "No active document." });
+        var uidoc = uiapp.ActiveUIDocument;
+        if (uidoc?.Document == null)
+            return Task.FromResult(Fail(request, "No active document."));
 
         var parameterName = ToolArguments.GetString(request.Arguments, "parameterName");
-        var categoryFilter = ToolArguments.GetString(request.Arguments, "category");
-
         if (string.IsNullOrWhiteSpace(parameterName))
-            return Task.FromResult(new McpToolResult
-            {
-                RequestId = request.RequestId,
-                Success = false,
-                Message = "parameterName is required."
-            });
+            return Task.FromResult(Fail(request, "parameterName is required."));
 
-        // Build collector — filter by category first if provided (much faster)
-        var collector = new FilteredElementCollector(doc).WhereElementIsNotElementType();
+        var category = ToolArguments.GetString(request.Arguments, "category");
 
-        if (!string.IsNullOrWhiteSpace(categoryFilter))
+        var queryOpts = new ElementQueryOptions
         {
-            var cat = FindCategory(doc, categoryFilter);
-            if (cat == null)
-                return Task.FromResult(new McpToolResult
-                {
-                    RequestId = request.RequestId,
-                    Success = false,
-                    Message = $"Category not found: '{categoryFilter}'."
-                });
-            collector = collector.OfCategoryId(cat.Id);
-        }
+            Category = category,
+            IncludeInstanceParameters = true,
+            IncludeTypeParameters = true,
+            Limit = 10_000
+        };
 
-        var groups = new Dictionary<string, int>(StringComparer.Ordinal);
-        int matchedElements = 0;
-        int totalScanned = 0;
-        var warnings = new List<string>();
+        var queryResult = _queryEngine.Query(uidoc.Document, uidoc, queryOpts);
+        if (!queryResult.Success)
+            return Task.FromResult(Fail(request, queryResult.Message));
 
-        // Cache type parameter lookups — many instances share the same type
-        var typeValueCache = new Dictionary<ElementId, string?>();
-
-        foreach (var element in collector)
+        var groupOpts = new GroupingOptions
         {
-            totalScanned++;
-
-            string? value = null;
-            try
+            GroupBy = new List<GroupKeyOptions>
             {
-                // 1. Check instance parameters first
-                foreach (Parameter p in element.Parameters)
-                {
-                    var defName = p.Definition?.Name;
-                    if (defName != null &&
-                        defName.IndexOf(parameterName, StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        value = ReadParamValue(p);
-                        break;
-                    }
-                }
-
-                // 2. Fall back to type parameters (cached per type ID)
-                if (value == null)
-                {
-                    var typeId = element.GetTypeId();
-                    if (typeId != null && typeId != ElementId.InvalidElementId)
-                    {
-                        if (!typeValueCache.TryGetValue(typeId, out var cached))
-                        {
-                            cached = null;
-                            var elementType = doc.GetElement(typeId);
-                            if (elementType != null)
-                            {
-                                foreach (Parameter p in elementType.Parameters)
-                                {
-                                    var defName = p.Definition?.Name;
-                                    if (defName != null &&
-                                        defName.IndexOf(parameterName, StringComparison.OrdinalIgnoreCase) >= 0)
-                                    {
-                                        cached = ReadParamValue(p);
-                                        break;
-                                    }
-                                }
-                            }
-                            typeValueCache[typeId] = cached;
-                        }
-                        value = cached;
-                    }
-                }
+                new() { Type = "Parameter", ParameterName = parameterName, ParameterMatchMode = "Contains" }
             }
-            catch
-            {
-                continue;
-            }
+        };
 
-            if (value == null) continue;
+        var groupResult = _groupingEngine.Group(queryResult.Elements, groupOpts);
 
-            matchedElements++;
-            if (groups.TryGetValue(value, out var existing))
-                groups[value] = existing + 1;
-            else
-                groups[value] = 1;
-        }
+        // Filter out "not found" group for backwards-compatible output
+        var found = groupResult.GroupsFlat.Where(r => r.Keys.Values.FirstOrDefault() != "(not found)").ToList();
+        var matchedElements = found.Sum(r => r.Count);
 
-        if (totalScanned > 5000 && string.IsNullOrWhiteSpace(categoryFilter))
-            warnings.Add($"Scanned {totalScanned} elements — provide a 'category' argument to speed up future calls.");
-
-        var sorted = groups
-            .OrderByDescending(kv => kv.Value)
-            .Select(kv => new { name = kv.Key, count = kv.Value })
+        var groups = found
+            .OrderByDescending(r => r.Count)
+            .Select(r => new { name = r.Keys.Values.FirstOrDefault() ?? string.Empty, count = r.Count })
             .ToList();
 
         sw.Stop();
+        var warnings = queryResult.Warnings.Concat(groupResult.Warnings).ToList();
+
         return Task.FromResult(new McpToolResult
         {
             RequestId = request.RequestId,
             Success = true,
-            Message = $"Found {matchedElements} elements with parameter matching '{parameterName}'. {sorted.Count} distinct values.",
+            Message = $"Found {matchedElements} elements with parameter matching '{parameterName}'. {groups.Count} distinct values.",
             Data = new
             {
                 parameterName,
-                categoryFilter,
-                totalScanned,
+                categoryFilter = category,
+                totalScanned = queryResult.TotalMatched,
                 matchedElements,
-                distinctValues = sorted.Count,
-                groups = sorted
+                distinctValues = groups.Count,
+                groups
             },
             Warnings = warnings,
             DurationMs = sw.ElapsedMilliseconds
         });
     }
 
-    private static string ReadParamValue(Parameter p)
-    {
-        try
-        {
-            if (p.StorageType == StorageType.String)
-                return p.AsString() ?? "(empty)";
-
-            var vs = p.AsValueString();
-            if (!string.IsNullOrWhiteSpace(vs)) return vs;
-
-            if (p.StorageType == StorageType.Integer)
-                return p.AsInteger().ToString();
-
-            return "(empty)";
-        }
-        catch
-        {
-            return "(error)";
-        }
-    }
-
-    private static Autodesk.Revit.DB.Category? FindCategory(Document doc, string name)
-    {
-        foreach (Autodesk.Revit.DB.Category cat in doc.Settings.Categories)
-        {
-            if (string.Equals(cat.Name, name, StringComparison.OrdinalIgnoreCase))
-                return cat;
-        }
-        return null;
-    }
+    private static McpToolResult Fail(McpToolRequest r, string msg) =>
+        new() { RequestId = r.RequestId, Success = false, Message = msg };
 }

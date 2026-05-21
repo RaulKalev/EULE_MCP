@@ -1,0 +1,60 @@
+using System.Diagnostics;
+using Autodesk.Revit.UI;
+using RevitMCP.Addin.Interfaces;
+using RevitMCP.Addin.Query;
+using RevitMCP.Core.Models;
+
+namespace RevitMCP.Addin.Tools;
+
+public class FindElementsByParameterTool : IRevitMcpTool
+{
+    public string Name => "revit_find_elements_by_parameter";
+    public string Description => "Finds model elements matching one or more parameter filters. Supports instance/type parameters, partial name matching, and value operators (equals, contains, startsWith, isEmpty, greaterThan, etc.).";
+    public ToolPermission Permission => ToolPermission.ReadOnly;
+    public ToolCategory Category => ToolCategory.Parameters;
+
+    private static readonly ElementQueryEngine _engine = new();
+
+    public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
+    {
+        var sw = Stopwatch.StartNew();
+        var uidoc = uiapp.ActiveUIDocument;
+        if (uidoc?.Document == null)
+            return Task.FromResult(Fail(request, "No active document."));
+
+        var opts = new ElementQueryOptions
+        {
+            Category = ToolArguments.GetString(request.Arguments, "category"),
+            UseSelection = ToolArguments.GetBool(request.Arguments, "useSelection"),
+            ElementIds = ToolArguments.GetLongArray(request.Arguments, "elementIds").ToList(),
+            Filters = ToolArguments.GetFilters(request.Arguments),
+            ReturnParameters = ToolArguments.GetStringArray(request.Arguments, "returnParameters").ToList(),
+            IncludeInstanceParameters = ToolArguments.GetBool(request.Arguments, "includeInstanceParameters", true),
+            IncludeTypeParameters = ToolArguments.GetBool(request.Arguments, "includeTypeParameters", true),
+            Limit = ToolArguments.GetInt(request.Arguments, "limit", 500)
+        };
+
+        var result = _engine.Query(uidoc.Document, uidoc, opts);
+        if (!result.Success)
+            return Task.FromResult(Fail(request, result.Message));
+
+        sw.Stop();
+        return Task.FromResult(new McpToolResult
+        {
+            RequestId = request.RequestId,
+            Success = true,
+            Message = $"Found {result.TotalMatched} matching elements, returned {result.Elements.Count}.",
+            Data = new
+            {
+                totalMatched = result.TotalMatched,
+                returned = result.Elements.Count,
+                elements = result.Elements
+            },
+            Warnings = result.Warnings,
+            DurationMs = sw.ElapsedMilliseconds
+        });
+    }
+
+    private static McpToolResult Fail(McpToolRequest r, string msg) =>
+        new() { RequestId = r.RequestId, Success = false, Message = msg };
+}
