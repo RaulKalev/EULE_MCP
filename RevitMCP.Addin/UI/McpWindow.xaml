@@ -186,6 +186,104 @@
                     </StackPanel>
                 </TabItem>
 
+                <!-- ═══════════════════  PENDING TAB  ═══════════════════ -->
+                <TabItem Header="{Binding PendingTabHeader}" Style="{StaticResource McpTabItemStyle}">
+                    <DockPanel Margin="12,10,12,12">
+
+                        <!-- Bottom button -->
+                        <Button DockPanel.Dock="Bottom"
+                                Content="Reject All"
+                                Command="{Binding RejectAllCommand}"
+                                Style="{StaticResource DangerButtonStyle}"
+                                HorizontalAlignment="Stretch"
+                                Margin="0,6,0,0" />
+
+                        <!-- Pending items list -->
+                        <Grid MinHeight="180">
+                            <ItemsControl ItemsSource="{Binding PendingApprovals}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{DynamicResource SecondaryBackgroundBrush}"
+                                                CornerRadius="6"
+                                                Padding="10,8"
+                                                Margin="0,0,0,6"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1">
+                                            <StackPanel>
+                                                <!-- Header: Time + Tool -->
+                                                <DockPanel Margin="0,0,0,4">
+                                                    <TextBlock DockPanel.Dock="Right"
+                                                               Text="{Binding Time}"
+                                                               Foreground="{DynamicResource IconForegroundBrush}"
+                                                               FontSize="10"
+                                                               VerticalAlignment="Center" />
+                                                    <TextBlock Text="{Binding Tool}"
+                                                               Foreground="{DynamicResource ForegroundBrush}"
+                                                               FontSize="11"
+                                                               FontWeight="SemiBold"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </DockPanel>
+
+                                                <!-- Summary -->
+                                                <TextBlock Text="{Binding Summary}"
+                                                           Foreground="{DynamicResource ForegroundBrush}"
+                                                           FontSize="11"
+                                                           TextWrapping="Wrap"
+                                                           Margin="0,0,0,2" />
+
+                                                <!-- Client -->
+                                                <TextBlock Foreground="{DynamicResource IconForegroundBrush}"
+                                                           FontSize="10"
+                                                           Margin="0,0,0,6">
+                                                    <TextBlock.Text>
+                                                        <Binding Path="Client" StringFormat="From: {0}" />
+                                                    </TextBlock.Text>
+                                                </TextBlock>
+
+                                                <!-- Approve / Reject buttons -->
+                                                <UniformGrid Columns="2">
+                                                    <Button Content="Approve"
+                                                            Command="{Binding DataContext.ApproveCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding ApprovalId}"
+                                                            Style="{StaticResource ApproveButtonStyle}"
+                                                            Margin="0,0,3,0" />
+                                                    <Button Content="Reject"
+                                                            Command="{Binding DataContext.RejectCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding ApprovalId}"
+                                                            Style="{StaticResource DangerButtonStyle}"
+                                                            Margin="3,0,0,0" />
+                                                </UniformGrid>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- Empty state overlay -->
+                            <TextBlock Text="No pending actions — approval requests will appear here."
+                                       Foreground="{DynamicResource IconForegroundBrush}"
+                                       FontSize="11"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       TextAlignment="Center"
+                                       Margin="20,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasNoPendingApprovals}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+
+                    </DockPanel>
+                </TabItem>
+
                 <!-- ═══════════════════  ACTIVITY TAB  ═══════════════════ -->
                 <TabItem Header="ACTIVITY" Style="{StaticResource McpTabItemStyle}">
                     <DockPanel Margin="12,10,12,12">

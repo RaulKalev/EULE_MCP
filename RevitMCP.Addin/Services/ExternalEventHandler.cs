@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Approval;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Core.Models;
 
@@ -8,14 +9,21 @@ namespace RevitMCP.Addin.Services;
 /// <summary>
 /// Runs on the Revit API thread. Drains the pending request queue and resolves each TaskCompletionSource.
 /// All Revit API calls must happen here — never on the pipe thread.
+/// Tools marked RequiresApproval are intercepted and routed to ApprovalService instead of executing immediately.
 /// </summary>
 public class ExternalEventHandler : IExternalEventHandler
 {
     private readonly ConcurrentQueue<(McpToolRequest Request, TaskCompletionSource<McpToolResult> Tcs)> _queue = new();
     private readonly Dictionary<string, IRevitMcpTool> _tools = new();
     private volatile RevitDocumentContext? _lastContext;
+    private ApprovalService? _approvalService;
 
     public string GetName() => "RevitMCP.ExternalEventHandler";
+
+    /// <summary>
+    /// Wires the approval service. Called once during startup from App.cs.
+    /// </summary>
+    public void SetApprovalService(ApprovalService service) => _approvalService = service;
 
     public void RegisterTool(IRevitMcpTool tool)
         => _tools[tool.Name] = tool;
@@ -72,6 +80,24 @@ public class ExternalEventHandler : IExternalEventHandler
                     Message = $"Unknown tool: {request.ToolName}"
                 });
                 continue;
+            }
+
+            // Intercept RequiresApproval tools — defer execution until user approves in the UI.
+            // Approved requests (re-dispatched after user clicks Approve) skip this check.
+            if (tool.Permission == ToolPermission.RequiresApproval
+                && !request.IsApproved
+                && _approvalService != null)
+            {
+                var summary = ApprovalSummaryBuilder.Build(request);
+                _approvalService.Add(new PendingApprovalRequest
+                {
+                    OriginalRequest = request,
+                    Completion = tcs,
+                    ToolName = tool.Name,
+                    Summary = summary,
+                    ClientName = request.ClientName
+                });
+                continue; // don't resolve TCS — pipe client waits for approval
             }
 
             try

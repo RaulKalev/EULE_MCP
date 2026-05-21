@@ -1,3 +1,5 @@
+using RevitMCP.Addin.Approval;
+
 namespace RevitMCP.Addin.Services;
 
 /// <summary>
@@ -7,14 +9,16 @@ public class ConnectorService
 {
     private readonly PipeServer _pipeServer;
     private readonly ExternalEventService _eventService;
+    private readonly ApprovalService? _approvalService;
 
     public event Action<bool>? StatusChanged;
     public bool IsRunning { get; private set; }
 
-    public ConnectorService(PipeServer pipeServer, ExternalEventService eventService)
+    public ConnectorService(PipeServer pipeServer, ExternalEventService eventService, ApprovalService? approvalService = null)
     {
         _pipeServer = pipeServer;
         _eventService = eventService;
+        _approvalService = approvalService;
     }
 
     public void Start()
@@ -35,6 +39,7 @@ public class ConnectorService
 
     public void PanicStop()
     {
+        _approvalService?.RejectAll();
         _eventService.CancelAllPending("Request cancelled by Panic Stop.");
         _pipeServer.Stop();
         IsRunning = false;

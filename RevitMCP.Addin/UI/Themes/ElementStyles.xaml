@@ -35,10 +35,16 @@
         </Setter>
     </Style>
 
-    <!-- Danger Button (Panic Stop) -->
+    <!-- Danger Button (Panic Stop, Reject) -->
     <Style x:Key="DangerButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
         <Setter Property="Foreground" Value="{DynamicResource StatusStoppedBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource StatusStoppedBrush}" />
+    </Style>
+
+    <!-- Approve Button (green accent) -->
+    <Style x:Key="ApproveButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+        <Setter Property="Foreground" Value="{DynamicResource StatusRunningBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource StatusRunningBrush}" />
     </Style>
 
     <!-- Status Label -->

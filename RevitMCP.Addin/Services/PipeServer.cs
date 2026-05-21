@@ -114,7 +114,10 @@ public class PipeServer
                     request = JsonConvert.DeserializeObject<McpToolRequest>(line);
                     if (request == null) throw new InvalidOperationException("Null request deserialized.");
 
-                    result = await _eventService.DispatchAsync(request);
+                    // Use a generous timeout (5 min) to allow time for user approval.
+                    // Read-only tools complete in milliseconds; the timeout only matters
+                    // for RequiresApproval tools waiting on user interaction.
+                    result = await _eventService.DispatchAsync(request, timeoutMs: 300_000);
                 }
                 catch (Exception ex)
                 {

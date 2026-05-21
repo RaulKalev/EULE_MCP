@@ -23,6 +23,16 @@ public class ExternalEventService
     public void CancelAllPending(string reason) => _handler.CancelAllPending(reason);
 
     /// <summary>
+    /// Re-enqueues a previously intercepted request (with its original TCS) and raises ExternalEvent.
+    /// Used by ApprovalService to dispatch approved requests back to the Revit API thread.
+    /// </summary>
+    public void Redispatch(McpToolRequest request, TaskCompletionSource<McpToolResult> existingTcs)
+    {
+        _handler.Enqueue(request, existingTcs);
+        _externalEvent.Raise();
+    }
+
+    /// <summary>
     /// Enqueues a tool request and raises ExternalEvent. Returns when Revit executes it.
     /// Times out after <paramref name="timeoutMs"/> if Revit never processes the event.
     /// If Raise() returns Denied, the item is still in the queue and will be processed

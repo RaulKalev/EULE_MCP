@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
+using RevitMCP.Addin.Approval;
 using RevitMCP.Addin.Logging;
 using RevitMCP.Addin.Services;
 using RevitMCP.Core.Logging;
@@ -13,6 +14,7 @@ public class McpWindowViewModel : BaseViewModel
 {
     private readonly ConnectorService _connector;
     private readonly ActivityLogger _logger;
+    private readonly ApprovalService? _approvalService;
 
     private bool _isRunning;
     private string _statusText = "Stopped";
@@ -23,16 +25,28 @@ public class McpWindowViewModel : BaseViewModel
     private string _revitUsername = "—";
     private int _selectedElementCount;
     private bool _isDarkTheme = true;
+    private string _pendingTabHeader = "PENDING";
 
-    public McpWindowViewModel(ConnectorService connector, ActivityLogger logger)
+    public McpWindowViewModel(ConnectorService connector, ActivityLogger logger, ApprovalService? approvalService = null)
     {
         _connector = connector;
         _logger = logger;
+        _approvalService = approvalService;
 
         _connector.StatusChanged += OnConnectorStatusChanged;
         _logger.EntryLogged += OnEntryLogged;
 
         ActivityLog.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoActivity));
+        PendingApprovals.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasNoPendingApprovals));
+            PendingTabHeader = PendingApprovals.Count > 0
+                ? $"PENDING ({PendingApprovals.Count})"
+                : "PENDING";
+        };
+
+        if (_approvalService != null)
+            _approvalService.PendingChanged += OnPendingChanged;
 
         StartCommand = new RelayCommand(_ => _connector.Start(), _ => !_isRunning);
         StopCommand = new RelayCommand(_ => _connector.Stop(), _ => _isRunning);
@@ -40,6 +54,9 @@ public class McpWindowViewModel : BaseViewModel
         ToggleThemeCommand = new RelayCommand(_ => ToggleTheme());
         OpenLogFolderCommand = new RelayCommand(_ => OpenLogFolder());
         ClearActivityLogCommand = new RelayCommand(_ => ActivityLog.Clear());
+        ApproveCommand = new RelayCommand(id => ApproveItem(id as string));
+        RejectCommand = new RelayCommand(id => RejectItem(id as string));
+        RejectAllCommand = new RelayCommand(_ => _approvalService?.RejectAll(), _ => PendingApprovals.Count > 0);
     }
 
     // ── Status tab ────────────────────────────────────────────────────────────
@@ -57,6 +74,11 @@ public class McpWindowViewModel : BaseViewModel
     public ObservableCollection<ActivityLogItem> ActivityLog { get; } = [];
     public bool HasNoActivity => ActivityLog.Count == 0;
 
+    // ── Pending tab ──────────────────────────────────────────────────────────
+    public ObservableCollection<PendingApprovalItem> PendingApprovals { get; } = [];
+    public bool HasNoPendingApprovals => PendingApprovals.Count == 0;
+    public string PendingTabHeader { get => _pendingTabHeader; private set => SetProperty(ref _pendingTabHeader, value); }
+
     // ── Commands ──────────────────────────────────────────────────────────────
     public ICommand StartCommand { get; }
     public ICommand StopCommand { get; }
@@ -64,6 +86,9 @@ public class McpWindowViewModel : BaseViewModel
     public ICommand ToggleThemeCommand { get; }
     public ICommand OpenLogFolderCommand { get; }
     public ICommand ClearActivityLogCommand { get; }
+    public ICommand ApproveCommand { get; }
+    public ICommand RejectCommand { get; }
+    public ICommand RejectAllCommand { get; }
 
     // ── Handlers ──────────────────────────────────────────────────────────────
     private void OnConnectorStatusChanged(bool running)
@@ -95,6 +120,42 @@ public class McpWindowViewModel : BaseViewModel
             while (ActivityLog.Count > 200)
                 ActivityLog.RemoveAt(ActivityLog.Count - 1);
         });
+    }
+
+    // ── Pending approval handlers ────────────────────────────────────────────
+    private void OnPendingChanged()
+    {
+        Application.Current?.Dispatcher.Invoke(() =>
+        {
+            PendingApprovals.Clear();
+            if (_approvalService == null) return;
+
+            foreach (var p in _approvalService.GetPending())
+            {
+                PendingApprovals.Add(new PendingApprovalItem
+                {
+                    ApprovalId = p.ApprovalId,
+                    Time = p.CreatedAt.ToString("HH:mm:ss"),
+                    Tool = p.ToolName,
+                    Summary = p.Summary,
+                    Client = p.ClientName
+                });
+            }
+
+            CommandManager.InvalidateRequerySuggested();
+        });
+    }
+
+    private void ApproveItem(string? approvalId)
+    {
+        if (approvalId != null)
+            _approvalService?.Approve(approvalId);
+    }
+
+    private void RejectItem(string? approvalId)
+    {
+        if (approvalId != null)
+            _approvalService?.Reject(approvalId);
     }
 
     private void ToggleTheme()

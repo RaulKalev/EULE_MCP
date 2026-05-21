@@ -1,4 +1,5 @@
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Approval;
 using RevitMCP.Addin.Logging;
 using RevitMCP.Addin.Services;
 using RevitMCP.Addin.Tools;
@@ -45,10 +46,15 @@ public class App : IExternalApplication
             handler.RegisterTool(new SetParameterTool());
 
             var eventService = new ExternalEventService(handler);
+
+            var approvalService = new ApprovalService();
+            approvalService.SetRedispatch(eventService.Redispatch);
+            handler.SetApprovalService(approvalService);
+
             var pipeServer = new PipeServer(RevitMcpDefaults.PipeName, eventService, logger);
-            var connector = new ConnectorService(pipeServer, eventService);
+            var connector = new ConnectorService(pipeServer, eventService, approvalService);
             _connector = connector;
-            _viewModel = new McpWindowViewModel(connector, logger);
+            _viewModel = new McpWindowViewModel(connector, logger, approvalService);
 
             // Ribbon
             AddRibbonButton(application);
