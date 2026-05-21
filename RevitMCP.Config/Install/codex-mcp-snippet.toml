@@ -1,0 +1,7 @@
+# Revit MCP connector for Codex
+# Add this block to: C:\Users\RaulKalev\.codex\config.toml
+# Then restart Codex.
+
+[mcp_servers.revit-mcp]
+command = "C:\\Users\\RaulKalev\\Documents\\AntiGravity\\EULE_MCP\\RevitMCP.Bridge\\bin\\Release\\net8.0\\RevitMCP.Bridge.exe"
+args = ["--client", "Codex"]

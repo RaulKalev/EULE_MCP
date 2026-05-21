@@ -1,11 +1,16 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using RevitMCP.Bridge;
 
 var clientName = GetArg(args, "--client");
 var pipeName = GetArg(args, "--pipe");
 
 var builder = Host.CreateApplicationBuilder(args);
+
+// Suppress all console logging — stdout is reserved for MCP JSON-RPC protocol.
+// Any text written to stdout corrupts the stdio transport and causes JSON parse errors.
+builder.Logging.ClearProviders();
 
 // CLI arguments take precedence over appsettings.json
 if (clientName != null)
