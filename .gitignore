@@ -3,6 +3,10 @@ bin/
 obj/
 publish/
 bin-new/
+bin-v2/
+
+# Claude
+.claude/
 
 # Visual Studio
 .vs/
