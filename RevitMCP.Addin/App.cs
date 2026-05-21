@@ -5,9 +5,11 @@ using RevitMCP.Addin.Services;
 using RevitMCP.Addin.Tools;
 using RevitMCP.Addin.UI.ViewModels;
 using RevitMCP.Core.Configuration;
+using ricaun.Revit.UI;
 
 namespace RevitMCP.Addin;
 
+[AppLoader]
 public class App : IExternalApplication
 {
     private static McpWindowViewModel? _viewModel;
@@ -15,10 +17,22 @@ public class App : IExternalApplication
 
     public static McpWindowViewModel? GetViewModel() => _viewModel;
 
+    private static readonly string DiagLogPath = System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "RevitMCP_startup.log");
+
+    private static void DiagLog(string msg)
+    {
+        try { System.IO.File.AppendAllText(DiagLogPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); } catch { }
+    }
+
     public Result OnStartup(UIControlledApplication application)
     {
+        try { System.IO.File.WriteAllText(DiagLogPath, $"=== RevitMCP OnStartup {DateTime.Now} ===\r\n"); } catch { }
+        DiagLog($"Assembly: {typeof(App).Assembly.Location}");
         try
         {
+            DiagLog("Creating ActivityLogger");
             // Build services
             var logger = new ActivityLogger();
             var handler = new ExternalEventHandler();
@@ -57,12 +71,19 @@ public class App : IExternalApplication
             _viewModel = new McpWindowViewModel(connector, logger, approvalService);
 
             // Ribbon
+            DiagLog("Calling AddRibbonButton");
             AddRibbonButton(application);
+            DiagLog("AddRibbonButton OK");
 
+            DiagLog("OnStartup SUCCEEDED");
             return Result.Succeeded;
         }
         catch (Exception ex)
         {
+            DiagLog($"EXCEPTION: {ex.GetType().FullName}: {ex.Message}");
+            DiagLog($"StackTrace: {ex.StackTrace}");
+            if (ex.InnerException != null)
+                DiagLog($"InnerException: {ex.InnerException.GetType().FullName}: {ex.InnerException.Message}");
             TaskDialog.Show("RevitMCP Startup Error", ex.Message);
             return Result.Failed;
         }

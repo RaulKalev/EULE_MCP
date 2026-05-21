@@ -56,8 +56,13 @@ public class ExportScheduleListToExcelTool : IRevitMcpTool
             try
             {
                 var def = s.Definition;
-                for (int i = 0; i < def.GetFieldCount(); i++)
-                    fields.Add(def.GetField(i).GetName());
+                if (def != null)
+                    for (int i = 0; i < def.GetFieldCount(); i++)
+                    {
+                        var field = def.GetField(i);
+                        if (field != null)
+                            fields.Add(field.GetName());
+                    }
             }
             catch { }
 
