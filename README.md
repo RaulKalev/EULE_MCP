@@ -128,8 +128,8 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_get_circuit_route_assumptions` | Returns the routing assumptions for a circuit (installation method, conductor material, temperature rating) used as voltage drop inputs |
 | `revit_estimate_circuit_length` | Estimates the cable length for a single circuit using element locations and a configurable method (StraightLine, Manhattan, Estimate) |
 | `revit_estimate_circuit_lengths` | Bulk version of `revit_estimate_circuit_length` — estimates lengths for multiple circuits in one call |
-| `revit_export_voltage_drop_input_to_excel` | Exports voltage drop input data (circuit, panel, load, estimated length, cable type) to `.xlsx` for external calculation |
-| `revit_get_voltage_drop_precheck` | Pre-checks circuits for voltage drop calculation readiness: flags missing cable type, missing load, zero connected elements, and unreachable locations |
+| `revit_export_voltage_drop_input_to_excel` | Exports voltage drop input data (circuit, panel, load, estimated length, cable type) to `.xlsx`. Accepts `circuitIds` (array — exports only those circuits), or `panelName`/`systemType` filters when no IDs given |
+| `revit_get_voltage_drop_precheck` | Pre-checks one or more circuits for voltage drop calculation readiness. Accepts `circuitIds` (array, preferred) or single `circuitId`. Flags missing cable type, load, voltage, and unreachable locations. Returns per-circuit results with a bulk summary when multiple IDs are provided |
 
 ### Fire Alarm Circuit Preset Tools
 
