@@ -38,11 +38,17 @@ public class PreviewPlaceViewsOnSheetsTool : IRevitMcpTool
         if (viewIds.Length == 0)
             return Task.FromResult(new McpToolResult { RequestId = request.RequestId, Success = false, Message = "viewIds is required." });
 
-        var placedIds = new FilteredElementCollector(doc)
-            .OfClass(typeof(ViewSheet))
-            .Cast<ViewSheet>()
-            .SelectMany(s => s.GetAllPlacedViews())
-            .ToHashSet();
+        // Build view→sheet reverse map so we can report which sheet a view is already on
+        var viewToSheet = new Dictionary<ElementId, (long sheetId, string sheetNumber)>();
+        var placedIds = new HashSet<ElementId>();
+        foreach (var sheet in new FilteredElementCollector(doc).OfClass(typeof(ViewSheet)).Cast<ViewSheet>())
+        {
+            foreach (var vid in sheet.GetAllPlacedViews())
+            {
+                placedIds.Add(vid);
+                viewToSheet[vid] = (sheet.Id.Value, sheet.SheetNumber);
+            }
+        }
 
         IEnumerable<ViewSheet> candidateSheets;
         if (allSheets || sheetIds.Length == 0)
@@ -71,9 +77,41 @@ public class PreviewPlaceViewsOnSheetsTool : IRevitMcpTool
 
         var warnings = new List<string>();
         if (skippedIds.Length > 0)
-            warnings.Add($"{skippedIds.Length} view(s) skipped (already placed on sheets).");
+        {
+            var skippedDescs = skippedIds.Select(id =>
+            {
+                var eid = new ElementId(id);
+                var name = (doc.GetElement(eid) as View)?.Name ?? id.ToString();
+                if (viewToSheet.TryGetValue(eid, out var info))
+                    return $"'{name}' (already on sheet {info.sheetNumber})";
+                return $"'{name}' (already placed)";
+            });
+            warnings.Add($"{skippedIds.Length} view(s) skipped — already placed: {string.Join(", ", skippedDescs)}. " +
+                         $"To place on a different sheet use skipAlreadyPlaced=false, or use targetSheetId for direct placement.");
+        }
         if (unmatched > 0)
-            warnings.Add($"{unmatched} view(s) could not be matched to a sheet.");
+            warnings.Add($"{unmatched} view(s) could not be matched to a sheet with mode '{matchMode}'.");
+
+        // Build skipped-view entries for inline visibility
+        var skippedProposals = skippedIds.Select(id =>
+        {
+            var eid  = new ElementId(id);
+            var name = (doc.GetElement(eid) as View)?.Name ?? id.ToString();
+            viewToSheet.TryGetValue(eid, out var info);
+            return new
+            {
+                viewId            = id,
+                viewName          = name,
+                targetSheetId     = (long?)null,
+                targetSheetNumber = (string?)null,
+                targetSheetName   = (string?)null,
+                score             = 0.0,
+                reason            = info.sheetNumber != null
+                    ? $"Skipped — already on sheet {info.sheetNumber} (id {info.sheetId})"
+                    : "Skipped — already placed",
+                skipped           = true
+            };
+        });
 
         sw.Stop();
         return Task.FromResult(new McpToolResult
@@ -94,8 +132,9 @@ public class PreviewPlaceViewsOnSheetsTool : IRevitMcpTool
                     targetSheetNumber= p.SheetNumber,
                     targetSheetName  = p.SheetName,
                     score            = Math.Round(p.Score, 3),
-                    reason           = p.Reason
-                })
+                    reason           = p.Reason,
+                    skipped          = false
+                }).Concat<object>(skippedProposals)
             },
             Warnings   = warnings,
             DurationMs = sw.ElapsedMilliseconds

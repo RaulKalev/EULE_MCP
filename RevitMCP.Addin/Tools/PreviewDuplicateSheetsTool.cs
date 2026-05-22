@@ -53,12 +53,32 @@ public class PreviewDuplicateSheetsTool : IRevitMcpTool
             sources = allSheets.Where(s => numSet.Contains(s.SheetNumber));
         }
 
+        var sourceList = sources.ToList();
+        if (sourceList.Count == 0)
+        {
+            // Diagnostic failure — helps the LLM understand what was searched
+            var searchedDesc = sourceIds.Length > 0
+                ? $"IDs [{string.Join(", ", sourceIds)}]"
+                : $"numbers [{string.Join(", ", sourceNums)}]";
+            var availableNumbers = allSheets.Take(5).Select(s => s.SheetNumber).ToList();
+            var availDesc = availableNumbers.Count > 0
+                ? $"Sample available sheet numbers: {string.Join(", ", availableNumbers)} (total {allSheets.Count})"
+                : "Model has no sheets.";
+            return Task.FromResult(new McpToolResult
+            {
+                RequestId = request.RequestId,
+                Success   = false,
+                Message   = $"No sheets found matching {searchedDesc}. {availDesc}. " +
+                            $"Use revit_list_sheets to retrieve valid element IDs and sheet numbers."
+            });
+        }
+
         var existingNumbers = allSheets.Select(s => s.SheetNumber).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var proposals = new List<object>();
         var warnings  = new List<string>();
 
-        foreach (var s in sources)
+        foreach (var s in sourceList)
         {
             var newNum  = s.SheetNumber + numSuffix;
             var newName = s.Name + nameSuffix;

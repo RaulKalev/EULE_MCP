@@ -65,18 +65,23 @@ public static class ViewSheetMatchingService
 
     private static (ViewSheet?, double, string) BestExact(View view, List<ViewSheet> sheets)
     {
+        // Match view name against sheet name (title) OR sheet number
         var match = sheets.FirstOrDefault(s =>
-            string.Equals(s.Name, view.Name, StringComparison.OrdinalIgnoreCase));
+            string.Equals(s.Name, view.Name, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(s.SheetNumber, view.Name, StringComparison.OrdinalIgnoreCase));
         return match != null
             ? (match, 1.0, "ExactName match")
-            : (null, 0, "No exact name match found");
+            : (null, 0, "No exact name/number match found");
     }
 
     private static (ViewSheet?, double, string) BestContains(View view, List<ViewSheet> sheets)
     {
+        // Match view name against sheet name (title) OR sheet number (contains)
         var match = sheets.FirstOrDefault(s =>
             s.Name.Contains(view.Name, StringComparison.OrdinalIgnoreCase) ||
-            view.Name.Contains(s.Name, StringComparison.OrdinalIgnoreCase));
+            view.Name.Contains(s.Name, StringComparison.OrdinalIgnoreCase) ||
+            s.SheetNumber.Contains(view.Name, StringComparison.OrdinalIgnoreCase) ||
+            view.Name.Contains(s.SheetNumber, StringComparison.OrdinalIgnoreCase));
         return match != null
             ? (match, 0.8, "Contains match")
             : (null, 0, "No contains match found");
@@ -88,7 +93,10 @@ public static class ViewSheetMatchingService
         double bestScore = threshold;
         foreach (var s in sheets)
         {
-            var score = FuzzyNameMatcher.Similarity(view.Name, s.Name);
+            // Score against both sheet name and sheet number, take the higher
+            var scoreByName   = FuzzyNameMatcher.Similarity(view.Name, s.Name);
+            var scoreByNumber = FuzzyNameMatcher.Similarity(view.Name, s.SheetNumber);
+            var score = Math.Max(scoreByName, scoreByNumber);
             if (score > bestScore) { best = s; bestScore = score; }
         }
         return best != null

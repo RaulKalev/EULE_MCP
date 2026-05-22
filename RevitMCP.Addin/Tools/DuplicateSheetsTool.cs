@@ -45,13 +45,24 @@ public class DuplicateSheetsTool : IRevitMcpTool
             ? allSheets.Where(s => sourceIds.ToHashSet().Contains(s.Id.Value))
             : allSheets.Where(s => sourceNums.Select(n => n.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase).Contains(s.SheetNumber));
 
+        var sourceList = sources.ToList();
+        if (sourceList.Count == 0)
+        {
+            var searchedDesc = sourceIds.Length > 0
+                ? $"IDs [{string.Join(", ", sourceIds)}]"
+                : $"numbers [{string.Join(", ", sourceNums)}]";
+            return Task.FromResult(Fail(request,
+                $"No sheets found matching {searchedDesc}. " +
+                $"Use revit_list_sheets to retrieve valid element IDs and sheet numbers."));
+        }
+
         int created  = 0;
         var warnings = new List<string>();
         var results  = new List<object>();
 
         using var t = new Transaction(doc, "Revit MCP - Duplicate Sheets");
         t.Start();
-        foreach (var src in sources)
+        foreach (var src in sourceList)
         {
             try
             {
