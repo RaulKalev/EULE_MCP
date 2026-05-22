@@ -92,12 +92,22 @@ public class DuplicateSheetsTool : IRevitMcpTool
                 newSheet.SheetNumber = newNum;
                 newSheet.Name        = newName;
 
-                // Copy instance parameters
+                // Copy instance parameters (skip sheet number / name — set explicitly above)
                 if (copyParams)
                 {
                     foreach (Parameter srcParam in src.Parameters)
                     {
                         if (srcParam.IsReadOnly) continue;
+                        // Sheet Number and Sheet Name must not be overwritten from source;
+                        // Revit defers uniqueness validation and the whole transaction would
+                        // fail at Commit() if we write the source's sheet number to the copy.
+                        if (srcParam.Definition is InternalDefinition intDef)
+                        {
+                            var bip = intDef.BuiltInParameter;
+                            if (bip == BuiltInParameter.SHEET_NUMBER ||
+                                bip == BuiltInParameter.VIEW_NAME)
+                                continue;
+                        }
                         try
                         {
                             var dstParam = newSheet.get_Parameter(srcParam.Definition);
@@ -112,9 +122,6 @@ public class DuplicateSheetsTool : IRevitMcpTool
                         }
                         catch { /* skip unwritable params */ }
                     }
-                    // Restore sheet number and name (they get overwritten by param copy)
-                    newSheet.SheetNumber = newNum;
-                    newSheet.Name        = newName;
                 }
 
                 created++;
@@ -125,7 +132,14 @@ public class DuplicateSheetsTool : IRevitMcpTool
                 warnings.Add($"Failed to duplicate sheet '{src.SheetNumber}': {ex.Message}");
             }
         }
-        t.Commit();
+        var commitStatus = t.Commit();
+        if (commitStatus != TransactionStatus.Committed)
+        {
+            return Task.FromResult(Fail(request,
+                $"Transaction did not commit (status: {commitStatus}). " +
+                $"No sheets were created. This can happen if a generated sheet number " +
+                $"conflicts with an existing one — run revit_preview_duplicate_sheets first."));
+        }
 
         sw.Stop();
         return Task.FromResult(new McpToolResult
