@@ -449,3 +449,208 @@ Verify:
 - An element on multiple circuits returns all circuits.
 - An uncircuited element returns `circuitCount=0` with `success=true`.
 - A non-FamilyInstance or element without MEP model returns a clear error.
+
+---
+
+## 19. Circuit Parameter Completeness, Selection, and Export Tools
+
+### 19.1 Check Circuit Parameter Completeness
+
+**Prompts:**
+```
+Check that all circuits on panel DB-L1 have Circuit Number, Load Name, and Cable Type filled.
+What percentage of circuits are missing a Load Name?
+```
+
+**Verify:**
+- `revit_check_circuit_parameter_completeness` returns per-parameter `filledCount`, `emptyCount`, `fillRate`.
+- `emptyCircuitIds` lists IDs of circuits with missing values.
+- Works with `panelName` and `systemType` filters.
+
+---
+
+### 19.2 Select Circuit Elements
+
+**Prompts:**
+```
+Select all elements connected to circuit 2520343.
+```
+
+**Verify:**
+- Approval appears in Pending tab with circuit ID in summary.
+- After approval, elements are selected in Revit.
+- `zoomToSelection=true` zooms to the selection.
+
+---
+
+### 19.3 Select Uncircuited Elements
+
+**Prompts:**
+```
+Select all electrical fixtures that are not connected to any circuit.
+```
+
+**Verify:**
+- Approval appears in Pending tab with category list and limit.
+- After approval, uncircuited elements are selected in Revit.
+- `replaceSelection=false` adds to existing selection.
+
+---
+
+### 19.4 Export Circuit Health to Excel
+
+**Prompts:**
+```
+Export a circuit health report for panel DB-L1 to Excel.
+```
+
+**Verify:**
+- `revit_export_circuit_health_to_excel` returns a file path in `Documents\RKTools\RevitMCP\Exports\`.
+- File has Summary and Health Issues sheets with autofilter.
+
+---
+
+### 19.5 Export Uncircuited Elements to Excel
+
+**Prompts:**
+```
+Export all uncircuited fire alarm devices to Excel including ELENEA_Nimetus and ELENEA_Tootja.
+```
+
+**Verify:**
+- Returns file path.
+- Extra parameter columns appear when `returnParameters` is set.
+
+---
+
+### 19.6 Get Circuits for Selected Elements
+
+**Prompts:**
+```
+Select some devices in Revit, then ask: What circuits are these devices on?
+```
+
+**Verify:**
+- `revit_get_circuits_for_selected_elements` returns unique circuits only.
+- Uncircuited selected elements are reported in warnings.
+
+---
+
+### 19.7 Find Elements on Circuit
+
+**Prompts:**
+```
+List all elements on circuit 2520343.
+Show elements on circuit JK-1/12 including ELENEA_Nimetus.
+```
+
+**Verify:**
+- Returns element IDs, category, family, type, level.
+- `returnParameters` adds extra values per element.
+
+---
+
+## 20. Load Summary, Panel Utilization, Numbering, and Bulk Tools
+
+### 20.1 Get Circuit Load Summary
+
+**Prompts:**
+```
+Summarize total loads by panel.
+Show load by panel and system type.
+Show load by cable type.
+```
+
+**Verify:**
+- `revit_get_circuit_load_summary` groups circuits by the requested keys.
+- Each group has `circuitCount` and `totalApparentLoad`.
+- `includeCircuitDetails=true` adds per-circuit breakdown.
+
+---
+
+### 20.2 Check Panel Utilization
+
+**Prompts:**
+```
+Check all panels for missing cable types and load names.
+What is the total load on panel DB-L1?
+```
+
+**Verify:**
+- `revit_check_panel_utilization` returns per-panel: `circuitCount`, `totalApparentLoad`, `missingCableType`, `missingLoadName`, `emptyCircuitNumbers`.
+- `includeCircuitDetails=true` adds per-circuit rows.
+
+---
+
+### 20.3 Preview Circuit Numbering
+
+**Prompts:**
+```
+Preview renumbering circuits on panel DB-L1 starting from 1.
+Preview renumbering circuits on JK-1 sorted by load name.
+```
+
+**Verify:**
+- `revit_preview_circuit_numbering` returns a `changes` list with `oldCircuitNumber`, `newCircuitNumber`, `willChange`.
+- Model is NOT modified.
+- `changedCount` is returned.
+
+---
+
+### 20.4 Apply Circuit Numbering
+
+**Prompts:**
+```
+Apply the renumbering shown in the preview to panel DB-L1.
+```
+
+**Verify:**
+- Approval appears in Pending tab with count of circuits to change.
+- After approval, circuit numbers are updated in Revit.
+- Revit Undo shows the transaction "Revit MCP - Apply Circuit Numbering".
+- Rejection does NOT modify the model.
+
+---
+
+### 20.5 Preview Circuit Load Names
+
+**Prompts:**
+```
+Preview load names for panel JK-1 using template '{Room Number} {Category}'.
+Preview load names for panel DB-L1 from connected elements.
+```
+
+**Verify:**
+- `revit_preview_circuit_load_names` returns proposals with `oldLoadName`, `newLoadName`, `willChange`.
+- Model is NOT modified.
+- `{ParameterName}` placeholders are resolved from connected elements or circuit parameters.
+
+---
+
+### 20.6 Apply Circuit Load Names
+
+**Prompts:**
+```
+Apply the load name proposals for panel JK-1.
+```
+
+**Verify:**
+- Approval appears in Pending tab with count of circuits to change.
+- After approval, Load Name parameters are updated.
+- Revit Undo shows "Revit MCP - Apply Circuit Load Names".
+
+---
+
+### 20.7 Set Circuit Parameters Bulk
+
+**Prompts:**
+```
+Set Comments to "Reviewed" on all circuits on panel DB-L1.
+Set Cable Type to "XX_EN_IT_Cat6a" on circuits 2520343 and 2520353 in one operation.
+```
+
+**Verify:**
+- Approval appears in Pending tab with parameter count and target description.
+- After approval, all specified parameters are updated on all target circuits.
+- Revit Undo shows "Revit MCP - Set Circuit Parameters Bulk".
+- Per-circuit, per-parameter success/failure is reported.

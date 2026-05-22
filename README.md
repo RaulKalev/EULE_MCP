@@ -93,6 +93,20 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_export_panel_circuit_list_to_excel` | Exports a panel-organized circuit report to `.xlsx` with Summary, Panel Circuits, Circuit Elements, and Health Issues sheets |
 | `revit_find_circuits_by_element_parameter` | Finds circuits containing elements matching category and parameter filters (e.g. circuits in room 201, circuits with specific device types) |
 | `revit_trace_circuit` | Traces an element or circuit back to its panel — returns circuit number, load name, wire type, apparent load, and panel details |
+| `revit_check_circuit_parameter_completeness` | Checks required parameters on circuit elements — returns per-parameter fill rates and IDs of circuits with empty values |
+| `revit_select_circuit_elements` | Selects all elements connected to a circuit in the Revit UI *(requires approval)* |
+| `revit_select_uncircuited_elements` | Selects elements not assigned to any circuit across electrical categories *(requires approval)* |
+| `revit_export_circuit_health_to_excel` | Exports circuit QA issues (missing panel, duplicate numbers, missing cable type, missing load name) to `.xlsx` |
+| `revit_export_uncircuited_elements_to_excel` | Exports elements not assigned to any circuit to `.xlsx` with optional parameter columns |
+| `revit_get_circuits_for_selected_elements` | Returns all circuits for the current Revit selection, de-duplicated |
+| `revit_find_elements_on_circuit` | Lists all elements connected to a specific circuit with category, family, type, and optional parameters |
+| `revit_get_circuit_load_summary` | Summarizes circuit apparent loads grouped by Panel, SystemType, CableType, or WireType |
+| `revit_check_panel_utilization` | Checks circuit count, total load, and data quality issues (missing cable type, load name, circuit number) per panel |
+| `revit_preview_circuit_numbering` | Previews renumbering proposals for panel circuits without modifying the model |
+| `revit_apply_circuit_numbering` | Applies previewed circuit number changes *(requires approval, transaction-wrapped)* |
+| `revit_preview_circuit_load_names` | Previews load name proposals using a `{ParameterName}` template resolved from connected elements |
+| `revit_apply_circuit_load_names` | Applies previewed load name changes *(requires approval, transaction-wrapped)* |
+| `revit_set_circuit_parameters_bulk` | Sets multiple parameters on multiple circuits in a single transaction *(requires approval)* |
 
 Advanced tools that accept `filters` and `groupBy` expect valid JSON arrays. See [Example JSON Arguments](#example-json-arguments) below.
 
@@ -365,7 +379,7 @@ EULE_MCP/
 │   ├── Commands/        OpenMcpWindowCommand
 │   ├── Electrical/      Circuit query/mutation services, WireTypeResolver, CircuitDtoBuilder
 │   ├── Services/        PipeServer, ExternalEventHandler, ConnectorService
-│   ├── Tools/           One file per MCP tool (38 tools)
+│   ├── Tools/           One file per MCP tool (52 tools)
 │   ├── UI/              WPF window (Status + Pending + Activity tabs) + ViewModels + themes
 │   └── Interfaces/      IRevitMcpTool
 ├── RevitMCP.Bridge/
