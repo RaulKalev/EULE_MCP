@@ -89,6 +89,26 @@ public class App : IExternalApplication
             handler.RegisterTool(new ApplyCircuitLoadNamesTool());
             handler.RegisterTool(new SetCircuitParametersBulkTool());
 
+            // Electrical Dashboard (Group A)
+            handler.RegisterTool(new GetElectricalDashboardSummaryTool());
+            handler.RegisterTool(new GetPanelIssueSummaryTool());
+            handler.RegisterTool(new ExportElectricalDashboardToExcelTool());
+
+            // Voltage-Drop Preparation (Group B)
+            handler.RegisterTool(new GetCircuitRouteAssumptionsTool());
+            handler.RegisterTool(new EstimateCircuitLengthTool());
+            handler.RegisterTool(new EstimateCircuitLengthsTool());
+            handler.RegisterTool(new ExportVoltageDropInputToExcelTool());
+            handler.RegisterTool(new GetVoltageDropPrecheckTool());
+
+            // Fire Alarm / ATS Preset (Group C)
+            handler.RegisterTool(new RunFireAlarmCircuitPresetTool());
+            handler.RegisterTool(new ExportFireAlarmCircuitPresetToExcelTool());
+            handler.RegisterTool(new GetFireAlarmVisualizationDataTool());
+            handler.RegisterTool(new GetFireAlarmVoltageDropSummaryTool());
+            handler.RegisterTool(new ListCableResistanceProfilesTool());
+            handler.RegisterTool(new GetMatchingCableResistanceProfileTool());
+
             var eventService = new ExternalEventService(handler);
 
             var approvalService = new ApprovalService();

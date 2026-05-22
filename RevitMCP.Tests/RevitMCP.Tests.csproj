@@ -18,5 +18,7 @@
   <!-- Reference only the pure-logic types; no Revit API dependency -->
   <ItemGroup>
     <Compile Include="..\RevitMCP.Addin\Electrical\CircuitElementClassifier.cs" Link="Electrical\CircuitElementClassifier.cs" />
+    <Compile Include="..\RevitMCP.Addin\Electrical\LengthUnitHelper.cs" Link="Electrical\LengthUnitHelper.cs" />
+    <Compile Include="..\RevitMCP.Addin\Electrical\CircuitLengthEstimator.cs" Link="Electrical\CircuitLengthEstimator.cs" />
   </ItemGroup>
 </Project>

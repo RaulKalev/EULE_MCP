@@ -1085,4 +1085,311 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         var result = await pipeClient.SendAsync("revit_set_circuit_parameters_bulk", args, cancellationToken);
         return FormatResult(result);
     }
+
+    // ── Electrical Dashboard (Group A) ────────────────────────────────────────
+
+    [McpServerTool(Name = "revit_get_electrical_dashboard_summary", ReadOnly = true),
+     Description("Returns a compact model-wide electrical QA summary: panel/circuit counts, issue breakdown, top problem panels, system type summary, load summary. Accepts: includePanels (bool), includeSystemTypes (bool), includeTopIssues (bool), includeUncircuitedSummary (bool — slower), includeLoadSummary (bool), limit (int).")]
+    public async Task<string> GetElectricalDashboardSummary(
+        [Description("Include top-issue panels in response (default true)")] bool includePanels = true,
+        [Description("Include system type breakdown (default true)")] bool includeSystemTypes = true,
+        [Description("Include top-issue breakdown (default true)")] bool includeTopIssues = true,
+        [Description("Include uncircuited element summary (slower, default true)")] bool includeUncircuitedSummary = true,
+        [Description("Include load summary (default true)")] bool includeLoadSummary = true,
+        [Description("Max circuits to process (default 5000)")] int limit = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["includePanels"] = includePanels,
+            ["includeSystemTypes"] = includeSystemTypes,
+            ["includeTopIssues"] = includeTopIssues,
+            ["includeUncircuitedSummary"] = includeUncircuitedSummary,
+            ["includeLoadSummary"] = includeLoadSummary,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_get_electrical_dashboard_summary", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_panel_issue_summary", ReadOnly = true),
+     Description("Returns electrical QA data grouped by panel: circuit count, issue counts per type, total load. Accepts: panelName (optional partial filter), includeCircuitDetails (bool), includeIssueDetails (bool), limit (int).")]
+    public async Task<string> GetPanelIssueSummary(
+        [Description("Optional panel name filter (partial match)")] string? panelName = null,
+        [Description("Include per-circuit details (default false)")] bool includeCircuitDetails = false,
+        [Description("Include issue details (default true)")] bool includeIssueDetails = true,
+        [Description("Max circuits to process (default 5000)")] int limit = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panelName"] = panelName ?? string.Empty,
+            ["includeCircuitDetails"] = includeCircuitDetails,
+            ["includeIssueDetails"] = includeIssueDetails,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_get_panel_issue_summary", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_export_electrical_dashboard_to_excel", ReadOnly = true),
+     Description("Exports the electrical dashboard summary to an .xlsx file (sheets: Summary, Issue Breakdown, Panel Summary, System Type Summary). Accepts: fileName, includePanelSummary (bool), includeIssueDetails (bool), includeSystemTypeSummary (bool), limit (int).")]
+    public async Task<string> ExportElectricalDashboardToExcel(
+        [Description("Output file name (default Electrical_Dashboard_Summary.xlsx)")] string fileName = "Electrical_Dashboard_Summary.xlsx",
+        [Description("Include panel summary sheet (default true)")] bool includePanelSummary = true,
+        [Description("Include issue details sheet (default true)")] bool includeIssueDetails = true,
+        [Description("Include system type summary sheet (default true)")] bool includeSystemTypeSummary = true,
+        [Description("Max circuits to process (default 5000)")] int limit = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["fileName"] = fileName,
+            ["includePanelSummary"] = includePanelSummary,
+            ["includeIssueDetails"] = includeIssueDetails,
+            ["includeSystemTypeSummary"] = includeSystemTypeSummary,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_export_electrical_dashboard_to_excel", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    // ── Voltage-Drop Preparation (Group B) ───────────────────────────────────
+
+    [McpServerTool(Name = "revit_get_circuit_route_assumptions", ReadOnly = true),
+     Description("Returns the data that would be used to estimate a circuit's length: panel and element model locations (meters), and an assumptions/warnings list. Does not estimate length. Accepts: circuitId (required), includeConnectedElements (bool), includeLocations (bool).")]
+    public async Task<string> GetCircuitRouteAssumptions(
+        [Description("Circuit element ID (required)")] long circuitId,
+        [Description("Include connected elements in response (default true)")] bool includeConnectedElements = true,
+        [Description("Include element location data (default true)")] bool includeLocations = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["circuitId"] = circuitId,
+            ["includeConnectedElements"] = includeConnectedElements,
+            ["includeLocations"] = includeLocations
+        };
+        var result = await pipeClient.SendAsync("revit_get_circuit_route_assumptions", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_estimate_circuit_length", ReadOnly = true),
+     Description("Estimates the total cable length for a single circuit by computing distances from panel to connected elements in the model. Length method: StraightLineMax, StraightLineSum, ManhattanMax (default), ManhattanSum, NearestNeighborPath. Results are PRELIMINARY. Accepts: circuitId (required), method (string), routingMultiplier (double, default 1.25), includeElementBreakdown (bool).")]
+    public async Task<string> EstimateCircuitLength(
+        [Description("Circuit element ID (required)")] long circuitId,
+        [Description("Length estimation method (default ManhattanMax)")] string method = "ManhattanMax",
+        [Description("Multiplier to account for routing overhead (default 1.25)")] double routingMultiplier = 1.25,
+        [Description("Include per-element distance breakdown")] bool includeElementBreakdown = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["circuitId"] = circuitId,
+            ["method"] = method,
+            ["routingMultiplier"] = routingMultiplier,
+            ["includeElementBreakdown"] = includeElementBreakdown
+        };
+        var result = await pipeClient.SendAsync("revit_estimate_circuit_length", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_estimate_circuit_lengths", ReadOnly = true),
+     Description("Estimates cable lengths for multiple circuits at once. Filter by panelName, systemType, or explicit circuitIds. Returns a row per circuit with raw and routed length estimates. Results are PRELIMINARY. Accepts: panelName, systemType, circuitIds (long[]), method, routingMultiplier, limit.")]
+    public async Task<string> EstimateCircuitLengths(
+        [Description("Optional panel name filter")] string? panelName = null,
+        [Description("Optional system type filter")] string? systemType = null,
+        [Description("Explicit circuit element IDs (optional)")] long[]? circuitIds = null,
+        [Description("Length estimation method (default ManhattanMax)")] string method = "ManhattanMax",
+        [Description("Routing multiplier (default 1.25)")] double routingMultiplier = 1.25,
+        [Description("Max circuits (default 1000)")] int limit = 1000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panelName"] = panelName ?? string.Empty,
+            ["systemType"] = systemType ?? string.Empty,
+            ["circuitIds"] = circuitIds ?? [],
+            ["method"] = method,
+            ["routingMultiplier"] = routingMultiplier,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_estimate_circuit_lengths", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_export_voltage_drop_input_to_excel", ReadOnly = true),
+     Description("Exports circuit data and estimated lengths for manual voltage-drop calculations to .xlsx (sheets: Summary, Voltage Drop Input, Circuit Elements, Assumptions, Failures). Results are PRELIMINARY. Accepts: panelName, systemType, method, routingMultiplier (double), fileName, limit.")]
+    public async Task<string> ExportVoltageDropInputToExcel(
+        [Description("Optional panel name filter")] string? panelName = null,
+        [Description("Optional system type filter")] string? systemType = null,
+        [Description("Length method (default ManhattanMax)")] string method = "ManhattanMax",
+        [Description("Routing multiplier (default 1.25)")] double routingMultiplier = 1.25,
+        [Description("Output file name (default Voltage_Drop_Input.xlsx)")] string fileName = "Voltage_Drop_Input.xlsx",
+        [Description("Max circuits (default 1000)")] int limit = 1000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panelName"] = panelName ?? string.Empty,
+            ["systemType"] = systemType ?? string.Empty,
+            ["method"] = method,
+            ["routingMultiplier"] = routingMultiplier,
+            ["fileName"] = fileName,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_export_voltage_drop_input_to_excel", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_voltage_drop_precheck", ReadOnly = true),
+     Description("Reports whether a circuit has enough data available for voltage-drop calculation. Checks voltage, load, cable type, wire type, and location data. Does not calculate voltage drop. Accepts: circuitId (required), requireCableType (bool), requireVoltage (bool), requireLoad (bool), requireLength (bool).")]
+    public async Task<string> GetVoltageDropPrecheck(
+        [Description("Circuit element ID (required)")] long circuitId,
+        [Description("Require cable type (default true)")] bool requireCableType = true,
+        [Description("Require voltage (default true)")] bool requireVoltage = true,
+        [Description("Require load (default true)")] bool requireLoad = true,
+        [Description("Require estimable length (default true)")] bool requireLength = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["circuitId"] = circuitId,
+            ["requireCableType"] = requireCableType,
+            ["requireVoltage"] = requireVoltage,
+            ["requireLoad"] = requireLoad,
+            ["requireLength"] = requireLength
+        };
+        var result = await pipeClient.SendAsync("revit_get_voltage_drop_precheck", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    // ── Fire Alarm / ATS Preset (Group C) ────────────────────────────────────
+
+    [McpServerTool(Name = "revit_run_fire_alarm_circuit_preset", ReadOnly = true),
+     Description("Runs the Fire Alarm Devices circuit preset: collects OST_FireAlarmDevices, groups by Ahela nr. (or custom loop parameter), resolves Seadme Nr. and device type, finds connected circuits, and classifies each loop (AddressableLoop, ConventionalSounderLine, ModuleLoop, Unknown). Accepts: panelName, loopParameterName (default 'Ahela nr.'), deviceNumberParameterName (default 'Seadme Nr.'), deviceTypeParameterName (default 'ELENEA_Nimetus'), descriptionParameterName, includeDeviceList (bool), includeCircuitInfo (bool), allowDeviceNumberXXX (bool), limit.")]
+    public async Task<string> RunFireAlarmCircuitPreset(
+        [Description("Optional panel name filter")] string? panelName = null,
+        [Description("Loop/line parameter name (default 'Ahela nr.')")] string loopParameterName = "Ahela nr.",
+        [Description("Device number parameter name (default 'Seadme Nr.')")] string deviceNumberParameterName = "Seadme Nr.",
+        [Description("Device type parameter name (default 'ELENEA_Nimetus')")] string deviceTypeParameterName = "ELENEA_Nimetus",
+        [Description("Description parameter name (default 'Description')")] string descriptionParameterName = "Description",
+        [Description("Include device list in response (default true)")] bool includeDeviceList = true,
+        [Description("Include circuit info per loop (default true)")] bool includeCircuitInfo = true,
+        [Description("Allow device numbers matching 'xxx' prefix (default true)")] bool allowDeviceNumberXXX = true,
+        [Description("Max devices to process (default 5000)")] int limit = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panelName"] = panelName ?? string.Empty,
+            ["loopParameterName"] = loopParameterName,
+            ["deviceNumberParameterName"] = deviceNumberParameterName,
+            ["deviceTypeParameterName"] = deviceTypeParameterName,
+            ["descriptionParameterName"] = descriptionParameterName,
+            ["includeDeviceList"] = includeDeviceList,
+            ["includeCircuitInfo"] = includeCircuitInfo,
+            ["allowDeviceNumberXXX"] = allowDeviceNumberXXX,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_run_fire_alarm_circuit_preset", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_export_fire_alarm_circuit_preset_to_excel", ReadOnly = true),
+     Description("Exports fire alarm circuit preset results to .xlsx (sheets: Summary, Loop Summary, Device List, Circuit Info, Voltage Drop Input, Warnings). Accepts: panelName, loopParameterName, deviceTypeParameterName, includeVoltageDropInput (bool), sounderCurrentMilliAmps (double), fallbackResistanceOhmPerMeter (double), fileName, limit.")]
+    public async Task<string> ExportFireAlarmCircuitPresetToExcel(
+        [Description("Optional panel name filter")] string? panelName = null,
+        [Description("Loop parameter name (default 'Ahela nr.')")] string loopParameterName = "Ahela nr.",
+        [Description("Device type parameter name (default 'ELENEA_Nimetus')")] string deviceTypeParameterName = "ELENEA_Nimetus",
+        [Description("Include voltage drop input sheet (default true)")] bool includeVoltageDropInput = true,
+        [Description("Sounder current per device in mA (default 50)")] double sounderCurrentMilliAmps = 50.0,
+        [Description("Fallback resistance Ω/m if no profile matches (default 0.035)")] double fallbackResistanceOhmPerMeter = 0.035,
+        [Description("Output file name (default FireAlarm_Circuit_Preset.xlsx)")] string fileName = "FireAlarm_Circuit_Preset.xlsx",
+        [Description("Max devices (default 5000)")] int limit = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panelName"] = panelName ?? string.Empty,
+            ["loopParameterName"] = loopParameterName,
+            ["deviceTypeParameterName"] = deviceTypeParameterName,
+            ["includeVoltageDropInput"] = includeVoltageDropInput,
+            ["sounderCurrentMilliAmps"] = sounderCurrentMilliAmps,
+            ["fallbackResistanceOhmPerMeter"] = fallbackResistanceOhmPerMeter,
+            ["fileName"] = fileName,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_export_fire_alarm_circuit_preset_to_excel", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_fire_alarm_visualization_data", ReadOnly = true),
+     Description("Returns structured fire alarm data for diagram/spatial visualization, grouped by Ahela nr. Each loop contains device list with element IDs, levels, device types, and model coordinates. Accepts: panelName, loopParameterName (default 'Ahela nr.'), deviceTypeParameterName, limit.")]
+    public async Task<string> GetFireAlarmVisualizationData(
+        [Description("Optional panel name filter")] string? panelName = null,
+        [Description("Loop parameter name (default 'Ahela nr.')")] string loopParameterName = "Ahela nr.",
+        [Description("Device type parameter name (default 'ELENEA_Nimetus')")] string deviceTypeParameterName = "ELENEA_Nimetus",
+        [Description("Max devices (default 5000)")] int limit = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panelName"] = panelName ?? string.Empty,
+            ["loopParameterName"] = loopParameterName,
+            ["deviceTypeParameterName"] = deviceTypeParameterName,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_get_fire_alarm_visualization_data", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_fire_alarm_voltage_drop_summary", ReadOnly = true),
+     Description("Returns preliminary voltage-drop (sounder lines) or loop resistance (addressable loops) estimates for fire alarm circuits. Uses cable resistance profiles or fallback. Accepts: panelName, loopParameterName, deviceTypeParameterName, sounderCurrentMilliAmps (default 50), sounderSupplyVoltage (default 24), minimumSounderVoltage (default 18), addressableLoopMaxResistanceOhm (default 120), fallbackResistanceOhmPerMeter (default 0.035), limit.")]
+    public async Task<string> GetFireAlarmVoltageDropSummary(
+        [Description("Optional panel name filter")] string? panelName = null,
+        [Description("Loop parameter name (default 'Ahela nr.')")] string loopParameterName = "Ahela nr.",
+        [Description("Device type parameter name (default 'ELENEA_Nimetus')")] string deviceTypeParameterName = "ELENEA_Nimetus",
+        [Description("Sounder current per device in mA (default 50)")] double sounderCurrentMilliAmps = 50.0,
+        [Description("Supply voltage to sounder line V (default 24)")] double sounderSupplyVoltage = 24.0,
+        [Description("Minimum required voltage at last sounder V (default 18)")] double minimumSounderVoltage = 18.0,
+        [Description("Addressable loop max resistance Ω (default 120)")] double addressableLoopMaxResistanceOhm = 120.0,
+        [Description("Fallback resistance Ω/m if no cable profile matches (default 0.035)")] double fallbackResistanceOhmPerMeter = 0.035,
+        [Description("Max devices (default 5000)")] int limit = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panelName"] = panelName ?? string.Empty,
+            ["loopParameterName"] = loopParameterName,
+            ["deviceTypeParameterName"] = deviceTypeParameterName,
+            ["sounderCurrentMilliAmps"] = sounderCurrentMilliAmps,
+            ["sounderSupplyVoltage"] = sounderSupplyVoltage,
+            ["minimumSounderVoltage"] = minimumSounderVoltage,
+            ["addressableLoopMaxResistanceOhm"] = addressableLoopMaxResistanceOhm,
+            ["fallbackResistanceOhmPerMeter"] = fallbackResistanceOhmPerMeter,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_get_fire_alarm_voltage_drop_summary", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_list_cable_resistance_profiles", ReadOnly = true),
+     Description("Lists all configured cable resistance profiles from %AppData%\\RKTools\\RevitMCP\\electrical-cable-profiles.json. Returns profile name, description, and resistance Ω/m. Default profiles are created on first use.")]
+    public async Task<string> ListCableResistanceProfiles(CancellationToken cancellationToken = default)
+    {
+        var result = await pipeClient.SendAsync("revit_list_cable_resistance_profiles", [], cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_matching_cable_resistance_profile", ReadOnly = true),
+     Description("Returns the cable resistance profile that matches the given cable type name (case-insensitive Contains match), or indicates no match. Accepts: cableTypeName (required).")]
+    public async Task<string> GetMatchingCableResistanceProfile(
+        [Description("Cable type name to look up")] string cableTypeName,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["cableTypeName"] = cableTypeName };
+        var result = await pipeClient.SendAsync("revit_get_matching_cable_resistance_profile", args, cancellationToken);
+        return FormatResult(result);
+    }
 }
