@@ -956,3 +956,445 @@ Which cable resistance profile matches "2×0.8 CCA"?
 - Matching is case-insensitive and uses contains-style lookup.
 - When no match exists the tool returns `"success": true` with no match and a clear warning rather than an error.
 - No Revit transaction is created.
+
+---
+
+## 26. View/Sheet Discovery Tools
+
+### 26.1 View Sheet Summary
+
+**Prompts:**
+```
+Give me a view and sheet summary for this model.
+How many views are unplaced?
+```
+
+**Verify:**
+- `revit_get_view_sheet_summary` returns `totalSheets`, `totalViews`, `placedViews`, `unplacedViews`, `viewsWithTemplate`, `sheetsWithTitleBlock`.
+- No Revit transaction is created.
+
+---
+
+### 26.2 List Title Blocks
+
+**Prompts:**
+```
+List all title blocks loaded in the model.
+Which title block should I use when creating new sheets?
+```
+
+**Verify:**
+- `revit_list_titleblocks` returns `familySymbolId`, `familyName`, `typeName`, `isInUse` per entry.
+- `familySymbolId` can be used directly in `revit_create_sheets_from_table`.
+- No Revit transaction is created.
+
+---
+
+### 26.3 List View Templates
+
+**Prompts:**
+```
+List all view templates.
+List all floor plan view templates.
+```
+
+**Verify:**
+- `revit_list_view_templates` returns `elementId`, `name`, `viewType`, `assignedViewCount`.
+- Optional `viewType` filter (e.g. `"FloorPlan"`) narrows results.
+- `elementId` can be used directly in `revit_apply_view_template`.
+- No Revit transaction is created.
+
+---
+
+### 26.4 List Revisions
+
+**Prompts:**
+```
+List all revisions in the model.
+```
+
+**Verify:**
+- `revit_list_revisions` returns at least `elementId`, `sequenceNumber`, `revisionDate`, `description`, `issuedBy`, `visibility`.
+- No Revit transaction is created.
+
+---
+
+### 26.5 Get Sheet Viewports
+
+**Prompts:**
+```
+What views are placed on sheet "E-01"?
+Show viewport details for sheets E-01 and E-02.
+```
+
+**Verify:**
+- `revit_get_sheet_viewports` accepts `sheetIds` (long[]) or `sheetNumbers` (string[]).
+- Returns `viewportId`, `viewId`, `viewName`, `viewType`, `sheetPosition`, `detailNumber` per viewport.
+- Invalid or unknown sheet IDs/numbers return a clear warning rather than an error.
+- No Revit transaction is created.
+
+---
+
+### 26.6 Find Unplaced Views
+
+**Prompts:**
+```
+Find all views not placed on any sheet.
+Find all unplaced floor plan views.
+Find the first 10 unplaced views.
+```
+
+**Verify:**
+- `revit_find_unplaced_views` returns views not currently on any sheet.
+- `viewTypes` filter (e.g. `["FloorPlan"]`) narrows results.
+- `nameFilter` matches on partial name.
+- `includeTemplates=false` (default) excludes view templates.
+- `limit` caps the result count.
+- No Revit transaction is created.
+
+---
+
+### 26.7 Enhanced revit_list_views
+
+**Prompts:**
+```
+List all floor plan and section views with name containing "KORRUS".
+List views and return their Discipline and View Scale parameters.
+```
+
+**Verify:**
+- `viewTypes` parameter filters by Revit view type name.
+- `nameFilter` does a substring match on the view name.
+- `returnParameters` reads extra parameters per view using partial name matching.
+- `includeTemplates=false` (default) hides view templates.
+- `limit` caps results.
+- New return fields: `uniqueId`, `sheetId`, `sheetNumber`, `sheetName` (when placed), `viewTemplateId`, `viewTemplateName`.
+
+---
+
+### 26.8 Enhanced revit_list_sheets
+
+**Prompts:**
+```
+List all sheets with number starting with "E-".
+List sheets and return the Märkus and Sheet Issue Date parameters.
+List sheets with full viewport detail.
+List sheets using default Estonian parameters.
+```
+
+**Verify:**
+- `numberFilter` does a substring match on sheet number.
+- `nameFilter` does a substring match on sheet name.
+- `returnParameters=["default"]` expands to 10 standard sheet params: Sheet Number, Sheet Name, Project Number, Project Status, Projekti osa, Grupi tähis, Järjekorra tähis, Current Revision, Märkus, Sheet Issue Date.
+- `includeViewports=true` returns viewport detail (viewId, viewName, position, detailNumber) per sheet.
+- `limit` caps results.
+- New return fields: `uniqueId`, `titleBlockId`, `titleBlockName`.
+
+---
+
+## 27. View/Sheet Preview Tools
+
+All preview tools are read-only — they return proposals without modifying the model.
+
+### 27.1 Preview Place Views on Sheets
+
+**Prompts:**
+```
+Preview placing unplaced floor plan views on sheets.
+Preview matching views to sheets using fuzzy matching with threshold 0.7.
+```
+
+**Verify:**
+- `revit_preview_place_views_on_sheets` requires `viewIds`.
+- Match modes work: `ExactName`, `Contains`, `Fuzzy`, `SheetNumberPrefix`, `SheetNumberSuffix`, `CustomParameter`.
+- `fuzzyThreshold` (0–1) affects which views get a match in Fuzzy mode.
+- `skipAlreadyPlaced=true` (default) excludes views already on sheets.
+- Returns `proposals` list with `viewId`, `viewName`, `matchedSheetId`, `matchedSheetNumber`, `score`, `reason`.
+- No Revit transaction is created.
+
+---
+
+### 27.2 Preview Duplicate Sheets
+
+**Prompts:**
+```
+Preview duplicating sheets E-01 and E-02 with suffix "_V2".
+```
+
+**Verify:**
+- Returns proposals with `sourceSheetNumber`, `newSheetNumber`, `newSheetName`, `titleBlockName`, `conflict`.
+- `conflict=true` when the generated sheet number already exists.
+- No Revit transaction is created.
+
+---
+
+### 27.3 Preview Create Sheets From Table
+
+**Prompts:**
+```
+Preview creating 3 new sheets: E-10 "Elektripaigaldis", E-11 "Valgustus", E-12 "Maandus".
+```
+
+**Verify:**
+- Returns per-row validation: `valid`, `conflict`, `issues`.
+- Rows with duplicate sheet numbers in the input set or that conflict with existing sheets are flagged.
+- `titleBlockId` must be a valid family symbol ID (from `revit_list_titleblocks`).
+- No Revit transaction is created.
+
+---
+
+### 27.4 Preview Rename Views
+
+**Prompts:**
+```
+Preview renaming all floor plan views — replace "KORRUS" with "Level".
+Preview adding prefix "EL-" to all electrical section views.
+```
+
+**Verify:**
+- `mode` must be one of: `FindReplace`, `PrefixSuffix`, `Template`, `RegexFindReplace`.
+- `FindReplace` requires `find`; `replace` defaults to empty string.
+- `PrefixSuffix` requires at least one of `prefix`, `suffix`.
+- `Template` requires `template` with `{Name}` placeholder.
+- Returns `oldName`, `newName`, `willChange` per view.
+- Views where the new name equals the old name have `willChange=false`.
+- No Revit transaction is created.
+
+---
+
+### 27.5 Preview Rename Sheets
+
+**Prompts:**
+```
+Preview renaming sheet names — replace "Elektripaigaldis" with "Electrical".
+Preview adding suffix " (Rev A)" to sheet names for sheets matching number "E-".
+Preview renaming sheet numbers — replace "E-" with "EL-".
+```
+
+**Verify:**
+- `target` parameter: `Name`, `Number`, or `Both`.
+- Same rename modes as `revit_preview_rename_views`.
+- `numberFilter` / `nameFilter` narrow which sheets are included.
+- Returns `oldName`, `newName`, `oldNumber`, `newNumber`, `willChange` per sheet.
+- No Revit transaction is created.
+
+---
+
+## 28. View/Sheet Write Tools (Requires Approval)
+
+All write tools follow the standard approval flow: response shows `approval_required`, Pending tab shows the request, Approve/Reject controls are available.
+
+### 28.1 Place Views on Sheets
+
+**Prompts:**
+```
+Run revit_preview_place_views_on_sheets first, then place the views.
+```
+
+**Verify:**
+1. Run preview first — confirm proposals look correct.
+2. Call `revit_place_views_on_sheets` with same parameters.
+3. Approval appears in Pending tab.
+4. Reject → no change, Revit Undo unchanged.
+5. Approve → views appear on matched sheets in Revit.
+6. Revit Undo shows `"Revit MCP - Place Views on Sheets"`.
+7. Already-placed views are skipped when `skipAlreadyPlaced=true`.
+
+---
+
+### 28.2 Duplicate Sheets
+
+**Prompts:**
+```
+Duplicate sheets E-01 and E-02 with number suffix "_COPY".
+```
+
+**Verify:**
+- Approval required; new sheets created after approval.
+- New sheet numbers and names match the preview.
+- `keepTitleBlock=true` gives new sheets the same title block family.
+- `copyParameters=true` copies instance parameter values.
+- Transaction name: `"Revit MCP - Duplicate Sheets"`.
+
+---
+
+### 28.3 Create Sheets From Table
+
+**Prompts:**
+```
+Create sheets E-10 "Elektripaigaldis", E-11 "Valgustus" with title block ID [from revit_list_titleblocks].
+```
+
+**Verify:**
+- Run preview first to confirm no conflicts.
+- After approval, new sheets appear in Revit.
+- Sheets with conflicting numbers are skipped with a warning; others still created.
+- Parameter values from the row are applied after sheet creation.
+- Transaction name: `"Revit MCP - Create Sheets From Table"`.
+
+---
+
+### 28.4 Duplicate Views
+
+**Prompts:**
+```
+Duplicate view 12345 with option DuplicateWithDetailing and suffix " - Copy".
+```
+
+**Verify:**
+- `duplicateOption`: `Duplicate`, `DuplicateWithDetailing`, `AsDependent`.
+- Views that do not support duplication are skipped with a warning.
+- New view names follow `{namePrefix}{originalName}{nameSuffix}`.
+- Transaction name: `"Revit MCP - Duplicate Views"`.
+
+---
+
+### 28.5 Apply View Template
+
+**Prompts:**
+```
+Apply view template 56789 to all floor plan views containing "KORRUS".
+```
+
+**Verify:**
+- `viewTemplateId` must be a valid view template element ID.
+- Can target by explicit `viewIds`, or by `viewTypes` + `nameFilter`.
+- `limit` caps how many views are updated.
+- Invalid template ID returns `"success": false` with a clear error.
+- Transaction name: `"Revit MCP - Apply View Template"`.
+
+---
+
+### 28.6 Rename Views
+
+**Prompts:**
+```
+Rename all section views — replace "Section" with "Lõige".
+Add prefix "EL-" to all floor plan views with name containing "KORRUS".
+```
+
+**Verify:**
+1. Run `revit_preview_rename_views` first to confirm proposals.
+2. Call `revit_rename_views` with same parameters.
+3. Approval in Pending tab.
+4. After approval, view names updated in Revit.
+5. Transaction name: `"Revit MCP - Rename Views"`.
+6. Rejection leaves all names unchanged.
+
+---
+
+### 28.7 Rename Sheets
+
+**Prompts:**
+```
+Rename sheet names — replace "Elektripaigaldis" with "Electrical".
+Rename sheet numbers — replace prefix "E-" with "EL-".
+```
+
+**Verify:**
+- Same modes as rename views.
+- `target=Name` only renames the sheet name; `target=Number` only the sheet number; `target=Both` renames both.
+- Transaction name: `"Revit MCP - Rename Sheets"`.
+- Duplicate resulting sheet numbers are rejected with a per-sheet error; others still renamed.
+
+---
+
+### 28.8 Set Sheet Parameters Bulk
+
+**Prompts:**
+```
+Set "Märkus" to "Rev A" on sheets E-01 and E-02.
+Set "Project Status" to "Issued for Construction" on all sheets with number starting with "E-".
+```
+
+**Verify:**
+- Accepts `sheetIds`, `sheetNumbers`, and/or `nameFilter` to identify target sheets.
+- `parameters` is a key→value map of parameter name to value.
+- Partial parameter name matching works (Contains mode).
+- Read-only parameters are reported as per-sheet failures without aborting the batch.
+- Transaction name: `"Revit MCP - Set Sheet Parameters Bulk"`.
+
+---
+
+### 28.9 Set View Parameters Bulk
+
+**Prompts:**
+```
+Set "Comments" to "Reviewed" on all floor plan views.
+```
+
+**Verify:**
+- Same verification as 28.8 but targets views.
+- `includeTemplates=false` (default) skips view templates.
+- Transaction name: `"Revit MCP - Set View Parameters Bulk"`.
+
+---
+
+## 29. View/Sheet Destructive Delete Tools
+
+> **Safety:** `revit_delete_views` and `revit_delete_sheets` use `DestructiveRequiresManualApproval` — they **always** require manual approval in the Pending tab even when Direct Edit mode is enabled. This cannot be overridden.
+
+### 29.1 Preview Delete Views
+
+**Prompts:**
+```
+Preview deleting all unplaced section views with name containing "Working".
+```
+
+**Verify:**
+- `revit_preview_delete_views` returns the views that would be deleted with `elementId`, `name`, `viewType`.
+- `skipPlacedOnSheets=true` (default) excludes views currently placed on a sheet.
+- `viewTypes` + `nameFilter` narrow scope.
+- No Revit transaction is created.
+
+---
+
+### 29.2 Delete Views
+
+**Prompts:**
+```
+Delete views 12345 and 67890.
+```
+
+**Verify:**
+1. Run `revit_preview_delete_views` first.
+2. Call `revit_delete_views` with confirmed view IDs.
+3. **Direct Edit enabled** → approval still required (not bypassed).
+4. Rejection → model unchanged.
+5. Approval → views are deleted.
+6. `skipPlacedOnSheets=true` causes placed views to be skipped with a warning.
+7. Transaction name: `"Revit MCP - Delete Views"`.
+8. Revit Undo restores deleted views.
+
+---
+
+### 29.3 Preview Delete Sheets
+
+**Prompts:**
+```
+Preview deleting sheets with number containing "_COPY".
+```
+
+**Verify:**
+- `revit_preview_delete_sheets` returns sheets with `elementId`, `sheetNumber`, `sheetName`, `viewportCount`.
+- `skipSheetsWithViews=true` (default) excludes sheets that have placed viewports.
+- No Revit transaction is created.
+
+---
+
+### 29.4 Delete Sheets
+
+**Prompts:**
+```
+Delete sheets with number suffix "_COPY".
+```
+
+**Verify:**
+1. Run `revit_preview_delete_sheets` first.
+2. Call `revit_delete_sheets` with confirmed IDs or numbers.
+3. **Direct Edit enabled** → approval still required (not bypassed).
+4. Rejection → model unchanged.
+5. Approval → sheets are deleted.
+6. `skipSheetsWithViews=true` skips occupied sheets with a per-sheet warning.
+7. Transaction name: `"Revit MCP - Delete Sheets"`.
+8. Revit Undo restores deleted sheets.

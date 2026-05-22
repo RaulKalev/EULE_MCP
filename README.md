@@ -2,9 +2,10 @@
 
 A local [Model Context Protocol](https://modelcontextprotocol.io) connector that lets **Claude Code** and **Codex** interrogate and work with a live **Autodesk Revit 2026** model in real time.
 
-**66 tools** across two functional areas:
+**91 tools** across three functional areas:
 - **General** (22 tools) — element discovery, parameter QA, grouping, Excel exports, selection, and write operations
 - **Electrical** (44 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
+- **Documentation** (25 tools) — view and sheet management: discovery, summary, preview/apply workflows for placing views, creating/duplicating/renaming sheets and views, bulk parameter updates, and safe destructive delete with mandatory manual approval
 
 ---
 
@@ -141,6 +142,67 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_get_fire_alarm_voltage_drop_summary` | Summarises estimated voltage drop inputs per fire alarm loop using classified loop types and estimated cable lengths |
 | `revit_list_cable_resistance_profiles` | Lists all cable resistance profiles (Ω/m) from the config file (`electrical-cable-profiles.json`) |
 | `revit_get_matching_cable_resistance_profile` | Finds the best-matching cable resistance profile for a given cable type name |
+
+### Documentation / View and Sheet Tools
+
+#### Discovery
+
+| Tool | Description |
+|------|-------------|
+| `revit_get_view_sheet_summary` | High-level summary: total sheets/views, placed vs unplaced counts, template and title block coverage |
+| `revit_list_titleblocks` | Lists all title block family symbols loaded in the document — returns `familySymbolId`, `familyName`, `typeName`, `isInUse` |
+| `revit_list_view_templates` | Lists view templates with optional `viewType` filter — returns `elementId`, `name`, `viewType`, `assignedViewCount` |
+| `revit_list_revisions` | Lists all revisions — returns sequence number, date, description, issued-by, issued-to, visibility |
+| `revit_get_sheet_viewports` | Returns viewport detail for one or more sheets (by `sheetIds` or `sheetNumbers`) — view name, type, sheet position, detail number |
+| `revit_find_unplaced_views` | Finds views not placed on any sheet — filterable by `viewTypes`, `nameFilter`, `includeTemplates`, `limit` |
+
+`revit_list_views` and `revit_list_sheets` are enhanced in this version:
+
+| Parameter | `revit_list_views` | `revit_list_sheets` |
+|-----------|-------------------|--------------------|
+| `viewTypes` | Filter by one or more view types | — |
+| `nameFilter` | Substring filter on view name | Substring filter on sheet name |
+| `numberFilter` | — | Substring filter on sheet number |
+| `includeTemplates` | Include view templates | — |
+| `returnParameters` | Extra parameters to read per view | Accepts `["default"]` to expand to 10 Estonian/Revit sheet params |
+| `includeViewports` | — | Add viewport detail (view, position, detail number) per sheet |
+| `limit` | Cap result count | Cap result count |
+
+#### Preview Tools (read-only, no changes)
+
+| Tool | Description |
+|------|-------------|
+| `revit_preview_place_views_on_sheets` | Shows which views would be placed on which sheets using configurable match modes (ExactName, Contains, Fuzzy, SheetNumberPrefix, SheetNumberSuffix, CustomParameter) |
+| `revit_preview_duplicate_sheets` | Shows new sheet numbers/names that would result from duplicating selected sheets |
+| `revit_preview_create_sheets_from_table` | Validates a table of `{sheetNumber, sheetName, ...params}` rows — flags conflicts and issues without creating anything |
+| `revit_preview_duplicate_views` | Shows new view names that would result from duplicating views with configurable duplicate option |
+| `revit_preview_rename_views` | Shows before/after names for a batch rename using FindReplace, PrefixSuffix, Template, or RegexFindReplace mode |
+| `revit_preview_rename_sheets` | Same as above for sheets — targets Name, Number, or Both |
+
+#### Write Tools (requires approval)
+
+| Tool | Description |
+|------|-------------|
+| `revit_place_views_on_sheets` | Places views on matched sheets in a transaction — same parameters as the preview tool |
+| `revit_duplicate_sheets` | Creates empty sheet copies with the same title block and optionally copied parameters |
+| `revit_create_sheets_from_table` | Creates multiple sheets from a row table in one transaction |
+| `revit_duplicate_views` | Duplicates views with Duplicate, DuplicateWithDetailing, or AsDependent option |
+| `revit_apply_view_template` | Applies a view template to one or more views filtered by ID, type, or name |
+| `revit_set_sheet_parameters_bulk` | Sets parameters on multiple sheets in one transaction |
+| `revit_set_view_parameters_bulk` | Sets parameters on multiple views in one transaction |
+| `revit_rename_views` | Renames views using FindReplace, PrefixSuffix, Template, or RegexFindReplace mode |
+| `revit_rename_sheets` | Renames sheet names, numbers, or both using the same rename modes |
+
+#### Destructive Delete Tools (always requires manual approval — Direct Edit does NOT bypass)
+
+| Tool | Description |
+|------|-------------|
+| `revit_preview_delete_views` | Shows which views would be deleted — never modifies the model |
+| `revit_delete_views` | **Permanently deletes views.** Always requires explicit manual approval regardless of Direct Edit mode. Optional `skipPlacedOnSheets=true` (default) protects placed views |
+| `revit_preview_delete_sheets` | Shows which sheets would be deleted — never modifies the model |
+| `revit_delete_sheets` | **Permanently deletes sheets.** Always requires explicit manual approval. Optional `skipSheetsWithViews=true` (default) protects occupied sheets |
+
+> **Safety:** `revit_delete_views` and `revit_delete_sheets` use `DestructiveRequiresManualApproval` permission — they always queue for manual approval in the Pending tab even when Direct Edit is enabled. This cannot be overridden.
 
 Advanced tools that accept `filters` and `groupBy` expect valid JSON arrays. See [Example JSON Arguments](#example-json-arguments) below.
 
@@ -412,6 +474,7 @@ EULE_MCP/
 │   ├── App.cs           IExternalApplication entry point
 │   ├── Commands/        OpenMcpWindowCommand
 │   ├── Electrical/      Circuit services, QA helpers, dashboard, voltage-drop prep, fire alarm preset, cable resistance
+│   ├── Documentation/   Pure-logic helpers: RenameEngine, FuzzyNameMatcher, PlacementPointResolver, ViewSheetMatchingService
 │   ├── Services/        PipeServer, ExternalEventHandler, ConnectorService
 │   ├── Tools/           One file per MCP tool
 │   ├── UI/              WPF window (Status + Pending + Activity tabs) + ViewModels + themes
