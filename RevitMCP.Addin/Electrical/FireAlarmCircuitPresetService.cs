@@ -248,25 +248,9 @@ public static class FireAlarmCircuitPresetService
 
     // ── Loop classification ───────────────────────────────────────────────────
 
+    /// <summary>Delegates to <see cref="FireAlarmLoopClassifier.Classify"/>.</summary>
     public static string ClassifyLoop(string loopName, IEnumerable<string> deviceTypes)
-    {
-        if (loopName.Contains('#'))
-            return "ConventionalSounderLine";
-
-        var types = deviceTypes.Select(t => t.ToLowerInvariant()).ToList();
-
-        if (types.Any(t => t.Contains("sireen") || t.Contains("vilkur") || t.Contains("alarmseade")))
-            return "ConventionalSounderLine";
-
-        if (types.Any(t => t.Contains("moodul") || t.Contains("sisend") || t.Contains("väljund")
-                        || t.Contains("sim") || t.Contains("som")))
-            return "ModuleLoop";
-
-        if (loopName.Contains("Ahel", StringComparison.OrdinalIgnoreCase))
-            return "AddressableLoop";
-
-        return "Unknown";
-    }
+        => FireAlarmLoopClassifier.Classify(loopName, deviceTypes);
 
     // ── Private helpers ───────────────────────────────────────────────────────
 

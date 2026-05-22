@@ -20,5 +20,7 @@
     <Compile Include="..\RevitMCP.Addin\Electrical\CircuitElementClassifier.cs" Link="Electrical\CircuitElementClassifier.cs" />
     <Compile Include="..\RevitMCP.Addin\Electrical\LengthUnitHelper.cs" Link="Electrical\LengthUnitHelper.cs" />
     <Compile Include="..\RevitMCP.Addin\Electrical\CircuitLengthEstimator.cs" Link="Electrical\CircuitLengthEstimator.cs" />
+    <Compile Include="..\RevitMCP.Addin\Electrical\CableResistanceProfileService.cs" Link="Electrical\CableResistanceProfileService.cs" />
+    <Compile Include="..\RevitMCP.Addin\Electrical\FireAlarmLoopClassifier.cs" Link="Electrical\FireAlarmLoopClassifier.cs" />
   </ItemGroup>
 </Project>
