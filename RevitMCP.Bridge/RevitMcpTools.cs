@@ -1219,10 +1219,11 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_export_voltage_drop_input_to_excel", ReadOnly = true),
-     Description("Exports circuit data and estimated lengths for manual voltage-drop calculations to .xlsx (sheets: Summary, Voltage Drop Input, Circuit Elements, Assumptions, Failures). Results are PRELIMINARY. Accepts: panelName, systemType, method, routingMultiplier (double), fileName, limit.")]
+     Description("Exports circuit data and estimated lengths for manual voltage-drop calculations to .xlsx (sheets: Summary, Voltage Drop Input, Circuit Elements, Assumptions, Failures). Results are PRELIMINARY. Accepts: circuitIds (long[], optional — overrides other filters), panelName, systemType, method, routingMultiplier (double), fileName, limit.")]
     public async Task<string> ExportVoltageDropInputToExcel(
-        [Description("Optional panel name filter")] string? panelName = null,
-        [Description("Optional system type filter")] string? systemType = null,
+        [Description("Circuit element IDs to export (optional — when provided, panelName/systemType are ignored)")] long[]? circuitIds = null,
+        [Description("Optional panel name filter (used when circuitIds is empty)")] string? panelName = null,
+        [Description("Optional system type filter (used when circuitIds is empty)")] string? systemType = null,
         [Description("Length method (default ManhattanMax)")] string method = "ManhattanMax",
         [Description("Routing multiplier (default 1.25)")] double routingMultiplier = 1.25,
         [Description("Output file name (default Voltage_Drop_Input.xlsx)")] string fileName = "Voltage_Drop_Input.xlsx",
@@ -1231,6 +1232,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     {
         var args = new Dictionary<string, object?>
         {
+            ["circuitIds"] = circuitIds ?? [],
             ["panelName"] = panelName ?? string.Empty,
             ["systemType"] = systemType ?? string.Empty,
             ["method"] = method,
@@ -1243,9 +1245,10 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_get_voltage_drop_precheck", ReadOnly = true),
-     Description("Reports whether a circuit has enough data available for voltage-drop calculation. Checks voltage, load, cable type, wire type, and location data. Does not calculate voltage drop. Accepts: circuitId (required), requireCableType (bool), requireVoltage (bool), requireLoad (bool), requireLength (bool).")]
+     Description("Reports whether circuits have enough data for voltage-drop calculation. Checks voltage, load, cable type, wire type, and location data. Does not calculate voltage drop. Accepts: circuitIds (long[], preferred for bulk) or circuitId (single long), requireCableType (bool), requireVoltage (bool), requireLoad (bool), requireLength (bool). Returns single result for one circuit, array summary for multiple.")]
     public async Task<string> GetVoltageDropPrecheck(
-        [Description("Circuit element ID (required)")] long circuitId,
+        [Description("Circuit element IDs (preferred — accepts one or more)")] long[]? circuitIds = null,
+        [Description("Single circuit element ID (backward-compatible alternative to circuitIds)")] long circuitId = 0,
         [Description("Require cable type (default true)")] bool requireCableType = true,
         [Description("Require voltage (default true)")] bool requireVoltage = true,
         [Description("Require load (default true)")] bool requireLoad = true,
@@ -1254,6 +1257,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     {
         var args = new Dictionary<string, object?>
         {
+            ["circuitIds"] = circuitIds ?? [],
             ["circuitId"] = circuitId,
             ["requireCableType"] = requireCableType,
             ["requireVoltage"] = requireVoltage,

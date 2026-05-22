@@ -13,7 +13,7 @@ namespace RevitMCP.Addin.Tools;
 public class ExportVoltageDropInputToExcelTool : IRevitMcpTool
 {
     public string Name => "revit_export_voltage_drop_input_to_excel";
-    public string Description => "Exports circuit data and estimated lengths for manual voltage-drop calculations to an .xlsx file. Sheets: Summary, Voltage Drop Input, Circuit Elements, Assumptions, Failures. Accepts: panelName, systemType, method (default ManhattanMax), routingMultiplier (default 1.25), fileName, limit. Results are PRELIMINARY engineering input only.";
+    public string Description => "Exports circuit data and estimated lengths for manual voltage-drop calculations to an .xlsx file. Sheets: Summary, Voltage Drop Input, Circuit Elements, Assumptions, Failures. Accepts: circuitIds (long[], optional — overrides other filters), panelName, systemType, method (default ManhattanMax), routingMultiplier (default 1.25), fileName, limit. Results are PRELIMINARY engineering input only.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Electrical;
 
@@ -34,10 +34,18 @@ public class ExportVoltageDropInputToExcelTool : IRevitMcpTool
         var multiplier = GetDouble(request.Arguments, "routingMultiplier", 1.25);
         var fileName = ToolArguments.GetString(request.Arguments, "fileName", "Voltage_Drop_Input.xlsx");
         var limit = ToolArguments.GetInt(request.Arguments, "limit", 1000);
+        var circuitIds = ToolArguments.GetLongArray(request.Arguments, "circuitIds");
 
         var circuits = CircuitQueryService.GetAll(doc);
-        if (!string.IsNullOrWhiteSpace(panelName) || !string.IsNullOrWhiteSpace(systemType))
+        if (circuitIds.Length > 0)
+        {
+            var idSet = new HashSet<long>(circuitIds);
+            circuits = circuits.Where(c => idSet.Contains(c.Id.Value)).ToList();
+        }
+        else if (!string.IsNullOrWhiteSpace(panelName) || !string.IsNullOrWhiteSpace(systemType))
+        {
             circuits = CircuitQueryService.Filter(circuits, panelName, null, systemType);
+        }
         circuits = circuits.Take(limit).ToList();
 
         var filePath = _pathService.ResolveFilePath(fileName);
