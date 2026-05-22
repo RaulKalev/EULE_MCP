@@ -1127,6 +1127,7 @@ Get revision details for sheets E-01, E-02, and E-03.
 - `includeRevisionDetails=false` returns counts only (no per-revision list).
 - Sheets not found by ID or number produce a warning but the tool still succeeds for valid sheets.
 - No Revit transaction is created.
+- **Note:** Cloud-specific revision visibility (workshared model cloud tracking) may not be surfaced by the Revit 2026 API and may not appear in results.
 
 ---
 

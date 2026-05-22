@@ -154,7 +154,7 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_list_view_templates` | Lists view templates with optional `viewType` filter — returns `elementId`, `name`, `viewType`, `assignedViewCount` |
 | `revit_list_revisions` | Lists all revisions — returns sequence number, date, description, issued-by, issued-to, visibility |
 | `revit_list_revision_numbering_sequences` | Lists revision numbering sequences — returns sequenceId, name, numberingType, prefix, suffix, minimumDigits. Returns empty list on projects with no custom sequences |
-| `revit_get_sheet_revisions` | Returns revisions visible on one or more sheets (by `sheetIds` or `sheetNumbers`) — revisionId, sequenceNumber, revisionNumber, date, description, issuedBy, issuedTo per sheet |
+| `revit_get_sheet_revisions` | Returns revisions visible on one or more sheets (by `sheetIds` or `sheetNumbers`) — revisionId, sequenceNumber, revisionNumber, date, description, issuedBy, issuedTo per sheet. *Cloud-specific revision visibility (workshared model cloud tracking) may not be accessible via the Revit 2026 API.* |
 | `revit_get_sheet_viewports` | Returns viewport detail for one or more sheets (by `sheetIds` or `sheetNumbers`) — view name, type, sheet position, detail number |
 | `revit_find_unplaced_views` | Finds views not placed on any sheet — filterable by `viewTypes`, `nameFilter`, `includeTemplates`, `limit` |
 | `revit_list_view_sheet_presets` | Lists available PlaceViews / Sheet Manager preset JSON files from the RK Tools preset folder. Returns fileName, detectedType, sizeBytes, modifiedUtc |

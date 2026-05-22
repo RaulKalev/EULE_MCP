@@ -179,9 +179,28 @@ public static class ApprovalSummaryBuilder
 
     private static string BuildApplyViewTemplate(McpToolRequest request)
     {
-        var viewIds      = ToolArguments.GetLongArray(request.Arguments, "viewIds");
-        var templateName = ToolArguments.GetString(request.Arguments, "templateName");
-        return $"Apply view template '{templateName}' to {viewIds.Length} view{(viewIds.Length == 1 ? "" : "s")}.";
+        var viewTemplateId = ToolArguments.GetLong(request.Arguments, "viewTemplateId", 0L);
+        var viewIds        = ToolArguments.GetLongArray(request.Arguments, "viewIds");
+        var viewTypes      = ToolArguments.GetStringArray(request.Arguments, "viewTypes");
+        var nameFilter     = ToolArguments.GetString(request.Arguments, "nameFilter");
+        var limit          = ToolArguments.GetInt(request.Arguments, "limit", 500);
+
+        var templatePart = viewTemplateId > 0 ? $"template ID:{viewTemplateId}" : "view template";
+
+        string targetPart;
+        if (viewIds.Length > 0)
+            targetPart = $"{viewIds.Length} view{(viewIds.Length == 1 ? "" : "s")}";
+        else
+        {
+            var parts = new System.Collections.Generic.List<string>();
+            if (viewTypes.Length > 0) parts.Add($"types [{string.Join(", ", viewTypes)}]");
+            if (!string.IsNullOrWhiteSpace(nameFilter)) parts.Add($"name contains '{nameFilter}'");
+            targetPart = parts.Count > 0
+                ? $"views matching {string.Join(" + ", parts)} (limit {limit})"
+                : $"all views (limit {limit})";
+        }
+
+        return $"Apply {templatePart} to {targetPart}.";
     }
 
     private static string BuildRenameViews(McpToolRequest request)
@@ -203,32 +222,47 @@ public static class ApprovalSummaryBuilder
         var sheetIds  = ToolArguments.GetLongArray(request.Arguments, "sheetIds");
         var sheetNums = ToolArguments.GetStringArray(request.Arguments, "sheetNumbers");
         var count = sheetIds.Length > 0 ? sheetIds.Length : sheetNums.Length;
-        int paramCount = 0;
-        try
-        {
-            if (request.Arguments.TryGetValue("parameters", out var pObj) && pObj is Newtonsoft.Json.Linq.JObject jObj)
-                paramCount = jObj.Count;
-        }
-        catch { }
+        var paramCount = CountDictionary(request.Arguments, "parameters");
         var paramPart = paramCount > 0 ? $", {paramCount} parameter{(paramCount == 1 ? "" : "s")}" : "";
         return $"Set parameters on {count} sheet{(count == 1 ? "" : "s")}{paramPart}.";
     }
 
     private static string BuildSetViewParametersBulk(McpToolRequest request)
     {
-        var viewIds = ToolArguments.GetLongArray(request.Arguments, "viewIds");
-        return $"Set parameters on {viewIds.Length} view{(viewIds.Length == 1 ? "" : "s")}.";
+        var viewIds    = ToolArguments.GetLongArray(request.Arguments, "viewIds");
+        var paramCount = CountDictionary(request.Arguments, "parameters");
+        var paramPart  = paramCount > 0 ? $", {paramCount} parameter{(paramCount == 1 ? "" : "s")}" : "";
+        return $"Set parameters on {viewIds.Length} view{(viewIds.Length == 1 ? "" : "s")}{paramPart}.";
     }
 
     private static string BuildCreateSheetsFromTable(McpToolRequest request)
     {
-        var rows = ToolArguments.GetString(request.Arguments, "rows");
-        int rowCount = 0;
-        try { rowCount = Newtonsoft.Json.Linq.JArray.Parse(rows).Count; } catch { }
+        var rowCount = CountRows(request.Arguments);
         var titleBlockId = ToolArguments.GetLong(request.Arguments, "titleBlockId");
         var titleBlockPart = titleBlockId > 0 ? $" (titleBlock ID:{titleBlockId})" : "";
         return $"Create {rowCount} sheet{(rowCount == 1 ? "" : "s")} from table{titleBlockPart}.";
     }
+    // ── Private helpers ────────────────────────────────────────────────────
+
+    /// <summary>Counts rows from the 'rows' argument — handles JArray, object[], and JSON string.</summary>
+    private static int CountRows(Dictionary<string, object?> args)
+    {
+        if (!args.TryGetValue("rows", out var val)) return 0;
+        if (val is Newtonsoft.Json.Linq.JArray ja) return ja.Count;
+        if (val is string s) { try { return Newtonsoft.Json.Linq.JArray.Parse(s).Count; } catch { return 0; } }
+        if (val is System.Collections.IEnumerable e) { try { return e.Cast<object>().Count(); } catch { return 0; } }
+        return 0;
+    }
+
+    /// <summary>Counts entries in a named dictionary/object argument — handles JObject and IDictionary.</summary>
+    private static int CountDictionary(Dictionary<string, object?> args, string key)
+    {
+        if (!args.TryGetValue(key, out var val)) return 0;
+        if (val is Newtonsoft.Json.Linq.JObject jo) return jo.Count;
+        if (val is System.Collections.IDictionary d) return d.Count;
+        return 0;
+    }
+
     private static string BuildDeleteViews(McpToolRequest request)
     {
         var viewIds = ToolArguments.GetLongArray(request.Arguments, "viewIds");
