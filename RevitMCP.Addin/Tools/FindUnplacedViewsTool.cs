@@ -44,6 +44,7 @@ public class FindUnplacedViewsTool : IRevitMcpTool
         IEnumerable<View> query = new FilteredElementCollector(doc)
             .OfClass(typeof(View))
             .Cast<View>()
+            .Where(v => v.ViewType != ViewType.DrawingSheet)  // exclude sheets (ViewSheet objects appear as ViewType.DrawingSheet)
             .Where(v => !placedIds.Contains(v.Id))
             .Where(v => includeTemplates || !v.IsTemplate)
             .Where(v => v.CanBePrinted);

@@ -33,6 +33,13 @@ public class PreviewDuplicateViewsTool : IRevitMcpTool
         if (viewIds.Length == 0)
             return Task.FromResult(new McpToolResult { RequestId = request.RequestId, Success = false, Message = "viewIds is required." });
 
+        // EmptyDetailOnly is not implemented in this MCP version
+        if (string.Equals(duplicateOption, "EmptyDetailOnly", StringComparison.OrdinalIgnoreCase))
+        {
+            return Task.FromResult(new McpToolResult { RequestId = request.RequestId, Success = false,
+                Message = "EmptyDetailOnly is not implemented in this MCP version. Supported duplicateOption values are Duplicate, DuplicateWithDetailing, and AsDependent." });
+        }
+
         // "DuplicateWithDetailing" is the user-facing alias; the Revit enum value is "WithDetailing"
         if (string.Equals(duplicateOption, "DuplicateWithDetailing", StringComparison.OrdinalIgnoreCase))
             duplicateOption = "WithDetailing";

@@ -41,11 +41,15 @@ call revit_get_selected_elements
 call revit_count_elements with category = "Fire Alarm Devices"
 call revit_get_element_parameters with useSelection = true
 call revit_list_views
+call revit_list_views with viewTypes=["FloorPlan","Section"] and nameFilter="KORRUS"
+call revit_list_views with returnParameters=["Discipline"] and includePlacedStatus=true
 call revit_list_sheets
+call revit_list_sheets with numberFilter="E-" and returnParameters=["default"]
+call revit_list_sheets with includeViewports=true
 call revit_list_schedules
 ```
 
-All should return valid JSON.
+All should return valid JSON. `revit_list_views` and `revit_list_sheets` accept optional filter and parameter arguments — see Section 26.7 and 26.8 for full parameter test coverage.
 
 ---
 
@@ -1092,6 +1096,105 @@ List sheets using default Estonian parameters.
 
 ---
 
+### 26.9 Revision Numbering Sequences
+
+**Prompts:**
+```
+List all revision numbering sequences in the model.
+```
+
+**Verify:**
+- `revit_list_revision_numbering_sequences` returns a list (may be empty on projects with no custom sequences).
+- Each entry has `sequenceId`, `name`, `numberingType`, `prefix`, `suffix`, `minimumDigits`.
+- Tool returns `success: true` with an explanatory message when the list is empty.
+- No Revit transaction is created.
+
+---
+
+### 26.10 Sheet Revisions
+
+**Prompts:**
+```
+What revisions are shown on sheet E-01?
+Get revision details for sheets E-01, E-02, and E-03.
+```
+
+**Verify:**
+- `revit_get_sheet_revisions` accepts `sheetIds` (long[]) or `sheetNumbers` (string[]).
+- Requires at least one of `sheetIds` or `sheetNumbers`.
+- Each entry has `sheetId`, `sheetNumber`, `sheetName`, `revisionCount`, `revisions`.
+- Each revision entry has `revisionId`, `sequenceNumber`, `revisionNumber`, `revisionDate`, `description`, `issuedBy`, `issuedTo`.
+- `includeRevisionDetails=false` returns counts only (no per-revision list).
+- Sheets not found by ID or number produce a warning but the tool still succeeds for valid sheets.
+- No Revit transaction is created.
+
+---
+
+### 26.11 List View/Sheet Presets
+
+**Prompts:**
+```
+List available PlaceViews presets.
+```
+
+**Verify:**
+- `revit_list_view_sheet_presets` checks `C:\ProgramData\RK Tools\PlaceViews\SheetManagerSettings`.
+- If the folder does not exist, returns `success: false` with a clear path message.
+- Each preset entry has `FileName`, `DetectedType`, `SizeBytes`, `modifiedUtc`.
+- No Revit transaction is created.
+
+---
+
+### 26.12 Get View/Sheet Preset
+
+**Prompts:**
+```
+Read the preset file "MyPreset.json".
+Read preset "MyPreset" (without extension).
+```
+
+**Verify:**
+- `revit_get_view_sheet_preset` accepts `presetName` with or without `.json` extension.
+- Returns `workflowType`, `parsedContent`.
+- Path traversal attempts (e.g. `presetName = "../../../etc/passwd"`) return `success: false` without reading any file.
+- Non-existent preset returns `success: false` with a clear error.
+- No Revit transaction is created.
+
+---
+
+### 26.13 Validate View/Sheet Preset
+
+**Prompts:**
+```
+Validate the preset "MyPreset.json".
+```
+
+**Verify:**
+- `revit_validate_view_sheet_preset` returns `isValid`, `workflowType`, `errors[]`, `suggestions[]`.
+- An empty JSON `{}` returns `isValid: false` with an appropriate error.
+- A valid preset returns `isValid: true`.
+- No Revit transaction is created.
+
+---
+
+### 26.14 Run View/Sheet Workflow Preset (planning only)
+
+**Prompts:**
+```
+Plan the workflow from preset "MyPreset.json".
+What steps would running preset "SheetManagerSettings.json" perform?
+```
+
+**Verify:**
+- `revit_run_view_sheet_workflow_preset` returns `workflowType`, `stepCount`, `steps[]`, `notes[]`.
+- Notes confirm that no model changes were made.
+- Steps list human-readable descriptions with suggested follow-up tool calls.
+- No Revit transaction is created.
+
+> **Deferred:** `revit_create_sheets_from_preset` (direct single-call execution of a PlaceViews preset) is not yet implemented. Use `revit_run_view_sheet_workflow_preset` to plan the workflow, then execute steps with `revit_create_sheets_from_table`, `revit_duplicate_sheets`, etc.
+
+---
+
 ## 27. View/Sheet Preview Tools
 
 All preview tools are read-only — they return proposals without modifying the model.
@@ -1184,6 +1287,8 @@ Preview renaming sheet numbers — replace "E-" with "EL-".
 
 All write tools follow the standard approval flow: response shows `approval_required`, Pending tab shows the request, Approve/Reject controls are available.
 
+> **Note – Direct Edit mode**: When Direct Edit is enabled in the Revit panel, `RequiresApproval` tools execute immediately without queuing an approval request (see `ExternalEventHandler.cs`). In that mode the tests in this section will NOT show the approval flow — the action executes directly. To verify the approval flow, ensure **Direct Edit is disabled**. Exception: `DestructiveRequiresManualApproval` tools (Delete Views, Delete Sheets) always require manual approval regardless of Direct Edit state.
+
 ### 28.1 Place Views on Sheets
 
 **Prompts:**
@@ -1246,6 +1351,17 @@ Duplicate view 12345 with option DuplicateWithDetailing and suffix " - Copy".
 - Views that do not support duplication are skipped with a warning.
 - New view names follow `{namePrefix}{originalName}{nameSuffix}`.
 - Transaction name: `"Revit MCP - Duplicate Views"`.
+
+**Test: EmptyDetailOnly returns a clear error (deferred)**
+
+```
+Duplicate view 12345 with option EmptyDetailOnly.
+```
+
+Verify:
+- `revit_duplicate_views` returns `success: false` with message: `"EmptyDetailOnly is not implemented in this MCP version. Supported duplicateOption values are Duplicate, DuplicateWithDetailing, and AsDependent."`
+- `revit_preview_duplicate_views` returns the same error for `EmptyDetailOnly`.
+- Model is not modified.
 
 ---
 

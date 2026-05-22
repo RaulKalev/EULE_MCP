@@ -120,12 +120,19 @@ public class CreateSheetsFromTableTool : IRevitMcpTool
     private static List<Dictionary<string, object?>> GetRows(Dictionary<string, object?> args)
     {
         if (!args.TryGetValue("rows", out var val)) return [];
-        if (val is JArray ja)
-            return ja.Children<JObject>()
-                .Select(o => o.Properties().ToDictionary(p => p.Name, p => (object?)p.Value.ToObject<object>()))
-                .ToList();
-        return [];
+
+        JArray? ja = val is JArray j         ? j
+                   : val is string s         ? TryParseRows(s)
+                   : val is System.Collections.IEnumerable e ? TryFromEnumerable(e)
+                   : null;
+
+        return ja?.Children<JObject>()
+            .Select(o => o.Properties().ToDictionary(p => p.Name, p => (object?)p.Value.ToObject<object>()))
+            .ToList() ?? [];
     }
+
+    private static JArray? TryParseRows(string s)       { try { return JArray.Parse(s); }       catch { return null; } }
+    private static JArray? TryFromEnumerable(System.Collections.IEnumerable e) { try { return JArray.FromObject(e); } catch { return null; } }
 
     private static McpToolResult Fail(McpToolRequest r, string msg) =>
         new() { RequestId = r.RequestId, Success = false, Message = msg };

@@ -136,5 +136,6 @@ Each line is a JSON object with: `timestamp`, `client`, `tool`, `status`, `durat
 | Bridge can't connect | Confirm connector is Running (green chip) in Revit |
 | Claude Code doesn't see the tool | Re-run `Install-Claude-MCP.bat`, then run `claude mcp list` to verify, then restart Claude Code |
 | Codex doesn't see the tool | Verify `[mcp_servers.revit-mcp]` block is in `%USERPROFILE%\.codex\config.toml` and Codex was restarted |
+| `Transport closed` on MCP tool calls | The bridge process for that session has died. Start a new Codex session — Codex spawns a fresh bridge process per session. The config and exe are fine; only the live connection needs to be reset. |
 | Log shows wrong client name | Ensure `--client "Claude Code"` or `--client Codex` is in the registered args |
 | Revit crash on load | Check Revit journal at `%LocalAppData%\Autodesk\Revit\Autodesk Revit 2026\Journals\` |

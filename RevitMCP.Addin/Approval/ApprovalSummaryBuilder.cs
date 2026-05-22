@@ -38,6 +38,8 @@ public static class ApprovalSummaryBuilder
             "revit_set_sheet_parameters_bulk"   => BuildSetSheetParametersBulk(request),
             "revit_set_view_parameters_bulk"    => BuildSetViewParametersBulk(request),
             "revit_create_sheets_from_table"    => BuildCreateSheetsFromTable(request),
+            "revit_delete_views"                => BuildDeleteViews(request),
+            "revit_delete_sheets"               => BuildDeleteSheets(request),
             _ => $"Execute {request.ToolName}"
         };
     }
@@ -201,7 +203,15 @@ public static class ApprovalSummaryBuilder
         var sheetIds  = ToolArguments.GetLongArray(request.Arguments, "sheetIds");
         var sheetNums = ToolArguments.GetStringArray(request.Arguments, "sheetNumbers");
         var count = sheetIds.Length > 0 ? sheetIds.Length : sheetNums.Length;
-        return $"Set parameters on {count} sheet{(count == 1 ? "" : "s")}.";
+        int paramCount = 0;
+        try
+        {
+            if (request.Arguments.TryGetValue("parameters", out var pObj) && pObj is Newtonsoft.Json.Linq.JObject jObj)
+                paramCount = jObj.Count;
+        }
+        catch { }
+        var paramPart = paramCount > 0 ? $", {paramCount} parameter{(paramCount == 1 ? "" : "s")}" : "";
+        return $"Set parameters on {count} sheet{(count == 1 ? "" : "s")}{paramPart}.";
     }
 
     private static string BuildSetViewParametersBulk(McpToolRequest request)
@@ -215,6 +225,19 @@ public static class ApprovalSummaryBuilder
         var rows = ToolArguments.GetString(request.Arguments, "rows");
         int rowCount = 0;
         try { rowCount = Newtonsoft.Json.Linq.JArray.Parse(rows).Count; } catch { }
-        return $"Create {rowCount} sheet{(rowCount == 1 ? "" : "s")} from table.";
+        var titleBlockId = ToolArguments.GetLong(request.Arguments, "titleBlockId");
+        var titleBlockPart = titleBlockId > 0 ? $" (titleBlock ID:{titleBlockId})" : "";
+        return $"Create {rowCount} sheet{(rowCount == 1 ? "" : "s")} from table{titleBlockPart}.";
+    }
+    private static string BuildDeleteViews(McpToolRequest request)
+    {
+        var viewIds = ToolArguments.GetLongArray(request.Arguments, "viewIds");
+        return $"DESTRUCTIVE: Delete {viewIds.Length} view{(viewIds.Length == 1 ? "" : "s")}. Manual approval required.";
+    }
+
+    private static string BuildDeleteSheets(McpToolRequest request)
+    {
+        var sheetIds = ToolArguments.GetLongArray(request.Arguments, "sheetIds");
+        return $"DESTRUCTIVE: Delete {sheetIds.Length} sheet{(sheetIds.Length == 1 ? "" : "s")}. Manual approval required.";
     }
 }

@@ -2,10 +2,10 @@
 
 A local [Model Context Protocol](https://modelcontextprotocol.io) connector that lets **Claude Code** and **Codex** interrogate and work with a live **Autodesk Revit 2026** model in real time.
 
-**91 tools** across three functional areas:
+**97 tools** across three functional areas:
 - **General** (22 tools) — element discovery, parameter QA, grouping, Excel exports, selection, and write operations
 - **Electrical** (44 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
-- **Documentation** (25 tools) — view and sheet management: discovery, summary, preview/apply workflows for placing views, creating/duplicating/renaming sheets and views, bulk parameter updates, and safe destructive delete with mandatory manual approval
+- **Documentation** (31 tools) — view and sheet management: discovery, summary, preview/apply workflows for placing views, creating/duplicating/renaming sheets and views, bulk parameter updates, revision tracking, preset inspection, and safe destructive delete with mandatory manual approval
 
 ---
 
@@ -153,8 +153,14 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_list_titleblocks` | Lists all title block family symbols loaded in the document — returns `familySymbolId`, `familyName`, `typeName`, `isInUse` |
 | `revit_list_view_templates` | Lists view templates with optional `viewType` filter — returns `elementId`, `name`, `viewType`, `assignedViewCount` |
 | `revit_list_revisions` | Lists all revisions — returns sequence number, date, description, issued-by, issued-to, visibility |
+| `revit_list_revision_numbering_sequences` | Lists revision numbering sequences — returns sequenceId, name, numberingType, prefix, suffix, minimumDigits. Returns empty list on projects with no custom sequences |
+| `revit_get_sheet_revisions` | Returns revisions visible on one or more sheets (by `sheetIds` or `sheetNumbers`) — revisionId, sequenceNumber, revisionNumber, date, description, issuedBy, issuedTo per sheet |
 | `revit_get_sheet_viewports` | Returns viewport detail for one or more sheets (by `sheetIds` or `sheetNumbers`) — view name, type, sheet position, detail number |
 | `revit_find_unplaced_views` | Finds views not placed on any sheet — filterable by `viewTypes`, `nameFilter`, `includeTemplates`, `limit` |
+| `revit_list_view_sheet_presets` | Lists available PlaceViews / Sheet Manager preset JSON files from the RK Tools preset folder. Returns fileName, detectedType, sizeBytes, modifiedUtc |
+| `revit_get_view_sheet_preset` | Reads and returns the contents of a named preset file — returns workflowType and parsedContent |
+| `revit_validate_view_sheet_preset` | Validates preset structure — returns isValid, workflowType, errors[], suggestions[] |
+| `revit_run_view_sheet_workflow_preset` | Plans a preset workflow (read-only) — returns workflowType, steps[], notes[]. Does not execute any changes; use separate write tools to execute steps |
 
 `revit_list_views` and `revit_list_sheets` are enhanced in this version:
 
@@ -192,6 +198,10 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_set_view_parameters_bulk` | Sets parameters on multiple views in one transaction |
 | `revit_rename_views` | Renames views using FindReplace, PrefixSuffix, Template, or RegexFindReplace mode |
 | `revit_rename_sheets` | Renames sheet names, numbers, or both using the same rename modes |
+
+> **Deferred (not yet implemented):**
+> - `EmptyDetailOnly` duplicate option: `revit_duplicate_views` and `revit_preview_duplicate_views` return a clear error if `duplicateOption="EmptyDetailOnly"` is requested. Only `Duplicate`, `DuplicateWithDetailing`, and `AsDependent` are supported.
+> - `revit_create_sheets_from_preset`: Creating sheets directly from a PlaceViews preset file is not yet implemented. Use `revit_run_view_sheet_workflow_preset` to plan the workflow, then execute steps manually with `revit_create_sheets_from_table`, `revit_duplicate_sheets`, etc.
 
 #### Destructive Delete Tools (always requires manual approval — Direct Edit does NOT bypass)
 

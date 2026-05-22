@@ -25,18 +25,59 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_list_views", ReadOnly = true),
-     Description("Lists all views in the active Revit document with type, template status, sheet placement, scale, and discipline.")]
-    public async Task<string> ListViews(CancellationToken cancellationToken)
+     Description("Lists views in the active Revit document. Supports viewTypes, includeTemplates, nameFilter, includePlacedStatus, returnParameters, and limit.")]
+    public async Task<string> ListViews(
+        [Description("Filter by Revit view type names, e.g. FloorPlan, CeilingPlan, Section, Elevation, ThreeD, DraftingView")]
+        string[]? viewTypes = null,
+        [Description("Include view templates. Default false.")]
+        bool includeTemplates = false,
+        [Description("Optional substring filter for view name.")]
+        string? nameFilter = null,
+        [Description("Include sheet placement status and sheet info. Default true.")]
+        bool includePlacedStatus = true,
+        [Description("Additional view parameter names to return. Partial matching is supported by the add-in.")]
+        string[]? returnParameters = null,
+        [Description("Maximum views to return. 0 means all.")]
+        int limit = 0,
+        CancellationToken cancellationToken = default)
     {
-        var result = await pipeClient.SendAsync("revit_list_views", [], cancellationToken);
+        var args = new Dictionary<string, object?>
+        {
+            ["viewTypes"] = viewTypes ?? [],
+            ["includeTemplates"] = includeTemplates,
+            ["nameFilter"] = nameFilter ?? string.Empty,
+            ["includePlacedStatus"] = includePlacedStatus,
+            ["returnParameters"] = returnParameters ?? [],
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_list_views", args, cancellationToken);
         return FormatResult(result);
     }
 
     [McpServerTool(Name = "revit_list_sheets", ReadOnly = true),
-     Description("Lists all sheets in the active Revit document with sheet number, name, and the views placed on each sheet.")]
-    public async Task<string> ListSheets(CancellationToken cancellationToken)
+     Description("Lists sheets in the active Revit document. Supports nameFilter, numberFilter, returnParameters, includeViewports, and limit.")]
+    public async Task<string> ListSheets(
+        [Description("Optional substring filter for sheet name.")]
+        string? nameFilter = null,
+        [Description("Optional substring filter for sheet number.")]
+        string? numberFilter = null,
+        [Description("Sheet parameter names to return. Use [\"default\"] for the standard EULE/Revit sheet parameters.")]
+        string[]? returnParameters = null,
+        [Description("Include viewport details per sheet. Default false.")]
+        bool includeViewports = false,
+        [Description("Maximum sheets to return. 0 means all.")]
+        int limit = 0,
+        CancellationToken cancellationToken = default)
     {
-        var result = await pipeClient.SendAsync("revit_list_sheets", [], cancellationToken);
+        var args = new Dictionary<string, object?>
+        {
+            ["nameFilter"] = nameFilter ?? string.Empty,
+            ["numberFilter"] = numberFilter ?? string.Empty,
+            ["returnParameters"] = returnParameters ?? [],
+            ["includeViewports"] = includeViewports,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_list_sheets", args, cancellationToken);
         return FormatResult(result);
     }
 
@@ -1854,6 +1895,102 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["skipSheetsWithViews"] = skipSheetsWithViews
         };
         var result = await pipeClient.SendAsync("revit_delete_sheets", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    // -----------------------------------------------------------------------
+    // Revision Numbering Sequences
+    // -----------------------------------------------------------------------
+
+    [McpServerTool(Name = "revit_list_revision_numbering_sequences", ReadOnly = true),
+     Description("Lists revision numbering sequences defined in the active document. Returns sequenceId, name, numberingType, prefix, suffix, minimumDigits. Projects without custom sequences return an empty list.")]
+    public async Task<string> ListRevisionNumberingSequences(CancellationToken cancellationToken = default)
+    {
+        var result = await pipeClient.SendAsync("revit_list_revision_numbering_sequences", [], cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_sheet_revisions", ReadOnly = true),
+     Description("Returns revisions visible/assigned on one or more sheets. Accepts sheetIds (long[]) or sheetNumbers (string[]). Returns per-sheet: sheetNumber, sheetName, revisionCount, revisions (revisionId, sequenceNumber, revisionNumber, revisionDate, description, issuedBy, issuedTo).")]
+    public async Task<string> GetSheetRevisions(
+        [Description("Element IDs of target sheets")] long[]? sheetIds = null,
+        [Description("Sheet numbers of target sheets, e.g. [\"A-01\", \"S-02\"]")] string[]? sheetNumbers = null,
+        [Description("Include full revision detail per sheet (default true)")] bool includeRevisionDetails = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["sheetIds"]               = sheetIds ?? [],
+            ["sheetNumbers"]           = sheetNumbers ?? [],
+            ["includeRevisionDetails"] = includeRevisionDetails
+        };
+        var result = await pipeClient.SendAsync("revit_get_sheet_revisions", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    // -----------------------------------------------------------------------
+    // PlaceViews / Sheet Manager Preset Tools
+    // -----------------------------------------------------------------------
+
+    [McpServerTool(Name = "revit_list_view_sheet_presets", ReadOnly = true),
+     Description("Lists available PlaceViews / Sheet Manager preset JSON files from the RK Tools preset folder. Returns fileName, detectedType, sizeBytes, modifiedUtc. Optional: overrideFolderPath.")]
+    public async Task<string> ListViewSheetPresets(
+        [Description("Override the default preset folder path (optional)")] string? overrideFolderPath = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["overrideFolderPath"] = overrideFolderPath ?? string.Empty
+        };
+        var result = await pipeClient.SendAsync("revit_list_view_sheet_presets", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_view_sheet_preset", ReadOnly = true),
+     Description("Reads and returns the contents of a named PlaceViews / Sheet Manager preset JSON file. Accepts: presetName (filename with or without .json). Returns: fileName, workflowType, parsedContent.")]
+    public async Task<string> GetViewSheetPreset(
+        [Description("Preset filename (with or without .json extension)")] string presetName = "",
+        [Description("Override the default preset folder path (optional)")] string? overrideFolderPath = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["presetName"]         = presetName,
+            ["overrideFolderPath"] = overrideFolderPath ?? string.Empty
+        };
+        var result = await pipeClient.SendAsync("revit_get_view_sheet_preset", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_validate_view_sheet_preset", ReadOnly = true),
+     Description("Validates the structure of a PlaceViews / Sheet Manager preset JSON file. Returns: isValid, workflowType, errors[], suggestions[]. Does not modify the model.")]
+    public async Task<string> ValidateViewSheetPreset(
+        [Description("Preset filename (with or without .json extension)")] string presetName = "",
+        [Description("Override the default preset folder path (optional)")] string? overrideFolderPath = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["presetName"]         = presetName,
+            ["overrideFolderPath"] = overrideFolderPath ?? string.Empty
+        };
+        var result = await pipeClient.SendAsync("revit_validate_view_sheet_preset", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_run_view_sheet_workflow_preset", ReadOnly = true),
+     Description("Plans a view/sheet workflow from a preset — returns a structured preview of what the workflow would do without modifying the model. Returns: workflowType, stepCount, steps[], notes[]. Execute steps with revit_duplicate_sheets, revit_place_views_on_sheets, etc.")]
+    public async Task<string> RunViewSheetWorkflowPreset(
+        [Description("Preset filename (with or without .json extension)")] string presetName = "",
+        [Description("Override the default preset folder path (optional)")] string? overrideFolderPath = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["presetName"]         = presetName,
+            ["overrideFolderPath"] = overrideFolderPath ?? string.Empty
+        };
+        var result = await pipeClient.SendAsync("revit_run_view_sheet_workflow_preset", args, cancellationToken);
         return FormatResult(result);
     }
 }

@@ -113,9 +113,15 @@ public class App : IExternalApplication
             handler.RegisterTool(new ListTitleBlocksTool());
             handler.RegisterTool(new ListViewTemplatesTool());
             handler.RegisterTool(new ListRevisionsTool());
+            handler.RegisterTool(new ListRevisionNumberingSequencesTool());
+            handler.RegisterTool(new GetSheetRevisionsTool());
             handler.RegisterTool(new GetSheetViewportsTool());
             handler.RegisterTool(new FindUnplacedViewsTool());
             handler.RegisterTool(new GetViewSheetSummaryTool());
+            handler.RegisterTool(new ListViewSheetPresetsTool());
+            handler.RegisterTool(new GetViewSheetPresetTool());
+            handler.RegisterTool(new ValidateViewSheetPresetTool());
+            handler.RegisterTool(new RunViewSheetWorkflowPresetTool());
 
             // View / Sheet / Documentation (Phase 2 — Preview)
             handler.RegisterTool(new PreviewPlaceViewsOnSheetsTool());
