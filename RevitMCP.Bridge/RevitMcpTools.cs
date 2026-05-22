@@ -708,4 +708,381 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         var result = await pipeClient.SendAsync("revit_set_circuit_parameter", args, cancellationToken);
         return FormatResult(result);
     }
+
+    [McpServerTool(Name = "revit_find_uncircuited_elements", ReadOnly = true),
+     Description("Finds elements in electrical/lighting/data/fire/security categories that have no electrical circuit assignment. Checks via MEPModel.ElectricalSystems. Accepts: categories (string[], default all electrical), useSelection (bool), filters (JSON array), returnParameters (string[]), limit (int, default 1000).")]
+    public async Task<string> FindUncircuitedElements(
+        [Description("Category names to scan (empty = all default electrical categories)")] string[]? categories = null,
+        [Description("If true, check current Revit selection instead of categories")] bool useSelection = false,
+        [Description("JSON array of parameter filters")] string? filters = null,
+        [Description("Parameter names to include in each result (partial match supported)")] string[]? returnParameters = null,
+        [Description("Max uncircuited elements to return (default 1000)")] int limit = 1000,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
+            return FormatBridgeError(filtersError!);
+
+        var args = new Dictionary<string, object?>
+        {
+            ["categories"] = categories ?? Array.Empty<string>(),
+            ["useSelection"] = useSelection,
+            ["filters"] = parsedFilters,
+            ["returnParameters"] = returnParameters ?? Array.Empty<string>(),
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_find_uncircuited_elements", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_check_circuit_health", ReadOnly = true),
+     Description("Central circuit QA tool. Configurable checks: MissingPanel, EmptyCircuitNumber, DuplicateCircuitNumbers, MissingCableType, MissingWireType, MissingLoadName, NoConnectedElements. Filter by panelName or systemType. Returns issue details with circuit IDs.")]
+    public async Task<string> CheckCircuitHealth(
+        [Description("Optional panel name filter (partial match)")] string? panelName = null,
+        [Description("Optional system type filter (e.g. PowerCircuit, Data, FireAlarm)")] string? systemType = null,
+        [Description("Checks to run — default all: MissingPanel, EmptyCircuitNumber, DuplicateCircuitNumbers, MissingCableType, MissingWireType, MissingLoadName, NoConnectedElements")] string[]? checks = null,
+        [Description("Include connected elements for circuits with issues")] bool includeElements = true,
+        [Description("Max circuits to check (default 5000)")] int limit = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panelName"] = panelName ?? string.Empty,
+            ["systemType"] = systemType ?? string.Empty,
+            ["checks"] = checks ?? Array.Empty<string>(),
+            ["includeElements"] = includeElements,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_check_circuit_health", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_export_panel_circuit_list_to_excel", ReadOnly = true),
+     Description("Exports a panel-organized circuit report to .xlsx. Sheets: Summary, Panel Circuits, Circuit Elements (optional), Health Issues (optional). Returns file path. Columns: Panel, Circuit Number, Load Name, Circuit Id, System Type, Elements Count, Apparent Load, Voltage, Poles, Cable/Wire Type, Comments.")]
+    public async Task<string> ExportPanelCircuitListToExcel(
+        [Description("Optional panel name filter")] string? panelName = null,
+        [Description("Optional system type filter")] string? systemType = null,
+        [Description("Include Circuit Elements sheet (can be slow for large models)")] bool includeElements = true,
+        [Description("Include Health Issues sheet")] bool includeHealthCheck = true,
+        [Description("Output file name (default Panel_Circuit_List.xlsx)")] string fileName = "Panel_Circuit_List.xlsx",
+        [Description("Max circuits to export (default 5000)")] int limit = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panelName"] = panelName ?? string.Empty,
+            ["systemType"] = systemType ?? string.Empty,
+            ["includeElements"] = includeElements,
+            ["includeHealthCheck"] = includeHealthCheck,
+            ["fileName"] = fileName,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_export_panel_circuit_list_to_excel", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_find_circuits_by_element_parameter", ReadOnly = true),
+     Description("Finds electrical circuits that contain elements matching category and parameter filters. Example uses: find circuits in room 201, find circuits containing devices of type X, find circuits where ELENEA_Osasüsteem = ATS. Returns distinct circuits with matched element IDs.")]
+    public async Task<string> FindCircuitsByElementParameter(
+        [Description("Category name for element search (e.g. 'Electrical Fixtures', 'Fire Alarm Devices')")] string? elementCategory = null,
+        [Description("JSON array of parameter filters on the elements")] string? filters = null,
+        [Description("Include matched element IDs in each circuit result")] bool includeElements = true,
+        [Description("Max candidate elements to scan (default 500)")] int limit = 500,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
+            return FormatBridgeError(filtersError!);
+
+        var args = new Dictionary<string, object?>
+        {
+            ["elementCategory"] = elementCategory ?? string.Empty,
+            ["filters"] = parsedFilters,
+            ["includeElements"] = includeElements,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_find_circuits_by_element_parameter", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_trace_circuit", ReadOnly = true),
+     Description("Traces an element or circuit back to its panel. From an element (elementId or useSelection=true): finds its circuit(s) and panel(s). From a circuit (circuitId): finds the panel and optionally connected elements. Returns circuit number, load name, wire type, apparent load, panel name, panel element ID.")]
+    public async Task<string> TraceCircuit(
+        [Description("Element ID to trace (0 = not used)")] long elementId = 0,
+        [Description("Circuit element ID to trace directly (0 = not used)")] long circuitId = 0,
+        [Description("If true, trace the currently selected element in Revit")] bool useSelection = false,
+        [Description("Include connected elements in circuit trace result")] bool includeConnectedElements = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["elementId"] = elementId,
+            ["circuitId"] = circuitId,
+            ["useSelection"] = useSelection,
+            ["includeConnectedElements"] = includeConnectedElements
+        };
+        var result = await pipeClient.SendAsync("revit_trace_circuit", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_check_circuit_parameter_completeness", ReadOnly = true),
+     Description("Checks required parameters on electrical circuit elements. Returns per-parameter fill rates and circuit IDs with empty values. requiredParameters defaults to [Circuit Number, Load Name, Cable Type].")]
+    public async Task<string> CheckCircuitParameterCompleteness(
+        [Description("Optional panel name filter")] string? panelName = null,
+        [Description("Optional system type filter")] string? systemType = null,
+        [Description("Parameter names to check (default: Circuit Number, Load Name, Cable Type)")] string[]? requiredParameters = null,
+        [Description("Treat whitespace-only values as empty (default true)")] bool treatWhitespaceAsEmpty = true,
+        [Description("Include circuit IDs in result (default true)")] bool includeCircuitIds = true,
+        [Description("Max circuits to check (default 1000)")] int limit = 1000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panelName"] = panelName ?? "",
+            ["systemType"] = systemType ?? "",
+            ["requiredParameters"] = requiredParameters ?? [],
+            ["treatWhitespaceAsEmpty"] = treatWhitespaceAsEmpty,
+            ["includeCircuitIds"] = includeCircuitIds,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_check_circuit_parameter_completeness", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_select_circuit_elements"),
+     Description("Selects all elements connected to a circuit in the Revit UI. Requires approval.")]
+    public async Task<string> SelectCircuitElements(
+        [Description("Element ID of the circuit")] long circuitId,
+        [Description("Replace current selection (default true)")] bool replaceSelection = true,
+        [Description("Zoom to selection after selecting (default false)")] bool zoomToSelection = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["circuitId"] = circuitId,
+            ["replaceSelection"] = replaceSelection,
+            ["zoomToSelection"] = zoomToSelection
+        };
+        var result = await pipeClient.SendAsync("revit_select_circuit_elements", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_select_uncircuited_elements"),
+     Description("Selects elements not assigned to any electrical circuit in the Revit UI. Requires approval.")]
+    public async Task<string> SelectUncircuitedElements(
+        [Description("Categories to search (default: all electrical categories)")] string[]? categories = null,
+        [Description("Parameter filters as JSON array")] string? filters = null,
+        [Description("Replace current selection (default true)")] bool replaceSelection = true,
+        [Description("Zoom to selection after selecting (default false)")] bool zoomToSelection = false,
+        [Description("Max elements to select (default 500)")] int limit = 500,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["categories"] = categories ?? [],
+            ["filters"] = filters ?? "[]",
+            ["replaceSelection"] = replaceSelection,
+            ["zoomToSelection"] = zoomToSelection,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_select_uncircuited_elements", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_export_circuit_health_to_excel", ReadOnly = true),
+     Description("Exports circuit QA health issues (missing panel, duplicate numbers, missing cable type, missing load name) to a formatted .xlsx file. Returns the file path.")]
+    public async Task<string> ExportCircuitHealthToExcel(
+        [Description("Optional panel name filter")] string? panelName = null,
+        [Description("Optional system type filter")] string? systemType = null,
+        [Description("Output file name (default: Circuit_Health_Report.xlsx)")] string fileName = "Circuit_Health_Report.xlsx",
+        [Description("Max circuits to check (default 5000)")] int limit = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panelName"] = panelName ?? "",
+            ["systemType"] = systemType ?? "",
+            ["fileName"] = fileName,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_export_circuit_health_to_excel", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_export_uncircuited_elements_to_excel", ReadOnly = true),
+     Description("Exports elements not assigned to any electrical circuit to a formatted .xlsx file. Returns the file path.")]
+    public async Task<string> ExportUncircuitedElementsToExcel(
+        [Description("Categories to search (default: all electrical categories)")] string[]? categories = null,
+        [Description("Parameter filters as JSON array")] string? filters = null,
+        [Description("Additional parameters to include as columns")] string[]? returnParameters = null,
+        [Description("Output file name (default: Uncircuited_Elements.xlsx)")] string fileName = "Uncircuited_Elements.xlsx",
+        [Description("Max elements to export (default 2000)")] int limit = 2000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["categories"] = categories ?? [],
+            ["filters"] = filters ?? "[]",
+            ["returnParameters"] = returnParameters ?? [],
+            ["fileName"] = fileName,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_export_uncircuited_elements_to_excel", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_circuits_for_selected_elements", ReadOnly = true),
+     Description("Returns all electrical circuits for the currently selected Revit elements, de-duplicated across multiple selected elements.")]
+    public async Task<string> GetCircuitsForSelectedElements(
+        [Description("Include connected elements in response (default true)")] bool includeElements = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["includeElements"] = includeElements };
+        var result = await pipeClient.SendAsync("revit_get_circuits_for_selected_elements", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_find_elements_on_circuit", ReadOnly = true),
+     Description("Lists all elements connected to a specific electrical circuit with category, family, type, level, and optional parameter values.")]
+    public async Task<string> FindElementsOnCircuit(
+        [Description("Element ID of the circuit")] long circuitId,
+        [Description("Parameter names to include in results")] string[]? returnParameters = null,
+        [Description("Max elements to return (default 500)")] int limit = 500,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["circuitId"] = circuitId,
+            ["returnParameters"] = returnParameters ?? [],
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_find_elements_on_circuit", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_circuit_load_summary", ReadOnly = true),
+     Description("Summarizes circuit apparent loads grouped by Panel, SystemType, CableType, or WireType.")]
+    public async Task<string> GetCircuitLoadSummary(
+        [Description("Grouping keys (default: [Panel, SystemType]). Valid: Panel, SystemType, CableType, WireType")] string[]? groupBy = null,
+        [Description("Optional panel name filter")] string? panelName = null,
+        [Description("Optional system type filter")] string? systemType = null,
+        [Description("Include per-circuit details in each group (default false)")] bool includeCircuitDetails = false,
+        [Description("Max circuits (default 5000)")] int limit = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["groupBy"] = groupBy ?? [],
+            ["panelName"] = panelName ?? "",
+            ["systemType"] = systemType ?? "",
+            ["includeCircuitDetails"] = includeCircuitDetails,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_get_circuit_load_summary", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_check_panel_utilization", ReadOnly = true),
+     Description("Checks circuit count, total apparent load, and data quality issues per panel. If panelName is empty, checks all panels.")]
+    public async Task<string> CheckPanelUtilization(
+        [Description("Optional panel name filter (empty = all panels)")] string? panelName = null,
+        [Description("Optional system type filter")] string? systemType = null,
+        [Description("Include per-circuit details in response (default false)")] bool includeCircuitDetails = false,
+        [Description("Max circuits (default 5000)")] int limit = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panelName"] = panelName ?? "",
+            ["systemType"] = systemType ?? "",
+            ["includeCircuitDetails"] = includeCircuitDetails,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_check_panel_utilization", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_preview_circuit_numbering", ReadOnly = true),
+     Description("Previews renumbering proposals for panel circuits without modifying the model. Returns old/new circuit number pairs with willChange flag.")]
+    public async Task<string> PreviewCircuitNumbering(
+        [Description("Panel name (required)")] string panelName,
+        [Description("Starting number (default 1)")] int startNumber = 1,
+        [Description("Increment between numbers (default 1)")] int increment = 1,
+        [Description("Optional system type filter")] string? systemType = null,
+        [Description("Sort circuits by: CurrentCircuitNumber (default) or LoadName")] string sortBy = "CurrentCircuitNumber",
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panelName"] = panelName,
+            ["startNumber"] = startNumber,
+            ["increment"] = increment,
+            ["systemType"] = systemType ?? "",
+            ["sortBy"] = sortBy
+        };
+        var result = await pipeClient.SendAsync("revit_preview_circuit_numbering", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_apply_circuit_numbering"),
+     Description("Applies circuit number changes after preview. Requires approval. Runs inside a transaction.")]
+    public async Task<string> ApplyCircuitNumbering(
+        [Description("JSON array: [{\"circuitId\": 12345, \"newCircuitNumber\": \"5\"}, ...]")] string changes,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["changes"] = changes };
+        var result = await pipeClient.SendAsync("revit_apply_circuit_numbering", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_preview_circuit_load_names", ReadOnly = true),
+     Description("Previews load name proposals for circuits without modifying the model. Uses a template with {ParameterName} placeholders resolved from connected element or circuit parameters.")]
+    public async Task<string> PreviewCircuitLoadNames(
+        [Description("Optional panel name filter")] string? panelName = null,
+        [Description("Template string with {ParameterName} placeholders, e.g. '{Room Number} {Category}'")] string? template = null,
+        [Description("Parameter source: ConnectedElements (default) or CircuitParameters")] string source = "ConnectedElements",
+        [Description("Optional system type filter")] string? systemType = null,
+        [Description("Max circuits (default 500)")] int limit = 500,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panelName"] = panelName ?? "",
+            ["template"] = template ?? "",
+            ["source"] = source,
+            ["systemType"] = systemType ?? "",
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_preview_circuit_load_names", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_apply_circuit_load_names"),
+     Description("Applies load name changes to circuits after preview. Requires approval. Runs inside a transaction.")]
+    public async Task<string> ApplyCircuitLoadNames(
+        [Description("JSON array: [{\"circuitId\": 12345, \"newLoadName\": \"201 Sockets\"}, ...]")] string changes,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["changes"] = changes };
+        var result = await pipeClient.SendAsync("revit_apply_circuit_load_names", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_set_circuit_parameters_bulk"),
+     Description("Sets multiple parameters on multiple circuits in a single transaction. Requires approval. Supports String, Integer, Double, and ElementId storage types.")]
+    public async Task<string> SetCircuitParametersBulk(
+        [Description("Circuit element IDs to target (optional — provide panelName if omitted)")] long[]? circuitIds = null,
+        [Description("Panel name to target all circuits on a panel (used when circuitIds is empty)")] string? panelName = null,
+        [Description("JSON array: [{\"parameterName\": \"Comments\", \"value\": \"Checked\"}, ...]")] string parameters = "[]",
+        [Description("Max circuits when using panelName (default 1000)")] int limit = 1000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["circuitIds"] = circuitIds ?? [],
+            ["panelName"] = panelName ?? "",
+            ["parameters"] = parameters,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_set_circuit_parameters_bulk", args, cancellationToken);
+        return FormatResult(result);
+    }
 }
