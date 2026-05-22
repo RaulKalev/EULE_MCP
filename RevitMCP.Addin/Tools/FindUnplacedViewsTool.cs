@@ -56,9 +56,9 @@ public class FindUnplacedViewsTool : IRevitMcpTool
             query = query.Where(v => v.Name.Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
 
         var ordered = query.OrderBy(v => v.ViewType.ToString()).ThenBy(v => v.Name);
-        if (limit > 0) ordered = (IOrderedEnumerable<View>)ordered.Take(limit);
+        IEnumerable<View> final = limit > 0 ? ordered.Take(limit) : ordered;
 
-        var views = ordered.Select(v => new
+        var views = final.Select(v => new
         {
             elementId  = v.Id.Value,
             uniqueId   = v.UniqueId,

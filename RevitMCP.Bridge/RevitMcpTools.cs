@@ -1603,11 +1603,14 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     // ── View / Sheet / Documentation — Phase 3 Write ─────────────────────────
 
     [McpServerTool(Name = "revit_place_views_on_sheets"),
-     Description("Places views on matched sheets. Requires approval. Required: viewIds. Same parameters as revit_preview_place_views_on_sheets. Run preview first.")]
+     Description("Places views on matched sheets. Requires approval. Required: viewIds. " +
+                 "Option A (direct): targetSheetId — places ALL views on one specific sheet, no matching needed. " +
+                 "Option B (matching): same parameters as revit_preview_place_views_on_sheets. Run preview first.")]
     public async Task<string> PlaceViewsOnSheets(
         [Description("View element IDs to place")] long[] viewIds,
-        [Description("Target sheet IDs")] long[]? sheetIds = null,
-        [Description("Match against all sheets")] bool allSheets = true,
+        [Description("Direct target sheet ID — bypasses matching; all views go to this sheet")] long? targetSheetId = null,
+        [Description("Target sheet IDs for matching (Option B)")] long[]? sheetIds = null,
+        [Description("Match against all sheets (Option B)")] bool allSheets = true,
         [Description("Match mode: ExactName|Contains|Fuzzy|SheetNumberPrefix|SheetNumberSuffix|CustomParameter")] string matchMode = "Contains",
         [Description("Fuzzy threshold 0-1")] double fuzzyThreshold = 0.6,
         [Description("Parameter name for CustomParameter mode")] string? customParamName = null,
@@ -1616,7 +1619,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     {
         var args = new Dictionary<string, object?>
         {
-            ["viewIds"] = viewIds, ["sheetIds"] = sheetIds ?? [], ["allSheets"] = allSheets,
+            ["viewIds"] = viewIds, ["targetSheetId"] = targetSheetId ?? 0L,
+            ["sheetIds"] = sheetIds ?? [], ["allSheets"] = allSheets,
             ["matchMode"] = matchMode, ["fuzzyThreshold"] = fuzzyThreshold,
             ["customParamName"] = customParamName ?? "", ["skipAlreadyPlaced"] = skipAlreadyPlaced
         };

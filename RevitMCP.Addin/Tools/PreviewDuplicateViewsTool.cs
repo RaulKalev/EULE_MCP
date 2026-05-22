@@ -33,6 +33,10 @@ public class PreviewDuplicateViewsTool : IRevitMcpTool
         if (viewIds.Length == 0)
             return Task.FromResult(new McpToolResult { RequestId = request.RequestId, Success = false, Message = "viewIds is required." });
 
+        // "DuplicateWithDetailing" is the user-facing alias; the Revit enum value is "WithDetailing"
+        if (string.Equals(duplicateOption, "DuplicateWithDetailing", StringComparison.OrdinalIgnoreCase))
+            duplicateOption = "WithDetailing";
+
         if (!Enum.TryParse<ViewDuplicateOption>(duplicateOption, true, out var dupOpt))
         {
             return Task.FromResult(new McpToolResult { RequestId = request.RequestId, Success = false,

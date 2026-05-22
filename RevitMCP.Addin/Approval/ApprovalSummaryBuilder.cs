@@ -28,6 +28,16 @@ public static class ApprovalSummaryBuilder
             "revit_apply_circuit_numbering" => BuildApplyCircuitNumbering(request),
             "revit_apply_circuit_load_names" => BuildApplyCircuitLoadNames(request),
             "revit_set_circuit_parameters_bulk" => BuildSetCircuitParametersBulk(request),
+            // Documentation tools
+            "revit_place_views_on_sheets"       => BuildPlaceViewsOnSheets(request),
+            "revit_duplicate_sheets"            => BuildDuplicateSheets(request),
+            "revit_duplicate_views"             => BuildDuplicateViews(request),
+            "revit_apply_view_template"         => BuildApplyViewTemplate(request),
+            "revit_rename_views"                => BuildRenameViews(request),
+            "revit_rename_sheets"               => BuildRenameSheets(request),
+            "revit_set_sheet_parameters_bulk"   => BuildSetSheetParametersBulk(request),
+            "revit_set_view_parameters_bulk"    => BuildSetViewParametersBulk(request),
+            "revit_create_sheets_from_table"    => BuildCreateSheetsFromTable(request),
             _ => $"Execute {request.ToolName}"
         };
     }
@@ -134,5 +144,77 @@ public static class ApprovalSummaryBuilder
             : !string.IsNullOrWhiteSpace(panelName) ? $"all circuits on panel '{panelName}'"
             : "specified circuits";
         return $"Set {paramCount} parameter{(paramCount == 1 ? "" : "s")} on {target}. Runs in transaction, supports Undo.";
+    }
+
+    // ── Documentation summaries ────────────────────────────────────────────
+
+    private static string BuildPlaceViewsOnSheets(McpToolRequest request)
+    {
+        var viewIds = ToolArguments.GetLongArray(request.Arguments, "viewIds");
+        var targetSheetId = ToolArguments.GetLong(request.Arguments, "targetSheetId", 0L);
+        var matchMode = ToolArguments.GetString(request.Arguments, "matchMode", "Contains");
+        if (targetSheetId > 0)
+            return $"Place {viewIds.Length} view{(viewIds.Length == 1 ? "" : "s")} directly on sheet ID:{targetSheetId}.";
+        return $"Place {viewIds.Length} view{(viewIds.Length == 1 ? "" : "s")} on matched sheets. Match mode: {matchMode}.";
+    }
+
+    private static string BuildDuplicateSheets(McpToolRequest request)
+    {
+        var sourceIds  = ToolArguments.GetLongArray(request.Arguments, "sourceSheetIds");
+        var sourceNums = ToolArguments.GetStringArray(request.Arguments, "sourceSheetNumbers");
+        var numSuffix  = ToolArguments.GetString(request.Arguments, "newNumberSuffix", "_COPY");
+        var count = sourceIds.Length > 0 ? sourceIds.Length : sourceNums.Length;
+        var desc  = sourceNums.Length > 0 ? string.Join(", ", sourceNums) : $"{count} sheet{(count == 1 ? "" : "s")}";
+        return $"Duplicate {count} sheet{(count == 1 ? "" : "s")} ({desc}) with suffix '{numSuffix}'.";
+    }
+
+    private static string BuildDuplicateViews(McpToolRequest request)
+    {
+        var viewIds = ToolArguments.GetLongArray(request.Arguments, "viewIds");
+        var option  = ToolArguments.GetString(request.Arguments, "duplicateOption", "DuplicateWithDetailing");
+        return $"Duplicate {viewIds.Length} view{(viewIds.Length == 1 ? "" : "s")} with option '{option}'.";
+    }
+
+    private static string BuildApplyViewTemplate(McpToolRequest request)
+    {
+        var viewIds      = ToolArguments.GetLongArray(request.Arguments, "viewIds");
+        var templateName = ToolArguments.GetString(request.Arguments, "templateName");
+        return $"Apply view template '{templateName}' to {viewIds.Length} view{(viewIds.Length == 1 ? "" : "s")}.";
+    }
+
+    private static string BuildRenameViews(McpToolRequest request)
+    {
+        var viewIds = ToolArguments.GetLongArray(request.Arguments, "viewIds");
+        var mode    = ToolArguments.GetString(request.Arguments, "mode");
+        return $"Rename {viewIds.Length} view{(viewIds.Length == 1 ? "" : "s")} using mode '{mode}'.";
+    }
+
+    private static string BuildRenameSheets(McpToolRequest request)
+    {
+        var sheetIds = ToolArguments.GetLongArray(request.Arguments, "sheetIds");
+        var mode     = ToolArguments.GetString(request.Arguments, "mode");
+        return $"Rename {sheetIds.Length} sheet{(sheetIds.Length == 1 ? "" : "s")} using mode '{mode}'.";
+    }
+
+    private static string BuildSetSheetParametersBulk(McpToolRequest request)
+    {
+        var sheetIds  = ToolArguments.GetLongArray(request.Arguments, "sheetIds");
+        var sheetNums = ToolArguments.GetStringArray(request.Arguments, "sheetNumbers");
+        var count = sheetIds.Length > 0 ? sheetIds.Length : sheetNums.Length;
+        return $"Set parameters on {count} sheet{(count == 1 ? "" : "s")}.";
+    }
+
+    private static string BuildSetViewParametersBulk(McpToolRequest request)
+    {
+        var viewIds = ToolArguments.GetLongArray(request.Arguments, "viewIds");
+        return $"Set parameters on {viewIds.Length} view{(viewIds.Length == 1 ? "" : "s")}.";
+    }
+
+    private static string BuildCreateSheetsFromTable(McpToolRequest request)
+    {
+        var rows = ToolArguments.GetString(request.Arguments, "rows");
+        int rowCount = 0;
+        try { rowCount = Newtonsoft.Json.Linq.JArray.Parse(rows).Count; } catch { }
+        return $"Create {rowCount} sheet{(rowCount == 1 ? "" : "s")} from table.";
     }
 }

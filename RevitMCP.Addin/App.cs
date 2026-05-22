@@ -147,6 +147,7 @@ public class App : IExternalApplication
             var approvalService = new ApprovalService();
             approvalService.SetRedispatch(eventService.Redispatch);
             handler.SetApprovalService(approvalService);
+            handler.SetActivityLogger(logger);
 
             var pipeServer = new PipeServer(RevitMcpDefaults.PipeName, eventService, logger);
             var connector = new ConnectorService(pipeServer, eventService, approvalService);

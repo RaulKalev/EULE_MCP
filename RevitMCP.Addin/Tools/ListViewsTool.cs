@@ -71,10 +71,10 @@ public class ListViewsTool : IRevitMcpTool
             query = query.Where(v => v.Name.Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
 
         var ordered = query.OrderBy(v => v.ViewType.ToString()).ThenBy(v => v.Name);
-        if (limit > 0) ordered = (IOrderedEnumerable<View>)ordered.Take(limit);
+        IEnumerable<View> final = limit > 0 ? ordered.Take(limit) : ordered;
 
         var views = new List<object>();
-        foreach (var v in ordered)
+        foreach (var v in final)
         {
             viewToSheet.TryGetValue(v.Id, out var sheetInfo);
             templateNames.TryGetValue(v.ViewTemplateId, out var templateName);
@@ -83,7 +83,9 @@ public class ListViewsTool : IRevitMcpTool
             if (paramReader != null)
             {
                 var pvals = paramReader.ReadParameters(doc, v, paramReadOpts);
-                extraParams = pvals.ToDictionary(p => p.Name, p => p.Value);
+                var pd = new Dictionary<string, string?>();
+                foreach (var p in pvals) pd[p.Name] = p.Value;
+                extraParams = pd;
             }
 
             var entry = new Dictionary<string, object?>

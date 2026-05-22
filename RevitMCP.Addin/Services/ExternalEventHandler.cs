@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Autodesk.Revit.UI;
 using RevitMCP.Addin.Approval;
 using RevitMCP.Addin.Interfaces;
+using RevitMCP.Addin.Logging;
 using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Services;
@@ -17,6 +18,7 @@ public class ExternalEventHandler : IExternalEventHandler
     private readonly Dictionary<string, IRevitMcpTool> _tools = new();
     private volatile RevitDocumentContext? _lastContext;
     private ApprovalService? _approvalService;
+    private ActivityLogger? _activityLogger;
 
     public string GetName() => "RevitMCP.ExternalEventHandler";
 
@@ -24,6 +26,11 @@ public class ExternalEventHandler : IExternalEventHandler
     /// Wires the approval service. Called once during startup from App.cs.
     /// </summary>
     public void SetApprovalService(ApprovalService service) => _approvalService = service;
+
+    /// <summary>
+    /// Wires the activity logger so post-approval executions are logged.
+    /// </summary>
+    public void SetActivityLogger(ActivityLogger logger) => _activityLogger = logger;
 
     public void RegisterTool(IRevitMcpTool tool)
         => _tools[tool.Name] = tool;
@@ -106,7 +113,7 @@ public class ExternalEventHandler : IExternalEventHandler
                 // so the LLM sees approval_required instead of waiting 5 minutes.
                 var executionTcs = new TaskCompletionSource<McpToolResult>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-                _approvalService.Add(new PendingApprovalRequest
+                _approvalService!.Add(new PendingApprovalRequest
                 {
                     OriginalRequest = request,
                     Completion = executionTcs,
@@ -133,6 +140,9 @@ public class ExternalEventHandler : IExternalEventHandler
                 // The task will complete immediately for read-only tools.
                 var result = tool.ExecuteAsync(app, request, CancellationToken.None).GetAwaiter().GetResult();
                 tcs.TrySetResult(result);
+                // Log post-approval results — the pipe connection is already closed for these.
+                if (request.IsApproved)
+                    _ = _activityLogger?.WriteAsync(request, result, _lastContext);
             }
             catch (Exception ex)
             {
@@ -145,6 +155,8 @@ public class ExternalEventHandler : IExternalEventHandler
                 };
                 try { failResult.Status = "transaction_failed"; } catch (MissingMethodException) { }
                 tcs.TrySetResult(failResult);
+                if (request.IsApproved)
+                    _ = _activityLogger?.WriteAsync(request, failResult, _lastContext);
             }
         }
     }
