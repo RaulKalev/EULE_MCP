@@ -1515,3 +1515,406 @@ Delete sheets with number suffix "_COPY".
 6. `skipSheetsWithViews=true` skips occupied sheets with a per-sheet warning.
 7. Transaction name: `"Revit MCP - Delete Sheets"`.
 8. Revit Undo restores deleted sheets.
+
+
+
+---
+
+## 30. Full MCP Tool Coverage Matrix
+
+This section enumerates every MCP tool exposed by `RevitMCP.Bridge` and describes a one-shot smoke test for an agent to run. The intent is end-to-end runnability without a human present (except for steps explicitly noted as **manual approval**).
+
+**Column legend:**
+- **Permission** — One of `ReadOnly` (RO), `RequiresApproval` (RA), `DestructiveRequiresManualApproval` (DRA). Source: `RevitMCP.Core/Models/ToolPermission.cs`.
+- **Smoke Prompt** — A natural-language prompt to send through the MCP client.
+- **Expected Result** — What success looks like at the JSON layer.
+- **Approval** — Approval behavior expected. `Direct Edit` (DE) **bypasses RA** but **never** bypasses DRA.
+- **Undo** — Revit Undo expectation.
+- **Notes** — Required test data / caveats.
+
+**Baseline ReadOnly expectation (applies to every RO row):** returns valid JSON, does **not** open a Revit transaction, does **not** modify the model, returns a clear error/warning for invalid input (unknown id, empty array, bad parameter name).
+
+**Baseline RequiresApproval expectation:** preview tool first → call writer → `approval_required` returned when Direct Edit is OFF → pending item appears in MCP window → user can approve or reject → on approval a single named Revit transaction commits → Revit Undo reverses it. With Direct Edit ON the same writer executes immediately, no `approval_required`.
+
+**Baseline DestructiveRequiresManualApproval expectation:** preview tool returns dry-run JSON → destructive writer **always** returns `approval_required` (even with Direct Edit ON) → approval summary contains a `DESTRUCTIVE` warning line → on approval a named Revit transaction commits → Revit Undo restores deleted items.
+
+---
+
+### 30.1 Connection & General
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Connection | `revit_get_connection_status` | RO | "Check the Revit MCP connection status." | JSON with `connected: true`, document title, version | N/A | N/A | Requires Revit running, addin loaded, document open |
+| Selection | `revit_get_selected_elements` | RO | "List my currently selected elements in Revit." | Array of `{elementId, category, name}` or empty array | N/A | N/A | Pre-select 1+ elements in Revit before running |
+
+### 30.2 Query & Parameter
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Query | `revit_list_views` | RO | "List the first 50 views." | Array of view dicts with id/name/type/scale | N/A | N/A | — |
+| Query | `revit_list_sheets` | RO | "List all sheets." | Array of `{id, number, name, titleBlockType}` | N/A | N/A | At least 1 sheet recommended |
+| Query | `revit_list_schedules` | RO | "List schedules in the project." | Array of schedule names + ids | N/A | N/A | At least 1 schedule recommended |
+| Query | `revit_count_elements` | RO | "Count elements in category Walls." | `{category, count}` JSON | N/A | N/A | — |
+| Query | `revit_group_by_parameter` | RO | "Group walls by 'Type Name'." | Dictionary of groups with element ids | N/A | N/A | — |
+| Query | `revit_find_elements_by_parameter` | RO | "Find walls where Comments contains 'TEST'." | Filtered element list | N/A | N/A | Requires populated parameter values |
+| Query | `revit_get_elements_info` | RO | "Get info for element id 12345." | Array of `ElementInfoDto` | N/A | N/A | Use a known id from list/count |
+| Query | `revit_group_elements` | RO | "Group selected elements by category." | Grouping result JSON | N/A | N/A | — |
+| Params | `revit_get_element_parameters` | RO | "Show parameters for element 12345." | Array of `{name, value, isReadOnly}` | N/A | N/A | — |
+| Params | `revit_get_available_parameters` | RO | "List parameters available on Walls." | Array of `{name, type, source}` | N/A | N/A | — |
+| Params | `revit_check_parameter_completeness` | RO | "Check which walls are missing 'Fire Rating'." | Stats + list of missing elements | N/A | N/A | — |
+| Presets | `revit_list_query_presets` | RO | "List query presets." | Array of preset names + descriptions | N/A | N/A | Presets live under user data folder |
+| Presets | `revit_run_query_preset` | RO | "Run query preset 'WallAudit'." | Same shape as the underlying query | N/A | N/A | Skip if no presets configured |
+
+### 30.3 Generic Excel Export
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Export | `revit_export_query_to_excel` | RO | "Export a Walls query to Excel." | `{filePath}` of created `.xlsx` | N/A | N/A | File created under export path; no Revit transaction |
+| Export | `revit_export_view_list_to_excel` | RO | "Export the view list to Excel." | `{filePath}` | N/A | N/A | — |
+| Export | `revit_export_sheet_list_to_excel` | RO | "Export the sheet list to Excel." | `{filePath}` | N/A | N/A | — |
+| Export | `revit_export_schedule_list_to_excel` | RO | "Export the schedule list to Excel." | `{filePath}` | N/A | N/A | — |
+
+### 30.4 Selection
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Selection | `revit_select_elements` | RO | "Select elements with ids [12345, 12346]." | `{count}` and elements highlighted in Revit UI | N/A | N/A | Selection is UI-only, not a model change — runs in UI thread but uses no DB transaction |
+| Selection | `revit_select_elements_by_query` | RO | "Select all walls on Level 1." | `{count}` and elements highlighted | N/A | N/A | Same UI-only semantics |
+
+### 30.5 Generic Write
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Write | `revit_set_parameter` | RA | "Set Comments='SMOKE' on element 12345." | Preview-like summary → approval flow → applied | Required (DE bypasses) | Single Undo | Pick a writable, non-instance-locked parameter |
+
+
+### 30.6 Electrical Circuit Discovery
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Electrical | `revit_get_electrical_circuits` | RO | "List all electrical circuits on panel 'LP-1'." | Array of circuit dicts | N/A | N/A | Requires electrical model with a panel |
+| Electrical | `revit_get_circuit_info` | RO | "Get info for circuit id 99999." | Circuit DTO with load/length/panel | N/A | N/A | Use a circuit id from list call |
+| Electrical | `revit_get_available_panels` | RO | "List panels in the model." | Array of panels with id/name/voltage | N/A | N/A | Requires at least 1 panel |
+| Electrical | `revit_get_available_cable_types` | RO | "List cable types." | Array of cable types | N/A | N/A | — |
+| Electrical | `revit_get_available_wire_types` | RO | "List wire types." | Array of wire types | N/A | N/A | — |
+| Electrical | `revit_get_circuit_compatible_elements` | RO | "List elements compatible with circuit id 99999." | Array of element refs | N/A | N/A | — |
+| Electrical | `revit_find_uncircuited_elements` | RO | "Find uncircuited Lighting Fixtures." | Array of element refs | N/A | N/A | Useful even if empty |
+| Electrical | `revit_find_circuits_by_element_parameter` | RO | "Find circuits where 'Load Name' contains 'EXIT'." | Array of circuits | N/A | N/A | — |
+| Electrical | `revit_trace_circuit` | RO | "Trace circuit id 99999." | Tree of element/panel relationships | N/A | N/A | — |
+| Electrical | `revit_check_circuit_parameter_completeness` | RO | "Check circuit parameter completeness on panel 'LP-1'." | Stats + missing list | N/A | N/A | — |
+| Electrical | `revit_get_circuits_for_selected_elements` | RO | "Get circuits for my selected elements." | Array of circuits | N/A | N/A | Pre-select elements |
+| Electrical | `revit_find_elements_on_circuit` | RO | "List elements on circuit id 99999." | Array of element refs | N/A | N/A | — |
+| Electrical | `revit_get_circuit_load_summary` | RO | "Show load summary for panel 'LP-1'." | Aggregated load JSON | N/A | N/A | — |
+| Electrical | `revit_check_panel_utilization` | RO | "Check utilization for panel 'LP-1'." | Utilization stats | N/A | N/A | — |
+| Electrical | `revit_check_circuit_health` | RO | "Run circuit health check on panel 'LP-1'." | Issues array | N/A | N/A | — |
+
+### 30.7 Electrical Circuit Modification
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Electrical | `revit_create_electrical_circuit` | RA | "Create a 1-phase 20A circuit on panel 'LP-1' with elements [id1,id2]." | Preview summary → approval flow → new circuit id | Required (DE bypasses) | Single Undo | Use compatible elements from `get_circuit_compatible_elements` |
+| Electrical | `revit_add_elements_to_circuit` | RA | "Add element 12345 to circuit id 99999." | Approval flow → updated circuit | Required (DE bypasses) | Single Undo | — |
+| Electrical | `revit_reassign_circuit_panel` | RA | "Reassign circuit 99999 to panel 'LP-2'." | Approval flow → circuit moved | Required (DE bypasses) | Single Undo | Requires 2 panels |
+| Electrical | `revit_change_circuit_cable_or_wire_type` | RA | "Change cable type of circuit 99999 to 'THHN-12'." | Approval flow → type changed | Required (DE bypasses) | Single Undo | Cable type must exist in model |
+| Electrical | `revit_set_circuit_parameter` | RA | "Set Comments='SMOKE' on circuit 99999." | Approval flow → parameter set | Required (DE bypasses) | Single Undo | — |
+| Electrical | `revit_set_circuit_parameters_bulk` | RA | "Set Comments='SMOKE' on circuits [99999, 99998]." | Approval summary lists circuit count + parameter count → flow → applied | Required (DE bypasses) | Single Undo | — |
+
+### 30.8 Electrical Numbering & Load Names
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Electrical | `revit_preview_circuit_numbering` | RO | "Preview renumbering circuits on panel 'LP-1' starting at 1." | Dry-run mapping `{circuitId → newNumber}` | N/A | N/A | — |
+| Electrical | `revit_apply_circuit_numbering` | RA | "Apply that renumbering preview." | Approval flow → numbers committed | Required (DE bypasses) | Single Undo | Run preview first |
+| Electrical | `revit_preview_circuit_load_names` | RO | "Preview load name updates on panel 'LP-1'." | Dry-run mapping | N/A | N/A | — |
+| Electrical | `revit_apply_circuit_load_names` | RA | "Apply that load-name preview." | Approval flow → load names committed | Required (DE bypasses) | Single Undo | Run preview first |
+
+### 30.9 Electrical Selection
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Electrical | `revit_select_circuit_elements` | RA | "Select all elements on circuit 99999." | Approval flow → UI selection updated | Required (DE bypasses) | N/A (UI-only) | Marked RA in addin; no model change but classified as RA |
+| Electrical | `revit_select_uncircuited_elements` | RA | "Select all uncircuited Lighting Fixtures." | Approval flow → UI selection updated | Required (DE bypasses) | N/A (UI-only) | Same UI-only semantics |
+
+### 30.10 Electrical Excel Export
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Export | `revit_export_panel_circuit_list_to_excel` | RO | "Export panel 'LP-1' circuit list to Excel." | `{filePath}` | N/A | N/A | — |
+| Export | `revit_export_circuit_health_to_excel` | RO | "Export circuit health for panel 'LP-1' to Excel." | `{filePath}` | N/A | N/A | — |
+| Export | `revit_export_uncircuited_elements_to_excel` | RO | "Export uncircuited Lighting Fixtures to Excel." | `{filePath}` | N/A | N/A | — |
+
+### 30.11 Electrical Dashboard
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Dashboard | `revit_get_electrical_dashboard_summary` | RO | "Show electrical dashboard summary." | Aggregated panel/circuit/load JSON | N/A | N/A | — |
+| Dashboard | `revit_get_panel_issue_summary` | RO | "Show panel issue summary." | Per-panel issue counts | N/A | N/A | — |
+| Dashboard | `revit_export_electrical_dashboard_to_excel` | RO | "Export the electrical dashboard to Excel." | `{filePath}` | N/A | N/A | — |
+
+### 30.12 Voltage-Drop Preparation
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| VDrop | `revit_get_circuit_route_assumptions` | RO | "Show circuit route assumptions." | Assumption JSON | N/A | N/A | — |
+| VDrop | `revit_estimate_circuit_length` | RO | "Estimate length for circuit 99999." | `{length, method, assumptions}` | N/A | N/A | — |
+| VDrop | `revit_estimate_circuit_lengths` | RO | "Estimate lengths for circuits on panel 'LP-1'." | Array of `{circuitId, length}` | N/A | N/A | — |
+| VDrop | `revit_export_voltage_drop_input_to_excel` | RO | "Export voltage-drop input for panel 'LP-1' to Excel." | `{filePath}` | N/A | N/A | — |
+| VDrop | `revit_get_voltage_drop_precheck` | RO | "Run voltage-drop precheck on panel 'LP-1'." | Per-circuit precheck JSON | N/A | N/A | — |
+
+### 30.13 Fire Alarm / ATS Preset
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| FireAlarm | `revit_run_fire_alarm_circuit_preset` | RO | "Run the fire alarm circuit preset on panel 'FACP'." | Preset result JSON | N/A | N/A | Requires fire alarm panel naming convention |
+| FireAlarm | `revit_export_fire_alarm_circuit_preset_to_excel` | RO | "Export the fire alarm preset for panel 'FACP' to Excel." | `{filePath}` | N/A | N/A | — |
+| FireAlarm | `revit_get_fire_alarm_visualization_data` | RO | "Get fire alarm visualization data for panel 'FACP'." | Visualization JSON | N/A | N/A | HTML export tool is deferred — see Special Notes |
+| FireAlarm | `revit_get_fire_alarm_voltage_drop_summary` | RO | "Get fire alarm voltage drop summary for panel 'FACP'." | Summary JSON | N/A | N/A | — |
+
+### 30.14 Cable Resistance Profiles
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Profiles | `revit_list_cable_resistance_profiles` | RO | "List cable resistance profiles." | Array of profile entries | N/A | N/A | Profiles ship with the addin |
+| Profiles | `revit_get_matching_cable_resistance_profile` | RO | "Match resistance profile for THHN-12 copper." | Matched profile or null + reason | N/A | N/A | — |
+
+
+### 30.15 Documentation Discovery
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Docs | `revit_list_titleblocks` | RO | "List title block types." | Array of `{id, family, type}` | N/A | N/A | At least 1 title block family required |
+| Docs | `revit_list_view_templates` | RO | "List view templates." | Array of `{id, name, viewType}` | N/A | N/A | — |
+| Docs | `revit_list_revisions` | RO | "List project revisions." | Array of `{id, sequenceNumber, description, date, issued}` | N/A | N/A | Empty array OK |
+| Docs | `revit_list_revision_numbering_sequences` | RO | "List revision numbering sequences." | Array of sequence configs | N/A | N/A | — |
+| Docs | `revit_get_sheet_revisions` | RO | "Show revisions on sheet number 'A-101'." | Per-sheet revision array | N/A | N/A | Cloud revision note: results reflect what the model can see — see Special Notes |
+| Docs | `revit_get_sheet_viewports` | RO | "List viewports on sheet 'A-101'." | Array of `{viewportId, viewId, viewName, position}` | N/A | N/A | — |
+| Docs | `revit_find_unplaced_views` | RO | "Find views not placed on any sheet." | Array of view refs | N/A | N/A | `viewTypes` filter respected; DrawingSheet excluded |
+| Docs | `revit_get_view_sheet_summary` | RO | "Get the view/sheet summary." | Counts + sample arrays | N/A | N/A | — |
+
+### 30.16 PlaceViews Workflow Preset
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Preset | `revit_list_view_sheet_presets` | RO | "List view/sheet workflow presets." | Array of preset summaries | N/A | N/A | Presets live under user data folder |
+| Preset | `revit_get_view_sheet_preset` | RO | "Get preset 'AutoPlaceFloorPlans'." | Full preset JSON | N/A | N/A | — |
+| Preset | `revit_validate_view_sheet_preset` | RO | "Validate preset 'AutoPlaceFloorPlans'." | `{valid, issues[]}` | N/A | N/A | — |
+| Preset | `revit_run_view_sheet_workflow_preset` | RO | "Run preset 'AutoPlaceFloorPlans' as dry-run." | Dry-run summary (no transaction) | N/A | N/A | Preset runner itself is RO; underlying writers go through their own RA flow |
+
+### 30.17 Documentation Preview
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Docs | `revit_preview_place_views_on_sheets` | RO | "Preview placing unplaced FloorPlans on new sheets." | Dry-run sheet/view assignments | N/A | N/A | — |
+| Docs | `revit_preview_duplicate_sheets` | RO | "Preview duplicating sheets ['A-101']." | Dry-run `{source → target}` list | N/A | N/A | — |
+| Docs | `revit_preview_create_sheets_from_table` | RO | "Preview creating sheets from a 3-row table." | Dry-run with row count and per-row validation | N/A | N/A | Row counter handles JArray/object[]/string |
+| Docs | `revit_preview_duplicate_views` | RO | "Preview duplicating views [12345]." | Dry-run mapping | N/A | N/A | — |
+| Docs | `revit_preview_rename_views` | RO | "Preview renaming views matching pattern 'OLD_*' to 'NEW_*'." | Dry-run mapping | N/A | N/A | — |
+| Docs | `revit_preview_rename_sheets` | RO | "Preview renaming sheets matching 'A-1*' to add suffix '_R1'." | Dry-run mapping | N/A | N/A | — |
+
+### 30.18 Documentation Write
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Docs | `revit_place_views_on_sheets` | RA | "Place those previewed views on those sheets." | Approval flow → views placed | Required (DE bypasses) | Single Undo | Run preview first |
+| Docs | `revit_duplicate_sheets` | RA | "Duplicate sheets ['A-101'] with suffix '_COPY'." | Approval flow → new sheets created | Required (DE bypasses) | Single Undo | — |
+| Docs | `revit_create_sheets_from_table` | RA | "Create sheets from this 3-row table." | Approval summary shows row count → flow → sheets created | Required (DE bypasses) | Single Undo | Row count must match input rows |
+| Docs | `revit_duplicate_views` | RA | "Duplicate views [12345] with suffix '_COPY'." | Approval flow → new views created | Required (DE bypasses) | Single Undo | — |
+| Docs | `revit_apply_view_template` | RA | "Apply view template id 67890 to FloorPlans matching 'L1_*'." | Approval summary lists template name + filter + matched view count → flow → applied | Required (DE bypasses) | Single Undo | Summary uses `viewTemplateId` + filters |
+| Docs | `revit_set_sheet_parameters_bulk` | RA | "Set Drawn By='SMOKE' on sheets [A-101, A-102]." | Approval summary lists sheet count + parameter count → flow → applied | Required (DE bypasses) | Single Undo | Parameter count via `CountDictionary()` |
+| Docs | `revit_set_view_parameters_bulk` | RA | "Set Discipline='Architectural' on views [12345, 12346]." | Approval summary lists view count + parameter count → flow → applied | Required (DE bypasses) | Single Undo | Parameter count via `CountDictionary()` |
+| Docs | `revit_rename_views` | RA | "Rename views matching 'OLD_*' to 'NEW_*'." | Approval flow → views renamed | Required (DE bypasses) | Single Undo | Run preview first |
+| Docs | `revit_rename_sheets` | RA | "Rename sheets matching 'A-1*' adding suffix '_R1'." | Approval flow → sheets renamed | Required (DE bypasses) | Single Undo | Run preview first |
+
+### 30.19 Documentation Destructive
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Docs | `revit_preview_delete_views` | RO | "Preview deleting views ['L1_DEMO_COPY']." | Dry-run with placement/dependency warnings | N/A | N/A | `emptyDetailOnly` guard prevents accidental scope creep |
+| Docs | `revit_delete_views` | **DRA** | "Delete views ['L1_DEMO_COPY']." | `approval_required` even with DE on → summary contains `DESTRUCTIVE` line | **Manual approval ALWAYS required** | Revit Undo restores | DE never bypasses |
+| Docs | `revit_preview_delete_sheets` | RO | "Preview deleting sheets with suffix '_COPY'." | Dry-run with `skipSheetsWithViews` honored | N/A | N/A | — |
+| Docs | `revit_delete_sheets` | **DRA** | "Delete sheets with suffix '_COPY'." | `approval_required` even with DE on → summary contains `DESTRUCTIVE` line | **Manual approval ALWAYS required** | Revit Undo restores | DE never bypasses |
+
+---
+
+**Coverage check:** This matrix covers **97/97** registered MCP tools (verified by enumerating `RevitMCP.Bridge/RevitMcpTools.cs` and `RevitMCP.Addin/Tools/*.cs`). Bridge tool names and addin `Name` properties are in 1:1 parity.
+
+
+---
+
+## 31. Agent Test Run Result Template
+
+When an agent runs the Section 30 matrix, it should record one row per tool in a results table with the columns below. Use the **allowed Result values** verbatim so reports stay grep-friendly.
+
+**Allowed `Result` values (use exactly one):**
+- `Pass`
+- `Fail`
+- `Skipped - model data missing`
+- `Skipped - destructive action not approved`
+- `Skipped - requires manual setup`
+- `Blocked - connector issue`
+
+**Result table template:**
+
+| Tool | Tested | Result | Notes | Error | ApprovalBehavior | UndoBehavior |
+|------|--------|--------|-------|-------|------------------|--------------|
+| `revit_get_connection_status` | Yes | Pass | Connected to test model `RevitMCP_TestModel.rvt` | — | N/A | N/A |
+| `revit_list_views` | Yes | Pass | Returned 42 views | — | N/A | N/A |
+| `revit_set_parameter` | Yes | Pass | Set Comments='SMOKE' on Wall id 12345 | — | Approval received, applied on accept | Single Undo reversed change |
+| `revit_delete_views` | Yes | Pass | DRA: DE on, still required manual approval; `DESTRUCTIVE` warning present | — | Manual approval received | Revit Undo restored view |
+| `revit_run_fire_alarm_circuit_preset` | No | Skipped - model data missing | No fire alarm panel in test model | — | — | — |
+| `revit_create_electrical_circuit` | No | Skipped - destructive action not approved | Reviewer rejected approval to test rollback | — | Rejected pending item; model unchanged | N/A |
+| `revit_export_query_to_excel` | Yes | Blocked - connector issue | Bridge returned `transport-closed` mid-call | `transport-closed` | — | — |
+
+**Column rules:**
+- **Tool** — Exact MCP tool name (with `revit_` prefix), wrapped in backticks.
+- **Tested** — `Yes` if the tool was invoked, `No` if it was skipped.
+- **Result** — One of the six allowed values above.
+- **Notes** — One-line context (test data used, observed behavior).
+- **Error** — Exact error string if `Fail` or `Blocked`, else `—`.
+- **ApprovalBehavior** — For RA/DRA tools: did the approval flow behave per the Section 30 baseline? `N/A` for RO.
+- **UndoBehavior** — Did Revit Undo reverse the change as expected? `N/A` if no transaction (RO, UI-only selection).
+
+**Run mode notes:**
+- Record whether Direct Edit was **ON** or **OFF** for each writer test. The matrix expects both modes to be smoke-tested for at least one RA tool and the DRA pair (`revit_delete_views`, `revit_delete_sheets`).
+- For DRA tools, run the test twice: once with DE OFF, once with DE ON. Both must return `approval_required` for `Pass`.
+
+
+---
+
+## 32. Recommended Test Model Setup
+
+To exercise the entire Section 30 matrix without manual setup between tools, the test Revit model should contain (at minimum) the following data. Mark missing items as `Skipped - model data missing` rather than `Fail`.
+
+### 32.1 General
+
+- A saved `.rvt` file (any Revit 2026 template will do) named something like `RevitMCP_TestModel.rvt`.
+- At least one **Level** and one **Floor Plan view** placed on a sheet.
+- At least one **Title Block** family loaded.
+- At least one **Sheet** with the loaded title block.
+- At least one **View Template**.
+
+### 32.2 Walls / Generic Elements (Query & Parameter tests)
+
+- ~10 walls of mixed types so `count_elements`, `group_by_parameter`, `find_elements_by_parameter`, and `check_parameter_completeness` return meaningful data.
+- Populate `Comments` on at least one wall (used by `find_elements_by_parameter` and `set_parameter` tests).
+
+### 32.3 Electrical
+
+- At least **2 Electrical Panels** named e.g. `LP-1` and `LP-2` so `reassign_circuit_panel` can move a circuit between them.
+- At least **3 Electrical Equipment / Lighting Fixtures / Receptacles** that can host a circuit (verified via `get_circuit_compatible_elements`).
+- At least **1 existing circuit** on `LP-1` so the discovery and modification tools have a target id.
+- At least **1 uncircuited Lighting Fixture** so `find_uncircuited_elements` returns a non-empty result.
+- A **Cable Type** matching one of the cable resistance profiles shipped with the addin (so `get_matching_cable_resistance_profile` returns a hit).
+
+### 32.4 Fire Alarm (optional but recommended)
+
+- At least **1 panel** named to match the project's fire alarm preset convention (e.g. `FACP`). If absent, mark Section 30.13 rows as `Skipped - model data missing`.
+
+### 32.5 Documentation
+
+- At least **2 sheets** so duplicate/rename/delete preview operations have material.
+- At least **1 unplaced view** so `find_unplaced_views` returns a non-empty result.
+- At least **1 sheet with a placed viewport** so `get_sheet_viewports` returns rows.
+- A **revision** added to the project (issued or pending) so `list_revisions`, `list_revision_numbering_sequences`, and `get_sheet_revisions` return non-empty data.
+
+### 32.6 Presets
+
+- At least **1 query preset** under the user data folder so `list_query_presets` / `run_query_preset` are exercised. If none, mark as `Skipped - requires manual setup`.
+- At least **1 view-sheet workflow preset** so `list_view_sheet_presets` / `get_view_sheet_preset` / `validate_view_sheet_preset` / `run_view_sheet_workflow_preset` return data. If none, mark as `Skipped - requires manual setup`.
+
+### 32.7 Direct Edit Coverage
+
+The agent should run the matrix **twice**:
+1. **Direct Edit OFF** — verifies every RA tool returns `approval_required` and that the pending-approval queue, approve/reject, and Undo all work.
+2. **Direct Edit ON** — verifies every RA tool executes immediately (no `approval_required`), and verifies that **DRA tools still require manual approval** (`revit_delete_views`, `revit_delete_sheets`).
+
+### 32.8 Recommended Save State Between Runs
+
+- After each writer test that succeeds, immediately invoke Revit Undo and **do not save**. This keeps the test model reusable for the next pass.
+- For destructive tests, save a copy of the model before running so the `Undo` step can be verified by file-diff if Revit Undo is unavailable.
+
+---
+
+## 33. Special Notes / Deferred Features
+
+The following items are intentionally **not** covered in the Section 30 matrix because they are not registered as MCP tools at this time:
+
+- **`revit_export_fire_alarm_visualization_html`** — Mentioned in earlier design notes but not registered in `RevitMCP.Bridge/RevitMcpTools.cs` or `RevitMCP.Addin/App.cs`. The JSON-only `revit_get_fire_alarm_visualization_data` is the supported path; HTML export remains deferred.
+- **`EmptyDetailOnly` option for delete tools** — Implemented as a safety guard inside `preview_delete_views` / `delete_views` but not exposed as a standalone tool. No separate matrix row needed.
+- **`revit_create_sheets_from_preset`** — Considered during the preset work but not implemented. The current path is `revit_create_sheets_from_table` (already in Section 30.18) which accepts an inline table or preset payload.
+
+**Known classification quirks (intentional, do not "fix" without coordination):**
+- `revit_select_elements` and `revit_select_elements_by_query` are marked `ReadOnly` in the addin even though they change the Revit UI selection. They do not open a DB transaction, so they cannot be Undone.
+- `revit_select_circuit_elements` and `revit_select_uncircuited_elements` are marked `RequiresApproval` for symmetry with other electrical-domain writers, even though they also only touch the UI selection.
+- The view/sheet workflow preset runner (`revit_run_view_sheet_workflow_preset`) is itself `ReadOnly` (dry-run by default). Any actual writes happen through the individual RA writers, each of which goes through its own approval flow.
+
+
+---
+
+## 32. Recommended Test Model Setup
+
+To exercise the entire Section 30 matrix without manual setup between tools, the test Revit model should contain (at minimum) the following data. Mark missing items as `Skipped - model data missing` rather than `Fail`.
+
+### 32.1 General
+
+- A saved `.rvt` file (any Revit 2026 template will do) named something like `RevitMCP_TestModel.rvt`.
+- At least one **Level** and one **Floor Plan view** placed on a sheet.
+- At least one **Title Block** family loaded.
+- At least one **Sheet** with the loaded title block.
+- At least one **View Template**.
+
+### 32.2 Walls / Generic Elements (Query & Parameter tests)
+
+- ~10 walls of mixed types so `count_elements`, `group_by_parameter`, `find_elements_by_parameter`, and `check_parameter_completeness` return meaningful data.
+- Populate `Comments` on at least one wall (used by `find_elements_by_parameter` and `set_parameter` tests).
+
+### 32.3 Electrical
+
+- At least **2 Electrical Panels** named e.g. `LP-1` and `LP-2` so `reassign_circuit_panel` can move a circuit between them.
+- At least **3 Electrical Equipment / Lighting Fixtures / Receptacles** that can host a circuit (verified via `get_circuit_compatible_elements`).
+- At least **1 existing circuit** on `LP-1` so the discovery and modification tools have a target id.
+- At least **1 uncircuited Lighting Fixture** so `find_uncircuited_elements` returns a non-empty result.
+- A **Cable Type** matching one of the cable resistance profiles shipped with the addin (so `get_matching_cable_resistance_profile` returns a hit).
+
+### 32.4 Fire Alarm (optional but recommended)
+
+- At least **1 panel** named to match the project's fire alarm preset convention (e.g. `FACP`). If absent, mark Section 30.13 rows as `Skipped - model data missing`.
+
+### 32.5 Documentation
+
+- At least **2 sheets** so duplicate/rename/delete preview operations have material.
+- At least **1 unplaced view** so `find_unplaced_views` returns a non-empty result.
+- At least **1 sheet with a placed viewport** so `get_sheet_viewports` returns rows.
+- A **revision** added to the project (issued or pending) so `list_revisions`, `list_revision_numbering_sequences`, and `get_sheet_revisions` return non-empty data.
+
+### 32.6 Presets
+
+- At least **1 query preset** under the user data folder so `list_query_presets` / `run_query_preset` are exercised. If none, mark as `Skipped - requires manual setup`.
+- At least **1 view-sheet workflow preset** so `list_view_sheet_presets` / `get_view_sheet_preset` / `validate_view_sheet_preset` / `run_view_sheet_workflow_preset` return data. If none, mark as `Skipped - requires manual setup`.
+
+### 32.7 Direct Edit Coverage
+
+The agent should run the matrix **twice**:
+1. **Direct Edit OFF** — verifies every RA tool returns `approval_required` and that the pending-approval queue, approve/reject, and Undo all work.
+2. **Direct Edit ON** — verifies every RA tool executes immediately (no `approval_required`), and verifies that **DRA tools still require manual approval** (`revit_delete_views`, `revit_delete_sheets`).
+
+### 32.8 Recommended Save State Between Runs
+
+- After each writer test that succeeds, immediately invoke Revit Undo and **do not save**. This keeps the test model reusable for the next pass.
+- For destructive tests, save a copy of the model before running so the `Undo` step can be verified by file-diff if Revit Undo is unavailable.
+
+---
+
+## 33. Special Notes / Deferred Features
+
+The following items are intentionally **not** covered in the Section 30 matrix because they are not registered as MCP tools at this time:
+
+- **`revit_export_fire_alarm_visualization_html`** — Mentioned in earlier design notes but not registered in `RevitMCP.Bridge/RevitMcpTools.cs` or `RevitMCP.Addin/App.cs`. The JSON-only `revit_get_fire_alarm_visualization_data` is the supported path; HTML export remains deferred.
+- **`EmptyDetailOnly` option for delete tools** — Implemented as a safety guard inside `preview_delete_views` / `delete_views` but not exposed as a standalone tool. No separate matrix row needed.
+- **`revit_create_sheets_from_preset`** — Considered during the preset work but not implemented. The current path is `revit_create_sheets_from_table` (already in Section 30.18) which accepts an inline table or preset payload.
+
+**Known classification quirks (intentional, do not "fix" without coordination):**
+- `revit_select_elements` and `revit_select_elements_by_query` are marked `ReadOnly` in the addin even though they change the Revit UI selection. They do not open a DB transaction, so they cannot be Undone.
+- `revit_select_circuit_elements` and `revit_select_uncircuited_elements` are marked `RequiresApproval` for symmetry with other electrical-domain writers, even though they also only touch the UI selection.
+- The view/sheet workflow preset runner (`revit_run_view_sheet_workflow_preset`) is itself `ReadOnly` (dry-run by default). Any actual writes happen through the individual RA writers, each of which goes through its own approval flow.
+
