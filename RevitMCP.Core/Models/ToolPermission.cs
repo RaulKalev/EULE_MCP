@@ -4,5 +4,7 @@ public enum ToolPermission
 {
     ReadOnly,
     RequiresApproval,
-    DirectEdit
+    DirectEdit,
+    /// <summary>Destructive operation — always requires manual approval even when Direct Edit mode is on.</summary>
+    DestructiveRequiresManualApproval
 }

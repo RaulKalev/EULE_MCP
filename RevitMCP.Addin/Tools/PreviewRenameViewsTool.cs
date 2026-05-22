@@ -1,0 +1,108 @@
+using System.Diagnostics;
+using Autodesk.Revit.DB;
+using Autodesk.Revit.UI;
+using RevitMCP.Addin.Documentation.Naming;
+using RevitMCP.Addin.Interfaces;
+using RevitMCP.Core.Models;
+
+namespace RevitMCP.Addin.Tools;
+
+public class PreviewRenameViewsTool : IRevitMcpTool
+{
+    public string Name => "revit_preview_rename_views";
+    public string Description =>
+        "Previews view renames WITHOUT making changes. " +
+        "Required: viewIds (long array) OR viewTypes+nameFilter to select views, " +
+        "mode (FindReplace|PrefixSuffix|Template|RegexFindReplace). " +
+        "Mode params: find, replace (FindReplace/Regex), prefix, suffix (PrefixSuffix), template with {Name} (Template). " +
+        "Optional: viewTypes (string array), nameFilter (string). " +
+        "Returns proposals: viewId, currentName, newName, willChange (bool).";
+    public ToolPermission Permission => ToolPermission.ReadOnly;
+    public ToolCategory Category => ToolCategory.Documentation;
+
+    public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
+    {
+        var sw  = Stopwatch.StartNew();
+        var doc = uiapp.ActiveUIDocument?.Document;
+        if (doc == null)
+            return Task.FromResult(new McpToolResult { RequestId = request.RequestId, Success = false, Message = "No active document." });
+
+        var viewIds    = ToolArguments.GetLongArray(request.Arguments, "viewIds");
+        var mode       = ToolArguments.GetString(request.Arguments, "mode");
+        var find       = ToolArguments.GetString(request.Arguments, "find");
+        var replace    = ToolArguments.GetString(request.Arguments, "replace");
+        var prefix     = ToolArguments.GetString(request.Arguments, "prefix");
+        var suffix     = ToolArguments.GetString(request.Arguments, "suffix");
+        var template   = ToolArguments.GetString(request.Arguments, "template");
+        var nameFilter = ToolArguments.GetString(request.Arguments, "nameFilter");
+        var viewTypes  = ToolArguments.GetStringArray(request.Arguments, "viewTypes");
+
+        var modeError = RenameEngine.ValidateMode(mode);
+        if (modeError != null)
+            return Task.FromResult(new McpToolResult { RequestId = request.RequestId, Success = false, Message = modeError });
+
+        IEnumerable<View> views;
+        if (viewIds.Length > 0)
+        {
+            views = viewIds
+                .Select(id => doc.GetElement(new ElementId(id)) as View)
+                .Where(v => v != null)!;
+        }
+        else
+        {
+            views = new FilteredElementCollector(doc)
+                .OfClass(typeof(View))
+                .Cast<View>()
+                .Where(v => !v.IsTemplate);
+
+            if (viewTypes.Length > 0)
+                views = views.Where(v => viewTypes.Any(vt =>
+                    string.Equals(v.ViewType.ToString(), vt, StringComparison.OrdinalIgnoreCase)));
+            if (!string.IsNullOrWhiteSpace(nameFilter))
+                views = views.Where(v => v.Name.Contains(nameFilter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var existingNames = new FilteredElementCollector(doc)
+            .OfClass(typeof(View))
+            .Cast<View>()
+            .Select(v => v.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var proposals   = new List<object>();
+        var warnings    = new List<string>();
+        int changeCount = 0;
+
+        foreach (var v in views)
+        {
+            var proposed = RenameEngine.Apply(v.Name, mode, find, replace, prefix, suffix, template);
+            bool willChange = proposed != null;
+
+            if (willChange && existingNames.Contains(proposed!))
+            {
+                warnings.Add($"Proposed name '{proposed}' for view '{v.Name}' already exists.");
+                willChange = false;
+            }
+            if (willChange) changeCount++;
+
+            proposals.Add(new
+            {
+                viewId      = v.Id.Value,
+                viewType    = v.ViewType.ToString(),
+                currentName = v.Name,
+                newName     = proposed ?? v.Name,
+                willChange
+            });
+        }
+
+        sw.Stop();
+        return Task.FromResult(new McpToolResult
+        {
+            RequestId  = request.RequestId,
+            Success    = true,
+            Message    = $"Preview: {changeCount}/{proposals.Count} view(s) would be renamed.",
+            Data       = new { total = proposals.Count, willChange = changeCount, proposals },
+            Warnings   = warnings,
+            DurationMs = sw.ElapsedMilliseconds
+        });
+    }
+}

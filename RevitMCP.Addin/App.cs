@@ -109,6 +109,39 @@ public class App : IExternalApplication
             handler.RegisterTool(new ListCableResistanceProfilesTool());
             handler.RegisterTool(new GetMatchingCableResistanceProfileTool());
 
+            // View / Sheet / Documentation (Phase 1 — Discovery)
+            handler.RegisterTool(new ListTitleBlocksTool());
+            handler.RegisterTool(new ListViewTemplatesTool());
+            handler.RegisterTool(new ListRevisionsTool());
+            handler.RegisterTool(new GetSheetViewportsTool());
+            handler.RegisterTool(new FindUnplacedViewsTool());
+            handler.RegisterTool(new GetViewSheetSummaryTool());
+
+            // View / Sheet / Documentation (Phase 2 — Preview)
+            handler.RegisterTool(new PreviewPlaceViewsOnSheetsTool());
+            handler.RegisterTool(new PreviewDuplicateSheetsTool());
+            handler.RegisterTool(new PreviewCreateSheetsFromTableTool());
+            handler.RegisterTool(new PreviewDuplicateViewsTool());
+            handler.RegisterTool(new PreviewRenameViewsTool());
+            handler.RegisterTool(new PreviewRenameSheetsTool());
+
+            // View / Sheet / Documentation (Phase 3 — Write)
+            handler.RegisterTool(new PlaceViewsOnSheetsTool());
+            handler.RegisterTool(new DuplicateSheetsTool());
+            handler.RegisterTool(new CreateSheetsFromTableTool());
+            handler.RegisterTool(new DuplicateViewsTool());
+            handler.RegisterTool(new ApplyViewTemplateTool());
+            handler.RegisterTool(new SetSheetParametersBulkTool());
+            handler.RegisterTool(new SetViewParametersBulkTool());
+            handler.RegisterTool(new RenameViewsTool());
+            handler.RegisterTool(new RenameSheetsTool());
+
+            // View / Sheet / Documentation (Phase 4 — Destructive)
+            handler.RegisterTool(new PreviewDeleteViewsTool());
+            handler.RegisterTool(new DeleteViewsTool());
+            handler.RegisterTool(new PreviewDeleteSheetsTool());
+            handler.RegisterTool(new DeleteSheetsTool());
+
             var eventService = new ExternalEventService(handler);
 
             var approvalService = new ApprovalService();

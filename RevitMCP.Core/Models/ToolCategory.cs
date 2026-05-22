@@ -11,5 +11,6 @@ public enum ToolCategory
     Reports,
     Elements,
     Worksharing,
-    Electrical
+    Electrical,
+    Documentation
 }

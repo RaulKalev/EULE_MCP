@@ -87,14 +87,17 @@ public class ExternalEventHandler : IExternalEventHandler
                 continue;
             }
 
-            // Intercept RequiresApproval tools — defer execution until user approves in the UI.
+            // Intercept RequiresApproval / DestructiveRequiresManualApproval tools —
+            // defer execution until user approves in the UI.
             // Approved requests (re-dispatched after user clicks Approve) skip this check.
-            // Direct Edit mode bypasses approval entirely.
+            // Direct Edit mode bypasses RequiresApproval, but NEVER bypasses Destructive.
             var isDirectEditEnabled = RevitMCP.Addin.App.GetViewModel()?.IsDirectEditEnabled ?? false;
-            if (tool.Permission == ToolPermission.RequiresApproval
+            var needsApproval =
+                ((tool.Permission == ToolPermission.RequiresApproval && !isDirectEditEnabled)
+                 || tool.Permission == ToolPermission.DestructiveRequiresManualApproval)
                 && !request.IsApproved
-                && _approvalService != null
-                && !isDirectEditEnabled)
+                && _approvalService != null;
+            if (needsApproval)
             {
                 var summary = ApprovalSummaryBuilder.Build(request);
 
