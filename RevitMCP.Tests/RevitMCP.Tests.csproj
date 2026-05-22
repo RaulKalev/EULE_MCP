@@ -22,5 +22,15 @@
     <Compile Include="..\RevitMCP.Addin\Electrical\CircuitLengthEstimator.cs" Link="Electrical\CircuitLengthEstimator.cs" />
     <Compile Include="..\RevitMCP.Addin\Electrical\CableResistanceProfileService.cs" Link="Electrical\CableResistanceProfileService.cs" />
     <Compile Include="..\RevitMCP.Addin\Electrical\FireAlarmLoopClassifier.cs" Link="Electrical\FireAlarmLoopClassifier.cs" />
+    <!-- Coordination / Clash Detection — pure-logic files only (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\Coordination\Clash\DTOs\ClashElementRefDto.cs" Link="Coordination\Clash\DTOs\ClashElementRefDto.cs" />
+    <Compile Include="..\RevitMCP.Addin\Coordination\Clash\DTOs\ClashResultDto.cs" Link="Coordination\Clash\DTOs\ClashResultDto.cs" />
+    <Compile Include="..\RevitMCP.Addin\Coordination\Clash\DTOs\ClashRuleDto.cs" Link="Coordination\Clash\DTOs\ClashRuleDto.cs" />
+    <Compile Include="..\RevitMCP.Addin\Coordination\Clash\DTOs\ClashPresetDto.cs" Link="Coordination\Clash\DTOs\ClashPresetDto.cs" />
+    <Compile Include="..\RevitMCP.Addin\Coordination\Clash\DTOs\ClashRunResultDto.cs" Link="Coordination\Clash\DTOs\ClashRunResultDto.cs" />
+    <Compile Include="..\RevitMCP.Addin\Coordination\Clash\Geometry\ClashBoundingBoxMath.cs" Link="Coordination\Clash\Geometry\ClashBoundingBoxMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Coordination\Clash\Services\ClashSummaryService.cs" Link="Coordination\Clash\Services\ClashSummaryService.cs" />
+    <Compile Include="..\RevitMCP.Addin\Coordination\Clash\Services\ClashPresetService.cs" Link="Coordination\Clash\Services\ClashPresetService.cs" />
+    <Compile Include="..\RevitMCP.Addin\Coordination\Clash\Services\ClashRunCacheService.cs" Link="Coordination\Clash\Services\ClashRunCacheService.cs" />
   </ItemGroup>
 </Project>

@@ -2,10 +2,11 @@
 
 A local [Model Context Protocol](https://modelcontextprotocol.io) connector that lets **Claude Code** and **Codex** interrogate and work with a live **Autodesk Revit 2026** model in real time.
 
-**97 tools** across three functional areas:
+**114 tools** across four functional areas:
 - **General** (22 tools) — element discovery, parameter QA, grouping, Excel exports, selection, and write operations
 - **Electrical** (44 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
 - **Documentation** (31 tools) — view and sheet management: discovery, summary, preview/apply workflows for placing views, creating/duplicating/renaming sheets and views, bulk parameter updates, revision tracking, preset inspection, and safe destructive delete with mandatory manual approval
+- **Coordination** (17 tools) — Revit-native clash detection: category/link discovery, bounding-box hard-clash and clearance checking, preset management, Excel reporting, and step-through review views
 
 ---
 
@@ -214,6 +215,52 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 
 > **Safety:** `revit_delete_views` and `revit_delete_sheets` use `DestructiveRequiresManualApproval` permission — they always queue for manual approval in the Pending tab even when Direct Edit is enabled. This cannot be overridden.
 
+### Coordination / Clash Detection Tools
+
+> **Note:** All clash detection uses Revit-native bounding-box geometry — no external Navisworks or BIM Collaborate Pro dependency. Linked models must be loaded (not unloaded) to be clashable; imported geometry (DWG, IFC family) is not supported.
+
+#### Discovery
+
+| Tool | Description |
+|------|-------------|
+| `revit_list_clashable_categories` | Lists all element categories present in the model with element counts — used to select source/target category sets for clash rules |
+| `revit_list_clashable_links` | Lists all loaded Revit link instances — returns linkId, linkName, isLoaded, transform summary |
+| `revit_get_clash_candidates` | Collects candidate elements for source/target category sets; optionally filters to a named Revit link — returns element counts only, no geometry |
+
+#### Detection
+
+| Tool | Description |
+|------|-------------|
+| `revit_detect_hard_clashes` | Detects bounding-box hard clashes between two category sets (host and/or link elements) — returns clash list with elementIds, categories, and midpoint location |
+| `revit_detect_clearance_clashes` | Detects clearance violations — expands source bounding boxes by a configurable tolerance (mm) before intersection test |
+| `revit_get_clash_summary` | Aggregates a clash run result — returns total counts grouped by rule name, severity, status, and level |
+
+#### Presets
+
+| Tool | Description |
+|------|-------------|
+| `revit_list_clash_presets` | Lists all clash preset JSON files from the clash presets folder (built-in defaults + user-saved) |
+| `revit_get_clash_preset` | Reads and returns the full contents of a named clash preset |
+| `revit_validate_clash_preset` | Validates a clash preset structure — returns isValid, ruleCount, errors[], suggestions[] |
+| `revit_run_clash_preset` | Runs all rules in a clash preset and caches the combined result for step-through review |
+
+#### Reporting
+
+| Tool | Description |
+|------|-------------|
+| `revit_export_clash_report_to_excel` | Exports a clash run result to `.xlsx` with a Summary sheet and a per-clash Details sheet |
+| `revit_get_clash_dashboard_summary` | Returns aggregated dashboard stats: total clashes, by-rule breakdown, severity distribution, status distribution |
+
+#### Review Navigation
+
+| Tool | Description |
+|------|-------------|
+| `revit_get_next_clash` | Advances to the next clash in the cached run and returns its details |
+| `revit_get_previous_clash` | Steps back to the previous clash in the cached run |
+| `revit_create_clash_review_view` | Creates a temporary 3D section box view isolating a single clash *(requires approval)* |
+| `revit_focus_clash` | Zooms the active 3D view to a clash location and selects both clashing elements *(requires approval)* |
+| `revit_select_clash_elements` | Selects both elements of a specific clash in the Revit UI *(requires approval)* |
+
 Advanced tools that accept `filters` and `groupBy` expect valid JSON arrays. See [Example JSON Arguments](#example-json-arguments) below.
 
 Selection tools affect the active Revit UI selection. Write tools require approval inside Revit before changes are applied.
@@ -258,6 +305,22 @@ Assign cable type "XX_EN_IT_Cat6a" to circuits 2520343 and 2520353.
 Create a new power circuit from the currently selected devices and assign it to panel "DB-L1".
 
 Change the wire type of circuit 2518001 to "XX_EN_IT_Cat6a".
+
+List all categories in the model that I can run clashes against.
+
+Are there any loaded Revit links I can clash against?
+
+Detect hard clashes between Electrical Equipment and Mechanical Equipment.
+
+Detect clearance clashes between Fire Alarm Devices and Ducts with a 100 mm clearance.
+
+Run the built-in "Electrical vs HVAC" clash preset.
+
+Export the last clash run to Excel.
+
+Show me the next clash from the last run.
+
+Select the elements involved in clash CL-0003.
 ```
 
 ---

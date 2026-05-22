@@ -148,6 +148,29 @@ public class App : IExternalApplication
             handler.RegisterTool(new PreviewDeleteSheetsTool());
             handler.RegisterTool(new DeleteSheetsTool());
 
+            // Coordination — Phase 1 — Discovery
+            handler.RegisterTool(new ListClashableCategoriesTool());
+            handler.RegisterTool(new ListClashableLinksTool());
+            handler.RegisterTool(new GetClashCandidatesTool());
+            // Coordination — Phase 2 — Detection
+            handler.RegisterTool(new DetectHardClashesTool());
+            handler.RegisterTool(new DetectClearanceClashesTool());
+            handler.RegisterTool(new GetClashSummaryTool());
+            // Coordination — Phase 3 — Presets
+            handler.RegisterTool(new ListClashPresetsTool());
+            handler.RegisterTool(new GetClashPresetTool());
+            handler.RegisterTool(new ValidateClashPresetTool());
+            handler.RegisterTool(new RunClashPresetTool());
+            // Coordination — Phase 4 — Reporting
+            handler.RegisterTool(new ExportClashReportToExcelTool());
+            handler.RegisterTool(new GetClashDashboardSummaryTool());
+            // Coordination — Phase 5 — Navigation & Review View
+            handler.RegisterTool(new GetNextClashTool());
+            handler.RegisterTool(new GetPreviousClashTool());
+            handler.RegisterTool(new CreateClashReviewViewTool());
+            handler.RegisterTool(new FocusClashTool());
+            handler.RegisterTool(new SelectClashElementsTool());
+
             var eventService = new ExternalEventService(handler);
 
             var approvalService = new ApprovalService();

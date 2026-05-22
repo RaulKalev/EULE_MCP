@@ -40,6 +40,10 @@ public static class ApprovalSummaryBuilder
             "revit_create_sheets_from_table"    => BuildCreateSheetsFromTable(request),
             "revit_delete_views"                => BuildDeleteViews(request),
             "revit_delete_sheets"               => BuildDeleteSheets(request),
+            // Coordination tools
+            "revit_create_clash_review_view"    => BuildCreateClashReviewView(request),
+            "revit_focus_clash"                 => BuildFocusClash(request),
+            "revit_select_clash_elements"       => BuildSelectClashElements(request),
             _ => $"Execute {request.ToolName}"
         };
     }
@@ -273,5 +277,27 @@ public static class ApprovalSummaryBuilder
     {
         var sheetIds = ToolArguments.GetLongArray(request.Arguments, "sheetIds");
         return $"DESTRUCTIVE: Delete {sheetIds.Length} sheet{(sheetIds.Length == 1 ? "" : "s")}. Manual approval required.";
+    }
+
+    private static string BuildCreateClashReviewView(McpToolRequest request)
+    {
+        var clashId = ToolArguments.GetString(request.Arguments, "clashId", "");
+        var padding = request.Arguments.TryGetValue("sectionBoxPaddingMm", out var p) ? p?.ToString() ?? "1000" : "1000";
+        return string.IsNullOrWhiteSpace(clashId)
+            ? $"Create or reuse the 'MCP Clash Review' 3D view (no section box override)."
+            : $"Create or reuse the 'MCP Clash Review' 3D view and scope section box to clash '{clashId}' with {padding}mm padding.";
+    }
+
+    private static string BuildFocusClash(McpToolRequest request)
+    {
+        var clashId = ToolArguments.GetString(request.Arguments, "clashId", "?");
+        var padding = request.Arguments.TryGetValue("sectionBoxPaddingMm", out var p) ? p?.ToString() ?? "1000" : "1000";
+        return $"Activate 'MCP Clash Review' view, frame section box around clash '{clashId}' ({padding}mm padding), and select the clash elements.";
+    }
+
+    private static string BuildSelectClashElements(McpToolRequest request)
+    {
+        var clashId = ToolArguments.GetString(request.Arguments, "clashId", "?");
+        return $"Select the source and target elements of clash '{clashId}' in the Revit UI. Linked-model targets will select the link instance.";
     }
 }

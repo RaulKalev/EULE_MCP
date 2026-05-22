@@ -1993,4 +1993,282 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         var result = await pipeClient.SendAsync("revit_run_view_sheet_workflow_preset", args, cancellationToken);
         return FormatResult(result);
     }
+
+    // ── Coordination / Clash Detection ──────────────────────────────────────────
+
+    [McpServerTool(Name = "revit_list_clashable_categories", ReadOnly = true),
+     Description("Lists all element categories available for clash detection in the active document and loaded links, with element counts. Use before running detect or candidate tools.")]
+    public async Task<string> ListClashableCategories(
+        [Description("Include linked models (default true)")] bool includeLinks = true,
+        [Description("Include Generic Models category (default true)")] bool includeGenericModels = true,
+        [Description("Include imported geometry (DWG/DXF) (default true)")] bool includeImportedGeometry = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["includeLinks"] = includeLinks,
+            ["includeGenericModels"] = includeGenericModels,
+            ["includeImportedGeometry"] = includeImportedGeometry
+        };
+        var result = await pipeClient.SendAsync("revit_list_clashable_categories", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_list_clashable_links", ReadOnly = true),
+     Description("Lists all Revit link instances and imported geometry in the active document that can participate in clash detection, including load status.")]
+    public async Task<string> ListClashableLinks(CancellationToken cancellationToken = default)
+    {
+        var result = await pipeClient.SendAsync("revit_list_clashable_links", [], cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_clash_candidates", ReadOnly = true),
+     Description("Returns candidate element counts for a clash check WITHOUT running detection. Use to estimate scope before committing to a full run.")]
+    public async Task<string> GetClashCandidates(
+        [Description("Source element categories to check (e.g. 'Cable Trays', 'Conduits')")] string[] sourceCategories,
+        [Description("Target element categories to check against (e.g. 'Ducts', 'Pipes')")] string[] targetCategories,
+        [Description("Include linked models (default true)")] bool includeLinks = true,
+        [Description("Include Generic Models (default true)")] bool includeGenericModels = true,
+        [Description("Include imported geometry (default true)")] bool includeImportedGeometry = true,
+        [Description("Filter by link name substrings (optional)")] string[]? linkNameFilters = null,
+        [Description("Max candidates per set (0 = unlimited, default 5000)")] int limit = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["sourceCategories"] = sourceCategories, ["targetCategories"] = targetCategories,
+            ["includeLinks"] = includeLinks, ["includeGenericModels"] = includeGenericModels,
+            ["includeImportedGeometry"] = includeImportedGeometry,
+            ["linkNameFilters"] = linkNameFilters ?? [], ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_get_clash_candidates", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_detect_hard_clashes", ReadOnly = true),
+     Description("Detects hard (physical intersection) clashes between two sets of element categories. Uses solid-geometry intersection with bounding-box pre-check. Saves results as last run by default.")]
+    public async Task<string> DetectHardClashes(
+        [Description("Source element categories")] string[] sourceCategories,
+        [Description("Target element categories")] string[] targetCategories,
+        [Description("Include linked models (default true)")] bool includeLinks = true,
+        [Description("Include Generic Models (default true)")] bool includeGenericModels = true,
+        [Description("Include imported geometry (default true)")] bool includeImportedGeometry = true,
+        [Description("Filter by link name substrings")] string[]? linkNameFilters = null,
+        [Description("Minimum intersection volume tolerance in mm³ (default 5)")] double toleranceMm = 5,
+        [Description("Maximum clashes to return (default 1000)")] int limit = 1000,
+        [Description("Stop testing after this many element pairs (default 100000)")] int maxPairs = 100000,
+        [Description("Save as last run for navigation tools (default true)")] bool saveAsLastRun = true,
+        [Description("Rule name label for results (default 'Ad-hoc Hard Clash')")] string ruleName = "Ad-hoc Hard Clash",
+        [Description("Severity: Low | Medium | High | Critical (default Medium)")] string severity = "Medium",
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["sourceCategories"] = sourceCategories, ["targetCategories"] = targetCategories,
+            ["includeLinks"] = includeLinks, ["includeGenericModels"] = includeGenericModels,
+            ["includeImportedGeometry"] = includeImportedGeometry,
+            ["linkNameFilters"] = linkNameFilters ?? [], ["toleranceMm"] = toleranceMm,
+            ["limit"] = limit, ["maxPairs"] = maxPairs, ["saveAsLastRun"] = saveAsLastRun,
+            ["ruleName"] = ruleName, ["severity"] = severity
+        };
+        var result = await pipeClient.SendAsync("revit_detect_hard_clashes", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_detect_clearance_clashes", ReadOnly = true),
+     Description("Detects clearance violations between two sets of element categories using expanded bounding-box approximation. Reported distances are conservative estimates, not true surface-to-surface measurements.")]
+    public async Task<string> DetectClearanceClashes(
+        [Description("Source element categories")] string[] sourceCategories,
+        [Description("Target element categories")] string[] targetCategories,
+        [Description("Required clearance in mm (default 50)")] double clearanceMm = 50,
+        [Description("Include linked models (default true)")] bool includeLinks = true,
+        [Description("Include Generic Models (default true)")] bool includeGenericModels = true,
+        [Description("Include imported geometry (default true)")] bool includeImportedGeometry = true,
+        [Description("Filter by link name substrings")] string[]? linkNameFilters = null,
+        [Description("Maximum results (default 1000)")] int limit = 1000,
+        [Description("Stop after this many element pairs (default 100000)")] int maxPairs = 100000,
+        [Description("Save as last run (default true)")] bool saveAsLastRun = true,
+        [Description("Rule name label")] string ruleName = "Ad-hoc Clearance",
+        [Description("Severity: Low | Medium | High | Critical (default Medium)")] string severity = "Medium",
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["sourceCategories"] = sourceCategories, ["targetCategories"] = targetCategories,
+            ["clearanceMm"] = clearanceMm, ["includeLinks"] = includeLinks,
+            ["includeGenericModels"] = includeGenericModels, ["includeImportedGeometry"] = includeImportedGeometry,
+            ["linkNameFilters"] = linkNameFilters ?? [], ["limit"] = limit,
+            ["maxPairs"] = maxPairs, ["saveAsLastRun"] = saveAsLastRun,
+            ["ruleName"] = ruleName, ["severity"] = severity
+        };
+        var result = await pipeClient.SendAsync("revit_detect_clearance_clashes", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_clash_summary", ReadOnly = true),
+     Description("Returns a grouped summary of clash results from the last run or from provided JSON. Groups by Rule, Level, LinkedModel, CategoryPair, and/or Severity.")]
+    public async Task<string> GetClashSummary(
+        [Description("Use results from last detection run (default true)")] bool useLastRun = true,
+        [Description("Raw ClashRunResultDto JSON string (used when useLastRun=false)")] string clashesJson = "",
+        [Description("Group-by fields: Rule, Level, LinkedModel, CategoryPair, Severity")] string[]? groupBy = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["useLastRun"] = useLastRun, ["clashesJson"] = clashesJson,
+            ["groupBy"] = groupBy ?? []
+        };
+        var result = await pipeClient.SendAsync("revit_get_clash_summary", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_list_clash_presets", ReadOnly = true),
+     Description("Lists all available clash detection presets including names, descriptions, and rule counts.")]
+    public async Task<string> ListClashPresets(CancellationToken cancellationToken = default)
+    {
+        var result = await pipeClient.SendAsync("revit_list_clash_presets", [], cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_clash_preset", ReadOnly = true),
+     Description("Returns the full definition of a named clash detection preset including all rules and parameters.")]
+    public async Task<string> GetClashPreset(
+        [Description("Preset name (case-insensitive)")] string presetName,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["presetName"] = presetName };
+        var result = await pipeClient.SendAsync("revit_get_clash_preset", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_validate_clash_preset", ReadOnly = true),
+     Description("Validates a named clash detection preset and returns any validation errors.")]
+    public async Task<string> ValidateClashPreset(
+        [Description("Preset name to validate")] string presetName,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["presetName"] = presetName };
+        var result = await pipeClient.SendAsync("revit_validate_clash_preset", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_run_clash_preset", ReadOnly = true),
+     Description("Runs all rules in a named clash detection preset and returns merged results with per-rule clash counts.")]
+    public async Task<string> RunClashPreset(
+        [Description("Preset name to run")] string presetName,
+        [Description("Include linked models (default true)")] bool includeLinks = true,
+        [Description("Include Generic Models (default true)")] bool includeGenericModels = true,
+        [Description("Include imported geometry (default true)")] bool includeImportedGeometry = true,
+        [Description("Max results per rule (default 1000)")] int limit = 1000,
+        [Description("Max pairs per rule (default 100000)")] int maxPairs = 100000,
+        [Description("Save merged result as last run (default true)")] bool saveAsLastRun = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["presetName"] = presetName, ["includeLinks"] = includeLinks,
+            ["includeGenericModels"] = includeGenericModels, ["includeImportedGeometry"] = includeImportedGeometry,
+            ["limit"] = limit, ["maxPairs"] = maxPairs, ["saveAsLastRun"] = saveAsLastRun
+        };
+        var result = await pipeClient.SendAsync("revit_run_clash_preset", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_export_clash_report_to_excel", ReadOnly = true),
+     Description("Exports clash detection results to an Excel workbook with summary, per-rule, per-level, per-linked-model, and per-category-pair sheets.")]
+    public async Task<string> ExportClashReportToExcel(
+        [Description("Use last detection run (default true)")] bool useLastRun = true,
+        [Description("Raw ClashRunResultDto JSON (when useLastRun=false)")] string clashesJson = "",
+        [Description("Output filename (default Clash_Report.xlsx)")] string fileName = "Clash_Report.xlsx",
+        [Description("Include summary sheet (default true)")] bool includeSummary = true,
+        [Description("Include 'By Rule' sheet (default true)")] bool includeByRule = true,
+        [Description("Include 'By Level' sheet (default true)")] bool includeByLevel = true,
+        [Description("Include 'By Linked Model' sheet (default true)")] bool includeByLinkedModel = true,
+        [Description("Include 'By Category Pair' sheet (default true)")] bool includeByCategoryPair = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["useLastRun"] = useLastRun, ["clashesJson"] = clashesJson, ["fileName"] = fileName,
+            ["includeSummary"] = includeSummary, ["includeByRule"] = includeByRule,
+            ["includeByLevel"] = includeByLevel, ["includeByLinkedModel"] = includeByLinkedModel,
+            ["includeByCategoryPair"] = includeByCategoryPair
+        };
+        var result = await pipeClient.SendAsync("revit_export_clash_report_to_excel", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_clash_dashboard_summary", ReadOnly = true),
+     Description("Returns a rich dashboard summary of clash results grouped by multiple dimensions simultaneously for a quick project health overview.")]
+    public async Task<string> GetClashDashboardSummary(
+        [Description("Use last detection run (default true)")] bool useLastRun = true,
+        [Description("Raw ClashRunResultDto JSON (when useLastRun=false)")] string clashesJson = "",
+        [Description("Group-by fields: Rule, Level, LinkedModel, CategoryPair, Severity")] string[]? groupBy = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["useLastRun"] = useLastRun, ["clashesJson"] = clashesJson,
+            ["groupBy"] = groupBy ?? []
+        };
+        var result = await pipeClient.SendAsync("revit_get_clash_dashboard_summary", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_next_clash", ReadOnly = true),
+     Description("Navigates to the next clash in the last run result. Returns clash details and position. Wraps around from last to first.")]
+    public async Task<string> GetNextClash(CancellationToken cancellationToken = default)
+    {
+        var result = await pipeClient.SendAsync("revit_get_next_clash", [], cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_previous_clash", ReadOnly = true),
+     Description("Navigates to the previous clash in the last run result. Returns clash details and position. Wraps around from first to last.")]
+    public async Task<string> GetPreviousClash(CancellationToken cancellationToken = default)
+    {
+        var result = await pipeClient.SendAsync("revit_get_previous_clash", [], cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_create_clash_review_view"),
+     Description("Creates or reuses the 'MCP Clash Review' 3D view. Optionally scopes the section box to a specific clash by ClashId. Requires approval.")]
+    public async Task<string> CreateClashReviewView(
+        [Description("Clash ID to focus the section box on (optional)")] string clashId = "",
+        [Description("Section box padding in mm (default 1000)")] double sectionBoxPaddingMm = 1000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["clashId"] = clashId, ["sectionBoxPaddingMm"] = sectionBoxPaddingMm
+        };
+        var result = await pipeClient.SendAsync("revit_create_clash_review_view", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_focus_clash"),
+     Description("Activates the MCP Clash Review view, scopes the section box to the specified clash, and selects the source and target elements. Requires approval.")]
+    public async Task<string> FocusClash(
+        [Description("Clash ID to focus on (required)")] string clashId,
+        [Description("Section box padding in mm (default 1000)")] double sectionBoxPaddingMm = 1000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["clashId"] = clashId, ["sectionBoxPaddingMm"] = sectionBoxPaddingMm
+        };
+        var result = await pipeClient.SendAsync("revit_focus_clash", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_select_clash_elements"),
+     Description("Selects the source and target elements of a clash in the Revit UI. For linked-model targets, selects the RevitLinkInstance instead. Requires approval.")]
+    public async Task<string> SelectClashElements(
+        [Description("Clash ID (required)")] string clashId,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["clashId"] = clashId };
+        var result = await pipeClient.SendAsync("revit_select_clash_elements", args, cancellationToken);
+        return FormatResult(result);
+    }
 }

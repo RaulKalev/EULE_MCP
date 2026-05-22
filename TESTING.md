@@ -1918,3 +1918,242 @@ The following items are intentionally **not** covered in the Section 30 matrix b
 - `revit_select_circuit_elements` and `revit_select_uncircuited_elements` are marked `RequiresApproval` for symmetry with other electrical-domain writers, even though they also only touch the UI selection.
 - The view/sheet workflow preset runner (`revit_run_view_sheet_workflow_preset`) is itself `ReadOnly` (dry-run by default). Any actual writes happen through the individual RA writers, each of which goes through its own approval flow.
 
+
+---
+
+## 34. Coordination / Clash Detection Tools — Overview
+
+The 17 coordination tools implement a **Revit-native bounding-box clash detection pipeline** across five sub-areas:
+
+| Sub-area | Tools |
+|----------|-------|
+| Discovery | `revit_list_clashable_categories`, `revit_list_clashable_links`, `revit_get_clash_candidates` |
+| Detection | `revit_detect_hard_clashes`, `revit_detect_clearance_clashes`, `revit_get_clash_summary` |
+| Presets | `revit_list_clash_presets`, `revit_get_clash_preset`, `revit_validate_clash_preset`, `revit_run_clash_preset` |
+| Reporting | `revit_export_clash_report_to_excel`, `revit_get_clash_dashboard_summary` |
+| Review | `revit_get_next_clash`, `revit_get_previous_clash`, `revit_create_clash_review_view`, `revit_focus_clash`, `revit_select_clash_elements` |
+
+**Prerequisites:**
+- Revit model open with elements in at least two categories.
+- For link-vs-host tests: a Revit link must be loaded (not unloaded).
+- Run **Start Connector** before any test.
+
+---
+
+## 35. Coordination Discovery Tools
+
+### 35.1 `revit_list_clashable_categories`
+
+**Prompt:**
+```
+call revit_list_clashable_categories
+```
+**Expected:** JSON array of objects `{category, elementCount}`. At minimum one entry with `elementCount > 0`.
+
+### 35.2 `revit_list_clashable_links`
+
+**Prompt:**
+```
+call revit_list_clashable_links
+```
+**Expected (no links):** `{success: true, data: [], message: "0 link instances found"}`.
+
+**Expected (links loaded):** Each entry has `linkId`, `linkName`, `isLoaded: true`.
+
+**Expected (links unloaded):** `isLoaded: false` entries appear; no crash.
+
+### 35.3 `revit_get_clash_candidates`
+
+**Prompt:**
+```
+call revit_get_clash_candidates with sourceCategories=["Electrical Equipment"] and targetCategories=["Mechanical Equipment"]
+```
+**Expected:** `{success: true, data: {sourceCandidateCount, targetCandidateCount}}`.
+
+**Prompt (link):**
+```
+call revit_get_clash_candidates with sourceCategories=["Ducts"] and targetCategories=["Conduits"] and linkId=<id>
+```
+**Expected:** Counts sourced from the link model.
+
+---
+
+## 36. Coordination Detection Tools
+
+### 36.1 `revit_detect_hard_clashes`
+
+**Prompt:**
+```
+call revit_detect_hard_clashes with sourceCategories=["Electrical Equipment"] and targetCategories=["Mechanical Equipment"]
+```
+**Expected:** `{success: true, data: {clashes: [...], totalCount: N}}`. Each clash has `clashId`, `source.elementId`, `target.elementId`, `location.x/y/z`.
+
+**No-clash model:** Returns `data.totalCount: 0` and empty array.
+
+### 36.2 `revit_detect_clearance_clashes`
+
+**Prompt:**
+```
+call revit_detect_clearance_clashes with sourceCategories=["Fire Alarm Devices"] and targetCategories=["Ducts"] and toleranceMm=100
+```
+**Expected:** Clashes include `distanceMm` and `requiredClearanceMm=100`.
+
+### 36.3 `revit_get_clash_summary`
+
+**Prompt:**
+```
+call revit_get_clash_summary with clashes=<paste clash array from above>
+```
+**Expected:** `{byRule: {...}, bySeverity: {...}, byStatus: {...}, byLevel: {...}, totalCount: N}`.
+
+---
+
+## 37. Coordination Preset Tools
+
+### 37.1 `revit_list_clash_presets`
+
+**Prompt:**
+```
+call revit_list_clash_presets
+```
+**Expected:** At least 2 built-in presets (`"Electrical vs HVAC"`, `"Fire Alarm Devices Placement QA"`).
+
+### 37.2 `revit_get_clash_preset`
+
+**Prompt:**
+```
+call revit_get_clash_preset with name="Electrical vs HVAC"
+```
+**Expected:** Full preset JSON with `name`, `rules[]` where each rule has `sourceCategoryNames`, `targetCategoryNames`, `type`.
+
+### 37.3 `revit_validate_clash_preset`
+
+**Valid preset:**
+```
+call revit_validate_clash_preset with preset=<valid preset JSON>
+```
+**Expected:** `{isValid: true, ruleCount: N, errors: []}`.
+
+**Invalid preset (missing rules):**
+```
+call revit_validate_clash_preset with preset={}
+```
+**Expected:** `{isValid: false, errors: ["missing rules"]}`.
+
+### 37.4 `revit_run_clash_preset`
+
+**Prompt:**
+```
+call revit_run_clash_preset with presetName="Electrical vs HVAC"
+```
+**Expected:** `{success: true, data: {totalClashCount, ruleResults: [...]}}`. Result is cached for step-through review.
+
+---
+
+## 38. Coordination Reporting Tools
+
+### 38.1 `revit_export_clash_report_to_excel`
+
+**Prompt:**
+```
+call revit_export_clash_report_to_excel with run=<clash run result JSON>
+```
+**Expected:** `{success: true, data: {filePath: "...ClashReport_*.xlsx"}}`. File opens in Excel with Summary and Details sheets.
+
+**Verify:**
+1. Summary sheet has totals by rule.
+2. Details sheet has one row per clash with `ClashId`, `RuleName`, `ClashType`, `Severity`, `Status`, source/target element IDs and categories, location X/Y/Z, DistanceMm, RequiredClearanceMm.
+
+### 38.2 `revit_get_clash_dashboard_summary`
+
+**Prompt:**
+```
+call revit_get_clash_dashboard_summary with run=<clash run result JSON>
+```
+**Expected:** `{totalClashes, byRule: {...}, bySeverity: {...}, byStatus: {...}}`.
+
+---
+
+## 39. Coordination Review Tools
+
+### 39.1 `revit_get_next_clash` / `revit_get_previous_clash`
+
+**Prompt (after running a preset):**
+```
+call revit_get_next_clash
+```
+**Expected:** Returns next clash in sequence. Wraps around at end. Returns `{currentIndex, totalCount, clash}`.
+
+```
+call revit_get_previous_clash
+```
+**Expected:** Steps back. Wraps around at beginning.
+
+**No cache (cold start):**
+```
+call revit_get_next_clash
+```
+**Expected:** `{success: false, message: "No clash run cached..."}`.
+
+### 39.2 `revit_select_clash_elements` *(requires approval)*
+
+**Prompt:**
+```
+call revit_select_clash_elements with sourceElementId=<id> and targetElementId=<id>
+```
+1. Approval in Pending tab.
+2. After approval — both elements highlighted in Revit UI.
+3. Rejection — no selection change.
+
+### 39.3 `revit_focus_clash` *(requires approval)*
+
+**Prompt:**
+```
+call revit_focus_clash with sourceElementId=<id> and targetElementId=<id> and location={"x":1,"y":2,"z":3}
+```
+1. Approval in Pending tab.
+2. After approval — active 3D view zooms to clash location; both elements selected.
+
+### 39.4 `revit_create_clash_review_view` *(requires approval)*
+
+**Prompt:**
+```
+call revit_create_clash_review_view with clashId="CL-0001" and sourceElementId=<id> and targetElementId=<id>
+```
+1. Approval in Pending tab.
+2. After approval — a new 3D view named `ClashReview_CL-0001` appears in Project Browser with a section box isolating the two elements.
+3. Rejection — no view created.
+4. Transaction name: `"Revit MCP - Create Clash Review View"`.
+
+---
+
+## 40. Coordination Unit Tests
+
+Run via:
+```
+dotnet test RevitMCP.slnx
+```
+
+**Coordination-specific tests (19 facts in `ClashDetectionTests.cs`):**
+
+| Test | Asserts |
+|------|---------|
+| `BoundingBoxMath_Overlaps_WhenIntersecting` | Two identical boxes → overlap = true |
+| `BoundingBoxMath_NotOverlaps_WhenApart` | Non-touching boxes → overlap = false |
+| `BoundingBoxMath_Overlaps_AfterExpand` | Originally apart boxes overlap after 50 mm expand |
+| `BoundingBoxMath_ApproximateDistance_IsPositive` | Distance between non-overlapping boxes > 0 |
+| `BoundingBoxMath_ApproximateDistance_ZeroWhenOverlapping` | Overlapping boxes → distance = 0 |
+| `ClashSummaryService_GroupByRule` | Clashes grouped by rule name correctly |
+| `ClashSummaryService_GroupByLevel` | Clashes grouped by level correctly |
+| `ClashSummaryService_TotalCount` | Total count matches input list size |
+| `ClashSummaryService_AllStatusesPresent` | All 3 statuses appear in summary |
+| `ClashPresetService_DefaultPresets_Count` | GetDefaultPresets returns ≥ 2 built-in presets |
+| `ClashPresetService_Validate_ValidPreset` | Valid preset → isValid = true, no errors |
+| `ClashPresetService_Validate_MissingRules` | Preset with empty rules → isValid = false |
+| `ClashPresetService_Validate_NullSourceCategories` | Null sourceCategoryNames → isValid = false |
+| `ClashRunCacheService_SaveAndLoad` | Saved run → loaded run has same total count |
+| `ClashRunCacheService_HasCache_FalseWhenEmpty` | No cache → HasCache = false |
+| `ClashRunCacheService_GetNext_WrapsAround` | GetNext twice on 2-clash run → wraps to first |
+| `ClashRunCacheService_GetPrevious_WrapsAround` | GetPrevious from start → wraps to last |
+| `ClashRunCacheService_EmptyRunReturnsNull` | GetNext on 0-clash run → returns null |
+| `ClashResultDto_Defaults` | New ClashResultDto has Status="Active", Severity="Medium" |
