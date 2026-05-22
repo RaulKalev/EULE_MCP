@@ -2,9 +2,9 @@
 
 A local [Model Context Protocol](https://modelcontextprotocol.io) connector that lets **Claude Code** and **Codex** interrogate and work with a live **Autodesk Revit 2026** model in real time.
 
-**52 tools** across two functional areas:
+**66 tools** across two functional areas:
 - **General** (22 tools) — element discovery, parameter QA, grouping, Excel exports, selection, and write operations
-- **Electrical** (30 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, load naming, circuit numbering, and Excel reporting
+- **Electrical** (44 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
 
 ---
 
@@ -112,6 +112,35 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_preview_circuit_load_names` | Previews load name proposals using a `{ParameterName}` template resolved from connected elements |
 | `revit_apply_circuit_load_names` | Applies previewed load name changes *(requires approval, transaction-wrapped)* |
 | `revit_set_circuit_parameters_bulk` | Sets multiple parameters on multiple circuits in a single transaction *(requires approval)* |
+
+### Electrical Dashboard & Panel QA Tools
+
+| Tool | Description |
+|------|-------------|
+| `revit_get_electrical_dashboard_summary` | Aggregated dashboard: circuit counts by panel/system type, total load per panel, missing-data stats (no cable type, no load name, no panel, duplicate numbers) |
+| `revit_get_panel_issue_summary` | Per-panel issue breakdown — duplicate numbers, missing cable types, missing load names, unassigned circuits |
+| `revit_export_electrical_dashboard_to_excel` | Exports the dashboard summary to `.xlsx` with a Dashboard sheet and a per-panel Issues sheet |
+
+### Voltage Drop Preparation Tools
+
+| Tool | Description |
+|------|-------------|
+| `revit_get_circuit_route_assumptions` | Returns the routing assumptions for a circuit (installation method, conductor material, temperature rating) used as voltage drop inputs |
+| `revit_estimate_circuit_length` | Estimates the cable length for a single circuit using element locations and a configurable method (StraightLine, Manhattan, Estimate) |
+| `revit_estimate_circuit_lengths` | Bulk version of `revit_estimate_circuit_length` — estimates lengths for multiple circuits in one call |
+| `revit_export_voltage_drop_input_to_excel` | Exports voltage drop input data (circuit, panel, load, estimated length, cable type) to `.xlsx` for external calculation |
+| `revit_get_voltage_drop_precheck` | Pre-checks circuits for voltage drop calculation readiness: flags missing cable type, missing load, zero connected elements, and unreachable locations |
+
+### Fire Alarm Circuit Preset Tools
+
+| Tool | Description |
+|------|-------------|
+| `revit_run_fire_alarm_circuit_preset` | Analyses fire alarm circuits, classifies each loop (AddressableLoop / ConventionalSounderLine / ModuleLoop), and returns a structured preset with device counts and recommended cable types |
+| `revit_export_fire_alarm_circuit_preset_to_excel` | Exports the fire alarm circuit preset to `.xlsx` with a Summary sheet and a per-loop Devices sheet |
+| `revit_get_fire_alarm_visualization_data` | Returns GeoJSON-style location data for fire alarm devices grouped by loop — used for spatial visualisation |
+| `revit_get_fire_alarm_voltage_drop_summary` | Summarises estimated voltage drop inputs per fire alarm loop using classified loop types and estimated cable lengths |
+| `revit_list_cable_resistance_profiles` | Lists all cable resistance profiles (Ω/m) from the config file (`electrical-cable-profiles.json`) |
+| `revit_get_matching_cable_resistance_profile` | Finds the best-matching cable resistance profile for a given cable type name |
 
 Advanced tools that accept `filters` and `groupBy` expect valid JSON arrays. See [Example JSON Arguments](#example-json-arguments) below.
 
@@ -384,7 +413,8 @@ EULE_MCP/
 │   ├── Commands/        OpenMcpWindowCommand
 │   ├── Electrical/      Circuit query/mutation services, WireTypeResolver, CircuitDtoBuilder
 │   ├── Services/        PipeServer, ExternalEventHandler, ConnectorService
-│   ├── Tools/           One file per MCP tool (52 tools)
+│   ├── Electrical/      Circuit services, helpers, CableResistanceProfileService, FireAlarmCircuitPresetService
+│   ├── Tools/           One file per MCP tool (66 tools)
 │   ├── UI/              WPF window (Status + Pending + Activity tabs) + ViewModels + themes
 │   └── Interfaces/      IRevitMcpTool
 ├── RevitMCP.Bridge/
@@ -394,7 +424,7 @@ EULE_MCP/
 ├── RevitMCP.Config/
 │   └── Install/         .bat install scripts
 └── RevitMCP.Tests/
-    └── CircuitLookupTests.cs  xUnit regression tests for pure-logic helpers
+    └── *.Tests.cs             xUnit unit tests for pure-logic helpers (no Revit runtime required)
 ```
 
 ---
