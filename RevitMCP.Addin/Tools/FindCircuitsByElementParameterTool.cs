@@ -52,7 +52,11 @@ public class FindCircuitsByElementParameterTool : IRevitMcpTool
             if (element is not FamilyInstance fi || fi.MEPModel == null) continue;
             try
             {
-                foreach (ElectricalSystem sys in fi.MEPModel.ElectricalSystems)
+                var elemCircuits = new FilteredElementCollector(doc)
+                    .OfClass(typeof(ElectricalSystem)).Cast<ElectricalSystem>()
+                    .Where(sys => sys.Elements != null && sys.Elements.Cast<Element>().Any(e => e.Id == fi.Id))
+                    .ToList();
+                foreach (var sys in elemCircuits)
                 {
                     if (!circuitMap.ContainsKey(sys.Id.Value))
                         circuitMap[sys.Id.Value] = new List<long>();

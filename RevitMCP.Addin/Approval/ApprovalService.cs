@@ -63,13 +63,14 @@ public class ApprovalService
     {
         if (!_pending.TryRemove(approvalId, out var request)) return;
 
-        request.Completion.TrySetResult(new McpToolResult
+        var rejResult = new McpToolResult
         {
             RequestId = request.OriginalRequest.RequestId,
             Success = false,
-            Status = "approval_rejected",
             Message = "Action rejected by user."
-        });
+        };
+        try { rejResult.Status = "approval_rejected"; } catch (MissingMethodException) { }
+        request.Completion.TrySetResult(rejResult);
         PendingChanged?.Invoke();
     }
 

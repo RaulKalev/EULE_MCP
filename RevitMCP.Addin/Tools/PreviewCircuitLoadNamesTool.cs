@@ -5,6 +5,7 @@ using Autodesk.Revit.DB.Electrical;
 using Autodesk.Revit.UI;
 using RevitMCP.Addin.Electrical;
 using RevitMCP.Addin.Interfaces;
+using RevitMCP.Addin.Query;
 using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Tools;

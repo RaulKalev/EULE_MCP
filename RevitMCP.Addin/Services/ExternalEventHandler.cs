@@ -76,13 +76,14 @@ public class ExternalEventHandler : IExternalEventHandler
 
             if (!_tools.TryGetValue(request.ToolName, out var tool))
             {
-                tcs.TrySetResult(new McpToolResult
+                var unknownResult = new McpToolResult
                 {
                     RequestId = request.RequestId,
                     Success = false,
-                    Status = "unknown_tool",
                     Message = $"Unknown tool: {request.ToolName}"
-                });
+                };
+                try { unknownResult.Status = "unknown_tool"; } catch (MissingMethodException) { }
+                tcs.TrySetResult(unknownResult);
                 continue;
             }
 
@@ -112,13 +113,14 @@ public class ExternalEventHandler : IExternalEventHandler
                 });
                 // Return approval_required immediately — don't make the pipe wait 5 minutes.
                 // The user approves in the Revit MCP window; execution happens asynchronously.
-                tcs.TrySetResult(new McpToolResult
+                var approvalResult = new McpToolResult
                 {
                     RequestId = request.RequestId,
                     Success = false,
-                    Status = "approval_required",
                     Message = $"'{summary}' is pending approval in Revit. Open the RevitMCP window and click Approve on the Pending tab to execute, or Reject to cancel."
-                });
+                };
+                try { approvalResult.Status = "approval_required"; } catch (MissingMethodException) { }
+                tcs.TrySetResult(approvalResult);
                 continue; // pipe connection is now resolved; execution proceeds after user approves
             }
 
@@ -131,14 +133,15 @@ public class ExternalEventHandler : IExternalEventHandler
             }
             catch (Exception ex)
             {
-                tcs.TrySetResult(new McpToolResult
+                var failResult = new McpToolResult
                 {
                     RequestId = request.RequestId,
                     Success = false,
-                    Status = "transaction_failed",
                     Message = $"Tool execution failed: {ex.Message}",
                     Errors = new List<string> { ex.ToString() }
-                });
+                };
+                try { failResult.Status = "transaction_failed"; } catch (MissingMethodException) { }
+                tcs.TrySetResult(failResult);
             }
         }
     }

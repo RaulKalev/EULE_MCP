@@ -44,6 +44,13 @@ public class ExportUncircuitedElementsToExcelTool : IRevitMcpTool
         var records = new List<(long Id, string Category, string Family, string Type, string Level, Dictionary<string, string> Params)>();
         var warnings = new List<string>(filtersParsed.Warnings);
 
+        var circuitedElemIds = new HashSet<long>(
+            new FilteredElementCollector(doc)
+                .OfClass(typeof(ElectricalSystem)).Cast<ElectricalSystem>()
+                .Where(c => c.Elements != null)
+                .SelectMany(c => c.Elements.Cast<Element>().Select(e => e.Id.Value))
+        );
+
         foreach (var catName in categories)
         {
             if (records.Count >= limit) break;
@@ -56,13 +63,7 @@ public class ExportUncircuitedElementsToExcelTool : IRevitMcpTool
                 if (records.Count >= limit) break;
                 var element = doc.GetElement(eid);
                 if (element is not FamilyInstance fi || fi.MEPModel == null) continue;
-                try
-                {
-                    bool has = false;
-                    foreach (ElectricalSystem _ in fi.MEPModel.ElectricalSystems) { has = true; break; }
-                    if (has) continue;
-                }
-                catch { continue; }
+                if (circuitedElemIds.Contains(fi.Id.Value)) continue;
 
                 if (filtersParsed.Items.Count > 0)
                 {

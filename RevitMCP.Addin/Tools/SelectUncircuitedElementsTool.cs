@@ -41,6 +41,13 @@ public class SelectUncircuitedElementsTool : IRevitMcpTool
         var uncircuitedIds = new List<ElementId>();
         var warnings = new List<string>(filtersParsed.Warnings);
 
+        var circuitedElemIds = new HashSet<long>(
+            new FilteredElementCollector(doc)
+                .OfClass(typeof(ElectricalSystem)).Cast<ElectricalSystem>()
+                .Where(c => c.Elements != null)
+                .SelectMany(c => c.Elements.Cast<Element>().Select(e => e.Id.Value))
+        );
+
         foreach (var catName in categories)
         {
             if (uncircuitedIds.Count >= limit) break;
@@ -53,13 +60,7 @@ public class SelectUncircuitedElementsTool : IRevitMcpTool
                 if (uncircuitedIds.Count >= limit) break;
                 var element = doc.GetElement(eid);
                 if (element is not FamilyInstance fi || fi.MEPModel == null) continue;
-                try
-                {
-                    bool hasCircuit = false;
-                    foreach (ElectricalSystem _ in fi.MEPModel.ElectricalSystems) { hasCircuit = true; break; }
-                    if (hasCircuit) continue;
-                }
-                catch { continue; }
+                if (circuitedElemIds.Contains(fi.Id.Value)) continue;
 
                 if (filtersParsed.Items.Count > 0)
                 {

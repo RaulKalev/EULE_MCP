@@ -48,6 +48,13 @@ public class FindUncircuitedElementsTool : IRevitMcpTool
         var warnings = new List<string>(filtersParsed.Warnings);
         var skippedNoMep = 0;
 
+        var circuitedElemIds = new HashSet<long>(
+            new FilteredElementCollector(doc)
+                .OfClass(typeof(ElectricalSystem)).Cast<ElectricalSystem>()
+                .Where(c => c.Elements != null)
+                .SelectMany(c => c.Elements.Cast<Element>().Select(e => e.Id.Value))
+        );
+
         IEnumerable<Element> candidates;
         if (useSelection)
         {
@@ -89,16 +96,7 @@ public class FindUncircuitedElementsTool : IRevitMcpTool
                 continue;
             }
 
-            bool hasCircuit = false;
-            try
-            {
-                var systems = fi.MEPModel.ElectricalSystems;
-                if (systems != null)
-                    foreach (ElectricalSystem _ in systems) { hasCircuit = true; break; }
-            }
-            catch { continue; }
-
-            if (hasCircuit) continue;
+            if (circuitedElemIds.Contains(fi.Id.Value)) continue;
 
             // Apply parameter filters
             if (filtersParsed.Items.Count > 0)

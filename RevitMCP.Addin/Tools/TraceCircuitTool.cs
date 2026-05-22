@@ -81,7 +81,11 @@ public class TraceCircuitTool : IRevitMcpTool
             bool foundCircuit = false;
             try
             {
-                foreach (ElectricalSystem sys in fi.MEPModel.ElectricalSystems)
+                var elemCircuits = new FilteredElementCollector(doc)
+                    .OfClass(typeof(ElectricalSystem)).Cast<ElectricalSystem>()
+                    .Where(sys => sys.Elements != null && sys.Elements.Cast<Element>().Any(e => e.Id == fi.Id))
+                    .ToList();
+                foreach (var sys in elemCircuits)
                 {
                     if (seenCircuits.Contains(sys.Id.Value)) continue;
                     seenCircuits.Add(sys.Id.Value);

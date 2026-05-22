@@ -2,6 +2,10 @@
 
 A local [Model Context Protocol](https://modelcontextprotocol.io) connector that lets **Claude Code** and **Codex** interrogate and work with a live **Autodesk Revit 2026** model in real time.
 
+**52 tools** across two functional areas:
+- **General** (22 tools) — element discovery, parameter QA, grouping, Excel exports, selection, and write operations
+- **Electrical** (30 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, load naming, circuit numbering, and Excel reporting
+
 ---
 
 ## Supported Clients
@@ -43,6 +47,7 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `RevitMCP.Addin` | net8.0-windows | Revit add-in DLL — pipe server, tool registry, WPF UI |
 | `RevitMCP.Bridge` | net8.0 | STDIO MCP server — forwards tool calls over named pipe |
 | `RevitMCP.Config` | — | Install scripts and default configs |
+| `RevitMCP.Tests` | net8.0 | xUnit unit tests for pure-logic helpers (no Revit runtime required) |
 
 ---
 
@@ -89,7 +94,7 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_change_circuit_cable_or_wire_type` | Changes the cable/wire type on a circuit; prefers cable type, falls back to wire type *(requires approval)* |
 | `revit_set_circuit_parameter` | Sets **any** parameter on one or more circuits — fully handles `ElementId` storage type (Cable Type and similar) by resolving a numeric element ID or an exact element name *(requires approval)* |
 | `revit_find_uncircuited_elements` | Finds elements in electrical/lighting/data/fire/security categories that are not assigned to any circuit; supports category lists, parameter filters, and parameter return |
-| `revit_check_circuit_health` | Central circuit QA tool — checks for missing panel, empty/duplicate circuit numbers, missing cable/wire type, missing load name, and circuits with no connected elements |
+| `revit_check_circuit_health` | Central circuit QA tool — configurable checks: `MissingPanel`, `EmptyCircuitNumber`, `DuplicateCircuitNumbers`, `MissingCableType` (strict: Revit 2026 CableType ElementId not set), `MissingWireType` (lenient: neither CableType nor legacy WireType resolves to a name), `MissingLoadName`, `NoConnectedElements`. Flagged circuits include the resolved `wireType` for inline cross-checking against `revit_get_circuit_info` |
 | `revit_export_panel_circuit_list_to_excel` | Exports a panel-organized circuit report to `.xlsx` with Summary, Panel Circuits, Circuit Elements, and Health Issues sheets |
 | `revit_find_circuits_by_element_parameter` | Finds circuits containing elements matching category and parameter filters (e.g. circuits in room 201, circuits with specific device types) |
 | `revit_trace_circuit` | Traces an element or circuit back to its panel — returns circuit number, load name, wire type, apparent load, and panel details |
@@ -98,7 +103,7 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_select_uncircuited_elements` | Selects elements not assigned to any circuit across electrical categories *(requires approval)* |
 | `revit_export_circuit_health_to_excel` | Exports circuit QA issues (missing panel, duplicate numbers, missing cable type, missing load name) to `.xlsx` |
 | `revit_export_uncircuited_elements_to_excel` | Exports elements not assigned to any circuit to `.xlsx` with optional parameter columns |
-| `revit_get_circuits_for_selected_elements` | Returns all circuits for the current Revit selection, de-duplicated |
+| `revit_get_circuits_for_selected_elements` | Returns all circuits for the current Revit selection, de-duplicated. Reports `notTraceableCount` (not a FamilyInstance/MEPModel) and `noCircuitCount` (traceable but unassigned) as separate warning categories |
 | `revit_find_elements_on_circuit` | Lists all elements connected to a specific circuit with category, family, type, and optional parameters |
 | `revit_get_circuit_load_summary` | Summarizes circuit apparent loads grouped by Panel, SystemType, CableType, or WireType |
 | `revit_check_panel_utilization` | Checks circuit count, total load, and data quality issues (missing cable type, load name, circuit number) per panel |
@@ -386,8 +391,10 @@ EULE_MCP/
 │   ├── Program.cs       MCP host setup
 │   ├── RevitMcpTools.cs [McpServerToolType] — exposes tools to Claude
 │   └── RevitPipeClient  Named pipe client
-└── RevitMCP.Config/
-    └── Install/         .bat install scripts
+├── RevitMCP.Config/
+│   └── Install/         .bat install scripts
+└── RevitMCP.Tests/
+    └── CircuitLookupTests.cs  xUnit regression tests for pure-logic helpers
 ```
 
 ---

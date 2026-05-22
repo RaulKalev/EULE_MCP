@@ -29,21 +29,25 @@ public class GetCircuitsForSelectedElementsTool : IRevitMcpTool
 
         var circuits = new List<object>();
         var seenCircuits = new HashSet<long>();
-        var uncircuited = new List<long>();
+        var notTraceable = new List<long>();  // not FamilyInstance or no MEPModel
+        var noCircuit = new List<long>();      // traceable but not on any circuit
 
         foreach (var eid in selIds)
         {
             if (cancellationToken.IsCancellationRequested) break;
             var element = doc.GetElement(eid);
-            if (element is not FamilyInstance fi || fi.MEPModel == null) { uncircuited.Add(eid.Value); continue; }
+            if (element is not FamilyInstance fi || fi.MEPModel == null) { notTraceable.Add(eid.Value); continue; }
 
             bool found = false;
             try
             {
-                foreach (ElectricalSystem sys in fi.MEPModel.ElectricalSystems)
+                var elemCircuits = new FilteredElementCollector(doc)
+                    .OfClass(typeof(ElectricalSystem)).Cast<ElectricalSystem>()
+                    .Where(sys => sys.Elements != null && sys.Elements.Cast<Element>().Any(e => e.Id == fi.Id))
+                    .ToList();
+                foreach (var sys in elemCircuits)
                 {
-                    if (seenCircuits.Contains(sys.Id.Value)) continue;
-                    seenCircuits.Add(sys.Id.Value);
+                    if (!CircuitElementClassifier.TrackCircuit(sys.Id.Value, seenCircuits, ref found)) continue;
                     var panel = CircuitDtoBuilder.TryGetPanel(sys);
                     List<object>? elements = null;
                     if (includeElements)
@@ -67,16 +71,17 @@ public class GetCircuitsForSelectedElementsTool : IRevitMcpTool
                         wireType = CircuitDtoBuilder.GetWireTypeName(doc, sys),
                         connectedElements = (object?)elements
                     });
-                    found = true;
                 }
             }
             catch { }
-            if (!found) uncircuited.Add(eid.Value);
+            if (!found) noCircuit.Add(eid.Value);
         }
 
-        var warnings = uncircuited.Count > 0
-            ? new List<string> { $"{uncircuited.Count} selected element(s) have no circuit: [{string.Join(", ", uncircuited)}]" }
-            : new List<string>();
+        var warnings = new List<string>();
+        if (notTraceable.Count > 0)
+            warnings.Add($"{notTraceable.Count} selected element(s) are not electrically traceable: [{string.Join(", ", notTraceable)}]");
+        if (noCircuit.Count > 0)
+            warnings.Add($"{noCircuit.Count} selected element(s) are not assigned to any circuit: [{string.Join(", ", noCircuit)}]");
 
         sw.Stop();
         return Task.FromResult(new McpToolResult
@@ -84,7 +89,15 @@ public class GetCircuitsForSelectedElementsTool : IRevitMcpTool
             RequestId = request.RequestId,
             Success = true,
             Message = $"Found {circuits.Count} unique circuit(s) for {selIds.Count} selected element(s).",
-            Data = new { selectedCount = selIds.Count, circuitCount = circuits.Count, uncircuitedCount = uncircuited.Count, circuits },
+            Data = new
+            {
+                selectedCount = selIds.Count,
+                circuitCount = circuits.Count,
+                uncircuitedCount = notTraceable.Count + noCircuit.Count,
+                notTraceableCount = notTraceable.Count,
+                noCircuitCount = noCircuit.Count,
+                circuits
+            },
             Warnings = warnings,
             DurationMs = sw.ElapsedMilliseconds
         });

@@ -11,7 +11,7 @@ namespace RevitMCP.Addin.Tools;
 public class CheckCircuitHealthTool : IRevitMcpTool
 {
     public string Name => "revit_check_circuit_health";
-    public string Description => "Central circuit QA tool. Runs configurable checks: MissingPanel, EmptyCircuitNumber, DuplicateCircuitNumbers, MissingCableType, MissingWireType, MissingLoadName, NoConnectedElements. Returns circuit IDs and details for each issue found.";
+    public string Description => "Central circuit QA tool. Runs configurable checks: MissingPanel, EmptyCircuitNumber, DuplicateCircuitNumbers, MissingCableType (strict: Revit 2026 CableType not set), MissingWireType (lenient: neither CableType nor legacy WireType resolves to a name), MissingLoadName, NoConnectedElements. Returns circuit IDs and details for each issue found.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Electrical;
 
@@ -77,15 +77,11 @@ public class CheckCircuitHealthTool : IRevitMcpTool
             }
             catch { }
 
-            // WireType (deprecated but used as fallback)
-            bool hasWireType = false;
-            try
-            {
-#pragma warning disable CS0618
-                hasWireType = circuit.WireType != null;
-#pragma warning restore CS0618
-            }
-            catch { }
+            // WireType: use the same resolver as the DTO builder (CableType first, deprecated WireType as fallback)
+            // This prevents false positives when CableType is set but the deprecated WireType is null.
+            // Cached so the resolved name can be included in the output for inline cross-checking.
+            string resolvedWireType = CircuitDtoBuilder.GetWireTypeName(doc, circuit);
+            bool hasWireType = !string.IsNullOrEmpty(resolvedWireType);
 
             string loadName = "";
             try { loadName = circuit.LookupParameter("Load Name")?.AsString() ?? ""; } catch { }
@@ -144,6 +140,7 @@ public class CheckCircuitHealthTool : IRevitMcpTool
                     panelName = panel?.Name ?? "",
                     panelElementId = panel?.Id?.Value ?? 0L,
                     systemType = circuit.SystemType.ToString(),
+                    wireType = resolvedWireType,   // same resolver as revit_get_circuit_info — empty means genuinely missing
                     issues = circIssues,
                     connectedElements = elements
                 });
