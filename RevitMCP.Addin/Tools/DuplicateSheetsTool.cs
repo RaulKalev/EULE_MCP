@@ -56,6 +56,10 @@ public class DuplicateSheetsTool : IRevitMcpTool
                 $"Use revit_list_sheets to retrieve valid element IDs and sheet numbers."));
         }
 
+        // Build collision-detection sets; updated per-iteration to handle multi-sheet batches
+        var takenNumbers = allSheets.Select(s => s.SheetNumber).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var takenNames   = allSheets.Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         int created  = 0;
         var warnings = new List<string>();
         var results  = new List<object>();
@@ -66,8 +70,11 @@ public class DuplicateSheetsTool : IRevitMcpTool
         {
             try
             {
-                var newNum  = src.SheetNumber + numSuffix;
-                var newName = src.Name + nameSuffix;
+                var newNum  = ResolveUnique(src.SheetNumber + numSuffix, takenNumbers);
+                var newName = ResolveUnique(src.Name + nameSuffix, takenNames);
+                // Reserve so subsequent sheets in the same batch don't pick the same values
+                takenNumbers.Add(newNum);
+                takenNames.Add(newName);
 
                 // Get titleblock type
                 ElementId tbTypeId = ElementId.InvalidElementId;
@@ -134,4 +141,14 @@ public class DuplicateSheetsTool : IRevitMcpTool
 
     private static McpToolResult Fail(McpToolRequest r, string msg) =>
         new() { RequestId = r.RequestId, Success = false, Message = msg };
+
+    private static string ResolveUnique(string candidate, HashSet<string> taken)
+    {
+        if (!taken.Contains(candidate)) return candidate;
+        for (int i = 1; ; i++)
+        {
+            var s = $"{candidate} {i}";
+            if (!taken.Contains(s)) return s;
+        }
+    }
 }

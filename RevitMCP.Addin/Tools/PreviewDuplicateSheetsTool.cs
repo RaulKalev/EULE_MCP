@@ -73,15 +73,21 @@ public class PreviewDuplicateSheetsTool : IRevitMcpTool
             });
         }
 
-        var existingNumbers = allSheets.Select(s => s.SheetNumber).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // Build collision-detection sets; updated per-iteration to handle multi-sheet batches
+        var takenNumbers = allSheets.Select(s => s.SheetNumber).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var takenNames   = allSheets.Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var proposals = new List<object>();
         var warnings  = new List<string>();
 
         foreach (var s in sourceList)
         {
-            var newNum  = s.SheetNumber + numSuffix;
-            var newName = s.Name + nameSuffix;
+            var rawNum  = s.SheetNumber + numSuffix;
+            var rawName = s.Name + nameSuffix;
+            var newNum  = ResolveUnique(rawNum,  takenNumbers);
+            var newName = ResolveUnique(rawName, takenNames);
+            takenNumbers.Add(newNum);
+            takenNames.Add(newName);
 
             // Titleblock
             long? tbId   = null;
@@ -104,21 +110,25 @@ public class PreviewDuplicateSheetsTool : IRevitMcpTool
                 catch { }
             }
 
-            bool conflict = existingNumbers.Contains(newNum);
-            if (conflict)
-                warnings.Add($"Sheet number '{newNum}' already exists — adjust newNumberSuffix before applying.");
+            bool numberResolved = !string.Equals(newNum, rawNum, StringComparison.OrdinalIgnoreCase);
+            bool nameResolved   = !string.Equals(newName, rawName, StringComparison.OrdinalIgnoreCase);
+            if (numberResolved)
+                warnings.Add($"Sheet number '{rawNum}' already exists — will use '{newNum}' instead.");
+            if (nameResolved)
+                warnings.Add($"Sheet name '{rawName}' already exists — will use '{newName}' instead.");
 
             proposals.Add(new
             {
-                sourceSheetId     = s.Id.Value,
-                sourceSheetNumber = s.SheetNumber,
-                sourceSheetName   = s.Name,
-                newSheetNumber    = newNum,
-                newSheetName      = newName,
-                titleBlockId      = tbId,
-                titleBlockName    = tbName,
+                sourceSheetId      = s.Id.Value,
+                sourceSheetNumber  = s.SheetNumber,
+                sourceSheetName    = s.Name,
+                newSheetNumber     = newNum,
+                newSheetName       = newName,
+                titleBlockId       = tbId,
+                titleBlockName     = tbName,
                 willCopyParameters = copyParams,
-                conflict
+                numberResolved,
+                nameResolved
             });
         }
 
@@ -132,5 +142,15 @@ public class PreviewDuplicateSheetsTool : IRevitMcpTool
             Warnings   = warnings,
             DurationMs = sw.ElapsedMilliseconds
         });
+    }
+
+    private static string ResolveUnique(string candidate, HashSet<string> taken)
+    {
+        if (!taken.Contains(candidate)) return candidate;
+        for (int i = 1; ; i++)
+        {
+            var s = $"{candidate} {i}";
+            if (!taken.Contains(s)) return s;
+        }
     }
 }
