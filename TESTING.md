@@ -654,3 +654,305 @@ Set Cable Type to "XX_EN_IT_Cat6a" on circuits 2520343 and 2520353 in one operat
 - After approval, all specified parameters are updated on all target circuits.
 - Revit Undo shows "Revit MCP - Set Circuit Parameters Bulk".
 - Per-circuit, per-parameter success/failure is reported.
+
+---
+
+## 21. Electrical Dashboard Tools
+
+### 21.1 Get Electrical Dashboard Summary
+
+**Prompts:**
+```
+Give me an electrical dashboard summary for this model.
+
+Show a summary of electrical issues across all panels.
+```
+
+**Verify:**
+- `revit_get_electrical_dashboard_summary` returns valid JSON with `"success": true`.
+- Response includes panel count and circuit count.
+- Issue breakdown is included (circuits missing panel, cable type, load name, duplicate circuit numbers).
+- System type summary is present.
+- Load summary is present.
+- No Revit transaction is created.
+
+---
+
+### 21.2 Get Panel Issue Summary
+
+**Prompts:**
+```
+Which panels have the most electrical issues?
+
+Show panel issue summary for panel DB-L1.
+```
+
+**Verify:**
+- `revit_get_panel_issue_summary` groups data by panel.
+- `panelName` filter works as a partial match.
+- `includeCircuitDetails` controls whether circuit-level rows are included.
+- `includeIssueDetails` controls whether per-issue rows are included.
+- No Revit transaction is created.
+
+---
+
+### 21.3 Export Electrical Dashboard to Excel
+
+**Prompts:**
+```
+Export the electrical dashboard summary to Excel.
+```
+
+**Verify:**
+- `revit_export_electrical_dashboard_to_excel` returns a file path.
+- File is created in `Documents\RKTools\RevitMCP\Exports`.
+- Workbook opens in Excel.
+- Workbook contains a Dashboard sheet and a per-panel Issues sheet.
+- Headers are readable and columns are auto-sized.
+- No Revit transaction is created.
+
+---
+
+## 22. Circuit Route and Length Estimation Tools
+
+### 22.1 Get Circuit Route Assumptions
+
+**Prompts:**
+```
+Show route assumptions for circuit 2520343.
+```
+
+**Verify:**
+- `revit_get_circuit_route_assumptions` returns valid JSON with panel location when available.
+- Connected element locations are returned when `includeLocations=true`.
+- Location source field indicates the source: `LocationPoint`, `LocationCurve midpoint`, or `BoundingBox center`.
+- Missing locations are reported as warnings rather than crashing.
+- No length estimate is returned by this tool.
+- No Revit transaction is created.
+
+---
+
+### 22.2 Estimate Circuit Length (Single)
+
+**Prompts:**
+```
+Estimate the length of circuit 2520343 using ManhattanMax with a 1.25 multiplier.
+
+Estimate the length of circuit 2520343 using StraightLineMax.
+```
+
+**Verify:**
+- `revit_estimate_circuit_length` returns `rawLengthMeters` and `estimatedLengthMeters`.
+- Length values are in metres.
+- `routingMultiplier` affects `estimatedLengthMeters`.
+- All supported methods work without error:
+  - `StraightLineMax`
+  - `StraightLineSum`
+  - `ManhattanMax`
+  - `ManhattanSum`
+  - `NearestNeighborPath`
+- Warnings clearly state that the result is preliminary and not certified cable routing.
+- `elementBreakdown` is included only when explicitly requested.
+- No Revit transaction is created.
+
+---
+
+### 22.3 Estimate Circuit Lengths (Bulk)
+
+**Prompts:**
+```
+Estimate circuit lengths for all circuits on panel DB-L1.
+
+Estimate circuit lengths for all PowerCircuit circuits.
+```
+
+**Verify:**
+- `revit_estimate_circuit_lengths` accepts explicit `circuitIds`.
+- `panelName` filter works.
+- `systemType` filter works.
+- `limit` is respected.
+- Bulk failures are reported per circuit without failing the entire tool call.
+- No Revit transaction is created.
+
+---
+
+## 23. Voltage-Drop Input Export and Precheck
+
+### 23.1 Export Voltage-Drop Input to Excel
+
+**Prompts:**
+```
+Export voltage-drop input data for all circuits on panel DB-L1.
+
+Export voltage-drop input data only for circuits 2520343 and 2520353.
+```
+
+**Verify:**
+- `revit_export_voltage_drop_input_to_excel` returns a file path.
+- File is created in `Documents\RKTools\RevitMCP\Exports`.
+- Workbook opens in Excel.
+- Expected sheets exist: `Summary`, `Voltage Drop Input`, `Circuit Elements`, `Assumptions`, `Failures`.
+- `Voltage Drop Input` sheet includes columns: Panel, Circuit Number, Circuit Id, Load Name, System Type, Voltage, Apparent Load, Current Estimate, Cable Type, Wire Type, Estimated Length m, Length Method, Routing Multiplier, Connected Element Count, Elements Missing Location, Warnings.
+- `Assumptions` sheet includes the engineering disclaimer.
+- `Failures` sheet is populated when data is missing.
+- `circuitIds` argument exports only the requested circuits and ignores `panelName`/`systemType`.
+- `panelName`/`systemType` filters work correctly when `circuitIds` is not provided.
+- No Revit transaction is created.
+
+---
+
+### 23.2 Voltage-Drop Precheck
+
+**Prompts:**
+```
+Check whether circuit 2520343 has enough data for voltage-drop calculation.
+
+Check voltage-drop readiness for circuits 2520343 and 2520353.
+```
+
+**Verify:**
+- `revit_get_voltage_drop_precheck` accepts a single `circuitId`.
+- `revit_get_voltage_drop_precheck` accepts multiple `circuitIds` as an array.
+- Result reports availability of: `voltage`, `load`, `cableType`, `wireType`, `estimatedLength`, `panelLocation`, `elementLocations`.
+- `missing` list and `recommendations` are returned.
+- Bulk response includes `readyCount` and `notReadyCount` summary.
+- Response includes the disclaimer that this is a readiness check only, not a compliance check.
+- No Revit transaction is created.
+
+---
+
+## 24. Fire Alarm / ATS Preset Tools
+
+### 24.1 Run Fire Alarm Circuit Preset
+
+**Prompts:**
+```
+Run the fire alarm circuit preset.
+
+Run the fire alarm circuit preset for panel ATS KS.
+
+Show Ahel 01 device list sorted by Seadme Nr.
+```
+
+**Verify:**
+- `revit_run_fire_alarm_circuit_preset` collects `Fire Alarm Devices` category only.
+- Devices are grouped by `Ahela nr.`.
+- Device number is read from `Seadme Nr.`.
+- Device type is read using `ContainsNormalized` / partial parameter matching (`ELENEA_Nimetus` matches `ELENEA_ÜLD 001_Nimetus`).
+- Description is read from instance or type parameter where available.
+- `Seadme Nr. = XXX` is accepted when `allowDeviceNumberXXX=true`; a warning is returned but the tool succeeds.
+- Devices are sorted by level and `Seadme Nr.` where available.
+- Circuit info is included when available: Revit circuit ID, circuit number, panel, cable type / wire type, circuit length.
+- No Revit transaction is created.
+
+---
+
+### 24.2 Loop Classification
+
+**Verify:**
+- Loops are classified as one of: `AddressableLoop`, `ConventionalSounderLine`, `ModuleLoop`, `Unknown`.
+- `Ahela nr.` containing `#` classifies as `ConventionalSounderLine`.
+- Device types containing `sireen` / `vilkur` / `alarmseade` classify as `ConventionalSounderLine`.
+- Device types containing `moodul` / `sisend` / `väljund` / `SIM` / `SOM` classify as `ModuleLoop` or `AddressableLoop`.
+- Uncertain classification returns `Unknown` with a warning and does not fail the tool.
+
+---
+
+### 24.3 Export Fire Alarm Circuit Preset to Excel
+
+**Prompts:**
+```
+Export the fire alarm circuit preset to Excel.
+```
+
+**Verify:**
+- `revit_export_fire_alarm_circuit_preset_to_excel` returns a file path.
+- File is created in `Documents\RKTools\RevitMCP\Exports`.
+- Workbook opens in Excel.
+- Expected sheets exist: `Summary`, `Loop Summary`, `Device List`, `Circuit Info`, `Voltage Drop Input`, `Warnings`.
+- `Loop Summary` groups by `Ahela nr.`.
+- `Device List` includes element ID, level, `Ahela nr.`, `Seadme Nr.`, device type, description, circuit ID, panel, cable type.
+- `Voltage Drop Input` sheet includes length/current/resistance/voltage-drop fields where available.
+- `Warnings` sheet includes missing-data warnings.
+- No Revit transaction is created.
+
+---
+
+### 24.4 Get Fire Alarm Visualization Data
+
+**Prompts:**
+```
+Generate fire alarm visualization data for panel ATS KS.
+```
+
+**Verify:**
+- `revit_get_fire_alarm_visualization_data` returns valid structured JSON.
+- Data is grouped by `Ahela nr.`.
+- Panel information is included when available.
+- Loop kind is included.
+- Device count is included.
+- Cable type and length are included where available.
+- Device coordinates are included where available.
+- Warnings are included for missing location or circuit data.
+- No HTML file is created by this tool.
+- No Revit transaction is created.
+
+> **Note:** Standalone HTML/SVG export (`revit_export_fire_alarm_visualization_html`) is not part of the current implementation. Test `revit_get_fire_alarm_visualization_data` instead. HTML export is intentionally deferred until the JSON format is validated on real projects.
+
+---
+
+### 24.5 Get Fire Alarm Voltage-Drop Summary
+
+**Prompts:**
+```
+Give me a fire alarm voltage-drop summary using 50 mA per sounder.
+
+Which fire alarm loops are closest to the resistance or voltage-drop limits?
+```
+
+**Verify:**
+- `revit_get_fire_alarm_voltage_drop_summary` groups results by `Ahela nr.`.
+- Addressable loops return loop resistance style data.
+- Conventional sounder lines return voltage-drop style data.
+- `sounderCurrentMilliAmps` affects total current and voltage-drop result.
+- `sounderSupplyVoltage` affects estimated end voltage.
+- `minimumSounderVoltage` affects status.
+- `addressableLoopMaxResistanceOhm` affects status.
+- `fallbackResistanceOhmPerMeter` is used when no cable profile matches.
+- Warnings and engineering disclaimers are included in the response.
+- No Revit transaction is created.
+
+---
+
+## 25. Cable Resistance Profile Tools
+
+### 25.1 List Cable Resistance Profiles
+
+**Prompts:**
+```
+List cable resistance profiles.
+```
+
+**Verify:**
+- `revit_list_cable_resistance_profiles` returns all configured profiles.
+- Default profiles are created on first use if the config file is missing.
+- Config file is at `%AppData%\RKTools\RevitMCP\electrical-cable-profiles.json`.
+- Each profile includes match string(s), description, and resistance value (Ω/m).
+- No Revit transaction is created.
+
+---
+
+### 25.2 Get Matching Cable Resistance Profile
+
+**Prompts:**
+```
+Which cable resistance profile matches cable type "Varjestatud tulepüsiv kaabel 1×2×1.0 FE180/PH90/E90"?
+
+Which cable resistance profile matches "2×0.8 CCA"?
+```
+
+**Verify:**
+- `revit_get_matching_cable_resistance_profile` returns the best match by cable type name.
+- Matching is case-insensitive and uses contains-style lookup.
+- When no match exists the tool returns `"success": true` with no match and a clear warning rather than an error.
+- No Revit transaction is created.

@@ -137,7 +137,7 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 |------|-------------|
 | `revit_run_fire_alarm_circuit_preset` | Analyses fire alarm circuits, classifies each loop (AddressableLoop / ConventionalSounderLine / ModuleLoop), and returns a structured preset with device counts and recommended cable types |
 | `revit_export_fire_alarm_circuit_preset_to_excel` | Exports the fire alarm circuit preset to `.xlsx` with a Summary sheet and a per-loop Devices sheet |
-| `revit_get_fire_alarm_visualization_data` | Returns GeoJSON-style location data for fire alarm devices grouped by loop — used for spatial visualisation |
+| `revit_get_fire_alarm_visualization_data` | Returns structured location data for fire alarm devices grouped by loop — used for spatial visualisation. Standalone HTML/SVG export (`revit_export_fire_alarm_visualization_html`) is intentionally deferred until the JSON format is validated on real projects; AI clients can generate temporary HTML from this JSON if needed |
 | `revit_get_fire_alarm_voltage_drop_summary` | Summarises estimated voltage drop inputs per fire alarm loop using classified loop types and estimated cable lengths |
 | `revit_list_cable_resistance_profiles` | Lists all cable resistance profiles (Ω/m) from the config file (`electrical-cable-profiles.json`) |
 | `revit_get_matching_cable_resistance_profile` | Finds the best-matching cable resistance profile for a given cable type name |
@@ -411,10 +411,9 @@ EULE_MCP/
 ├── RevitMCP.Addin/
 │   ├── App.cs           IExternalApplication entry point
 │   ├── Commands/        OpenMcpWindowCommand
-│   ├── Electrical/      Circuit query/mutation services, WireTypeResolver, CircuitDtoBuilder
+│   ├── Electrical/      Circuit services, QA helpers, dashboard, voltage-drop prep, fire alarm preset, cable resistance
 │   ├── Services/        PipeServer, ExternalEventHandler, ConnectorService
-│   ├── Electrical/      Circuit services, helpers, CableResistanceProfileService, FireAlarmCircuitPresetService
-│   ├── Tools/           One file per MCP tool (66 tools)
+│   ├── Tools/           One file per MCP tool
 │   ├── UI/              WPF window (Status + Pending + Activity tabs) + ViewModels + themes
 │   └── Interfaces/      IRevitMcpTool
 ├── RevitMCP.Bridge/
