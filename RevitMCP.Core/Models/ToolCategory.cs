@@ -13,5 +13,7 @@ public enum ToolCategory
     Worksharing,
     Electrical,
     Documentation,
-    Coordination
+    Coordination,
+    FamilyCreation,
+    Skills
 }

@@ -2295,4 +2295,190 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         var result = await pipeClient.SendAsync("revit_select_clash_elements", args, cancellationToken);
         return FormatResult(result);
     }
+
+    // ── Family Creation ───────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "revit_create_panel_schematic_symbol_from_dwg"),
+     Description(
+         "Creates a Detail Item family (.rfa) from a local DWG file using a company preset. " +
+         "The family is saved to the output folder and is NOT loaded into the active project. " +
+         "Required: dwgPath (full path to .dwg), userDefinedName (used after the Kilp_ prefix). " +
+         "Optional: presetName (default \"DefaultPanelSchematicSymbol\"), outputFolder (override). " +
+         "If the target file already exists, a _01/_02 version suffix is applied. Requires approval.")]
+    public async Task<string> CreatePanelSchematicSymbolFromDwg(
+        [Description("Full local path to the source DWG file (must end with .dwg).")]
+        string dwgPath,
+        [Description("User-defined symbol name appended after the Kilp_ prefix, e.g. \"QF_3P\". Spaces and invalid filename chars are replaced with underscores.")]
+        string userDefinedName,
+        [Description("Preset name from DwgDetailItemPresets.json. Default: DefaultPanelSchematicSymbol.")]
+        string presetName = "DefaultPanelSchematicSymbol",
+        [Description("Override output folder. If empty, the preset's configured folder is used.")]
+        string? outputFolder = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["dwgPath"]         = dwgPath,
+            ["userDefinedName"] = userDefinedName,
+            ["presetName"]      = presetName,
+            ["outputFolder"]    = outputFolder ?? string.Empty
+        };
+        var result = await pipeClient.SendAsync(
+            "revit_create_panel_schematic_symbol_from_dwg", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    // ── Skills ────────────────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "revit_list_skills", ReadOnly = true),
+     Description("Lists all available company skills with their IDs, names, versions and task counts. " +
+                 "Optional: projectId (used to flag whether a project override exists for each skill).")]
+    public async Task<string> ListSkills(
+        [Description("Optional project ID used to check for existing overrides")] string? projectId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["projectId"] = projectId ?? string.Empty };
+        var result = await pipeClient.SendAsync("revit_list_skills", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_skill_details", ReadOnly = true),
+     Description("Returns the full definition for a specific skill. " +
+                 "Args: skillId (required), projectId, includeProjectOverride (bool — merge the project override into the response).")]
+    public async Task<string> GetSkillDetails(
+        [Description("ID of the skill, e.g. company.electrical.qa")] string skillId,
+        [Description("Optional project ID for override lookup")] string? projectId = null,
+        [Description("Merge the project override into the response")] bool includeProjectOverride = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["skillId"] = skillId,
+            ["projectId"] = projectId ?? string.Empty,
+            ["includeProjectOverride"] = includeProjectOverride
+        };
+        var result = await pipeClient.SendAsync("revit_get_skill_details", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_preview_skill_run", ReadOnly = true),
+     Description("Previews what a skill run will do: task list, which tasks change the model, and whether user confirmation is required. " +
+                 "Call this before revit_run_skill to understand the impact. " +
+                 "Args: skillId (required), projectId, useProjectOverride (bool).")]
+    public async Task<string> PreviewSkillRun(
+        [Description("ID of the skill to preview")] string skillId,
+        [Description("Optional project ID for override lookup")] string? projectId = null,
+        [Description("Apply the project override in the preview")] bool useProjectOverride = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["skillId"] = skillId,
+            ["projectId"] = projectId ?? string.Empty,
+            ["useProjectOverride"] = useProjectOverride
+        };
+        var result = await pipeClient.SendAsync("revit_preview_skill_run", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_run_skill"),
+     Description("Runs all enabled tasks in a company skill. Some tasks may create Revit views — requires approval. " +
+                 "Call revit_preview_skill_run first to understand the impact. " +
+                 "Args: skillId (required), projectId, useProjectOverride (bool, default false).")]
+    public async Task<string> RunSkill(
+        [Description("ID of the skill to run, e.g. company.electrical.qa")] string skillId,
+        [Description("Optional project ID for override lookup")] string? projectId = null,
+        [Description("Apply the project override when running")] bool useProjectOverride = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["skillId"] = skillId,
+            ["projectId"] = projectId ?? string.Empty,
+            ["useProjectOverride"] = useProjectOverride
+        };
+        var result = await pipeClient.SendAsync("revit_run_skill", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_run_skill_task"),
+     Description("Runs a single task within a skill. Useful for re-running or debugging one task. Requires approval. " +
+                 "Args: skillId (required), taskId (required), projectId, useProjectOverride (bool).")]
+    public async Task<string> RunSkillTask(
+        [Description("ID of the skill containing the task")] string skillId,
+        [Description("ID of the task to run, e.g. check.cabletray.vs.ducts")] string taskId,
+        [Description("Optional project ID for override lookup")] string? projectId = null,
+        [Description("Apply the project override when running")] bool useProjectOverride = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["skillId"] = skillId,
+            ["taskId"] = taskId,
+            ["projectId"] = projectId ?? string.Empty,
+            ["useProjectOverride"] = useProjectOverride
+        };
+        var result = await pipeClient.SendAsync("revit_run_skill_task", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_create_project_skill_override", ReadOnly = true),
+     Description("Creates a new project-specific override for a company skill. " +
+                 "changesJson is a JSON string with structure: " +
+                 "{\"tasks\":{\"<taskId>\":{\"enabled\":true,\"settings\":{\"clearanceMm\":100}}}}. " +
+                 "Args: skillId (required), projectId (required), projectName, changesJson, note.")]
+    public async Task<string> CreateProjectSkillOverride(
+        [Description("ID of the skill to override")] string skillId,
+        [Description("Project identifier (e.g. job number)")] string projectId,
+        [Description("Human-readable project name")] string? projectName = null,
+        [Description("JSON string of override data (tasks + settings)")] string? changesJson = null,
+        [Description("Optional note describing the reason for the override")] string? note = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["skillId"]     = skillId,
+            ["projectId"]   = projectId,
+            ["projectName"] = projectName ?? string.Empty,
+            ["changesJson"] = changesJson ?? "{}",
+            ["note"]        = note ?? string.Empty
+        };
+        var result = await pipeClient.SendAsync("revit_create_project_skill_override", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_update_project_skill_override", ReadOnly = true),
+     Description("Updates an existing project skill override by merging changesJson into it. " +
+                 "changesJson uses the same structure as revit_create_project_skill_override. " +
+                 "Args: skillId (required), projectId (required), changesJson, note.")]
+    public async Task<string> UpdateProjectSkillOverride(
+        [Description("ID of the skill")] string skillId,
+        [Description("Project identifier")] string projectId,
+        [Description("JSON string of override changes to merge in")] string? changesJson = null,
+        [Description("Optional note to append to the override history")] string? note = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["skillId"]     = skillId,
+            ["projectId"]   = projectId,
+            ["changesJson"] = changesJson ?? "{}",
+            ["note"]        = note ?? string.Empty
+        };
+        var result = await pipeClient.SendAsync("revit_update_project_skill_override", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_reset_project_skill_override", ReadOnly = true),
+     Description("Deletes the project-specific skill override, reverting to the company master skill. " +
+                 "Args: skillId (required), projectId (required).")]
+    public async Task<string> ResetProjectSkillOverride(
+        [Description("ID of the skill")] string skillId,
+        [Description("Project identifier")] string projectId,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["skillId"] = skillId, ["projectId"] = projectId };
+        var result = await pipeClient.SendAsync("revit_reset_project_skill_override", args, cancellationToken);
+        return FormatResult(result);
+    }
 }

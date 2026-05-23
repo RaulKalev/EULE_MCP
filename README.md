@@ -2,11 +2,13 @@
 
 A local [Model Context Protocol](https://modelcontextprotocol.io) connector that lets **Claude Code** and **Codex** interrogate and work with a live **Autodesk Revit 2026** model in real time.
 
-**114 tools** across four functional areas:
+**123 tools** across six functional areas:
 - **General** (22 tools) — element discovery, parameter QA, grouping, Excel exports, selection, and write operations
 - **Electrical** (44 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
 - **Documentation** (31 tools) — view and sheet management: discovery, summary, preview/apply workflows for placing views, creating/duplicating/renaming sheets and views, bulk parameter updates, revision tracking, preset inspection, and safe destructive delete with mandatory manual approval
 - **Coordination** (17 tools) — Revit-native clash detection: category/link discovery, bounding-box hard-clash and clearance checking, preset management, Excel reporting, and step-through review views
+- **Family Creation** (1 tool) — generate Detail Item families (.rfa) from DWG source files using company presets
+- **Skills** (8 tools) — multi-step QA workflow engine: run built-in or project-specific quality-check skill definitions, inspect task breakdowns, and manage per-project setting overrides
 
 ---
 
@@ -261,6 +263,29 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_create_clash_review_view` | Creates a temporary 3D section box view isolating a single clash *(requires approval)* |
 | `revit_focus_clash` | Zooms the active 3D view to a clash location and selects both clashing elements *(requires approval)* |
 | `revit_select_clash_elements` | Selects both elements of a specific clash in the Revit UI *(requires approval)* |
+
+### Family Creation Tools
+
+| Tool | Description |
+|------|-------------|
+| `revit_create_panel_schematic_symbol_from_dwg` | Creates a Detail Item family (`.rfa`) from a local DWG using a company preset. Saved to the configured output folder — not loaded into the active project. Applies `Kilp_` prefix + user-defined name; adds `_01`/`_02` suffix on conflicts. *(requires approval)* |
+
+### Skills Tools
+
+Skills are named multi-step QA workflows stored as `.skill.json` files. Built-in skills ship with the addin; project overrides let you enable/disable tasks or change settings per job.
+
+| Tool | Description |
+|------|-------------|
+| `revit_list_skills` | Lists all available company skills with IDs, names, versions, and task counts. Optional `projectId` flags which skills have a project override |
+| `revit_get_skill_details` | Returns the full task breakdown and settings for a skill. `includeProjectOverride=true` merges the project-level override into the response |
+| `revit_preview_skill_run` | Read-only preview: shows task list, which tasks would modify the model, and whether approval is required. Always call this before `revit_run_skill` |
+| `revit_run_skill` | Runs all enabled tasks in a skill. Some tasks may require approval. Use `useProjectOverride=true` to apply job-specific settings |
+| `revit_run_skill_task` | Runs a single task within a skill — useful for re-running or debugging one check without running the full skill |
+| `revit_create_project_skill_override` | Creates a project-level settings override for a skill. `changesJson` uses the structure `{"tasks":{"<taskId>":{"enabled":true,"settings":{...}}}}` |
+| `revit_update_project_skill_override` | Merges additional changes into an existing project override |
+| `revit_reset_project_skill_override` | Deletes the project override, reverting the skill to company-master defaults |
+
+---
 
 Advanced tools that accept `filters` and `groupBy` expect valid JSON arrays. See [Example JSON Arguments](#example-json-arguments) below.
 

@@ -171,6 +171,19 @@ public class App : IExternalApplication
             handler.RegisterTool(new FocusClashTool());
             handler.RegisterTool(new SelectClashElementsTool());
 
+            // Family Creation
+            handler.RegisterTool(new CreatePanelSchematicSymbolFromDwgTool());
+
+            // Skills
+            handler.RegisterTool(new ListSkillsTool());
+            handler.RegisterTool(new GetSkillDetailsTool());
+            handler.RegisterTool(new PreviewSkillRunTool());
+            handler.RegisterTool(new RunSkillTool());
+            handler.RegisterTool(new RunSkillTaskTool());
+            handler.RegisterTool(new CreateProjectSkillOverrideTool());
+            handler.RegisterTool(new UpdateProjectSkillOverrideTool());
+            handler.RegisterTool(new ResetProjectSkillOverrideTool());
+
             var eventService = new ExternalEventService(handler);
 
             var approvalService = new ApprovalService();
@@ -182,6 +195,12 @@ public class App : IExternalApplication
             var connector = new ConnectorService(pipeServer, eventService, approvalService);
             _connector = connector;
             _viewModel = new McpWindowViewModel(connector, logger, approvalService);
+
+            // Auto-start the pipe server so [AppLoader] hot-reloads are transparent to agents.
+            // OnShutdown calls PanicStop (stops old pipe), then OnStartup creates + starts a fresh one —
+            // no manual "Start" button click required after a rebuild.
+            connector.Start();
+            DiagLog("ConnectorService auto-started.");
 
             // Startup validation: log all registered tool names so mismatches (e.g. after a
             // partial rebuild before Revit restart) are visible in the diagnostic log.
