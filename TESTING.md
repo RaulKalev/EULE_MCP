@@ -1734,9 +1734,31 @@ This section enumerates every MCP tool exposed by `RevitMCP.Bridge` and describe
 | Docs | `revit_preview_delete_sheets` | RO | "Preview deleting sheets with suffix '_COPY'." | Dry-run with `skipSheetsWithViews` honored | N/A | N/A | — |
 | Docs | `revit_delete_sheets` | **DRA** | "Delete sheets with suffix '_COPY'." | `approval_required` even with DE on → summary contains `DESTRUCTIVE` line | **Manual approval ALWAYS required** | Revit Undo restores | DE never bypasses |
 
+### 30.20 Coordination / Clash Detection
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Coord | `revit_list_clashable_categories` | RO | "List clashable categories." | Array of `{category, elementCount}` objects | N/A | N/A | Includes all occupied categories in active doc |
+| Coord | `revit_list_clashable_links` | RO | "List loaded Revit links." | Array of `{linkId, linkName, isLoaded}` or empty array | N/A | N/A | Unloaded links appear with `isLoaded:false` |
+| Coord | `revit_get_clash_candidates` | RO | "Get candidates for Electrical Equipment vs Mechanical Equipment." | `{sourceCandidateCount, targetCandidateCount}` | N/A | N/A | No geometry extraction; counts only |
+| Coord | `revit_detect_hard_clashes` | RO | "Detect hard clashes between Electrical Equipment and Mechanical Equipment." | `{clashes:[...], totalCount:N}` with element IDs and location | N/A | N/A | Returns empty list when no clashes found |
+| Coord | `revit_detect_clearance_clashes` | RO | "Detect 100 mm clearance clashes between Fire Alarm Devices and Ducts." | Clashes include `distanceMm` and `requiredClearanceMm:100` | N/A | N/A | MVP uses expanded bounding-box approximation |
+| Coord | `revit_get_clash_summary` | RO | "Summarise the clash results." | `{byRule, bySeverity, byStatus, byLevel, totalCount}` | N/A | N/A | Pass `clashes` array as argument |
+| Coord | `revit_list_clash_presets` | RO | "List clash presets." | At least 2 built-in presets returned | N/A | N/A | Built-ins: "Electrical vs HVAC", "Fire Alarm Devices Placement QA" |
+| Coord | `revit_get_clash_preset` | RO | "Get preset 'Electrical vs HVAC'." | Full preset JSON with `name`, `rules[]` | N/A | N/A | Returns error if preset not found |
+| Coord | `revit_validate_clash_preset` | RO | "Validate preset JSON." | `{isValid:true, ruleCount:N, errors:[]}` | N/A | N/A | Pass invalid preset to verify `isValid:false` path |
+| Coord | `revit_run_clash_preset` | RO | "Run preset 'Electrical vs HVAC'." | `{totalClashCount, ruleResults:[...]}` cached for review | N/A | N/A | Result cached to `LastClashRun.json` |
+| Coord | `revit_export_clash_report_to_excel` | RO | "Export last clash run to Excel." | `{filePath: "...ClashReport_*.xlsx"}` | N/A | N/A | File has Summary + Details sheets |
+| Coord | `revit_get_clash_dashboard_summary` | RO | "Get clash dashboard summary." | `{totalClashes, byRule, bySeverity, byStatus}` | N/A | N/A | — |
+| Coord | `revit_get_next_clash` | RO | "Get next clash." | `{currentIndex, totalCount, clash}` | N/A | N/A | Returns error when no cache exists |
+| Coord | `revit_get_previous_clash` | RO | "Get previous clash." | `{currentIndex, totalCount, clash}` with index decremented | N/A | N/A | Wraps to last clash at index 0 |
+| Coord | `revit_select_clash_elements` | RA | "Select elements of clash CL-0001." | `approval_required` → both elements selected in UI after approval | Pending tab | N/A | Linked elements: selects `RevitLinkInstance` as fallback |
+| Coord | `revit_focus_clash` | RA | "Focus clash CL-0001 in active view." | `approval_required` → active 3D view zooms + elements selected | Pending tab | N/A | Requires an open 3D view |
+| Coord | `revit_create_clash_review_view` | RA | "Create clash review view for clash CL-0001." | `approval_required` → new 3D view `ClashReview_CL-0001` created | Pending tab | Revit Undo removes view | Transaction: `"Revit MCP - Create Clash Review View"` |
+
 ---
 
-**Coverage check:** This matrix covers **97/97** registered MCP tools (verified by enumerating `RevitMCP.Bridge/RevitMcpTools.cs` and `RevitMCP.Addin/Tools/*.cs`). Bridge tool names and addin `Name` properties are in 1:1 parity.
+**Coverage check:** This matrix covers **114/114** registered MCP tools (verified by enumerating `RevitMCP.Bridge/RevitMcpTools.cs` and `RevitMCP.Addin/Tools/*.cs`). Bridge tool names and addin `Name` properties are in 1:1 parity.
 
 
 ---
@@ -1777,76 +1799,6 @@ When an agent runs the Section 30 matrix, it should record one row per tool in a
 **Run mode notes:**
 - Record whether Direct Edit was **ON** or **OFF** for each writer test. The matrix expects both modes to be smoke-tested for at least one RA tool and the DRA pair (`revit_delete_views`, `revit_delete_sheets`).
 - For DRA tools, run the test twice: once with DE OFF, once with DE ON. Both must return `approval_required` for `Pass`.
-
-
----
-
-## 32. Recommended Test Model Setup
-
-To exercise the entire Section 30 matrix without manual setup between tools, the test Revit model should contain (at minimum) the following data. Mark missing items as `Skipped - model data missing` rather than `Fail`.
-
-### 32.1 General
-
-- A saved `.rvt` file (any Revit 2026 template will do) named something like `RevitMCP_TestModel.rvt`.
-- At least one **Level** and one **Floor Plan view** placed on a sheet.
-- At least one **Title Block** family loaded.
-- At least one **Sheet** with the loaded title block.
-- At least one **View Template**.
-
-### 32.2 Walls / Generic Elements (Query & Parameter tests)
-
-- ~10 walls of mixed types so `count_elements`, `group_by_parameter`, `find_elements_by_parameter`, and `check_parameter_completeness` return meaningful data.
-- Populate `Comments` on at least one wall (used by `find_elements_by_parameter` and `set_parameter` tests).
-
-### 32.3 Electrical
-
-- At least **2 Electrical Panels** named e.g. `LP-1` and `LP-2` so `reassign_circuit_panel` can move a circuit between them.
-- At least **3 Electrical Equipment / Lighting Fixtures / Receptacles** that can host a circuit (verified via `get_circuit_compatible_elements`).
-- At least **1 existing circuit** on `LP-1` so the discovery and modification tools have a target id.
-- At least **1 uncircuited Lighting Fixture** so `find_uncircuited_elements` returns a non-empty result.
-- A **Cable Type** matching one of the cable resistance profiles shipped with the addin (so `get_matching_cable_resistance_profile` returns a hit).
-
-### 32.4 Fire Alarm (optional but recommended)
-
-- At least **1 panel** named to match the project's fire alarm preset convention (e.g. `FACP`). If absent, mark Section 30.13 rows as `Skipped - model data missing`.
-
-### 32.5 Documentation
-
-- At least **2 sheets** so duplicate/rename/delete preview operations have material.
-- At least **1 unplaced view** so `find_unplaced_views` returns a non-empty result.
-- At least **1 sheet with a placed viewport** so `get_sheet_viewports` returns rows.
-- A **revision** added to the project (issued or pending) so `list_revisions`, `list_revision_numbering_sequences`, and `get_sheet_revisions` return non-empty data.
-
-### 32.6 Presets
-
-- At least **1 query preset** under the user data folder so `list_query_presets` / `run_query_preset` are exercised. If none, mark as `Skipped - requires manual setup`.
-- At least **1 view-sheet workflow preset** so `list_view_sheet_presets` / `get_view_sheet_preset` / `validate_view_sheet_preset` / `run_view_sheet_workflow_preset` return data. If none, mark as `Skipped - requires manual setup`.
-
-### 32.7 Direct Edit Coverage
-
-The agent should run the matrix **twice**:
-1. **Direct Edit OFF** — verifies every RA tool returns `approval_required` and that the pending-approval queue, approve/reject, and Undo all work.
-2. **Direct Edit ON** — verifies every RA tool executes immediately (no `approval_required`), and verifies that **DRA tools still require manual approval** (`revit_delete_views`, `revit_delete_sheets`).
-
-### 32.8 Recommended Save State Between Runs
-
-- After each writer test that succeeds, immediately invoke Revit Undo and **do not save**. This keeps the test model reusable for the next pass.
-- For destructive tests, save a copy of the model before running so the `Undo` step can be verified by file-diff if Revit Undo is unavailable.
-
----
-
-## 33. Special Notes / Deferred Features
-
-The following items are intentionally **not** covered in the Section 30 matrix because they are not registered as MCP tools at this time:
-
-- **`revit_export_fire_alarm_visualization_html`** — Mentioned in earlier design notes but not registered in `RevitMCP.Bridge/RevitMcpTools.cs` or `RevitMCP.Addin/App.cs`. The JSON-only `revit_get_fire_alarm_visualization_data` is the supported path; HTML export remains deferred.
-- **`EmptyDetailOnly` option for delete tools** — Implemented as a safety guard inside `preview_delete_views` / `delete_views` but not exposed as a standalone tool. No separate matrix row needed.
-- **`revit_create_sheets_from_preset`** — Considered during the preset work but not implemented. The current path is `revit_create_sheets_from_table` (already in Section 30.18) which accepts an inline table or preset payload.
-
-**Known classification quirks (intentional, do not "fix" without coordination):**
-- `revit_select_elements` and `revit_select_elements_by_query` are marked `ReadOnly` in the addin even though they change the Revit UI selection. They do not open a DB transaction, so they cannot be Undone.
-- `revit_select_circuit_elements` and `revit_select_uncircuited_elements` are marked `RequiresApproval` for symmetry with other electrical-domain writers, even though they also only touch the UI selection.
-- The view/sheet workflow preset runner (`revit_run_view_sheet_workflow_preset`) is itself `ReadOnly` (dry-run by default). Any actual writes happen through the individual RA writers, each of which goes through its own approval flow.
 
 
 ---
@@ -2156,4 +2108,53 @@ dotnet test RevitMCP.slnx
 | `ClashRunCacheService_GetNext_WrapsAround` | GetNext twice on 2-clash run → wraps to first |
 | `ClashRunCacheService_GetPrevious_WrapsAround` | GetPrevious from start → wraps to last |
 | `ClashRunCacheService_EmptyRunReturnsNull` | GetNext on 0-clash run → returns null |
-| `ClashResultDto_Defaults` | New ClashResultDto has Status="Active", Severity="Medium" |
+| `ClashResultDto_Defaults` | New ClashResultDto has Status="New", Severity="Medium" |
+
+---
+
+## 41. Coordination Tool Safety Notes and Known Limitations
+
+### 41.1 Linked Model Element Selection
+
+When a clashing element resides inside a linked Revit model, the Revit API does **not** allow selecting linked elements the same way as host elements.
+
+Expected behavior in `revit_select_clash_elements` and `revit_focus_clash`:
+- If the source element is in the host model: selects it directly.
+- If the source element is in a linked model: selects the `RevitLinkInstance` as a fallback.
+- The tool result includes a `warnings[]` entry explaining that linked element selection is approximate — the `linkInstanceId` is provided for reference.
+
+Do **not** treat a warning about linked-element fallback as a bug.
+
+### 41.2 Clearance Clash Approximation (Expanded Bounding Box)
+
+MVP clearance clash detection uses the **ExpandedBoundingBox** method:
+- Source element bounding box is expanded uniformly by `toleranceMm` in all directions.
+- An overlap with the target element's bounding box is reported as a clearance violation.
+
+**This is an approximation.** Bounding boxes are axis-aligned and do not follow element geometry curves or offsets. The reported `distanceMm` is the minimum axis-aligned distance between the two boxes and may differ from the true geometric clearance.
+
+Include `"clearance check uses bounding-box approximation"` in smoke test notes. Do not flag approximate clearance results as failures unless the distance value is wildly inconsistent.
+
+### 41.3 Imported / Generic Model Geometry Warnings
+
+When source or target categories include `Generic Models`, `ImportInstance`, or IFC-origin elements:
+- Geometry extraction may fail for some elements (no solid, no geometry iterator).
+- These elements are **skipped silently** and counted in `warnings[]` as `{skippedGeometryCount}`.
+- A non-zero `skippedGeometryCount` is **expected** for IFC-heavy models and is not a failure.
+
+Verify that the result still returns `success: true` and that the `skippedGeometryCount` warning appears when IFC or generic geometry is present.
+
+### 41.4 Unloaded Links
+
+If a Revit link is unloaded:
+- `revit_list_clashable_links` returns it with `isLoaded: false`.
+- `revit_get_clash_candidates`, `revit_detect_hard_clashes`, and `revit_detect_clearance_clashes` skip unloaded links entirely — no crash, no error.
+- The tool result includes a warning listing the skipped link names.
+
+### 41.5 No-Cache State
+
+If `revit_get_next_clash` or `revit_get_previous_clash` is called before any preset has been run:
+- The tool returns `{success: false, message: "No clash run cached. Run a preset first."}` (or similar).
+- This is the expected cold-start behavior — not a bug.
+
+Always run `revit_run_clash_preset` at least once per Revit session before using the step-through review tools.
