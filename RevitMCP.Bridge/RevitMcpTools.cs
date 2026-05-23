@@ -2070,7 +2070,10 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_detect_hard_clashes", ReadOnly = true),
-     Description("Detects hard (physical intersection) clashes between two sets of element categories. Uses solid-geometry intersection with bounding-box pre-check. Saves results as last run by default.")]
+     Description("Detects hard (physical intersection) clashes between two sets of element categories. " +
+                 "By default, only reports clashes confirmed by solid-geometry intersection (Confidence=High). " +
+                 "Set allowBoundingBoxFallback=true to also return low-confidence bbox-only results when solids cannot be extracted. " +
+                 "Saves results as last run by default.")]
     public async Task<string> DetectHardClashes(
         [Description("Source element categories")] string[] sourceCategories,
         [Description("Target element categories")] string[] targetCategories,
@@ -2084,6 +2087,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Save as last run for navigation tools (default true)")] bool saveAsLastRun = true,
         [Description("Rule name label for results (default 'Ad-hoc Hard Clash')")] string ruleName = "Ad-hoc Hard Clash",
         [Description("Severity: Low | Medium | High | Critical (default Medium)")] string severity = "Medium",
+        [Description("Allow low-confidence bounding-box fallback results when solids cannot be extracted or boolean intersection fails. Default false.")]
+        bool allowBoundingBoxFallback = false,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -2093,7 +2098,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["includeImportedGeometry"] = includeImportedGeometry,
             ["linkNameFilters"] = linkNameFilters ?? [], ["toleranceMm"] = toleranceMm,
             ["limit"] = limit, ["maxPairs"] = maxPairs, ["saveAsLastRun"] = saveAsLastRun,
-            ["ruleName"] = ruleName, ["severity"] = severity
+            ["ruleName"] = ruleName, ["severity"] = severity,
+            ["allowBoundingBoxFallback"] = allowBoundingBoxFallback
         };
         var result = await pipeClient.SendAsync("revit_detect_hard_clashes", args, cancellationToken);
         return FormatResult(result);
@@ -2177,7 +2183,9 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_run_clash_preset", ReadOnly = true),
-     Description("Runs all rules in a named clash detection preset and returns merged results with per-rule clash counts.")]
+     Description("Runs all rules in a named clash detection preset and returns merged results with per-rule clash counts. " +
+                 "Hard clash rules use strict solid-intersection by default (Confidence=High). " +
+                 "Set allowBoundingBoxFallback=true to also return low-confidence bbox-only results.")]
     public async Task<string> RunClashPreset(
         [Description("Preset name to run")] string presetName,
         [Description("Include linked models (default true)")] bool includeLinks = true,
@@ -2186,13 +2194,16 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Max results per rule (default 1000)")] int limit = 1000,
         [Description("Max pairs per rule (default 100000)")] int maxPairs = 100000,
         [Description("Save merged result as last run (default true)")] bool saveAsLastRun = true,
+        [Description("Allow low-confidence bounding-box fallback for hard clash rules when solids are unavailable. Default false.")]
+        bool allowBoundingBoxFallback = false,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
         {
             ["presetName"] = presetName, ["includeLinks"] = includeLinks,
             ["includeGenericModels"] = includeGenericModels, ["includeImportedGeometry"] = includeImportedGeometry,
-            ["limit"] = limit, ["maxPairs"] = maxPairs, ["saveAsLastRun"] = saveAsLastRun
+            ["limit"] = limit, ["maxPairs"] = maxPairs, ["saveAsLastRun"] = saveAsLastRun,
+            ["allowBoundingBoxFallback"] = allowBoundingBoxFallback
         };
         var result = await pipeClient.SendAsync("revit_run_clash_preset", args, cancellationToken);
         return FormatResult(result);

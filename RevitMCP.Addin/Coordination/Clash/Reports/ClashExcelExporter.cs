@@ -56,7 +56,8 @@ public class ClashExcelExporter
             "Clash ID", "Rule", "Type", "Severity", "Status",
             "Src ID", "Src Category", "Src Model",
             "Tgt ID", "Tgt Category", "Tgt Model",
-            "Level", "Dist (mm)", "Req. Clearance (mm)", "Message"
+            "Level", "Dist (mm)", "Req. Clearance (mm)",
+            "Detection Method", "Confidence", "Message"
         };
         for (var i = 0; i < headers.Length; i++)
             ws.Cell(1, i + 1).Value = headers[i];
@@ -81,7 +82,9 @@ public class ClashExcelExporter
             ws.Cell(row, 12).Value = c.Level ?? "";
             ws.Cell(row, 13).Value = c.DistanceMm.HasValue ? c.DistanceMm.Value.ToString("F1") : "";
             ws.Cell(row, 14).Value = c.RequiredClearanceMm.HasValue ? c.RequiredClearanceMm.Value.ToString("F1") : "";
-            ws.Cell(row, 15).Value = c.Message;
+            ws.Cell(row, 15).Value = c.DetectionMethod;
+            ws.Cell(row, 16).Value = c.Confidence;
+            ws.Cell(row, 17).Value = c.Message;
         }
 
         ws.Columns().AdjustToContents(1, Math.Min(clashes.Count + 2, 1000));

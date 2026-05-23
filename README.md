@@ -6,7 +6,7 @@ A local [Model Context Protocol](https://modelcontextprotocol.io) connector that
 - **General** (22 tools) — element discovery, parameter QA, grouping, Excel exports, selection, and write operations
 - **Electrical** (44 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
 - **Documentation** (31 tools) — view and sheet management: discovery, summary, preview/apply workflows for placing views, creating/duplicating/renaming sheets and views, bulk parameter updates, revision tracking, preset inspection, and safe destructive delete with mandatory manual approval
-- **Coordination** (17 tools) — Revit-native clash detection: category/link discovery, bounding-box hard-clash and clearance checking, preset management, Excel reporting, and step-through review views
+- **Coordination** (17 tools) — Revit-native clash detection: category/link discovery, solid-intersection hard-clash and clearance checking, preset management, Excel reporting, and step-through review views
 - **Family Creation** (1 tool) — generate Detail Item families (.rfa) from DWG source files using company presets
 - **Skills** (8 tools) — multi-step QA workflow engine: run built-in or project-specific quality-check skill definitions, inspect task breakdowns, and manage per-project setting overrides
 
@@ -220,7 +220,7 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 
 ### Coordination / Clash Detection Tools
 
-> **Note:** All clash detection uses Revit-native bounding-box geometry — no external Navisworks or BIM Collaborate Pro dependency. Linked models must be loaded (not unloaded) to be clashable; imported geometry (DWG, IFC family) has limited support — bounding-box detection only, solid accuracy unavailable.
+> **Note:** Hard clash detection uses bounding-box overlap as a fast candidate pre-filter only. Reported hard clashes are confirmed by solid-geometry boolean intersection — elements without extractable solids (e.g. some fire alarm devices, imported DWG geometry) are skipped by default (`Confidence = High`). Pass `allowBoundingBoxFallback = true` to also return unconfirmed bounding-box overlaps (`Confidence = Low`). Clearance detection uses expanded bounding-box approximation — distances are conservative estimates, not true surface-to-surface. Linked models must be loaded to be clashable.
 
 #### Discovery
 
@@ -234,9 +234,9 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 
 | Tool | Description |
 |------|-------------|
-| `revit_detect_hard_clashes` | Detects bounding-box hard clashes between two category sets (host and/or link elements) — returns clash list with elementIds, categories, and midpoint location |
-| `revit_detect_clearance_clashes` | Detects clearance violations — expands source bounding boxes by a configurable tolerance (mm) before intersection test |
-| `revit_get_clash_summary` | Aggregates a clash run result — returns total counts grouped by rule name, severity, status, and level |
+| `revit_detect_hard_clashes` | Detects hard (physical intersection) clashes between two category sets using solid-geometry boolean intersection (`Confidence = High`). Bounding-box is used only as a fast candidate pre-filter. Set `allowBoundingBoxFallback = true` to also return unconfirmed bbox-only overlaps (`Confidence = Low`) when solids are unavailable. |
+| `revit_detect_clearance_clashes` | Detects clearance violations — expands source bounding boxes by a configurable tolerance (mm) before intersection test. Results are conservative estimates; `Confidence = Medium`. |
+| `revit_get_clash_summary` | Aggregates a clash run result — returns total counts grouped by rule name, severity, status, level, detection method, and confidence |
 
 #### Presets
 
@@ -245,7 +245,7 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_list_clash_presets` | Lists all clash preset JSON files from the clash presets folder (built-in defaults + user-saved) |
 | `revit_get_clash_preset` | Reads and returns the full contents of a named clash preset |
 | `revit_validate_clash_preset` | Validates a clash preset structure — returns isValid, ruleCount, errors[], suggestions[] |
-| `revit_run_clash_preset` | Runs all rules in a clash preset and caches the combined result for step-through review |
+| `revit_run_clash_preset` | Runs all rules in a clash preset and caches the combined result for step-through review. Hard clash rules use strict solid-intersection by default; set `allowBoundingBoxFallback = true` for low-confidence fallback results. |
 
 #### Reporting
 

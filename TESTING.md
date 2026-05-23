@@ -2158,3 +2158,87 @@ If `revit_get_next_clash` or `revit_get_previous_clash` is called before any pre
 - This is the expected cold-start behavior — not a bug.
 
 Always run `revit_run_clash_preset` at least once per Revit session before using the step-through review tools.
+
+---
+
+## 42. Hard Clash False Positive Regression Tests
+
+These tests verify that the strict solid-intersection path does **not** report false positives for elements that are spatially adjacent but do not physically intersect, and that the `allowBoundingBoxFallback` flag behaves correctly.
+
+### 42.1 Fire Alarm Detector vs Pipe — Strict Mode (default)
+
+**Setup:** A fire alarm smoke detector mounted near (but not intersecting) a sprinkler pipe. Both are present in the host model or a loaded link.
+
+**Prompt:**
+```
+Detect hard clashes between Fire Alarm Devices and Pipe Accessories with toleranceMm=5 and allowBoundingBoxFallback=false.
+```
+
+**Expected:**
+- `clashes` array is **empty** (or contains only genuine intersections if any exist).
+- `warnings` contains the strict-mode notice: `"Hard clash detection uses bounding-box overlap only as a candidate pre-check..."`
+- If solids could not be extracted, `warnings` includes a line starting `"Skipped N candidate pair(s) because usable solids could not be extracted."`
+- **No false positives** — the detector is not reported as clashing with the pipe due to bounding-box proximity alone.
+
+### 42.2 Fire Alarm Detector vs Pipe — Fallback Mode (opt-in)
+
+**Setup:** Same geometry as 42.1.
+
+**Prompt:**
+```
+Detect hard clashes between Fire Alarm Devices and Pipe Accessories with toleranceMm=5 and allowBoundingBoxFallback=true.
+```
+
+**Expected:**
+- If solids are unavailable for either element, a clash result **may** appear with `detectionMethod: "BoundingBoxFallback"` and `confidence: "Low"`.
+- The clash `message` contains the phrase `"bounding-box fallback only; verify visually"`.
+- `warnings` includes `"Bounding-box fallback was enabled. Some hard clash results are low-confidence and must be reviewed visually."`
+
+### 42.3 Solid-Confirmed Hard Clash Returns High Confidence
+
+**Setup:** Two pipes that genuinely intersect in the model (or a host + link element that physically overlaps).
+
+**Prompt:**
+```
+Detect hard clashes between Pipes and Pipes (or Pipes and Mechanical Equipment) with toleranceMm=1.
+```
+
+**Expected:**
+- At least one clash result has `detectionMethod: "SolidIntersection"` and `confidence: "High"`.
+- `intersectionVolume` is a positive number (cubic mm).
+- No `"BoundingBoxFallback"` results appear in the same run.
+
+### 42.4 Clearance Result Has Medium Confidence
+
+**Prompt:**
+```
+Detect 100 mm clearance clashes between Fire Alarm Devices and Ducts.
+```
+
+**Expected:**
+- Every clash result (if any) has `detectionMethod: "ExpandedBoundingBox"` and `confidence: "Medium"`.
+- `warnings` includes `"Clearance detection uses expanded bounding-box approximation. Results should be visually reviewed."`
+
+### 42.5 Summary Includes byDetectionMethod and byConfidence
+
+**Prompt:**
+```
+Summarise the last clash run results.
+```
+
+**Expected:**
+- Response includes a `byDetectionMethod` key (e.g. `{"SolidIntersection": 5, "BoundingBoxFallback": 2}`).
+- Response includes a `byConfidence` key (e.g. `{"High": 5, "Low": 2}`).
+
+### 42.6 Excel Export Includes Detection Method and Confidence Columns
+
+**Prompt:**
+```
+Export the last clash run to Excel.
+```
+
+**Expected:**
+- The generated `.xlsx` file has a `Clashes` sheet with columns `Detection Method` (column 15) and `Confidence` (column 16).
+- High-confidence solid-intersection rows show `SolidIntersection` / `High`.
+- Low-confidence fallback rows (if any) show `BoundingBoxFallback` / `Low`.
+

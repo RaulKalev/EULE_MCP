@@ -10,7 +10,7 @@ namespace RevitMCP.Addin.Coordination.Clash.Services;
 public class ClearanceClashDetector
 {
     private const string ApproximationWarning =
-        "MVP clearance detection uses expanded bounding-box approximation — reported distances are conservative estimates, not true surface-to-surface measurements.";
+        "Clearance detection uses expanded bounding-box approximation. Results should be visually reviewed.";
 
     public (List<ClashResultDto> clashes, List<string> warnings) Detect(
         List<ClashCandidateInfo> sources,
@@ -78,6 +78,8 @@ public class ClearanceClashDetector
                     Location = new ClashLocationDto { X = lx, Y = ly, Z = lz },
                     DistanceMm = Math.Round(distMm, 1),
                     RequiredClearanceMm = clearanceMm,
+                    DetectionMethod = "ExpandedBoundingBox",
+                    Confidence = "Medium",
                     Status = "New",
                     Message = $"{src.Category} within {clearanceMm}mm clearance of {tgt.Category} (approx)."
                 });

@@ -43,6 +43,7 @@ public class RunClashPresetTool : IRevitMcpTool
         var limit = ToolArguments.GetInt(args, "limit", 1000);
         var maxPairs = ToolArguments.GetInt(args, "maxPairs", 100_000);
         var saveAsLastRun = ToolArguments.GetBool(args, "saveAsLastRun", true);
+        var allowBoundingBoxFallback = ToolArguments.GetBool(args, "allowBoundingBoxFallback", false);
 
         var allClashes = new List<ClashResultDto>();
         var allWarnings = new List<string>();
@@ -90,7 +91,7 @@ public class RunClashPresetTool : IRevitMcpTool
             }
             else
             {
-                (ruleClashes, ruleWarnings) = _hardDetector.Detect(sources, targets, rule.Name, rule.Severity, rule.ToleranceMm, limit, maxPairs, cancellationToken);
+                (ruleClashes, ruleWarnings) = _hardDetector.Detect(sources, targets, rule.Name, rule.Severity, rule.ToleranceMm, limit, maxPairs, allowBoundingBoxFallback, cancellationToken);
             }
 
             allWarnings.AddRange(ruleWarnings);

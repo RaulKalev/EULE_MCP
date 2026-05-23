@@ -11,7 +11,7 @@ public static class ClashSummaryService
         List<ClashResultDto> clashes,
         IEnumerable<string>? groupByFields = null)
     {
-        var groups = (groupByFields ?? ["Rule", "Level", "LinkedModel", "CategoryPair", "Severity"])
+        var groups = (groupByFields ?? ["Rule", "Level", "LinkedModel", "CategoryPair", "Severity", "DetectionMethod", "Confidence"])
             .ToList();
         var summary = new Dictionary<string, object>
         {
@@ -47,6 +47,16 @@ public static class ClashSummaryService
                 case "Severity":
                     summary["bySeverity"] = clashes
                         .GroupBy(c => c.Severity)
+                        .ToDictionary(g => g.Key, g => (object)g.Count());
+                    break;
+                case "DetectionMethod":
+                    summary["byDetectionMethod"] = clashes
+                        .GroupBy(c => string.IsNullOrWhiteSpace(c.DetectionMethod) ? "(unknown)" : c.DetectionMethod)
+                        .ToDictionary(g => g.Key, g => (object)g.Count());
+                    break;
+                case "Confidence":
+                    summary["byConfidence"] = clashes
+                        .GroupBy(c => string.IsNullOrWhiteSpace(c.Confidence) ? "(unknown)" : c.Confidence)
                         .ToDictionary(g => g.Key, g => (object)g.Count());
                     break;
             }

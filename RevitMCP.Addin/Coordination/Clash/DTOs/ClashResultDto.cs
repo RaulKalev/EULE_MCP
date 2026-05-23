@@ -24,6 +24,10 @@ public class ClashResultDto
     public double? RequiredClearanceMm { get; set; }
     /// <summary>Intersection volume in cubic mm (hard clashes only, null = bbox-fallback).</summary>
     public double? IntersectionVolume { get; set; }
+    /// <summary>How this result was produced: SolidIntersection | ExpandedBoundingBox | BoundingBoxFallback.</summary>
+    public string DetectionMethod { get; set; } = string.Empty;
+    /// <summary>Confidence level: High | Medium | Low.</summary>
+    public string Confidence { get; set; } = string.Empty;
     public string Status { get; set; } = "New";
     public string Message { get; set; } = string.Empty;
 }

@@ -39,6 +39,7 @@ public class DetectHardClashesTool : IRevitMcpTool
         var saveAsLastRun = ToolArguments.GetBool(args, "saveAsLastRun", true);
         var ruleName = ToolArguments.GetString(args, "ruleName", "Ad-hoc Hard Clash");
         var severity = ToolArguments.GetString(args, "severity", "Medium");
+        var allowBoundingBoxFallback = ToolArguments.GetBool(args, "allowBoundingBoxFallback", false);
 
         if (sourceCategories.Length == 0) return Task.FromResult(Fail(request, "sourceCategories is required."));
         if (targetCategories.Length == 0) return Task.FromResult(Fail(request, "targetCategories is required."));
@@ -46,7 +47,7 @@ public class DetectHardClashesTool : IRevitMcpTool
         var (sources, srcWarn) = _collector.Collect(doc, sourceCategories, includeLinks, includeGenericModels, includeImportedGeometry, linkNameFilters, 0);
         var (targets, tgtWarn) = _collector.Collect(doc, targetCategories, includeLinks, includeGenericModels, includeImportedGeometry, linkNameFilters, 0);
 
-        var (clashes, detectWarn) = _detector.Detect(sources, targets, ruleName, severity, toleranceMm, limit, maxPairs, cancellationToken);
+        var (clashes, detectWarn) = _detector.Detect(sources, targets, ruleName, severity, toleranceMm, limit, maxPairs, allowBoundingBoxFallback, cancellationToken);
 
         var allWarnings = srcWarn.Concat(tgtWarn).Concat(detectWarn).Distinct().ToList();
         var run = new ClashRunResultDto

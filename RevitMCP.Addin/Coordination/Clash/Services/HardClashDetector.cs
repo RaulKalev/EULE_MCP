@@ -6,8 +6,8 @@ namespace RevitMCP.Addin.Coordination.Clash.Services;
 
 public class HardClashDetector
 {
-    private const string SolidFallbackNotice =
-        "Hard clash detection uses solid-geometry intersection with bounding-box pre-check. Elements without extractable solids fall back to bounding-box overlap (conservative — may include false positives).";
+    private const string StrictModeNotice =
+        "Hard clash detection uses bounding-box overlap only as a candidate pre-check. Reported hard clashes require successful solid intersection above tolerance.";
 
     public (List<ClashResultDto> clashes, List<string> warnings) Detect(
         List<ClashCandidateInfo> sources,
@@ -17,12 +17,17 @@ public class HardClashDetector
         double toleranceMm,
         int limit,
         int maxPairs,
+        bool allowBoundingBoxFallback = false,
         CancellationToken cancellationToken = default)
     {
         var clashes = new List<ClashResultDto>();
-        var warnings = new List<string> { SolidFallbackNotice };
+        var warnings = new List<string> { StrictModeNotice };
         int pairCount = 0;
         int clashIndex = 0;
+        int skippedNoSolid = 0;
+        int skippedBooleanFailure = 0;
+        int skippedBelowTolerance = 0;
+        int solidIntersectionCount = 0;
         // Tolerance: volume in cubic feet for intersection test
         double tolFeet = toleranceMm / 304.8;
         double tolVolume = tolFeet * tolFeet * tolFeet;
@@ -50,15 +55,16 @@ public class HardClashDetector
                 if (maxPairs > 0 && pairCount > maxPairs)
                 {
                     warnings.Add($"maxPairs limit ({maxPairs}) reached — detection stopped early. Results may be incomplete.");
-                    return (clashes, warnings);
+                    goto done;
                 }
 
-                // Bounding-box precheck
+                // Bounding-box precheck (candidate filter only)
                 if (!ClashBoundingBoxHelper.Overlaps(src.BoundingBox, tgt.BoundingBox)) continue;
 
                 // Attempt solid intersection
-                bool intersects = false;
+                bool? solidResult = null;  // true=intersects, false=no-intersect, null=skipped
                 double? volume = null;
+                string? skipReason = null;
                 try
                 {
                     var srcElem = src.OwnerDocument.GetElement(new ElementId(src.ElementId));
@@ -71,7 +77,12 @@ public class HardClashDetector
                         if (sw != null) warnings.Add(sw);
                         if (tw != null) warnings.Add(tw);
 
-                        if (srcSolid != null && tgtSolid != null)
+                        if (srcSolid == null || tgtSolid == null)
+                        {
+                            skippedNoSolid++;
+                            skipReason = "no-solid";
+                        }
+                        else
                         {
                             var workSrc = src.LinkTransform.IsIdentity
                                 ? srcSolid
@@ -85,47 +96,88 @@ public class HardClashDetector
 
                             if (intersection != null && intersection.Volume > tolVolume)
                             {
-                                intersects = true;
+                                solidResult = true;
                                 volume = intersection.Volume * (304.8 * 304.8 * 304.8); // cubic feet → cubic mm
+                                solidIntersectionCount++;
                             }
-                        }
-                        else
-                        {
-                            intersects = true; // bbox overlap with no solid — report conservatively
+                            else
+                            {
+                                solidResult = false;
+                                skippedBelowTolerance++;
+                            }
                         }
                     }
                 }
                 catch
                 {
-                    intersects = true;
-                    warnings.Add($"Solid intersection failed for pair ({src.ElementId}, {tgt.ElementId}) — using bounding-box result.");
+                    skippedBooleanFailure++;
+                    skipReason = "boolean-failure";
                 }
 
-                if (!intersects) continue;
-
-                clashIndex++;
-                if (limit > 0 && clashes.Count >= limit)
+                // Strict mode: only report when solid intersection confirmed
+                if (solidResult == true)
                 {
-                    warnings.Add($"Result limit ({limit}) reached.");
-                    return (clashes, warnings);
+                    clashIndex++;
+                    if (limit > 0 && clashes.Count >= limit)
+                    {
+                        warnings.Add($"Result limit ({limit}) reached.");
+                        goto done;
+                    }
+                    var (lx, ly, lz) = ClashLocationResolver.ResolveMeters(src.BoundingBox, tgt.BoundingBox);
+                    clashes.Add(new ClashResultDto
+                    {
+                        ClashId = $"CL-{clashIndex:D4}",
+                        RuleName = ruleName,
+                        ClashType = "HardClash",
+                        Severity = severity,
+                        Source = BuildRef(src),
+                        Target = BuildRef(tgt),
+                        Location = new ClashLocationDto { X = lx, Y = ly, Z = lz },
+                        IntersectionVolume = volume,
+                        DetectionMethod = "SolidIntersection",
+                        Confidence = "High",
+                        Status = "New",
+                        Message = $"{src.Category} intersects {tgt.Category}."
+                    });
                 }
-
-                var (lx, ly, lz) = ClashLocationResolver.ResolveMeters(src.BoundingBox, tgt.BoundingBox);
-                clashes.Add(new ClashResultDto
+                else if (skipReason != null && allowBoundingBoxFallback)
                 {
-                    ClashId = $"CL-{clashIndex:D4}",
-                    RuleName = ruleName,
-                    ClashType = "HardClash",
-                    Severity = severity,
-                    Source = BuildRef(src),
-                    Target = BuildRef(tgt),
-                    Location = new ClashLocationDto { X = lx, Y = ly, Z = lz },
-                    IntersectionVolume = volume,
-                    Status = "New",
-                    Message = $"{src.Category} intersects {tgt.Category}."
-                });
+                    // Explicit opt-in fallback — clearly marked low-confidence
+                    clashIndex++;
+                    if (limit > 0 && clashes.Count >= limit)
+                    {
+                        warnings.Add($"Result limit ({limit}) reached.");
+                        goto done;
+                    }
+                    var (lx, ly, lz) = ClashLocationResolver.ResolveMeters(src.BoundingBox, tgt.BoundingBox);
+                    clashes.Add(new ClashResultDto
+                    {
+                        ClashId = $"CL-{clashIndex:D4}",
+                        RuleName = ruleName,
+                        ClashType = "HardClash",
+                        Severity = severity,
+                        Source = BuildRef(src),
+                        Target = BuildRef(tgt),
+                        Location = new ClashLocationDto { X = lx, Y = ly, Z = lz },
+                        IntersectionVolume = null,
+                        DetectionMethod = "BoundingBoxFallback",
+                        Confidence = "Low",
+                        Status = "New",
+                        Message = $"{src.Category} bounding-box overlaps {tgt.Category} (bounding-box fallback only; verify visually)."
+                    });
+                }
             }
         }
+
+        done:
+        if (skippedNoSolid > 0)
+            warnings.Add($"Skipped {skippedNoSolid} candidate pair(s) because usable solids could not be extracted.");
+        if (skippedBooleanFailure > 0)
+            warnings.Add($"Skipped {skippedBooleanFailure} candidate pair(s) because solid boolean intersection failed.");
+        if (skippedBelowTolerance > 0)
+            warnings.Add($"Skipped {skippedBelowTolerance} candidate pair(s) because intersection volume was below tolerance ({toleranceMm}mm³).");
+        if (allowBoundingBoxFallback)
+            warnings.Add("Bounding-box fallback was enabled. Some hard clash results are low-confidence and must be reviewed visually.");
 
         return (clashes, warnings);
     }
