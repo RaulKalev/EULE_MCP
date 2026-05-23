@@ -76,16 +76,26 @@ public class CreateElectricalCircuitTool : IRevitMcpTool
             panel = resolvedPanel;
         }
 
-        // Resolve wire type (optional)
-        Autodesk.Revit.DB.Electrical.WireType? wireType = null;
+        // Resolve wire/cable type (optional).
+        // Try CableType first — fire alarm and data circuits store their type as CableType.
+        // Fall back to WireType if no CableType with that name exists.
+        Autodesk.Revit.DB.Element? resolvedTypeElem = null;
         if (!string.IsNullOrWhiteSpace(wireTypeName))
         {
-            var (wt, wtError) = WireTypeResolver.Resolve(doc, wireTypeName);
-            if (wt == null) return Task.FromResult(Fail(request, wtError));
-            wireType = wt;
+            var (cableElem, _) = CableTypeResolver.Resolve(doc, wireTypeName);
+            if (cableElem != null)
+            {
+                resolvedTypeElem = cableElem;
+            }
+            else
+            {
+                var (wt, wtError) = WireTypeResolver.Resolve(doc, wireTypeName);
+                if (wt == null) return Task.FromResult(Fail(request, wtError));
+                resolvedTypeElem = wt;
+            }
         }
 
-        var result = CircuitMutationService.CreateCircuit(doc, ids, systemType, panel, wireType);
+        var result = CircuitMutationService.CreateCircuit(doc, ids, systemType, panel, resolvedTypeElem);
         var warnings = filtersParsed.Warnings.Concat(result.Errors).ToList();
 
         sw.Stop();

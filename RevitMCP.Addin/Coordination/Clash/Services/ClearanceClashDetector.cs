@@ -19,15 +19,27 @@ public class ClearanceClashDetector
         string severity,
         double clearanceMm,
         int limit,
-        int maxPairs)
+        int maxPairs,
+        CancellationToken cancellationToken = default)
     {
         var clashes = new List<ClashResultDto>();
         var warnings = new List<string> { ApproximationWarning };
         int pairCount = 0;
         int clashIndex = 0;
 
+        if (cancellationToken.IsCancellationRequested)
+        {
+            warnings.Add("Clearance clash detection cancelled before it started.");
+            return (clashes, warnings);
+        }
+
         foreach (var src in sources)
         {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                warnings.Add($"Clearance clash detection cancelled mid-run — {clashes.Count} clash(es) found before cancellation. Results are partial.");
+                return (clashes, warnings);
+            }
             if (src.BoundingBox == null) continue;
             var expandedSrc = ClashBoundingBoxHelper.Expand(src.BoundingBox, clearanceMm);
 

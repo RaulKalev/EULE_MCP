@@ -124,6 +124,13 @@ public class DuplicateSheetsTool : IRevitMcpTool
                     }
                 }
 
+                // Re-assert number and name after parameter copy.
+                // A title-block or other shared parameter on the source may have been written
+                // back through get_Parameter(srcParam.Definition) and overwritten the name we
+                // set above.  Setting these last guarantees the requested suffix is preserved.
+                newSheet.SheetNumber = newNum;
+                newSheet.Name        = newName;
+
                 created++;
                 results.Add(new { sourceSheetId = src.Id.Value, sourceSheetNumber = src.SheetNumber, newSheetId = newSheet.Id.Value, newSheetNumber = newNum, newSheetName = newName });
             }

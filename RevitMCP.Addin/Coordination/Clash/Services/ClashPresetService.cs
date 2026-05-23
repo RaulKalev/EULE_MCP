@@ -95,6 +95,22 @@ public class ClashPresetService
                 },
                 new ClashRuleDto
                 {
+                    Name = "Cable Trays vs Pipes — Clearance 50mm",
+                    SourceCategories = ["Cable Trays"],
+                    TargetCategories = ["Pipes"],
+                    ClashType = "Clearance", ClearanceMm = 50, Severity = "Medium",
+                    TargetScope = "HostAndLinks", IncludeGenericModels = true, IncludeImportedGeometry = true
+                },
+                new ClashRuleDto
+                {
+                    Name = "Conduits vs Ducts — Hard Clash",
+                    SourceCategories = ["Conduits"],
+                    TargetCategories = ["Ducts"],
+                    ClashType = "HardClash", ToleranceMm = 5, Severity = "High",
+                    TargetScope = "HostAndLinks", IncludeGenericModels = true, IncludeImportedGeometry = true
+                },
+                new ClashRuleDto
+                {
                     Name = "Conduits vs Pipes — Hard Clash",
                     SourceCategories = ["Conduits"],
                     TargetCategories = ["Pipes"],

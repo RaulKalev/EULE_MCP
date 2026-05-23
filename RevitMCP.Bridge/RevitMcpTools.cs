@@ -507,6 +507,30 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return JsonConvert.SerializeObject(response, Formatting.Indented);
     }
 
+    /// <summary>
+    /// Converts a value that may be a <see cref="System.Text.Json.JsonElement"/> (as received
+    /// from the MCP SDK which uses System.Text.Json) into a Newtonsoft.Json JToken so the
+    /// request serialises correctly when sent through the named-pipe.
+    /// Without this, JsonElement structs are serialised with their .NET properties (ValueKind,
+    /// etc.) instead of the actual JSON content they wrap.
+    /// </summary>
+    private static object? ToJToken(object? value)
+    {
+        if (value is null) return null;
+        if (value is System.Text.Json.JsonElement je)
+            return Newtonsoft.Json.Linq.JToken.Parse(je.GetRawText());
+        if (value is object[] arr)
+        {
+            var ja = new Newtonsoft.Json.Linq.JArray();
+            foreach (var item in arr)
+                ja.Add(item is System.Text.Json.JsonElement je2
+                    ? Newtonsoft.Json.Linq.JToken.Parse(je2.GetRawText())
+                    : Newtonsoft.Json.Linq.JToken.FromObject(item));
+            return ja;
+        }
+        return value;
+    }
+
     private static string FormatResult(McpToolResult result)
     {
         var response = new
@@ -1566,7 +1590,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Title block family symbol element ID")] long titleBlockId,
         CancellationToken cancellationToken = default)
     {
-        var args = new Dictionary<string, object?> { ["rows"] = rows, ["titleBlockId"] = titleBlockId };
+        var args = new Dictionary<string, object?> { ["rows"] = ToJToken(rows), ["titleBlockId"] = titleBlockId };
         var result = await pipeClient.SendAsync("revit_preview_create_sheets_from_table", args, cancellationToken);
         return FormatResult(result);
     }
@@ -1697,7 +1721,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Title block family symbol element ID (from revit_list_titleblocks)")] long titleBlockId,
         CancellationToken cancellationToken = default)
     {
-        var args = new Dictionary<string, object?> { ["rows"] = rows, ["titleBlockId"] = titleBlockId };
+        var args = new Dictionary<string, object?> { ["rows"] = ToJToken(rows), ["titleBlockId"] = titleBlockId };
         var result = await pipeClient.SendAsync("revit_create_sheets_from_table", args, cancellationToken);
         return FormatResult(result);
     }
@@ -1751,7 +1775,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         var args = new Dictionary<string, object?>
         {
             ["sheetIds"] = sheetIds ?? [], ["sheetNumbers"] = sheetNumbers ?? [],
-            ["nameFilter"] = nameFilter ?? "", ["parameters"] = parameters
+            ["nameFilter"] = nameFilter ?? "", ["parameters"] = ToJToken(parameters)
         };
         var result = await pipeClient.SendAsync("revit_set_sheet_parameters_bulk", args, cancellationToken);
         return FormatResult(result);
@@ -1772,7 +1796,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         {
             ["viewIds"] = viewIds ?? [], ["viewTypes"] = viewTypes ?? [],
             ["nameFilter"] = nameFilter ?? "", ["includeTemplates"] = includeTemplates,
-            ["limit"] = limit, ["parameters"] = parameters
+            ["limit"] = limit, ["parameters"] = ToJToken(parameters)
         };
         var result = await pipeClient.SendAsync("revit_set_view_parameters_bulk", args, cancellationToken);
         return FormatResult(result);

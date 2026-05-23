@@ -1754,7 +1754,7 @@ This section enumerates every MCP tool exposed by `RevitMCP.Bridge` and describe
 | Coord | `revit_get_previous_clash` | RO | "Get previous clash." | `{currentIndex, totalCount, clash}` with index decremented | N/A | N/A | Wraps to last clash at index 0 |
 | Coord | `revit_select_clash_elements` | RA | "Select elements of clash CL-0001." | `approval_required` → both elements selected in UI after approval | Pending tab | N/A | Linked elements: selects `RevitLinkInstance` as fallback |
 | Coord | `revit_focus_clash` | RA | "Focus clash CL-0001 in active view." | `approval_required` → active 3D view zooms + elements selected | Pending tab | N/A | Requires an open 3D view |
-| Coord | `revit_create_clash_review_view` | RA | "Create clash review view for clash CL-0001." | `approval_required` → new 3D view `ClashReview_CL-0001` created | Pending tab | Revit Undo removes view | Transaction: `"Revit MCP - Create Clash Review View"` |
+| Coord | `revit_create_clash_review_view` | RA | "Create clash review view for clash CL-0001." | `approval_required` → reusable 3D view `MCP Clash Review` created or reused, section box scoped to clash | Pending tab | Revit Undo removes view (if newly created) | Transaction: `"Revit MCP - Create Clash Review View"` |
 
 ---
 
@@ -2073,7 +2073,7 @@ call revit_focus_clash with sourceElementId=<id> and targetElementId=<id> and lo
 call revit_create_clash_review_view with clashId="CL-0001" and sourceElementId=<id> and targetElementId=<id>
 ```
 1. Approval in Pending tab.
-2. After approval — a new 3D view named `ClashReview_CL-0001` appears in Project Browser with a section box isolating the two elements.
+2. After approval — the reusable 3D view named `MCP Clash Review` appears in Project Browser (created if missing, otherwise reused) with a section box isolating the two elements.
 3. Rejection — no view created.
 4. Transaction name: `"Revit MCP - Create Clash Review View"`.
 

@@ -44,7 +44,7 @@ public static class CircuitMutationService
         IEnumerable<ElementId> elementIds,
         ElectricalSystemType systemType,
         FamilyInstance? panel,
-        WireType? wireType)
+        Element? wireTypeElem)
     {
         var errors = new List<string>();
         var validIds = new List<ElementId>();
@@ -98,9 +98,9 @@ public static class CircuitMutationService
                 catch (Exception ex) { errors.Add($"Panel assignment failed: {ex.Message}"); }
             }
 
-            if (wireType != null)
+            if (wireTypeElem != null)
             {
-                try { circuit.CableType = wireType.Id; }
+                try { circuit.CableType = wireTypeElem.Id; }
                 catch (Exception ex) { errors.Add($"Wire type assignment failed: {ex.Message}"); }
             }
 

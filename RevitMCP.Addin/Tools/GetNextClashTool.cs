@@ -19,8 +19,17 @@ public class GetNextClashTool : IRevitMcpTool
     {
         var sw = Stopwatch.StartNew();
         var run = _cache.Load();
-        if (run == null || run.Clashes.Count == 0)
+        if (run == null)
             return Task.FromResult(Fail(request, "No clash run in cache. Run a detection first."));
+        if (run.Clashes.Count == 0)
+            return Task.FromResult(new McpToolResult
+            {
+                RequestId  = request.RequestId,
+                Success    = true,
+                Message    = $"Last run for preset '{run.PresetName}' completed with 0 clashes — no results to navigate.",
+                Data       = new { runId = run.RunId, presetName = run.PresetName, totalClashes = 0 },
+                DurationMs = sw.ElapsedMilliseconds
+            });
 
         var (clash, index, total) = _cache.GetNext(run);
 

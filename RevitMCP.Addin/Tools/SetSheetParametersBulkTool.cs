@@ -95,10 +95,18 @@ public class SetSheetParametersBulkTool : IRevitMcpTool
     private static Dictionary<string, object?> GetParamDict(Dictionary<string, object?> args)
     {
         if (!args.TryGetValue("parameters", out var val)) return [];
-        if (val is JObject jo)
-            return jo.Properties().ToDictionary(p => p.Name, p => (object?)p.Value.ToObject<object>());
-        return [];
+        JObject? jo = val switch
+        {
+            JObject j => j,
+            JToken t  => t as JObject,
+            string s  => TryParseJObject(s),
+            _         => null
+        };
+        if (jo == null) return [];
+        return jo.Properties().ToDictionary(p => p.Name, p => (object?)p.Value.ToObject<object>());
     }
+
+    private static JObject? TryParseJObject(string s) { try { return JObject.Parse(s); } catch { return null; } }
 
     private static McpToolResult Fail(McpToolRequest r, string msg) =>
         new() { RequestId = r.RequestId, Success = false, Message = msg };

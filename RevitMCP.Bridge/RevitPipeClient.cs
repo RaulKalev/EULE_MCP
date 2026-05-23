@@ -57,11 +57,20 @@ public class RevitPipeClient
         using var reader = new StreamReader(pipe, leaveOpen: true);
         using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
 
-        var requestJson = JsonConvert.SerializeObject(request);
-        await writer.WriteLineAsync(requestJson);
-
+        // Start the request timeout before the write so both write and read are covered.
+        // This prevents an indefinite hang if the pipe write blocks (e.g. due to sandbox restrictions).
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(_requestTimeoutMs);
+
+        var requestJson = JsonConvert.SerializeObject(request);
+        try
+        {
+            await writer.WriteLineAsync(requestJson.AsMemory(), cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return Error(request.RequestId, "Request timed out while sending to Revit. Revit may be busy or the connector has stopped.");
+        }
 
         try
         {

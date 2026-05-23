@@ -6,6 +6,9 @@ namespace RevitMCP.Addin.Coordination.Clash.Services;
 
 public class HardClashDetector
 {
+    private const string SolidFallbackNotice =
+        "Hard clash detection uses solid-geometry intersection with bounding-box pre-check. Elements without extractable solids fall back to bounding-box overlap (conservative — may include false positives).";
+
     public (List<ClashResultDto> clashes, List<string> warnings) Detect(
         List<ClashCandidateInfo> sources,
         List<ClashCandidateInfo> targets,
@@ -13,18 +16,30 @@ public class HardClashDetector
         string severity,
         double toleranceMm,
         int limit,
-        int maxPairs)
+        int maxPairs,
+        CancellationToken cancellationToken = default)
     {
         var clashes = new List<ClashResultDto>();
-        var warnings = new List<string>();
+        var warnings = new List<string> { SolidFallbackNotice };
         int pairCount = 0;
         int clashIndex = 0;
         // Tolerance: volume in cubic feet for intersection test
         double tolFeet = toleranceMm / 304.8;
         double tolVolume = tolFeet * tolFeet * tolFeet;
 
+        if (cancellationToken.IsCancellationRequested)
+        {
+            warnings.Add("Hard clash detection cancelled before it started.");
+            return (clashes, warnings);
+        }
+
         foreach (var src in sources)
         {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                warnings.Add($"Hard clash detection cancelled mid-run — {clashes.Count} clash(es) found before cancellation. Results are partial.");
+                return (clashes, warnings);
+            }
             if (src.BoundingBox == null) continue;
             foreach (var tgt in targets)
             {

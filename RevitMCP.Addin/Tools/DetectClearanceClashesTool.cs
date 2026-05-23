@@ -47,7 +47,7 @@ public class DetectClearanceClashesTool : IRevitMcpTool
         var (sources, srcWarn) = _collector.Collect(doc, sourceCategories, includeLinks, includeGenericModels, includeImportedGeometry, linkNameFilters, 0);
         var (targets, tgtWarn) = _collector.Collect(doc, targetCategories, includeLinks, includeGenericModels, includeImportedGeometry, linkNameFilters, 0);
 
-        var (clashes, detectWarn) = _detector.Detect(sources, targets, ruleName, severity, clearanceMm, limit, maxPairs);
+        var (clashes, detectWarn) = _detector.Detect(sources, targets, ruleName, severity, clearanceMm, limit, maxPairs, cancellationToken);
 
         var allWarnings = srcWarn.Concat(tgtWarn).Concat(detectWarn).Distinct().ToList();
         var run = new ClashRunResultDto

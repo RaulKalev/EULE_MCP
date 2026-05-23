@@ -51,6 +51,14 @@ public class RunClashPresetTool : IRevitMcpTool
 
         foreach (var rule in preset.Rules)
         {
+            // A. Respect cancellation between rules — return partial results cleanly rather
+            //    than leaving Revit grinding indefinitely after the client has disconnected.
+            if (cancellationToken.IsCancellationRequested)
+            {
+                allWarnings.Add($"Preset execution cancelled after {countByRule.Count}/{preset.Rules.Count} rule(s). Remaining rules were not run. Results are partial.");
+                break;
+            }
+
             var incGM = includeGenericModels && rule.IncludeGenericModels;
             var incIG = includeImportedGeometry && rule.IncludeImportedGeometry;
             var incLinks = includeLinks && (rule.TargetScope == "HostAndLinks");
@@ -59,16 +67,30 @@ public class RunClashPresetTool : IRevitMcpTool
             var (targets, tw1) = _collector.Collect(doc, rule.TargetCategories, incLinks, incGM, incIG, null, 0);
             allWarnings.AddRange(sw1); allWarnings.AddRange(tw1);
 
+            // B. Skip rules with no real candidates — avoids expensive detector work on empty sets.
+            if (sources.Count == 0 || targets.Count == 0)
+            {
+                var skipReason = sources.Count == 0
+                    ? $"no source candidates for [{string.Join(", ", rule.SourceCategories)}]"
+                    : $"no target candidates for [{string.Join(", ", rule.TargetCategories)}]";
+                allWarnings.Add($"Rule '{rule.Name}': skipped — {skipReason}.");
+                countByRule[rule.Name] = 0;
+                continue;
+            }
+
+            // C. Observability — record candidate counts before entering detection work.
+            allWarnings.Add($"Rule '{rule.Name}': {sources.Count} source(s), {targets.Count} target(s), running {rule.ClashType} detection.");
+
             List<ClashResultDto> ruleClashes;
             List<string> ruleWarnings;
 
             if (rule.ClashType == "Clearance")
             {
-                (ruleClashes, ruleWarnings) = _clearanceDetector.Detect(sources, targets, rule.Name, rule.Severity, rule.ClearanceMm, limit, maxPairs);
+                (ruleClashes, ruleWarnings) = _clearanceDetector.Detect(sources, targets, rule.Name, rule.Severity, rule.ClearanceMm, limit, maxPairs, cancellationToken);
             }
             else
             {
-                (ruleClashes, ruleWarnings) = _hardDetector.Detect(sources, targets, rule.Name, rule.Severity, rule.ToleranceMm, limit, maxPairs);
+                (ruleClashes, ruleWarnings) = _hardDetector.Detect(sources, targets, rule.Name, rule.Severity, rule.ToleranceMm, limit, maxPairs, cancellationToken);
             }
 
             allWarnings.AddRange(ruleWarnings);

@@ -16,16 +16,17 @@ A local [Model Context Protocol](https://modelcontextprotocol.io) connector that
 |--------|--------|-------|
 | [Claude Code](https://claude.ai/code) | Supported | `Install-Claude-MCP.bat` |
 | [Codex CLI](https://github.com/openai/codex) | Supported | `Install-Codex-MCP.bat` |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | Supported | `Install-GeminiCLI-MCP.bat` |
 | ChatGPT / other | Not targeted | — |
 
-Both clients connect through the same `RevitMCP.Bridge.exe`. The bridge is started by the AI client over STDIO; client identity is passed via `--client` argument so logs correctly identify who made each request.
+All clients connect through the same `RevitMCP.Bridge.exe`. The bridge is started by the AI client over STDIO; client identity is passed via `--client` argument so logs correctly identify who made each request.
 
 ---
 
 ## Architecture
 
 ```
-Claude Code / Codex
+Claude Code / Codex / Gemini CLI
     │  MCP JSON-RPC 2.0 over STDIO
     ▼
 RevitMCP.Bridge.exe          ← .NET 8 console app
@@ -217,7 +218,7 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 
 ### Coordination / Clash Detection Tools
 
-> **Note:** All clash detection uses Revit-native bounding-box geometry — no external Navisworks or BIM Collaborate Pro dependency. Linked models must be loaded (not unloaded) to be clashable; imported geometry (DWG, IFC family) is not supported.
+> **Note:** All clash detection uses Revit-native bounding-box geometry — no external Navisworks or BIM Collaborate Pro dependency. Linked models must be loaded (not unloaded) to be clashable; imported geometry (DWG, IFC family) has limited support — bounding-box detection only, solid accuracy unavailable.
 
 #### Discovery
 
@@ -457,7 +458,7 @@ The **Approval Required** button in the title bar controls whether write tools (
 
 - Revit 2026
 - .NET 8 SDK
-- Claude Code CLI (`claude`) **or** Codex CLI (`codex`)
+- Claude Code CLI (`claude`), Codex CLI (`codex`), **or** Gemini CLI (`gemini`)
 
 ---
 
@@ -511,6 +512,12 @@ This registers `RevitMCP.Bridge.exe` as a user-scoped MCP server named `revit-mc
 Run `RevitMCP.Config\Install\Install-Codex-MCP.bat`
 
 This generates `RevitMCP.Config\Install\codex-mcp-snippet.toml` with the absolute bridge path already filled in. Paste its contents into `%USERPROFILE%\.codex\config.toml` and restart Codex.
+
+### Gemini CLI
+
+Run `RevitMCP.Config\Install\Install-GeminiCLI-MCP.bat`
+
+This registers `RevitMCP.Bridge.exe` in `%USERPROFILE%\.gemini\settings.json` with `--client GeminiCLI`. Gemini CLI reads this file automatically on startup — no manual config editing required.
 
 ---
 

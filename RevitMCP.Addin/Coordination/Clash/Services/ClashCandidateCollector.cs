@@ -50,30 +50,22 @@ public class ClashCandidateCollector
         var linkFilters = linkNameFilters?.ToList() ?? new List<string>();
         var cats = categoryNames.ToList();
 
-        // Host document
+        // Host document.
+        // "ImportedGeometry" is a special pseudo-category: only collected when explicitly listed
+        // in the category names AND includeImportedGeometry is true.
+        // It is NEVER injected automatically — this prevents DWG imports from polluting
+        // category-specific sets like "Cable Trays" or "Conduits".
         foreach (var catName in cats)
         {
+            if (catName.Equals("ImportedGeometry", StringComparison.OrdinalIgnoreCase))
+            {
+                if (includeImportedGeometry)
+                    CollectImportedGeometryFromDoc(hostDoc, result, warnings, limit);
+                continue;
+            }
             if (!CategoryMap.TryGetValue(catName, out var bic)) { warnings.Add($"Unknown category '{catName}' — skipped."); continue; }
             if (!includeGenericModels && bic == BuiltInCategory.OST_GenericModel) continue;
             CollectFromDoc(hostDoc, bic, catName, "Host", null, null, Transform.Identity, result, limit);
-        }
-
-        if (includeImportedGeometry)
-        {
-            foreach (var imp in new FilteredElementCollector(hostDoc)
-                         .OfClass(typeof(ImportInstance))
-                         .WhereElementIsNotElementType()
-                         .Cast<ImportInstance>())
-            {
-                var bbox = imp.get_BoundingBox(null);
-                if (bbox == null) continue;
-                result.Add(new ClashCandidateInfo
-                {
-                    ElementId = imp.Id.Value, Category = "ImportedGeometry",
-                    Model = "Host", BoundingBox = bbox,
-                    OwnerDocument = hostDoc, LinkTransform = Transform.Identity
-                });
-            }
         }
 
         if (!includeLinks) return (result, warnings);
@@ -92,6 +84,9 @@ public class ClashCandidateCollector
             var transform = link.GetTransform();
             foreach (var catName in cats)
             {
+                // "ImportedGeometry" from linked documents is not collected (complex transforms,
+                // rarely meaningful for clash purposes). Skip silently.
+                if (catName.Equals("ImportedGeometry", StringComparison.OrdinalIgnoreCase)) continue;
                 if (!CategoryMap.TryGetValue(catName, out var bic)) continue;
                 if (!includeGenericModels && bic == BuiltInCategory.OST_GenericModel) continue;
                 CollectFromDoc(linkDoc, bic, catName, link.Name, link.Id.Value, link.Name, transform, result, limit);
@@ -99,6 +94,36 @@ public class ClashCandidateCollector
         }
 
         return (result, warnings);
+    }
+
+    private static void CollectImportedGeometryFromDoc(
+        Document hostDoc,
+        List<ClashCandidateInfo> result,
+        List<string> warnings,
+        int limit)
+    {
+        var items = new FilteredElementCollector(hostDoc)
+            .OfClass(typeof(ImportInstance))
+            .WhereElementIsNotElementType()
+            .Cast<ImportInstance>()
+            .ToList();
+
+        if (items.Count == 0) return;
+
+        warnings.Add($"Imported geometry (DWG/IFC) detected ({items.Count} instance(s)): bounding-box detection only — solid accuracy not available for these elements.");
+
+        foreach (var imp in items)
+        {
+            if (limit > 0 && result.Count >= limit) break;
+            var bbox = imp.get_BoundingBox(null);
+            if (bbox == null) continue;
+            result.Add(new ClashCandidateInfo
+            {
+                ElementId = imp.Id.Value, Category = "ImportedGeometry",
+                Model = "Host", BoundingBox = bbox,
+                OwnerDocument = hostDoc, LinkTransform = Transform.Identity
+            });
+        }
     }
 
     private static void CollectFromDoc(

@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Newtonsoft.Json.Linq;
 using RevitMCP.Addin.Coordination.Clash.Review;
@@ -40,10 +39,8 @@ public class FocusClashTool : IRevitMcpTool
             c.ClashId.Equals(clashId, StringComparison.OrdinalIgnoreCase));
         if (clash == null) return Task.FromResult(Fail(request, $"ClashId '{clashId}' not found in last run."));
 
-        using var t = new Transaction(doc, "Revit MCP - Focus Clash");
-        t.Start();
-        var (message, warnings) = _focusService.Focus(uiapp, doc, clash, sectionBoxPaddingMm, t);
-        t.Commit();
+        // ClashFocusService owns the transaction and activates the view after commit.
+        var (message, warnings) = _focusService.Focus(uiapp, doc, clash, sectionBoxPaddingMm);
 
         sw.Stop();
         return Task.FromResult(new McpToolResult
@@ -66,3 +63,4 @@ public class FocusClashTool : IRevitMcpTool
     private static McpToolResult Fail(McpToolRequest r, string msg) =>
         new() { RequestId = r.RequestId, Success = false, Message = msg };
 }
+
