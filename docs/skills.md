@@ -41,6 +41,8 @@ Built-in default skill files are written here automatically when the skill loade
 | `company.parameter.qa` | Parameter QA | Required parameter completeness |
 | `company.coordination.qa` | Coordination QA | Clash detection and reporting |
 | `company.project.pre-delivery` | Pre-Delivery Combined Check | All checks in one run |
+| `company.lehed.nimetamine` | Lehtede Nimetamine | Auto-apply sheet numbers from naming mapping |
+| `company.security.valve-labipaas-spec-check` | Valve/Läbipääs Spec Check | Audit EN spec section 4 (Valve/Läbipääs) against the model |
 
 ---
 

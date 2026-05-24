@@ -100,6 +100,7 @@ public class SkillLoader
         ("CoordinationQA.skill.json",             BuildDefaultCoordinationQASkill()),
         ("PreDelivery.skill.json",                BuildDefaultPreDeliverySkill()),
         ("DrawingNaming.skill.json",              BuildDefaultDrawingNamingSkill()),
+        ("ValveLabipaasSpecCheck.skill.json",     BuildDefaultValveLabipaasSpecCheckSkill()),
     ];
 
     private static bool IsOlderVersion(string? loaded, string builtin)
@@ -470,6 +471,44 @@ public class SkillLoader
                     },
                 }
             },
+        ]
+    };
+
+    private static SkillDefinition BuildDefaultValveLabipaasSpecCheckSkill() => new()
+    {
+        Id          = "company.security.valve-labipaas-spec-check",
+        Name        = "Valve/Läbipääs Spec Check",
+        Description = "Audits section 4 (Valve/Läbipääs) of the project EN spec workbook against the live Revit model. " +
+                      "Counts detail items on the SHS/LPS struktuur drafting view, placed security devices and equipment, " +
+                      "and estimated cable lengths per cable type. Exports an issue report for any mismatches.",
+        Version     = "1.0.0",
+        Author      = "EULE / RK Tools",
+        IsCompanyMaster = true,
+        DefaultSettings = new()
+        {
+            StopOnCriticalFailure = false,
+            AllowProjectOverride  = true,
+            RequiresUserConfirmationBeforeModelChanges = false,
+        },
+        Tasks =
+        [
+            new()
+            {
+                Id = "security.audit.valve-labipaas-spec", Enabled = true,
+                Settings = new()
+                {
+                    ["excelFilePath"]                      = "",
+                    ["worksheetName"]                      = "Sheet1",
+                    ["draftingViewName"]                   = "SHS/LPS struktuur",
+                    ["quantityColumnLetter"]               = "",
+                    ["cableMarkupPercent"]                 = 30,
+                    ["cableRoundUpMeters"]                 = 100,
+                    ["bundledRunsContributeToValveKaabel"] = false,
+                    ["lengthEstimationMethod"]             = "NearestNeighborPath",
+                }
+            },
+            new() { Id = "common.export.excel-report",   Enabled = true,  Settings = new() { ["reportTitle"] = "Valve/Läbipääs Spec Check Report" } },
+            new() { Id = "common.export.html-dashboard", Enabled = true,  Settings = new() { ["reportTitle"] = "Valve/Läbipääs Spec Check Dashboard" } },
         ]
     };
 }

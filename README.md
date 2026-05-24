@@ -427,6 +427,17 @@ Run clash detection directly from your AI session without leaving the chat. Defi
 
 Skills are named multi-step QA workflows stored as `.skill.json` files. Built-in skills ship with the addin; project overrides let you enable/disable tasks or change settings per job. Use `revit_preview_skill_run` to inspect what a skill will do before running it.
 
+**Built-in skills:**
+| Skill ID | Name | What it checks |
+|----------|------|----------------|
+| `company.lehed.nimetamise-kontroll` | Lehtede Nimetamise Kontroll | Sheet naming QA |
+| `company.delivery.check` | Delivery Check | Delivery folder vs Revit sheets |
+| `company.parameter.qa` | Parameter QA | Required parameter completeness |
+| `company.coordination.qa` | Coordination QA | Clash detection |
+| `company.project.pre-delivery` | Pre-Delivery Combined Check | All checks in one run |
+| `company.lehed.nimetamine` | Lehtede Nimetamine | Auto-apply sheet numbers |
+| `company.security.valve-labipaas-spec-check` | Valve/Läbipääs Spec Check | Audit EN spec section 4 against the model |
+
 | Tool | Description |
 |------|-------------|
 | `revit_list_skills` | Lists all available company skills with IDs, names, versions, and task counts. Optional `projectId` flags which skills have a project override |

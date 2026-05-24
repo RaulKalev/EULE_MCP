@@ -4,6 +4,7 @@ using RevitMCP.Addin.Skills.Tasks.Delivery;
 using RevitMCP.Addin.Skills.Tasks.DrawingNaming;
 using RevitMCP.Addin.Skills.Tasks.LehtedeNimetamiseKontroll;
 using RevitMCP.Addin.Skills.Tasks.ParameterQA;
+using RevitMCP.Addin.Skills.Tasks.Security;
 
 namespace RevitMCP.Addin.Skills;
 
@@ -49,6 +50,9 @@ public class SkillTaskRegistry
             // Drawing Naming tasks
             new ValidateSheetNamingMappingTask(),
             new ApplySheetNamingMappingTask(),
+
+            // Security tasks
+            new AuditValveLabipaasSpecTask(),
         };
 
         _tasks = list.ToDictionary(t => t.Id, t => t, StringComparer.OrdinalIgnoreCase);

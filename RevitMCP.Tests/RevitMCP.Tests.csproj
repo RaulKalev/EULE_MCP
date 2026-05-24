@@ -69,5 +69,7 @@
     <!-- Drawing Naming pure-logic files (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Skills\Tasks\DrawingNaming\Models\NamingMappingToken.cs" Link="DrawingNaming\Models\NamingMappingToken.cs" />
     <Compile Include="..\RevitMCP.Addin\Skills\Tasks\DrawingNaming\NamingMappingEngine.cs" Link="DrawingNaming\NamingMappingEngine.cs" />
+    <!-- Security / Valve-Läbipääs pure-logic files (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\Skills\Tasks\Security\ValveLabipaasRowDefinitions.cs" Link="Security\ValveLabipaasRowDefinitions.cs" />
   </ItemGroup>
 </Project>
