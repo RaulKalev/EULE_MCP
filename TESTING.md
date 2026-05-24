@@ -1604,6 +1604,7 @@ This section enumerates every MCP tool exposed by `RevitMCP.Bridge` and describe
 |------|------|------------|--------------|-----------------|----------|------|-------|
 | Connection | `revit_get_connection_status` | RO | "Check the Revit MCP connection status." | JSON with `connected: true`, document title, version | N/A | N/A | Requires Revit running, addin loaded, document open |
 | Selection | `revit_get_selected_elements` | RO | "List my currently selected elements in Revit." | Array of `{elementId, category, name}` or empty array | N/A | N/A | Pre-select 1+ elements in Revit before running |
+| Selection | `revit_inspect_selected_elements` | RO | "Inspect my currently selected elements." | Array with `category`, `familyName`, `typeName`, `location`, `boundingBoxMm`, `parameters` per element | N/A | N/A | Pre-select 1+ elements; full coverage in S1 |
 
 ### 30.2 Query & Parameter
 
@@ -1674,6 +1675,7 @@ This section enumerates every MCP tool exposed by `RevitMCP.Bridge` and describe
 | Electrical | `revit_add_elements_to_circuit` | RA | "Add element 12345 to circuit id 99999." | Approval flow → updated circuit | Required (DE bypasses) | Single Undo | — |
 | Electrical | `revit_reassign_circuit_panel` | RA | "Reassign circuit 99999 to panel 'LP-2'." | Approval flow → circuit moved | Required (DE bypasses) | Single Undo | Requires 2 panels |
 | Electrical | `revit_change_circuit_cable_or_wire_type` | RA | "Change cable type of circuit 99999 to 'THHN-12'." | Approval flow → type changed | Required (DE bypasses) | Single Undo | Cable type must exist in model |
+| Electrical | `revit_set_circuit_path_mode` | RA | "Set path mode to All Devices for circuits on panel 'LP-1'." | `approval_required` → `{updated, skippedCustomPathCount, skippedUnsupportedModeCount}` | Required (DE bypasses) | Single Undo | Skips circuits with custom/manual paths; scope: `useSelection`, `circuitIds`, or all circuits |
 | Electrical | `revit_set_circuit_parameter` | RA | "Set Comments='SMOKE' on circuit 99999." | Approval flow → parameter set | Required (DE bypasses) | Single Undo | — |
 | Electrical | `revit_set_circuit_parameters_bulk` | RA | "Set Comments='SMOKE' on circuits [99999, 99998]." | Approval summary lists circuit count + parameter count → flow → applied | Required (DE bypasses) | Single Undo | — |
 
@@ -1915,10 +1917,11 @@ These tests cover tools added in the Phase 1 finalization pass. Run them against
 
 | Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
 |------|------|------------|--------------|-----------------|----------|------|-------|
-| Issues | `revit_export_issues_excel` | RO | "Export the issue report to Excel." | `{filePath}` pointing to a `.xlsx` file with Summary and Issues sheets | N/A | N/A | Pass a valid `IssueReportDto` JSON as argument |
-| Issues | `revit_export_issues_markdown` | RO | "Export the issue report to Markdown." | `{filePath}` pointing to a `.md` file with issue table | N/A | N/A | — |
-| Issues | `revit_merge_issue_reports` | RO | "Merge two issue reports." | Single merged `IssueReportDto` with combined issues and updated metadata | N/A | N/A | Pass `reports` array |
-| Issues | `revit_get_issue_report_summary` | RO | "Summarise this issue report." | `{totalIssues, byCategory, bySeverity, topMessages}` | N/A | N/A | — |
+| Issues | `revit_export_issues_json` | RA | "Export this issue report as JSON." | `{filePath}` pointing to a `.json` file | Pending tab | N/A | Pass `reportJson` (full `IssueReportDto` serialised as JSON string) |
+| Issues | `revit_export_issues_excel` | RA | "Export the issue report to Excel." | `{filePath}` pointing to a `.xlsx` file with Summary and Issues sheets | Pending tab | N/A | Pass a valid `IssueReportDto` JSON as argument |
+| Issues | `revit_export_issues_markdown` | RA | "Export the issue report to Markdown." | `{filePath}` pointing to a `.md` file with issue table | Pending tab | N/A | — |
+| Issues | `revit_merge_issue_reports` | RO | "Merge two issue reports." | Single merged `IssueReportDto` with combined issues and updated metadata | N/A | N/A | Pass `reportJsonArray` array |
+| Issues | `revit_export_issues_html_dashboard` | RA | "Export this issue report as an HTML dashboard." | `{filePath}` pointing to a standalone `.html` file with filtering and severity cards | Pending tab | N/A | `includeEmbeddedJson=true` (default) embeds raw JSON in the HTML |
 
 ### 30.22 Delivery
 
@@ -1935,6 +1938,9 @@ These tests cover tools added in the Phase 1 finalization pass. Run them against
 |------|------|------------|--------------|-----------------|----------|------|-------|
 | FileSystem | `file_read_text` | RO | "Read the file at `C:\Temp\test.txt`." | `{filePath, sizeBytes, content}` — UTF-8 content capped at `maxBytes` | N/A | N/A | Path must be inside an allowed-read root |
 | FileSystem | `file_write_text` | RA | "Write 'Hello World' to `C:\Temp\out.txt`." | `approval_required` → `{filePath, sizeBytes}` confirming written | Pending tab | N/A | Path must be in allowed-write root; `overwrite:false` by default |
+| FileSystem | `file_inspect` | RO | "Inspect metadata for `C:\Temp\test.xlsx`." | `{exists, type, extension, sizeBytes, createdAtUtc, modifiedAtUtc}` | N/A | N/A | `includeHash=true` adds `hashSha256`; full coverage in S2 |
+| FileSystem | `file_copy` | RA | "Copy `C:\Temp\source.txt` to `C:\Temp\dest.txt`." | `approval_required` → `{sourcePath, destinationPath, overwritten}` | Pending tab | N/A | `overwrite=false` by default; full coverage in S3 |
+| FileSystem | `file_backup` | RA | "Create a backup of `C:\Temp\sample.xlsx`." | `approval_required` → `{backupPath}` with `{stem}_backup_{yyyy-MM-dd_HHmmss}.{ext}` pattern | Pending tab | N/A | Optional `backupDirectory`; full coverage in S4 |
 | FileSystem | `file_list_directory` | RO | "List files in `C:\Temp`." | `{entries:[{name, path, isDirectory, sizeBytes}], totalCount}` | N/A | N/A | `searchPattern` / `recursive` filter results |
 
 ### 30.24 Excel (Standalone)
@@ -1951,7 +1957,57 @@ These tests cover tools added in the Phase 1 finalization pass. Run them against
 
 ---
 
-**Coverage check:** This matrix covers **150/150** registered MCP tools (verified by enumerating `RevitMCP.Bridge/RevitMcpTools.cs` and `RevitMCP.Addin/Tools/*.cs`). Bridge tool names and addin `Name` properties are in 1:1 parity.
+### 30.25 Config
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Config | `config_read` | RO | "Read the user config file." | JSON config object; `createIfMissing=true` creates empty `{}` on first call | N/A | N/A | Detailed coverage in S6; scope: `user`, `project`, or `addin` |
+| Config | `config_get_project_config` | RO | "Get the project config for `C:\Temp\ProjectRoot`." | Saved project config JSON or not-found error | N/A | N/A | Config file is `.rktools\mcp.project.config.json` under the project root |
+| Config | `config_write` | RA | "Write `{\"testKey\":\"testValue\"}` to the user config." | `approval_required` → `{filePath, keyCount}` | Pending tab | N/A | Overwrites entire file; prefer `config_update` for partial edits |
+| Config | `config_update` | RA | "Update user config: set `testKey` to `updatedValue`." | `approval_required` → `{updatedKeys}` | Pending tab | N/A | Merges into existing; dot-path keys supported |
+| Config | `config_set_project_config` | RA | "Set project config for `C:\Temp\ProjectRoot`." | `approval_required` → `{filePath}` | Pending tab | N/A | Creates `.rktools\mcp.project.config.json` in project root |
+
+### 30.26 Skills
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Skills | `revit_list_skills` | RO | "List all company skills." | Array of `{id, name, version, taskCount, hasProjectOverride}` | N/A | N/A | Reads from `CompanySkills/` under config folder |
+| Skills | `revit_get_skill_details` | RO | "Get details for skill 'company.electrical.qa'." | Full skill JSON with task definitions and settings | N/A | N/A | `includeProjectOverride=true` merges project override into response |
+| Skills | `revit_preview_skill_run` | RO | "Preview running skill 'company.electrical.qa'." | `{tasks:[{id, name, modifiesModel}], requiresConfirmation}` | N/A | N/A | Call before `revit_run_skill` to understand impact |
+| Skills | `revit_run_skill` | RA | "Run skill 'company.electrical.qa'." | `approval_required` → per-task `{success, issueCount}` | Required (DE bypasses) | Single Undo (model-writing tasks) | Call `revit_preview_skill_run` first; read-only tasks run without transaction |
+| Skills | `revit_run_skill_task` | RA | "Run task 'check.cabletray.vs.ducts' in skill 'company.electrical.qa'." | `approval_required` → single-task result | Required (DE bypasses) | Single Undo | Useful for re-running or debugging one task |
+| Skills | `revit_create_project_skill_override` | RO | "Create a project override for skill 'company.electrical.qa' for project 'P-2026-001'." | `{overridePath, skillId, projectId}` confirming file created | N/A | N/A | `changesJson`: `{\"tasks\":{\"<taskId>\":{\"enabled\":true,\"settings\":{...}}}}` |
+| Skills | `revit_update_project_skill_override` | RO | "Update the project override: disable task 'check.facp.clearance'." | `{updated: true, mergedKeys}` | N/A | N/A | Merges `changesJson` into existing override |
+| Skills | `revit_reset_project_skill_override` | RO | "Reset project override for skill 'company.electrical.qa' on project 'P-2026-001'." | `{deleted: true}` or not-found message | N/A | N/A | Reverts to company master skill |
+| Skills | `revit_configure_sheet_naming_skill` | RO | "Configure sheet naming skill for project 'P-2026-001' with Excel register at `C:\Temp\register.xlsx`." | `{overridePath, configuredTasks}` | N/A | N/A | Convenience wrapper for `company.lehed.nimetamise-kontroll`; set `enableExcelComparison=true` |
+
+### 30.27 Skills Admin
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Skills Admin | `revit_compare_skill_override_to_master` | RO | "Compare project override for skill 'company.electrical.qa' on project 'P-2026-001' to master." | `{changedSettings, disabledTasks, newTasksInMaster, versionMismatch}` diff JSON | N/A | N/A | Returns `upToDate: true` when no diffs found |
+| Skills Admin | `revit_propose_master_skill_update` | RO | "Propose a master update for skill 'company.electrical.qa' from project 'P-2026-001'." | `{proposalPath}` confirming proposal JSON written to local proposals folder | N/A | N/A | Never modifies company master files directly |
+| Skills Admin | `revit_export_skill_override_diff_markdown` | RO | "Export a Markdown diff of the override for skill 'company.electrical.qa' on project 'P-2026-001'." | `{filePath}` pointing to a `.md` diff report in the exports folder | N/A | N/A | Does not modify any skill files |
+
+### 30.28 Standards
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Standards | `standards_list_sources` | RO | "List company standards sources." | Array of `{id, name, enabled, fileCount, indexedAt}` | N/A | N/A | Config in `StandardsSources.json` under user data folder |
+| Standards | `standards_index_sources` | RO | "Index all enabled company standards sources." | `{indexed, skipped, errors}` counts per source | N/A | N/A | `force=true` rebuilds stale indexes; run before `standards_search` |
+| Standards | `standards_search` | RO | "Search company standards for 'cable tray sizing'." | Array of `{chunkId, source, heading, score, snippet}` | N/A | N/A | Run `standards_index_sources` first; `discipline` hint improves relevance |
+| Standards | `standards_get_document_chunk` | RO | "Get document chunk 'src1::chunk-042' with 1 context chunk before and after." | `{chunkId, text, source, heading, contextBefore:[], contextAfter:[]}` | N/A | N/A | `chunkId` from `standards_search` results |
+| Standards | `standards_validate_source_config` | RO | "Validate the standards source configuration." | `{valid, issues:[{source, issue}]}` — creates example config if none exists | N/A | N/A | Run first to diagnose missing or misconfigured sources |
+
+### 30.29 Family Creation
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Families | `revit_create_panel_schematic_symbol_from_dwg` | RA | "Create a panel schematic symbol from DWG `C:\Temp\QF_3P.dwg` with name 'QF_3P'." | `approval_required` → `{familyPath, familyName}` — `.rfa` saved to preset output folder | Required (DE bypasses) | N/A (file operation) | Family is NOT loaded into the project; version suffix `_01/_02` applied if file already exists |
+
+---
+
+**Coverage check:** This matrix covers **161/161** registered MCP tools (verified by enumerating `RevitMCP.Bridge/RevitMcpTools.cs` and `RevitMCP.Addin/Tools/*.cs`). Bridge tool names and addin `Name` properties are in 1:1 parity.
 
 
 ---
