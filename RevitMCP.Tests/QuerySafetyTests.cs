@@ -311,4 +311,71 @@ public class QuerySafetyTests
         Assert.Equal(50, families.Count);
         Assert.Equal("Family_100", families[0].Family);
     }
+
+    // ── QueryGuard.ResolveEffectiveLimits ────────────────────────────────────
+
+    [Fact]
+    public void ResolveEffectiveLimits_OversizedPageSize_ClampsToMaxPageSize()
+    {
+        var limits = new QueryLimits { DefaultPageSize = 100, MaxPageSize = 500 };
+        var (pageSize, _, _) = QueryGuard.ResolveEffectiveLimits(999_999, 500, 0, 0, limits);
+        Assert.Equal(500, pageSize);
+    }
+
+    [Fact]
+    public void ResolveEffectiveLimits_NegativePageSize_UsesDefaultPageSize()
+    {
+        var limits = new QueryLimits { DefaultPageSize = 100, MaxPageSize = 500 };
+        var (pageSize, _, _) = QueryGuard.ResolveEffectiveLimits(-1, 500, 0, 0, limits);
+        Assert.Equal(100, pageSize);
+    }
+
+    [Fact]
+    public void ResolveEffectiveLimits_SmallLimit_CapsPageSizeBelowDefault()
+    {
+        // limit=10 < DefaultPageSize=100 → effectivePageSize should be 10
+        var limits = new QueryLimits { DefaultPageSize = 100, MaxPageSize = 500 };
+        var (pageSize, _, _) = QueryGuard.ResolveEffectiveLimits(-1, 10, 0, 0, limits);
+        Assert.Equal(10, pageSize);
+    }
+
+    [Fact]
+    public void ResolveEffectiveLimits_ZeroMaxParams_UsesDefault()
+    {
+        var limits = new QueryLimits { MaxParametersPerElement = 40 };
+        var (_, maxParams, _) = QueryGuard.ResolveEffectiveLimits(-1, 500, 0, 0, limits);
+        Assert.Equal(40, maxParams);
+    }
+
+    [Fact]
+    public void ResolveEffectiveLimits_OversizedMaxParams_Clamped()
+    {
+        var limits = new QueryLimits { MaxParametersPerElement = 40 };
+        var (_, maxParams, _) = QueryGuard.ResolveEffectiveLimits(-1, 500, 999, 0, limits);
+        Assert.Equal(40, maxParams);
+    }
+
+    [Fact]
+    public void ResolveEffectiveLimits_ZeroTruncate_UsesDefault()
+    {
+        var limits = new QueryLimits { MaxStringLength = 500 };
+        var (_, _, truncate) = QueryGuard.ResolveEffectiveLimits(-1, 500, 0, 0, limits);
+        Assert.Equal(500, truncate);
+    }
+
+    [Fact]
+    public void ResolveEffectiveLimits_OversizedTruncate_Clamped()
+    {
+        var limits = new QueryLimits { MaxStringLength = 500 };
+        var (_, _, truncate) = QueryGuard.ResolveEffectiveLimits(-1, 500, 0, 9999, limits);
+        Assert.Equal(500, truncate);
+    }
+
+    [Fact]
+    public void ResolveEffectiveLimits_ExplicitSmallPageSize_Respected()
+    {
+        var limits = new QueryLimits { DefaultPageSize = 100, MaxPageSize = 500 };
+        var (pageSize, _, _) = QueryGuard.ResolveEffectiveLimits(25, 500, 0, 0, limits);
+        Assert.Equal(25, pageSize);
+    }
 }

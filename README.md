@@ -75,8 +75,8 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_get_element_parameters` | Reads instance/type parameters for element IDs or selection, including shared parameter metadata |
 | `revit_count_elements` | Element counts grouped by Category or FamilyAndType, with optional category filter |
 | `revit_group_by_parameter` | Convenience tool for grouping elements by one parameter |
-| `revit_find_elements_by_parameter` | Finds elements using one or more parameter filters. Optional pagination: `page` (0-based), `pageSize` (default capped at 500). Optional safety args: `maxParametersPerElement` (cap params per element), `truncateStringLength` (truncate long values). Response includes `hasMore`, `nextPageToken`. |
-| `revit_get_elements_info` | Returns structured element info with selected parameter values. Optional pagination: `page` (0-based), `pageSize` (default capped at 500). Optional safety args: `maxParametersPerElement`, `truncateStringLength`. Response includes `hasMore`, `nextPageToken`. |
+| `revit_find_elements_by_parameter` | Finds elements using one or more parameter filters. Supports `useSelection`, `elementIds`, `includeInstanceParameters/TypeParameters`. Pagination: `page`, `pageSize`. Safety caps: `maxParametersPerElement`, `truncateStringLength`. Set `summaryOnly=true` for category/family counts. Response includes `hasMore`, `nextPageToken`. |
+| `revit_get_elements_info` | Returns structured element info with selected parameter values. Requires `useSelection`, `elementIds`, `category`, or `summaryOnly=true`. Pagination: `page`, `pageSize`. Safety caps: `maxParametersPerElement`, `truncateStringLength`. Response includes `hasMore`, `nextPageToken`, and `summary` when `summaryOnly=true`. |
 | `revit_group_elements` | Groups elements by category, family, type, level, or multiple parameters |
 | `revit_export_query_to_excel` | Exports query/grouping results to a formatted `.xlsx` file |
 | `revit_get_available_parameters` | Discovers available parameters with fill stats and example values |
@@ -92,13 +92,43 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 
 ### Query Safety & Pagination
 
-All element query tools have built-in response guards:
+All element query tools have built-in response guards and safety defaults enforced by `QueryLimits`:
 
-- **ResponseGuard** — applied at the pipe boundary. If a serialized response exceeds **1 MB**, the tool returns a `ResponseTooLarge` error with remediation suggestions instead of sending an oversized payload. This cannot be disabled.
-- **Pagination** — `revit_get_elements_info` and `revit_find_elements_by_parameter` accept `page` (0-based integer) and `pageSize` (capped at 500). Responses include `hasMore` and `nextPageToken` for sequential retrieval.
-- **Per-element limits** — `maxParametersPerElement` caps the number of parameters per element; `truncateStringLength` truncates long parameter values (appends `... [truncated]`). Both default to 0 (off).
+| Limit | Default | Description |
+|-------|---------|-------------|
+| `DefaultPageSize` | 100 | Elements returned per page when `pageSize` is not specified |
+| `MaxPageSize` | 500 | Hard ceiling for `pageSize`; larger values are clamped with a warning |
+| `MaxParametersPerElement` | 40 | Parameters per element; 0 (omit) uses this default |
+| `MaxStringLength` | 500 chars | Parameter value truncation; 0 (omit) uses this default |
+| `MaxResponseBytes` | 1 MB | Serialized response hard limit; exceeded responses return `ResponseTooLarge` |
+| `TimeoutSeconds` | 30 s | Pipe dispatch timeout per tool call |
 
-If a query is too broad and would produce an oversized response, prefer: category filter → specific `parameterNames` → `pageSize: 20` → `includeTypeParameters: false`.
+**Key behaviors:**
+
+- **ResponseGuard** — applied at the pipe boundary. If a serialized response exceeds **1 MB**, the tool returns a `ResponseTooLarge` error with remediation suggestions. Cannot be disabled.
+- **Pagination** — `pageSize` defaults to 100 when omitted. Pass `page` (0-based) to walk through pages. Responses include `hasMore` and `nextPageToken`.
+- **Per-element limits** — `maxParametersPerElement` caps the number of parameters per element; `truncateStringLength` truncates long parameter values (appends `... [truncated]`). Both default to the safety defaults above when omitted.
+- **Summary mode** — `summaryOnly=true` on `revit_get_elements_info` or `revit_find_elements_by_parameter` returns category/family counts without building element DTOs. This is the recommended first step for broad model scans. Broad detailed queries without `category`, `elementIds`, or `useSelection` are blocked unless `summaryOnly=true`.
+- **Clamping warnings** — when caller-supplied `pageSize`, `maxParametersPerElement`, or `truncateStringLength` exceed the limits, the engine clamps the value and adds an explanatory warning to the response.
+
+**Example prompts:**
+
+Get a summary of all elements in the model without returning element details:
+```json
+{ "summaryOnly": true }
+```
+
+Find fire alarm devices but return only 50 at a time:
+```json
+{ "category": "Fire Alarm Devices", "pageSize": 50, "page": 0 }
+```
+
+Get element info with tight parameter and string caps to keep responses small:
+```json
+{ "category": "Electrical Fixtures", "pageSize": 50, "maxParametersPerElement": 10, "truncateStringLength": 200 }
+```
+
+If a query is too broad and would produce an oversized response, prefer: `summaryOnly=true` → `category` filter → specific `parameterNames` → `pageSize: 20` → `includeTypeParameters: false`.
 
 ### Parameter QA Rule Set Tools
 

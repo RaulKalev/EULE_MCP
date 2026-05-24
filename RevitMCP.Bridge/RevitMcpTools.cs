@@ -366,12 +366,21 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_find_elements_by_parameter", ReadOnly = true),
-     Description("Finds model elements matching one or more parameter filters. Each filter specifies: parameterName (partial match), operator (equals/contains/startsWith/isEmpty/greaterThan/lessThan/notEquals/notContains/endsWith/isNotEmpty), value, matchMode (Contains/ContainsNormalized/Exact/ExactNormalized), scope (InstanceAndType/Instance/Type). Also accepts category, useSelection, elementIds, returnParameters, includeInstanceParameters, includeTypeParameters, limit.")]
+     Description("Finds model elements matching one or more parameter filters. Each filter: parameterName (partial match), operator (equals/contains/startsWith/isEmpty/greaterThan/lessThan/notEquals/notContains/endsWith/isNotEmpty), value, matchMode, scope. Accepts category, useSelection, elementIds, returnParameters, paging (pageSize/page), and safety caps (maxParametersPerElement, truncateStringLength). Set summaryOnly=true to get category/family counts without element data.")]
     public async Task<string> FindElementsByParameter(
         [Description("JSON array of filter objects: [{parameterName, operator, value, matchMode, scope}]")] string? filters = null,
         [Description("Optional category name to restrict search (e.g. 'Fire Alarm Devices')")] string? category = null,
+        [Description("If true, scan current Revit selection instead of category/elementIds.")] bool useSelection = false,
+        [Description("Explicit element IDs to query.")] long[]? elementIds = null,
         [Description("Optional list of parameter names to include in returned elements")] string[]? returnParameters = null,
-        [Description("Max elements to return (default 500)")] int limit = 500,
+        [Description("Include instance parameters. Default true.")] bool includeInstanceParameters = true,
+        [Description("Include type parameters. Default true.")] bool includeTypeParameters = true,
+        [Description("Max elements to scan/return (default 500).")] int limit = 500,
+        [Description("Optional page size for paged results. Clamped by QueryLimits.MaxPageSize (500). Defaults to QueryLimits.DefaultPageSize (100) when omitted.")] int pageSize = -1,
+        [Description("Zero-based page index for paged results.")] int page = 0,
+        [Description("Maximum parameters returned per element. 0 uses the safety default (40).")] int maxParametersPerElement = 0,
+        [Description("Maximum string length for parameter values. 0 uses the safety default (500 chars).")] int truncateStringLength = 0,
+        [Description("If true, return category/family summary counts only without building element DTOs. Allows broad model scans.")] bool summaryOnly = false,
         CancellationToken cancellationToken = default)
     {
         if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
@@ -381,24 +390,38 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         {
             ["category"] = category ?? string.Empty,
             ["filters"] = parsedFilters,
+            ["useSelection"] = useSelection,
+            ["elementIds"] = elementIds ?? [],
             ["returnParameters"] = returnParameters ?? [],
-            ["limit"] = limit
+            ["includeInstanceParameters"] = includeInstanceParameters,
+            ["includeTypeParameters"] = includeTypeParameters,
+            ["limit"] = limit,
+            ["pageSize"] = pageSize,
+            ["page"] = page,
+            ["maxParametersPerElement"] = maxParametersPerElement,
+            ["truncateStringLength"] = truncateStringLength,
+            ["summaryOnly"] = summaryOnly
         };
         var result = await pipeClient.SendAsync("revit_find_elements_by_parameter", args, cancellationToken);
         return FormatResult(result);
     }
 
     [McpServerTool(Name = "revit_get_elements_info", ReadOnly = true),
-     Description("Returns structured element info and selected parameter values. Accepts: useSelection (bool), elementIds (int[]), category (string), filters (JSON array of {parameterName, operator, value, matchMode, scope}), parameterNames (string[]), includeInstanceParameters (bool), includeTypeParameters (bool), limit (int).")]
+     Description("Returns structured element info and selected parameter values. Requires useSelection, elementIds, category, or summaryOnly=true. Supports paging (pageSize/page) and safety caps (maxParametersPerElement, truncateStringLength). Set summaryOnly=true to get category/family counts across the whole model without building element DTOs. Filters: JSON array of {parameterName, operator, value, matchMode, scope}.")]
     public async Task<string> GetElementsInfo(
-        [Description("If true, use current selection")] bool useSelection = false,
-        [Description("List of element IDs")] long[]? elementIds = null,
-        [Description("Category name filter")] string? category = null,
-        [Description("JSON array of parameter filters")] string? filters = null,
-        [Description("Parameter names to return (partial match)")] string[]? parameterNames = null,
-        [Description("Include instance parameters")] bool includeInstanceParameters = true,
-        [Description("Include type parameters")] bool includeTypeParameters = true,
-        [Description("Max elements to return (default 500)")] int limit = 500,
+        [Description("If true, use current selection.")] bool useSelection = false,
+        [Description("List of element IDs to retrieve.")] long[]? elementIds = null,
+        [Description("Category name filter (e.g. 'Fire Alarm Devices').")] string? category = null,
+        [Description("JSON array of parameter filters: [{parameterName, operator, value, matchMode, scope}]")] string? filters = null,
+        [Description("Parameter names to return (partial match). Leave empty for all.")] string[]? parameterNames = null,
+        [Description("Include instance parameters. Default true.")] bool includeInstanceParameters = true,
+        [Description("Include type parameters. Default true.")] bool includeTypeParameters = true,
+        [Description("Max elements to scan/return (default 500).")] int limit = 500,
+        [Description("Optional page size for paged results. Clamped by QueryLimits.MaxPageSize (500). Defaults to QueryLimits.DefaultPageSize (100) when omitted.")] int pageSize = -1,
+        [Description("Zero-based page index for paged results.")] int page = 0,
+        [Description("Maximum parameters returned per element. 0 uses the safety default (40).")] int maxParametersPerElement = 0,
+        [Description("Maximum string length for parameter values. 0 uses the safety default (500 chars).")] int truncateStringLength = 0,
+        [Description("If true, return category/family summary counts only without element DTOs. Allows broad model scans without category/selection scope.")] bool summaryOnly = false,
         CancellationToken cancellationToken = default)
     {
         if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
@@ -413,7 +436,12 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["parameterNames"] = parameterNames ?? [],
             ["includeInstanceParameters"] = includeInstanceParameters,
             ["includeTypeParameters"] = includeTypeParameters,
-            ["limit"] = limit
+            ["limit"] = limit,
+            ["pageSize"] = pageSize,
+            ["page"] = page,
+            ["maxParametersPerElement"] = maxParametersPerElement,
+            ["truncateStringLength"] = truncateStringLength,
+            ["summaryOnly"] = summaryOnly
         };
         var result = await pipeClient.SendAsync("revit_get_elements_info", args, cancellationToken);
         return FormatResult(result);

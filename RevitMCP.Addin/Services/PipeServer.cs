@@ -115,9 +115,9 @@ public class PipeServer
                     request = JsonConvert.DeserializeObject<McpToolRequest>(line);
                     if (request == null) throw new InvalidOperationException("Null request deserialized.");
 
-                    // 60-second timeout: approval tools now return approval_required immediately,
-                    // so there is no reason to wait longer than a minute for any tool response.
-                    result = await _eventService.DispatchAsync(request, timeoutMs: 60_000);
+                    // QueryLimits controls the maximum time a tool may run before the dispatch layer returns a timeout.
+                    var timeoutMs = Math.Max(1, QueryLimits.Default.TimeoutSeconds) * 1000;
+                    result = await _eventService.DispatchAsync(request, timeoutMs: timeoutMs);
                 }
                 catch (Exception ex)
                 {

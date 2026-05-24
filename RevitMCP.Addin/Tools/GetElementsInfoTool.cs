@@ -41,8 +41,13 @@ public class GetElementsInfoTool : IRevitMcpTool
             SummaryOnly = ToolArguments.GetBool(request.Arguments, "summaryOnly", false)
         };
 
-        if (!opts.UseSelection && opts.ElementIds.Count == 0 && string.IsNullOrWhiteSpace(opts.Category))
-            return Task.FromResult(Fail(request, "Provide useSelection=true, elementIds, or a category."));
+        if (!opts.SummaryOnly &&
+            !opts.UseSelection &&
+            opts.ElementIds.Count == 0 &&
+            string.IsNullOrWhiteSpace(opts.Category))
+        {
+            return Task.FromResult(Fail(request, "Provide useSelection=true, elementIds, category, or set summaryOnly=true for a broad model summary."));
+        }
 
         var result = _engine.Query(uidoc.Document, uidoc, opts, cancellationToken);
         if (!result.Success)

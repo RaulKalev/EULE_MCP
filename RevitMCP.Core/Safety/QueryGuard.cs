@@ -61,4 +61,42 @@ public static class QueryGuard
         if (maxLength <= 0 || value.Length <= maxLength) return value;
         return string.Concat(value.AsSpan(0, maxLength), "... [truncated]");
     }
+
+    /// <summary>
+    /// Resolves effective page size, parameter cap, and string truncation length from
+    /// caller-supplied sentinel values against the configured <see cref="QueryLimits"/>.
+    /// <list type="bullet">
+    /// <item>Negative / zero <paramref name="requestedPageSize"/> → <see cref="QueryLimits.DefaultPageSize"/>, capped at <paramref name="requestedLimit"/>.</item>
+    /// <item>Values above <see cref="QueryLimits.MaxPageSize"/> are clamped.</item>
+    /// <item>Zero <paramref name="maxParametersPerElement"/> / <paramref name="truncateStringLength"/> → limit default.</item>
+    /// </list>
+    /// </summary>
+    public static (int effectivePageSize, int effectiveMaxParameters, int effectiveTruncateLength) ResolveEffectiveLimits(
+        int requestedPageSize,
+        int requestedLimit,
+        int maxParametersPerElement,
+        int truncateStringLength,
+        QueryLimits? limits = null)
+    {
+        limits ??= QueryLimits.Default;
+
+        int capLimit = requestedLimit > 0 ? requestedLimit : limits.DefaultPageSize;
+
+        int effectivePageSize = requestedPageSize > 0
+            ? NormalizePageSize(requestedPageSize, limits)
+            : Math.Min(capLimit, limits.DefaultPageSize);
+
+        // Ensure page size never exceeds the requested scan/return cap
+        effectivePageSize = Math.Min(effectivePageSize, capLimit);
+
+        int effectiveMaxParameters = maxParametersPerElement > 0
+            ? Math.Min(maxParametersPerElement, limits.MaxParametersPerElement)
+            : limits.MaxParametersPerElement;
+
+        int effectiveTruncateLength = truncateStringLength > 0
+            ? Math.Min(truncateStringLength, limits.MaxStringLength)
+            : limits.MaxStringLength;
+
+        return (effectivePageSize, effectiveMaxParameters, effectiveTruncateLength);
+    }
 }

@@ -56,8 +56,12 @@ public class ElementQueryEngine
         if (options.SummaryOnly)
             return BuildSummaryResult(doc, elementIds, options, reader, readOpts, cancellationToken);
 
-        // --- 3. Pagination setup ---
-        int effectivePageSize = options.PageSize > 0 ? Math.Min(options.PageSize, options.Limit) : options.Limit;
+        // --- 3. Resolve effective limits (clamp caller values against QueryLimits.Default) ---
+        var (effectivePageSize, effectiveMaxParameters, effectiveTruncateLength) =
+            QueryGuard.ResolveEffectiveLimits(
+                options.PageSize, options.Limit,
+                options.MaxParametersPerElement, options.TruncateStringLength);
+
         int page = Math.Max(0, options.Page);
         int pageStart = page * effectivePageSize; // 0-based index of first element on this page
 
@@ -67,6 +71,15 @@ public class ElementQueryEngine
         var warnings = new List<string>();
         int totalMatched = 0;
         int totalScanned = 0;
+
+        // Warn when caller-supplied values were actually clamped
+        var limits = QueryLimits.Default;
+        if (options.PageSize > limits.MaxPageSize)
+            warnings.Add($"Requested pageSize {options.PageSize} exceeded the maximum ({limits.MaxPageSize}); clamped to {effectivePageSize}.");
+        if (options.MaxParametersPerElement > limits.MaxParametersPerElement)
+            warnings.Add($"Requested maxParametersPerElement {options.MaxParametersPerElement} exceeded the maximum ({limits.MaxParametersPerElement}); clamped to {effectiveMaxParameters}.");
+        if (options.TruncateStringLength > limits.MaxStringLength)
+            warnings.Add($"Requested truncateStringLength {options.TruncateStringLength} exceeded the maximum ({limits.MaxStringLength}); clamped to {effectiveTruncateLength}.");
 
         foreach (var elementId in elementIds)
         {
@@ -92,8 +105,8 @@ public class ElementQueryEngine
                 allParams,
                 options.ReturnParameters,
                 options.ReturnParameterMatchMode,
-                options.MaxParametersPerElement,
-                options.TruncateStringLength);
+                effectiveMaxParameters,
+                effectiveTruncateLength);
 
             var typeId = element.GetTypeId();
             var typeElem = (typeId != null && typeId != ElementId.InvalidElementId) ? doc.GetElement(typeId) : null;

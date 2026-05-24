@@ -96,7 +96,65 @@ Invalid JSON is caught at the bridge before it reaches the Revit add-in. All err
 
 ### Add-in-level validation
 
-- Call `revit_get_elements_info` with no category, no selection, no element IDs — should return a clear error message.
+- Call `revit_get_elements_info` with no category, no selection, no element IDs — should return a clear error message that mentions `summaryOnly=true`.
+
+### Query Safety Smoke Tests
+
+Run these manually through an MCP client connected to Revit:
+
+**1 — Broad detailed query is rejected**
+```json
+{ "tool": "revit_get_elements_info", "arguments": {} }
+```
+Expected: `success=false`, message mentions `summaryOnly=true`.
+
+**2 — Broad `summaryOnly=true` query succeeds**
+```json
+{ "tool": "revit_get_elements_info", "arguments": { "summaryOnly": true } }
+```
+Expected: `success=true`, `data.summary` contains `totalElements`, `categories`, `families`; `data.elements` is empty.
+
+**3 — Large `pageSize` is clamped to MaxPageSize (500)**
+```json
+{ "tool": "revit_get_elements_info", "arguments": { "category": "Fire Alarm Devices", "pageSize": 999999 } }
+```
+Expected: `success=true`, `data.pageSize <= 500`, warning mentions clamping.
+
+**4 — Default page size applies (100) when `pageSize` is omitted**
+```json
+{ "tool": "revit_get_elements_info", "arguments": { "category": "Fire Alarm Devices" } }
+```
+Expected: `success=true`, `data.pageSize == 100` (or fewer if fewer than 100 elements matched).
+
+**5 — Explicit smaller page size is respected**
+```json
+{ "tool": "revit_get_elements_info", "arguments": { "category": "Fire Alarm Devices", "pageSize": 10 } }
+```
+Expected: `success=true`, `data.returned <= 10`, `data.hasMore=true` if more than 10 matched.
+
+**6 — Second page works**
+```json
+{ "tool": "revit_get_elements_info", "arguments": { "category": "Fire Alarm Devices", "pageSize": 10, "page": 1 } }
+```
+Expected: `success=true`, `data.page=1`, `data.returned <= 10`.
+
+**7 — Long parameter values are truncated**
+```json
+{ "tool": "revit_get_elements_info", "arguments": { "category": "Walls", "truncateStringLength": 20, "pageSize": 5 } }
+```
+Expected: `success=true`, no parameter value in `data.elements` exceeds 20 chars (long values end with `... [truncated]`).
+
+**8 — Parameter count is capped**
+```json
+{ "tool": "revit_get_elements_info", "arguments": { "category": "Walls", "maxParametersPerElement": 3, "pageSize": 5 } }
+```
+Expected: `success=true`, each element in `data.elements` has at most 3 parameters.
+
+**9 — ResponseGuard catches oversized response**
+Query a category with thousands of elements and no pageSize (will be capped at 100 by default). If that still exceeds 1 MB, expect `success=false`, `status="ResponseTooLarge"`, `data.suggestedActions` with narrowing advice.
+
+**10 — Timeout returns a clean error**
+If a long-running query times out (30 s limit per `QueryLimits.TimeoutSeconds`), expect `success=false`, message indicates timeout rather than freezing the MCP client.
 
 ### Expected error response shape
 
