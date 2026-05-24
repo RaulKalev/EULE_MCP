@@ -37,6 +37,16 @@ public static class CircuitMutationService
         string NewWireType,
         List<string> Warnings);
 
+    public record SetPathModeResult(
+        bool Success,
+        string Message,
+        int UpdatedCount,
+        int AlreadyCorrectCount,
+        int SkippedCustomPathCount,
+        List<CircuitPathAction> Actions);
+
+    public record CircuitPathAction(long CircuitId, string CircuitNumber, string Action);
+
     // ── Create ───────────────────────────────────────────────────────────
 
     public static CreateResult CreateCircuit(
@@ -225,6 +235,53 @@ public static class CircuitMutationService
             return new ChangeTypeResult(
                 false, $"Wire type change failed: {ex.Message}",
                 oldWireType, "", warnings);
+        }
+    }
+
+    // ── Set path mode ─────────────────────────────────────────────────────
+
+    public static SetPathModeResult SetPathMode(
+        Document doc,
+        IEnumerable<ElectricalSystem> circuits)
+    {
+        var actions = new List<CircuitPathAction>();
+        int updatedCount = 0, alreadyCorrectCount = 0, skippedCount = 0;
+
+        using var trans = new Transaction(doc, "Revit MCP - Set Circuit Path Mode to All Devices");
+        trans.Start();
+        try
+        {
+            foreach (var circuit in circuits)
+            {
+                string num = circuit.CircuitNumber ?? circuit.Id.Value.ToString();
+                if (circuit.CircuitPathMode == ElectricalCircuitPathMode.Custom)
+                {
+                    actions.Add(new CircuitPathAction(circuit.Id.Value, num, "skipped_custom"));
+                    skippedCount++;
+                }
+                else if (circuit.CircuitPathMode == ElectricalCircuitPathMode.AllDevices)
+                {
+                    actions.Add(new CircuitPathAction(circuit.Id.Value, num, "already_correct"));
+                    alreadyCorrectCount++;
+                }
+                else
+                {
+                    circuit.CircuitPathMode = ElectricalCircuitPathMode.AllDevices;
+                    actions.Add(new CircuitPathAction(circuit.Id.Value, num, "updated"));
+                    updatedCount++;
+                }
+            }
+            trans.Commit();
+            return new SetPathModeResult(
+                true,
+                $"Updated {updatedCount} circuit(s) to All Devices. {skippedCount} skipped (custom path). {alreadyCorrectCount} already correct.",
+                updatedCount, alreadyCorrectCount, skippedCount, actions);
+        }
+        catch (Exception ex)
+        {
+            trans.RollBack();
+            return new SetPathModeResult(
+                false, $"Transaction failed: {ex.Message}", 0, 0, 0, actions);
         }
     }
 }

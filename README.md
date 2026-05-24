@@ -2,9 +2,9 @@
 
 A local [Model Context Protocol](https://modelcontextprotocol.io) connector that lets **Claude Code** and **Codex** interrogate and work with a live **Autodesk Revit 2026** model in real time.
 
-**168 tools** across twelve functional areas:
+**169 tools** across twelve functional areas:
 - **General** (25 tools) — element discovery, parameter QA, grouping, Excel exports, selection, write operations, config-driven parameter QA rule sets, and detailed geometry inspection of selected elements
-- **Electrical** (44 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
+- **Electrical** (45 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, path mode control, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
 - **Documentation** (31 tools) — view and sheet management: discovery, summary, preview/apply workflows for placing views, creating/duplicating/renaming sheets and views, bulk parameter updates, revision tracking, preset inspection, and safe destructive delete with mandatory manual approval
 - **Coordination** (17 tools) — Revit-native clash detection: category/link discovery, solid-intersection hard-clash and clearance checking, preset management, Excel reporting, and step-through review views
 - **Family Creation** (1 tool) — generate Detail Item families (.rfa) from DWG source files using company presets
@@ -113,6 +113,7 @@ Config-driven rule sets stored in `%AppData%\RKTools\RevitMCP\parameter-qa-rules
 | `revit_add_elements_to_circuit` | Adds elements to an existing circuit *(requires approval)* |
 | `revit_reassign_circuit_panel` | Reassigns a circuit to a different panel *(requires approval)* |
 | `revit_change_circuit_cable_or_wire_type` | Changes the cable/wire type on a circuit; prefers cable type, falls back to wire type *(requires approval)* |
+| `revit_set_circuit_path_mode` | Sets the path mode of electrical circuits to **All Devices**. Skips circuits with a user-defined custom path. Scope: `useSelection=true` (circuits containing selected elements), `circuitIds` (explicit list), or all circuits when neither is provided *(requires approval)* |
 | `revit_set_circuit_parameter` | Sets **any** parameter on one or more circuits — fully handles `ElementId` storage type (Cable Type and similar) by resolving a numeric element ID or an exact element name *(requires approval)* |
 | `revit_find_uncircuited_elements` | Finds elements in electrical/lighting/data/fire/security categories that are not assigned to any circuit; supports category lists, parameter filters, and parameter return |
 | `revit_check_circuit_health` | Central circuit QA tool — configurable checks: `MissingPanel`, `EmptyCircuitNumber`, `DuplicateCircuitNumbers`, `MissingCableType` (strict: Revit 2026 CableType ElementId not set), `MissingWireType` (lenient: neither CableType nor legacy WireType resolves to a name), `MissingLoadName`, `NoConnectedElements`. Flagged circuits include the resolved `wireType` for inline cross-checking against `revit_get_circuit_info`. Pass `returnIssueReport=true` to include a structured `IssueReportDto` in the response. |

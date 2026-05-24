@@ -1166,6 +1166,25 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    [McpServerTool(Name = "revit_set_circuit_path_mode"),
+     Description(
+         "Sets the path mode of electrical circuits to 'All Devices'. Skips circuits with a user-defined " +
+         "custom path. Scope: useSelection=true (circuits containing selected elements), circuitIds (explicit list), " +
+         "or all circuits in the document when neither is provided. Requires approval.")]
+    public async Task<string> SetCircuitPathMode(
+        [Description("Circuit element IDs to target (optional — omit for all circuits)")] long[]? circuitIds = null,
+        [Description("Use current Revit selection to determine target circuits")] bool useSelection = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["circuitIds"] = circuitIds ?? [],
+            ["useSelection"] = useSelection
+        };
+        var result = await pipeClient.SendAsync("revit_set_circuit_path_mode", args, cancellationToken);
+        return FormatResult(result);
+    }
+
     [McpServerTool(Name = "revit_set_circuit_parameter"),
      Description(
          "Sets a parameter value on one or more electrical circuits. Handles ALL storage types including " +
