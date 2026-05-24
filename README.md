@@ -2,16 +2,17 @@
 
 A local [Model Context Protocol](https://modelcontextprotocol.io) connector that lets **Claude Code** and **Codex** interrogate and work with a live **Autodesk Revit 2026** model in real time.
 
-**135 tools** across nine functional areas:
+**145 tools** across ten functional areas:
 - **General** (22 tools) — element discovery, parameter QA, grouping, Excel exports, selection, and write operations
 - **Electrical** (44 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
 - **Documentation** (31 tools) — view and sheet management: discovery, summary, preview/apply workflows for placing views, creating/duplicating/renaming sheets and views, bulk parameter updates, revision tracking, preset inspection, and safe destructive delete with mandatory manual approval
 - **Coordination** (17 tools) — Revit-native clash detection: category/link discovery, solid-intersection hard-clash and clearance checking, preset management, Excel reporting, and step-through review views
 - **Family Creation** (1 tool) — generate Detail Item families (.rfa) from DWG source files using company presets
-- **Skills** (8 tools) — multi-step QA workflow engine: run built-in or project-specific quality-check skill definitions, inspect task breakdowns, and manage per-project setting overrides
+- **Skills** (9 tools) — multi-step QA workflow engine: run built-in or project-specific quality-check skill definitions, inspect task breakdowns, manage per-project setting overrides, and configure the sheet naming skill
 - **Issue Reports** (4 tools) — shared structured issue model (`IssueDto` / `IssueReportDto`) with JSON, Excel, and Markdown export; multi-report merge; foundation used by all QA tools
 - **File System** (3 tools) — read, write, and list local files with configurable path-policy enforcement (allowed-root lists, traversal blocking, size limits)
 - **Excel** (5 tools) — standalone Excel workbook tools (no open document required): inspect workbooks, read ranges, update cells, insert rows, and append table rows with automatic backup and header-matching
+- **Delivery** (4 tools) — pre-issue delivery folder QA: scan folders for EULE-format drawing files, cross-check against Revit sheets or an Excel document register, and run a combined full-check with optional Issue Report and Excel/Markdown export
 
 ---
 
@@ -78,7 +79,7 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_get_available_parameters` | Discovers available parameters with fill stats and example values |
 | `revit_list_query_presets` | Lists reusable query presets from config |
 | `revit_run_query_preset` | Runs a saved preset by name, optionally exports to Excel |
-| `revit_check_parameter_completeness` | Checks required parameters exist and are filled (model QA) |
+| `revit_check_parameter_completeness` | Checks required parameters exist and are filled (model QA). Pass `returnIssueReport=true` to include a structured `IssueReportDto` in the response. |
 | `revit_export_view_list_to_excel` | Exports all views to `.xlsx` with type, scale, sheet placement |
 | `revit_export_sheet_list_to_excel` | Exports all sheets to `.xlsx` with placed views |
 | `revit_export_schedule_list_to_excel` | Exports all schedules to `.xlsx` with fields |
@@ -102,7 +103,7 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_change_circuit_cable_or_wire_type` | Changes the cable/wire type on a circuit; prefers cable type, falls back to wire type *(requires approval)* |
 | `revit_set_circuit_parameter` | Sets **any** parameter on one or more circuits — fully handles `ElementId` storage type (Cable Type and similar) by resolving a numeric element ID or an exact element name *(requires approval)* |
 | `revit_find_uncircuited_elements` | Finds elements in electrical/lighting/data/fire/security categories that are not assigned to any circuit; supports category lists, parameter filters, and parameter return |
-| `revit_check_circuit_health` | Central circuit QA tool — configurable checks: `MissingPanel`, `EmptyCircuitNumber`, `DuplicateCircuitNumbers`, `MissingCableType` (strict: Revit 2026 CableType ElementId not set), `MissingWireType` (lenient: neither CableType nor legacy WireType resolves to a name), `MissingLoadName`, `NoConnectedElements`. Flagged circuits include the resolved `wireType` for inline cross-checking against `revit_get_circuit_info` |
+| `revit_check_circuit_health` | Central circuit QA tool — configurable checks: `MissingPanel`, `EmptyCircuitNumber`, `DuplicateCircuitNumbers`, `MissingCableType` (strict: Revit 2026 CableType ElementId not set), `MissingWireType` (lenient: neither CableType nor legacy WireType resolves to a name), `MissingLoadName`, `NoConnectedElements`. Flagged circuits include the resolved `wireType` for inline cross-checking against `revit_get_circuit_info`. Pass `returnIssueReport=true` to include a structured `IssueReportDto` in the response. |
 | `revit_export_panel_circuit_list_to_excel` | Exports a panel-organized circuit report to `.xlsx` with Summary, Panel Circuits, Circuit Elements, and Health Issues sheets |
 | `revit_find_circuits_by_element_parameter` | Finds circuits containing elements matching category and parameter filters (e.g. circuits in room 201, circuits with specific device types) |
 | `revit_trace_circuit` | Traces an element or circuit back to its panel — returns circuit number, load name, wire type, apparent load, and panel details |
@@ -237,8 +238,8 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 
 | Tool | Description |
 |------|-------------|
-| `revit_detect_hard_clashes` | Detects hard (physical intersection) clashes between two category sets using solid-geometry boolean intersection (`Confidence = High`). Bounding-box is used only as a fast candidate pre-filter. Set `allowBoundingBoxFallback = true` to also return unconfirmed bbox-only overlaps (`Confidence = Low`) when solids are unavailable. |
-| `revit_detect_clearance_clashes` | Detects clearance violations — expands source bounding boxes by a configurable tolerance (mm) before intersection test. Results are conservative estimates; `Confidence = Medium`. |
+| `revit_detect_hard_clashes` | Detects hard (physical intersection) clashes between two category sets using solid-geometry boolean intersection (`Confidence = High`). Bounding-box is used only as a fast candidate pre-filter. Set `allowBoundingBoxFallback = true` to also return unconfirmed bbox-only overlaps (`Confidence = Low`) when solids are unavailable. Pass `returnIssueReport=true` for a structured `IssueReportDto`. |
+| `revit_detect_clearance_clashes` | Detects clearance violations — expands source bounding boxes by a configurable tolerance (mm) before intersection test. Results are conservative estimates; `Confidence = Medium`. `distanceMode` controls the measurement method: `BoundingBoxApproximation` (default, `Confidence = Medium`) or `SolidCentroidApproximation` (centre-to-centre distance, `Confidence = Low`). |
 | `revit_get_clash_summary` | Aggregates a clash run result — returns total counts grouped by rule name, severity, status, level, detection method, and confidence |
 
 #### Presets
@@ -248,7 +249,7 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_list_clash_presets` | Lists all clash preset JSON files from the clash presets folder (built-in defaults + user-saved) |
 | `revit_get_clash_preset` | Reads and returns the full contents of a named clash preset |
 | `revit_validate_clash_preset` | Validates a clash preset structure — returns isValid, ruleCount, errors[], suggestions[] |
-| `revit_run_clash_preset` | Runs all rules in a clash preset and caches the combined result for step-through review. Hard clash rules use strict solid-intersection by default; set `allowBoundingBoxFallback = true` for low-confidence fallback results. |
+| `revit_run_clash_preset` | Runs all rules in a clash preset and caches the combined result for step-through review. Hard clash rules use strict solid-intersection by default; set `allowBoundingBoxFallback = true` for low-confidence fallback results. Pass `returnIssueReport=true` for a structured `IssueReportDto`. |
 
 #### Reporting
 
@@ -287,6 +288,7 @@ Skills are named multi-step QA workflows stored as `.skill.json` files. Built-in
 | `revit_create_project_skill_override` | Creates a project-level settings override for a skill. `changesJson` uses the structure `{"tasks":{"<taskId>":{"enabled":true,"settings":{...}}}}` |
 | `revit_update_project_skill_override` | Merges additional changes into an existing project override |
 | `revit_reset_project_skill_override` | Deletes the project override, reverting the skill to company-master defaults |
+| `revit_configure_sheet_naming_skill` | Helper that creates or updates the project override for the built-in sheet naming skill (`company.lehed.nimetamise-kontroll`). Supports `enableExcelComparison` with optional `excelFilePath` and `worksheetName`, and per-task enable/disable flags. Returns the saved override JSON. |
 
 ### Issue Report Tools
 
@@ -298,6 +300,21 @@ Shared structured issue model used as the output format for all QA tools. Issues
 | `revit_export_issues_excel` | Exports an `IssueReportDto` to a formatted `.xlsx` file with Summary and Issues sheets, severity colour coding, and auto-filter. Returns `filePath`. |
 | `revit_export_issues_markdown` | Exports an `IssueReportDto` to a `.md` file with summary table, category breakdown, and issues table. Returns `filePath`. |
 | `revit_merge_issue_reports` | Merges multiple `IssueReportDto` JSON strings (`reportJsonArray`) into a single consolidated report. Returns the merged report JSON and summary counts. |
+
+### Delivery Tools
+
+QA tools for pre-issue drawing deliveries. File names are expected to follow the EULE pattern: `{projectNumber}_{stage}_{discipline}-{group}-{sequence}[_{description}][_{revision}].{ext}`. Files that do not match the pattern are still listed but are flagged as unrecognised.
+
+All four tools accept a `returnIssueReport` flag (default `false`). When `true`, the response includes a structured `IssueReportDto` compatible with `revit_export_issues_excel` / `revit_export_issues_markdown`.
+
+| Tool | Description |
+|------|-------------|
+| `delivery_scan_folder` | Scans a local folder for drawing files, parses EULE-format names, and returns a file list with metadata. Args: `folderPath`, `recursive`, `includeExtensions`, `maxResults`. |
+| `delivery_check_against_revit_sheets` | Compares files in a delivery folder against sheets in the currently open Revit model. Flags missing PDFs/DWGs, orphan files with no matching sheet, duplicates, and suspiciously small files. Optional `stageFilter` and `disciplineFilter`. |
+| `delivery_check_against_excel_register` | Compares files in a delivery folder against rows in an Excel document register. Auto-detects the header row (looks for columns containing "nr", "number", or "dokumendi nr"). Flags register rows with no matching file, files not in the register, and duplicate document numbers. |
+| `delivery_run_full_check` | Runs all three checks in sequence (scan → Revit sheet check → Excel register check) and merges results into one `IssueReportDto`. Optional `exportExcelReport` and `exportMarkdownReport` flags write output files to the delivery folder. |
+
+---
 
 ### File System Tools
 
