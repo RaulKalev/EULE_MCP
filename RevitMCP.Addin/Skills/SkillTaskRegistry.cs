@@ -1,6 +1,7 @@
 using RevitMCP.Addin.Skills.Tasks.Common;
 using RevitMCP.Addin.Skills.Tasks.Coordination;
 using RevitMCP.Addin.Skills.Tasks.Delivery;
+using RevitMCP.Addin.Skills.Tasks.DrawingNaming;
 using RevitMCP.Addin.Skills.Tasks.LehtedeNimetamiseKontroll;
 using RevitMCP.Addin.Skills.Tasks.ParameterQA;
 
@@ -44,6 +45,10 @@ public class SkillTaskRegistry
 
             // Parameter QA tasks
             new RunParameterQaRuleSetTask(),
+
+            // Drawing Naming tasks
+            new ValidateSheetNamingMappingTask(),
+            new ApplySheetNamingMappingTask(),
         };
 
         _tasks = list.ToDictionary(t => t.Id, t => t, StringComparer.OrdinalIgnoreCase);

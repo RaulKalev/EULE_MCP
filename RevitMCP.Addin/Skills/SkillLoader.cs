@@ -99,6 +99,7 @@ public class SkillLoader
         ("ParameterQA.skill.json",                BuildDefaultParameterQASkill()),
         ("CoordinationQA.skill.json",             BuildDefaultCoordinationQASkill()),
         ("PreDelivery.skill.json",                BuildDefaultPreDeliverySkill()),
+        ("DrawingNaming.skill.json",              BuildDefaultDrawingNamingSkill()),
     ];
 
     private static bool IsOlderVersion(string? loaded, string builtin)
@@ -405,6 +406,70 @@ public class SkillLoader
             new() { Id = "common.merge.issues",             Enabled = true,  Settings = new() },
             new() { Id = "common.export.excel-report",      Enabled = true,  Settings = new() { ["reportTitle"] = "Pre-Delivery Combined Report" } },
             new() { Id = "common.export.html-dashboard",    Enabled = true,  Settings = new() { ["reportTitle"] = "Pre-Delivery Dashboard" } },
+        ]
+    };
+
+    private static SkillDefinition BuildDefaultDrawingNamingSkill() => new()
+    {
+        Id          = "company.lehed.nimetamine",
+        Name        = "Lehtede Nimetamine",
+        Description = "Valideerib ja rakendab lehtede numbreid automaatselt vastavalt ettevõtte nimetamise nimistule. " +
+                      "Valideerimine kontrollib praeguseid numbreid; rakendamine kirjutab uued numbrid Reviti.",
+        Version     = "1.0.0",
+        Author      = "EULE / RK Tools",
+        IsCompanyMaster = true,
+        DefaultSettings = new()
+        {
+            StopOnCriticalFailure = false,
+            AllowProjectOverride  = true,
+            RequiresUserConfirmationBeforeModelChanges = true,
+        },
+        Tasks =
+        [
+            new()
+            {
+                Id = "naming.validate-mapping", Enabled = true,
+                Settings = new()
+                {
+                    ["target"] = "Sheet Number",
+                    ["tokens"] = new object[]
+                    {
+                        new { type = "Parameter", value = "Project Number"     },
+                        new { type = "Separator",  value = "_"                 },
+                        new { type = "Parameter", value = "Project Status"     },
+                        new { type = "Separator",  value = "_"                 },
+                        new { type = "Parameter", value = "Projekti osa"       },
+                        new { type = "Separator",  value = "-"                 },
+                        new { type = "Parameter", value = "Grupi tähis"        },
+                        new { type = "Separator",  value = "-"                 },
+                        new { type = "Parameter", value = "Järjekorra tähis"   },
+                        new { type = "Separator",  value = "_"                 },
+                        new { type = "Parameter", value = "Märkus"             },
+                    },
+                }
+            },
+            new()
+            {
+                Id = "naming.apply-mapping", Enabled = true,
+                Settings = new()
+                {
+                    ["target"] = "Sheet Number",
+                    ["tokens"] = new object[]
+                    {
+                        new { type = "Parameter", value = "Project Number"     },
+                        new { type = "Separator",  value = "_"                 },
+                        new { type = "Parameter", value = "Project Status"     },
+                        new { type = "Separator",  value = "_"                 },
+                        new { type = "Parameter", value = "Projekti osa"       },
+                        new { type = "Separator",  value = "-"                 },
+                        new { type = "Parameter", value = "Grupi tähis"        },
+                        new { type = "Separator",  value = "-"                 },
+                        new { type = "Parameter", value = "Järjekorra tähis"   },
+                        new { type = "Separator",  value = "_"                 },
+                        new { type = "Parameter", value = "Märkus"             },
+                    },
+                }
+            },
         ]
     };
 }

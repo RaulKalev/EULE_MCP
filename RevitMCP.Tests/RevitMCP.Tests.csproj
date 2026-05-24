@@ -66,5 +66,8 @@
     <!-- Issue report pure-logic files (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Reports\IssueReportService.cs" Link="Reports\IssueReportService.cs" />
     <Compile Include="..\RevitMCP.Addin\Export\ExportPathService.cs" Link="Export\ExportPathService.cs" />
+    <!-- Drawing Naming pure-logic files (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\Skills\Tasks\DrawingNaming\Models\NamingMappingToken.cs" Link="DrawingNaming\Models\NamingMappingToken.cs" />
+    <Compile Include="..\RevitMCP.Addin\Skills\Tasks\DrawingNaming\NamingMappingEngine.cs" Link="DrawingNaming\NamingMappingEngine.cs" />
   </ItemGroup>
 </Project>
