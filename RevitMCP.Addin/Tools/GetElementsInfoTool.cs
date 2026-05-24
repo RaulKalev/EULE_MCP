@@ -33,13 +33,17 @@ public class GetElementsInfoTool : IRevitMcpTool
             ReturnParameters = ToolArguments.GetStringArray(request.Arguments, "parameterNames").ToList(),
             IncludeInstanceParameters = ToolArguments.GetBool(request.Arguments, "includeInstanceParameters", true),
             IncludeTypeParameters = ToolArguments.GetBool(request.Arguments, "includeTypeParameters", true),
-            Limit = ToolArguments.GetInt(request.Arguments, "limit", 500)
+            Limit = ToolArguments.GetInt(request.Arguments, "limit", 500),
+            PageSize = ToolArguments.GetInt(request.Arguments, "pageSize", -1),
+            Page = ToolArguments.GetInt(request.Arguments, "page", 0),
+            MaxParametersPerElement = ToolArguments.GetInt(request.Arguments, "maxParametersPerElement", 0),
+            TruncateStringLength = ToolArguments.GetInt(request.Arguments, "truncateStringLength", 0)
         };
 
         if (!opts.UseSelection && opts.ElementIds.Count == 0 && string.IsNullOrWhiteSpace(opts.Category))
             return Task.FromResult(Fail(request, "Provide useSelection=true, elementIds, or a category."));
 
-        var result = _engine.Query(uidoc.Document, uidoc, opts);
+        var result = _engine.Query(uidoc.Document, uidoc, opts, cancellationToken);
         if (!result.Success)
             return Task.FromResult(Fail(request, result.Message));
 
@@ -55,6 +59,10 @@ public class GetElementsInfoTool : IRevitMcpTool
             {
                 totalMatched = result.TotalMatched,
                 returned = result.Elements.Count,
+                page = result.Page,
+                pageSize = result.PageSize,
+                hasMore = result.HasMore,
+                nextPageToken = result.NextPageToken,
                 elements = result.Elements
             },
             Warnings = warnings,

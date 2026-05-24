@@ -54,7 +54,7 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 
 | Project | Target | Role |
 |---------|--------|------|
-| `RevitMCP.Core` | net8.0 | Shared DTOs — `McpToolRequest`, `McpToolResult`, enums |
+| `RevitMCP.Core` | net8.0 | Shared DTOs — `McpToolRequest`, `McpToolResult`, enums, `Safety/` guard classes |
 | `RevitMCP.Addin` | net8.0-windows | Revit add-in DLL — pipe server, tool registry, WPF UI |
 | `RevitMCP.Bridge` | net8.0 | STDIO MCP server — forwards tool calls over named pipe |
 | `RevitMCP.Config` | — | Install scripts and default configs |
@@ -75,8 +75,8 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_get_element_parameters` | Reads instance/type parameters for element IDs or selection, including shared parameter metadata |
 | `revit_count_elements` | Element counts grouped by Category or FamilyAndType, with optional category filter |
 | `revit_group_by_parameter` | Convenience tool for grouping elements by one parameter |
-| `revit_find_elements_by_parameter` | Finds elements using one or more parameter filters |
-| `revit_get_elements_info` | Returns structured element info with selected parameter values |
+| `revit_find_elements_by_parameter` | Finds elements using one or more parameter filters. Optional pagination: `page` (0-based), `pageSize` (default capped at 500). Optional safety args: `maxParametersPerElement` (cap params per element), `truncateStringLength` (truncate long values). Response includes `hasMore`, `nextPageToken`. |
+| `revit_get_elements_info` | Returns structured element info with selected parameter values. Optional pagination: `page` (0-based), `pageSize` (default capped at 500). Optional safety args: `maxParametersPerElement`, `truncateStringLength`. Response includes `hasMore`, `nextPageToken`. |
 | `revit_group_elements` | Groups elements by category, family, type, level, or multiple parameters |
 | `revit_export_query_to_excel` | Exports query/grouping results to a formatted `.xlsx` file |
 | `revit_get_available_parameters` | Discovers available parameters with fill stats and example values |
@@ -89,6 +89,16 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_select_elements` | Selects elements by IDs in Revit UI *(requires approval)* |
 | `revit_select_elements_by_query` | Selects elements by query in Revit UI *(requires approval)* |
 | `revit_set_parameter` | Sets a parameter value on elements — supports String, Integer, Double, and **ElementId** storage types *(requires approval, runs in transaction)* |
+
+### Query Safety & Pagination
+
+All element query tools have built-in response guards:
+
+- **ResponseGuard** — applied at the pipe boundary. If a serialized response exceeds **1 MB**, the tool returns a `ResponseTooLarge` error with remediation suggestions instead of sending an oversized payload. This cannot be disabled.
+- **Pagination** — `revit_get_elements_info` and `revit_find_elements_by_parameter` accept `page` (0-based integer) and `pageSize` (capped at 500). Responses include `hasMore` and `nextPageToken` for sequential retrieval.
+- **Per-element limits** — `maxParametersPerElement` caps the number of parameters per element; `truncateStringLength` truncates long parameter values (appends `... [truncated]`). Both default to 0 (off).
+
+If a query is too broad and would produce an oversized response, prefer: category filter → specific `parameterNames` → `pageSize: 20` → `includeTypeParameters: false`.
 
 ### Parameter QA Rule Set Tools
 

@@ -1,5 +1,6 @@
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RevitMCP.Core.Safety;
 
 namespace RevitMCP.Addin.Query;
 
@@ -10,7 +11,7 @@ public class ElementQueryEngine
 {
     private readonly CategoryResolver _categoryResolver = new();
 
-    public ElementQueryResult Query(Document doc, UIDocument uidoc, ElementQueryOptions options)
+    public ElementQueryResult Query(Document doc, UIDocument uidoc, ElementQueryOptions options, CancellationToken cancellationToken = default)
     {
         // --- 1. Determine element source ---
         IEnumerable<ElementId> elementIds;
@@ -44,7 +45,12 @@ public class ElementQueryEngine
             elementIds = collector.ToElementIds();
         }
 
-        // --- 2. Scan & filter ---
+        // --- 2. Pagination setup ---
+        int effectivePageSize = options.PageSize > 0 ? Math.Min(options.PageSize, options.Limit) : options.Limit;
+        int page = Math.Max(0, options.Page);
+        int pageStart = page * effectivePageSize; // 0-based index of first element on this page
+
+        // --- 3. Scan & filter ---
         var reader = new ParameterReader();
         var readOpts = new ParameterReadOptions
         {
@@ -59,6 +65,7 @@ public class ElementQueryEngine
 
         foreach (var elementId in elementIds)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             totalScanned++;
 
             var element = doc.GetElement(elementId);
@@ -68,12 +75,20 @@ public class ElementQueryEngine
 
             if (!PassesFilters(allParams, options.Filters)) continue;
 
+            // 0-based index of this matched element (capture before incrementing)
+            var matchIndex = totalMatched;
             totalMatched++;
 
-            if (results.Count >= options.Limit) continue;
+            // Skip elements before the current page window; keep scanning for totalMatched
+            if (matchIndex < pageStart || results.Count >= effectivePageSize) continue;
 
             // Build parameter map for response
-            var paramMap = BuildParameterMap(allParams, options.ReturnParameters, options.ReturnParameterMatchMode);
+            var paramMap = BuildParameterMap(
+                allParams,
+                options.ReturnParameters,
+                options.ReturnParameterMatchMode,
+                options.MaxParametersPerElement,
+                options.TruncateStringLength);
 
             var typeId = element.GetTypeId();
             var typeElem = (typeId != null && typeId != ElementId.InvalidElementId) ? doc.GetElement(typeId) : null;
@@ -99,8 +114,13 @@ public class ElementQueryEngine
         if (totalScanned > 5000 && string.IsNullOrWhiteSpace(options.Category))
             warnings.Add($"Scanned {totalScanned} elements. Provide a 'category' to narrow the search.");
 
-        if (totalMatched > options.Limit)
-            warnings.Add($"Results capped at {options.Limit}. {totalMatched - options.Limit} additional matching elements exist.");
+        int pageEnd = pageStart + effectivePageSize;
+        bool hasMore = totalMatched > pageEnd;
+
+        if (totalMatched > effectivePageSize && page == 0 && results.Count == effectivePageSize)
+            warnings.Add($"Results paged: showing {results.Count} of {totalMatched}. Use 'page' and 'pageSize' parameters to navigate.");
+        else if (hasMore)
+            warnings.Add($"More results available beyond this page ({totalMatched - pageEnd} remaining).");
 
         return new ElementQueryResult
         {
@@ -108,14 +128,20 @@ public class ElementQueryEngine
             Message = $"Matched {totalMatched} elements, returned {results.Count}.",
             Elements = results,
             TotalMatched = totalMatched,
-            Warnings = warnings
+            Warnings = warnings,
+            Page = page,
+            PageSize = effectivePageSize,
+            HasMore = hasMore,
+            NextPageToken = hasMore ? $"page={page + 1}" : null
         };
     }
 
     private static Dictionary<string, ParameterValueDto> BuildParameterMap(
         IReadOnlyList<ParameterValueDto> allParams,
         List<string> returnNames,
-        string matchMode)
+        string matchMode,
+        int maxParameters = 0,
+        int truncateLength = 0)
     {
         var map = new Dictionary<string, ParameterValueDto>(StringComparer.Ordinal);
 
@@ -125,10 +151,33 @@ public class ElementQueryEngine
 
         foreach (var p in filtered)
         {
-            var key = map.ContainsKey(p.Name)
-                ? $"{p.Name} [{p.Scope}]"
-                : p.Name;
-            map[key] = p;
+            if (maxParameters > 0 && map.Count >= maxParameters) break;
+
+            ParameterValueDto value = p;
+            if (truncateLength > 0 && p.Value.Length > truncateLength)
+            {
+                value = new ParameterValueDto
+                {
+                    Name = p.Name,
+                    NormalizedName = p.NormalizedName,
+                    Value = QueryGuard.TruncateString(p.Value, truncateLength),
+                    RawValue = p.RawValue,
+                    StorageType = p.StorageType,
+                    Scope = p.Scope,
+                    IsReadOnly = p.IsReadOnly,
+                    IsShared = p.IsShared,
+                    Guid = p.Guid,
+                    ParameterId = p.ParameterId,
+                    BuiltInParameterName = p.BuiltInParameterName,
+                    TypeElementId = p.TypeElementId,
+                    TypeName = p.TypeName
+                };
+            }
+
+            var key = map.ContainsKey(value.Name)
+                ? $"{value.Name} [{value.Scope}]"
+                : value.Name;
+            map[key] = value;
         }
 
         return map;

@@ -2,6 +2,7 @@ using System.IO;
 using System.IO.Pipes;
 using Newtonsoft.Json;
 using RevitMCP.Core.Models;
+using RevitMCP.Core.Safety;
 
 namespace RevitMCP.Addin.Services;
 
@@ -131,7 +132,7 @@ public class PipeServer
                 sw.Stop();
                 result.DurationMs = sw.ElapsedMilliseconds;
 
-                await writer.WriteLineAsync(JsonConvert.SerializeObject(result));
+                await writer.WriteLineAsync(JsonConvert.SerializeObject(ResponseGuard.GuardResult(result)));
 
                 if (request != null)
                     await _logger.WriteAsync(request, result, _eventService.GetLastContext());
