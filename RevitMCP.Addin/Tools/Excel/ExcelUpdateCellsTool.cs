@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Autodesk.Revit.UI;
 using Newtonsoft.Json.Linq;
 using RevitMCP.Addin.Excel;
+using RevitMCP.Addin.FileSystem;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Tools;
 using RevitMCP.Core.Models;
@@ -15,6 +16,8 @@ public class ExcelUpdateCellsTool : IRevitMcpTool
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Excel;
 
+    private static readonly FilePathPolicy _policy = new();
+
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
@@ -26,6 +29,10 @@ public class ExcelUpdateCellsTool : IRevitMcpTool
             return Task.FromResult(Fail(request, "filePath is required."));
         if (string.IsNullOrWhiteSpace(worksheetName))
             return Task.FromResult(Fail(request, "worksheetName is required."));
+
+        var policyError = _policy.ValidateWrite(filePath);
+        if (policyError != null)
+            return Task.FromResult(Fail(request, policyError));
 
         var updates = ParseCellUpdates(request.Arguments);
         if (updates.Count == 0)

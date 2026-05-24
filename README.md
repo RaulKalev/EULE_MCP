@@ -2,8 +2,8 @@
 
 A local [Model Context Protocol](https://modelcontextprotocol.io) connector that lets **Claude Code** and **Codex** interrogate and work with a live **Autodesk Revit 2026** model in real time.
 
-**145 tools** across ten functional areas:
-- **General** (22 tools) — element discovery, parameter QA, grouping, Excel exports, selection, and write operations
+**150 tools** across ten functional areas:
+- **General** (24 tools) — element discovery, parameter QA, grouping, Excel exports, selection, write operations, and config-driven parameter QA rule sets
 - **Electrical** (44 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
 - **Documentation** (31 tools) — view and sheet management: discovery, summary, preview/apply workflows for placing views, creating/duplicating/renaming sheets and views, bulk parameter updates, revision tracking, preset inspection, and safe destructive delete with mandatory manual approval
 - **Coordination** (17 tools) — Revit-native clash detection: category/link discovery, solid-intersection hard-clash and clearance checking, preset management, Excel reporting, and step-through review views
@@ -86,6 +86,15 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | `revit_select_elements` | Selects elements by IDs in Revit UI *(requires approval)* |
 | `revit_select_elements_by_query` | Selects elements by query in Revit UI *(requires approval)* |
 | `revit_set_parameter` | Sets a parameter value on elements — supports String, Integer, Double, and **ElementId** storage types *(requires approval, runs in transaction)* |
+
+### Parameter QA Rule Set Tools
+
+Config-driven rule sets stored in `%AppData%\RKTools\RevitMCP\parameter-qa-rules.json`. Each rule set contains one or more category rules (category name + required parameters). A default "ELENEA Basic QA" rule set is created on first use.
+
+| Tool | Description |
+|------|-------------|
+| `revit_list_parameter_qa_rule_sets` | Lists all available parameter QA rule sets — returns name, description, rule count, and per-rule category/parameter details. |
+| `revit_run_parameter_qa_rule_set` | Runs all rules in a named rule set. For each rule, collects elements by category and checks required parameters. Merges all issues into one `IssueReportDto`. Args: `ruleSetName` (required), `limitPerRule` (default 5000), `returnIssueReport` (default true). |
 
 ### Electrical Circuit Tools
 
@@ -239,7 +248,7 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 | Tool | Description |
 |------|-------------|
 | `revit_detect_hard_clashes` | Detects hard (physical intersection) clashes between two category sets using solid-geometry boolean intersection (`Confidence = High`). Bounding-box is used only as a fast candidate pre-filter. Set `allowBoundingBoxFallback = true` to also return unconfirmed bbox-only overlaps (`Confidence = Low`) when solids are unavailable. Pass `returnIssueReport=true` for a structured `IssueReportDto`. |
-| `revit_detect_clearance_clashes` | Detects clearance violations — expands source bounding boxes by a configurable tolerance (mm) before intersection test. Results are conservative estimates; `Confidence = Medium`. `distanceMode` controls the measurement method: `BoundingBoxApproximation` (default, `Confidence = Medium`) or `SolidCentroidApproximation` (centre-to-centre distance, `Confidence = Low`). |
+| `revit_detect_clearance_clashes` | Detects clearance violations — expands source bounding boxes by a configurable tolerance (mm) before intersection test. Results are conservative estimates; `Confidence = Medium`. `distanceMode` controls the measurement method: `ExpandedBoundingBox` (default, `Confidence = Medium`) or `SolidCentroidApproximation` (centre-to-centre distance, `Confidence = Low`). |
 | `revit_get_clash_summary` | Aggregates a clash run result — returns total counts grouped by rule name, severity, status, level, detection method, and confidence |
 
 #### Presets
@@ -309,10 +318,10 @@ All four tools accept a `returnIssueReport` flag (default `false`). When `true`,
 
 | Tool | Description |
 |------|-------------|
-| `delivery_scan_folder` | Scans a local folder for drawing files, parses EULE-format names, and returns a file list with metadata. Args: `folderPath`, `recursive`, `includeExtensions`, `maxResults`. |
-| `delivery_check_against_revit_sheets` | Compares files in a delivery folder against sheets in the currently open Revit model. Flags missing PDFs/DWGs, orphan files with no matching sheet, duplicates, and suspiciously small files. Optional `stageFilter` and `disciplineFilter`. |
+| `delivery_scan_folder` | Scans a local folder for drawing files, parses EULE-format names, and returns a file list with metadata. Args: `folderPath`, `recursive`, `includeExtensions`, `maxResults`. Optional policy checks: `checkTempFiles`, `checkOldRevisions`, `checkSuspiciousExtensions`, `checkRequiredFolders`, `requiredFolders[]`, `allowedExtraExtensions[]`. |
+| `delivery_check_against_revit_sheets` | Compares files in a delivery folder against sheets in the currently open Revit model. Flags missing PDFs/DWGs, orphan files with no matching sheet, duplicates, and suspiciously small files. Optional `stageFilter` and `disciplineFilter`. Sheet numbers in the format `1626_TP_EL-5-01` are correctly parsed — `disciplineFilter: ["EL"]` matches both short (`EL-5-01`) and full-prefix sheet numbers. |
 | `delivery_check_against_excel_register` | Compares files in a delivery folder against rows in an Excel document register. Auto-detects the header row (looks for columns containing "nr", "number", or "dokumendi nr"). Flags register rows with no matching file, files not in the register, and duplicate document numbers. |
-| `delivery_run_full_check` | Runs all three checks in sequence (scan → Revit sheet check → Excel register check) and merges results into one `IssueReportDto`. Optional `exportExcelReport` and `exportMarkdownReport` flags write output files to the delivery folder. |
+| `delivery_run_full_check` | Runs all three checks in sequence (scan → Revit sheet check → Excel register check) and merges results into one `IssueReportDto`. Optional `exportExcelReport` and `exportMarkdownReport` flags write output files to the delivery folder. Supports the same folder-policy checks as `delivery_scan_folder` (`checkTempFiles`, `checkOldRevisions`, `checkRequiredFolders`, `requiredFolders[]`, `checkSuspiciousExtensions`, `allowedExtraExtensions[]`, `requiredProjectFileExtensions[]`, `ignoredPatterns[]`). |
 
 ---
 
@@ -348,6 +357,8 @@ Standalone Excel workbook tools — operate directly on `.xlsx`/`.xlsm` files on
 | `excel_update_cells` | Updates one or more cells by address (e.g. `"B2"`, `"C5"`) — preserves existing cell styles. Optional backup. *(requires approval)* |
 | `excel_insert_rows` | Inserts new rows at a specified row number — copies style from a template row, writes cell values by column letter key. Optional backup. *(requires approval)* |
 | `excel_append_table_rows` | Appends rows after the last data row in a sheet or named table. `matchHeaders=true` maps values by header name; falls back to column letter (`"A"`, `"B"`) when unmatched. Extends named table if present. Optional backup. *(requires approval)* |
+
+> **Excel write limitations (MVP):** Write tools copy row height and cell styles (number format, font, fill, border, alignment). Advanced Excel features — merged cells, data validation, conditional formatting, and existing cell formulas — are preserved in cells that are not written to, but are **not** carried over to newly inserted rows. Verify complex worksheets manually after insertion or appending.
 
 ---
 
@@ -411,6 +422,16 @@ Export the last clash run to Excel.
 Show me the next clash from the last run.
 
 Select the elements involved in clash CL-0003.
+
+List available parameter QA rule sets.
+
+Run the ELENEA Basic QA parameter rule set and show me any missing parameters.
+
+Run the ELENEA Basic QA rule set and export the issue report to Excel.
+
+Scan delivery folder C:\\Projects\\1626\\Export for temp files and old revisions.
+
+Run the full delivery check for stage TP, discipline EL only, and flag any temp or backup files.
 ```
 
 ---

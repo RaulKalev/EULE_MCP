@@ -6,6 +6,7 @@ using RevitMCP.Addin.Tools;
 using RevitMCP.Addin.Tools.Delivery;
 using RevitMCP.Addin.Tools.Excel;
 using RevitMCP.Addin.Tools.FileSystem;
+using RevitMCP.Addin.Tools.ParameterQA;
 using RevitMCP.Addin.Tools.Reports;
 using RevitMCP.Addin.UI.ViewModels;
 using RevitMCP.Core.Configuration;
@@ -212,6 +213,10 @@ public class App : IExternalApplication
             handler.RegisterTool(new ExcelUpdateCellsTool());
             handler.RegisterTool(new ExcelInsertRowsTool());
             handler.RegisterTool(new ExcelAppendTableRowsTool());
+
+            // Parameter QA Rule Set Tools
+            handler.RegisterTool(new ListParameterQaRuleSetsTool());
+            handler.RegisterTool(new RunParameterQaRuleSetTool());
 
             var eventService = new ExternalEventService(handler);
 

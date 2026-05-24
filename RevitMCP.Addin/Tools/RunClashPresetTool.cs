@@ -89,7 +89,7 @@ public class RunClashPresetTool : IRevitMcpTool
 
             if (rule.ClashType == "Clearance")
             {
-                (ruleClashes, ruleWarnings) = _clearanceDetector.Detect(sources, targets, rule.Name, rule.Severity, rule.ClearanceMm, limit, maxPairs, "BoundingBoxApproximation", cancellationToken);
+                (ruleClashes, ruleWarnings) = _clearanceDetector.Detect(sources, targets, rule.Name, rule.Severity, rule.ClearanceMm, limit, maxPairs, "ExpandedBoundingBox", cancellationToken);
             }
             else
             {

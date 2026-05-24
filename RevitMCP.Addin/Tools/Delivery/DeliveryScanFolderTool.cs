@@ -4,6 +4,7 @@ using RevitMCP.Addin.Delivery;
 using RevitMCP.Addin.FileSystem;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Core.Models;
+using RevitMCP.Core.Models.Issues;
 
 namespace RevitMCP.Addin.Tools.Delivery;
 
@@ -38,6 +39,16 @@ public class DeliveryScanFolderTool : IRevitMcpTool
         if (!result.Success)
             return Task.FromResult(Fail(request, result.Error!));
 
+        // Optional folder-policy checks
+        var folderPolicy = BuildFolderPolicy(request);
+        var policyIssues = new List<RevitMCP.Core.Models.Issues.IssueDto>();
+        if (folderPolicy != null)
+        {
+            int seq = result.Files.Count + 1;
+            var runId = Guid.NewGuid().ToString("N")[..8];
+            policyIssues = DeliveryFolderPolicyChecker.Check(result, folderPolicy, runId, ref seq);
+        }
+
         sw.Stop();
         return Task.FromResult(new McpToolResult
         {
@@ -69,13 +80,49 @@ public class DeliveryScanFolderTool : IRevitMcpTool
                         revision = f.Parsed.Revision
                     }
                 }).ToList(),
-                warnings = result.Warnings
+                subFolders = result.SubFolders,
+                warnings = result.Warnings,
+                policyIssueCount = policyIssues.Count,
+                policyIssues = policyIssues
             },
             Warnings = result.Warnings,
             DurationMs = sw.ElapsedMilliseconds
         });
     }
 
+    private static DeliveryFolderPolicy? BuildFolderPolicy(McpToolRequest request)
+    {
+        var args = request.Arguments;
+        bool hasAny = ToolArguments.GetBool(args, "checkTempFiles", false)
+                   || ToolArguments.GetBool(args, "checkOldRevisions", false)
+                   || ToolArguments.GetBool(args, "checkSuspiciousExtensions", false)
+                   || ToolArguments.GetBool(args, "checkRequiredFolders", false)
+                   || ToolArguments.GetStringArray(args, "requiredProjectFileExtensions").Length > 0;
+        if (!hasAny) return null;
+
+        var policy = new DeliveryFolderPolicy
+        {
+            CheckTempFiles             = ToolArguments.GetBool(args, "checkTempFiles", true),
+            CheckOldRevisions          = ToolArguments.GetBool(args, "checkOldRevisions", true),
+            CheckSuspiciousExtensions  = ToolArguments.GetBool(args, "checkSuspiciousExtensions", false),
+            CheckRequiredFolders       = ToolArguments.GetBool(args, "checkRequiredFolders", false),
+        };
+        var requiredFolders = ToolArguments.GetStringArray(args, "requiredFolders");
+        if (requiredFolders.Length > 0) policy.RequiredFolders = [.. requiredFolders];
+
+        var allowedExtras = ToolArguments.GetStringArray(args, "allowedExtraExtensions");
+        if (allowedExtras.Length > 0) policy.AllowedExtraExtensions = [.. allowedExtras];
+
+        var reqProjectExts = ToolArguments.GetStringArray(args, "requiredProjectFileExtensions");
+        if (reqProjectExts.Length > 0) policy.RequiredProjectFileExtensions = [.. reqProjectExts];
+
+        var ignored = ToolArguments.GetStringArray(args, "ignoredPatterns");
+        if (ignored.Length > 0) policy.IgnoredPatterns = [.. ignored];
+
+        return policy;
+    }
+
     private static McpToolResult Fail(McpToolRequest r, string msg) =>
         new() { RequestId = r.RequestId, Success = false, Message = msg };
 }
+

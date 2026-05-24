@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Autodesk.Revit.UI;
 using RevitMCP.Addin.Excel;
+using RevitMCP.Addin.FileSystem;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Tools;
 using RevitMCP.Core.Models;
@@ -14,6 +15,8 @@ public class ExcelInspectWorkbookTool : IRevitMcpTool
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Excel;
 
+    private static readonly FilePathPolicy _policy = new();
+
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
@@ -23,6 +26,10 @@ public class ExcelInspectWorkbookTool : IRevitMcpTool
 
         if (string.IsNullOrWhiteSpace(filePath))
             return Task.FromResult(Fail(request, "filePath is required."));
+
+        var policyError = _policy.ValidateRead(filePath);
+        if (policyError != null)
+            return Task.FromResult(Fail(request, policyError));
 
         var (result, error) = ExcelWorkbookInspector.Inspect(filePath, includePreview, previewCount);
         sw.Stop();

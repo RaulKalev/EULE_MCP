@@ -58,13 +58,14 @@ public class DeliveryRunFullCheckTool : IRevitMcpTool
             .Where(s => !s.IsPlaceholder)
             .Select(s =>
             {
-                var num = s.SheetNumber;
-                var discipline = num.Contains('-') ? num.Split('-')[0] : null;
+                var parsed = RevitSheetNumberParser.Parse(s.SheetNumber);
                 return new RevitSheetDescriptor
                 {
-                    SheetNumber = num,
-                    SheetName = s.Name,
-                    Discipline = discipline
+                    SheetNumber   = parsed?.SheetNumberCore ?? s.SheetNumber,
+                    SheetName     = s.Name,
+                    Discipline    = parsed?.Discipline,
+                    Stage         = parsed?.Stage,
+                    ProjectNumber = parsed?.ProjectNumber
                 };
             })
             .ToList();
@@ -105,6 +106,15 @@ public class DeliveryRunFullCheckTool : IRevitMcpTool
                 if (compareError == null)
                     allIssues.AddRange(registerIssues);
             }
+        }
+
+        // Step 4 — Optional folder-policy checks (temp files, old revisions, etc.)
+        var folderPolicy = BuildFolderPolicy(request, requiredExtensions);
+        if (folderPolicy != null)
+        {
+            int policySeq = allIssues.Count + 1;
+            var policyIssues = DeliveryFolderPolicyChecker.Check(scan, folderPolicy, runId, ref policySeq);
+            allIssues.AddRange(policyIssues);
         }
 
         // Re-sequence IDs
@@ -178,6 +188,39 @@ public class DeliveryRunFullCheckTool : IRevitMcpTool
             Warnings = warnings,
             DurationMs = sw.ElapsedMilliseconds
         });
+    }
+
+    private static DeliveryFolderPolicy? BuildFolderPolicy(McpToolRequest request, List<string> requiredExtensions)
+    {
+        var args = request.Arguments;
+        bool hasAny = ToolArguments.GetBool(args, "checkTempFiles", false)
+                   || ToolArguments.GetBool(args, "checkOldRevisions", false)
+                   || ToolArguments.GetBool(args, "checkSuspiciousExtensions", false)
+                   || ToolArguments.GetBool(args, "checkRequiredFolders", false)
+                   || ToolArguments.GetStringArray(args, "requiredProjectFileExtensions").Length > 0;
+        if (!hasAny) return null;
+
+        var policy = new DeliveryFolderPolicy
+        {
+            CheckTempFiles            = ToolArguments.GetBool(args, "checkTempFiles", true),
+            CheckOldRevisions         = ToolArguments.GetBool(args, "checkOldRevisions", true),
+            CheckSuspiciousExtensions = ToolArguments.GetBool(args, "checkSuspiciousExtensions", false),
+            CheckRequiredFolders      = ToolArguments.GetBool(args, "checkRequiredFolders", false),
+            RequiredExtensions        = requiredExtensions
+        };
+        var requiredFolders = ToolArguments.GetStringArray(args, "requiredFolders");
+        if (requiredFolders.Length > 0) policy.RequiredFolders = [.. requiredFolders];
+
+        var allowedExtras = ToolArguments.GetStringArray(args, "allowedExtraExtensions");
+        if (allowedExtras.Length > 0) policy.AllowedExtraExtensions = [.. allowedExtras];
+
+        var reqProjectExts = ToolArguments.GetStringArray(args, "requiredProjectFileExtensions");
+        if (reqProjectExts.Length > 0) policy.RequiredProjectFileExtensions = [.. reqProjectExts];
+
+        var ignored = ToolArguments.GetStringArray(args, "ignoredPatterns");
+        if (ignored.Length > 0) policy.IgnoredPatterns = [.. ignored];
+
+        return policy;
     }
 
     private static McpToolResult Fail(McpToolRequest r, string msg) =>

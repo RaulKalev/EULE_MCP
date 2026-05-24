@@ -2850,4 +2850,37 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         var result = await pipeClient.SendAsync("delivery_run_full_check", args, cancellationToken);
         return FormatResult(result);
     }
+
+    // ── Parameter QA Rule Sets ─────────────────────────────────────────────────
+
+    [McpServerTool(Name = "revit_list_parameter_qa_rule_sets", ReadOnly = true),
+     Description("Lists all available parameter QA rule sets. Each rule set defines which parameters must be filled for specific Revit categories. " +
+                 "No args required.")]
+    public async Task<string> ListParameterQaRuleSets(
+        CancellationToken cancellationToken = default)
+    {
+        var result = await pipeClient.SendAsync("revit_list_parameter_qa_rule_sets", new Dictionary<string, object?>(), cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_run_parameter_qa_rule_set", ReadOnly = true),
+     Description("Runs a named parameter QA rule set against the active model. Checks that required parameters are filled for elements in each rule's category. " +
+                 "Use revit_list_parameter_qa_rule_sets to discover available rule sets. " +
+                 "Args: ruleSetName (required), limitPerRule, returnIssueReport.")]
+    public async Task<string> RunParameterQaRuleSet(
+        [Description("Name of the rule set to run (see revit_list_parameter_qa_rule_sets)")] string ruleSetName,
+        [Description("Maximum elements to check per rule")] int limitPerRule = 5000,
+        [Description("Include a full IssueReportDto in the response")] bool returnIssueReport = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["ruleSetName"]      = ruleSetName,
+            ["limitPerRule"]     = limitPerRule,
+            ["returnIssueReport"] = returnIssueReport
+        };
+        var result = await pipeClient.SendAsync("revit_run_parameter_qa_rule_set", args, cancellationToken);
+        return FormatResult(result);
+    }
 }
+

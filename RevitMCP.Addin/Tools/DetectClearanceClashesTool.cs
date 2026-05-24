@@ -14,7 +14,7 @@ public class DetectClearanceClashesTool : IRevitMcpTool
 {
     public string Name => "revit_detect_clearance_clashes";
     public string Description => "Detects clearance violations between two sets of element categories using expanded bounding-box approximation. " +
-        "distanceMode: 'BoundingBoxApproximation' (default) or 'SolidCentroidApproximation'. " +
+        "distanceMode: 'ExpandedBoundingBox' (default) or 'SolidCentroidApproximation'. " +
         "WARNING: distances reported are conservative estimates, not true surface-to-surface measurements.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Coordination;
@@ -42,7 +42,7 @@ public class DetectClearanceClashesTool : IRevitMcpTool
         var saveAsLastRun = ToolArguments.GetBool(args, "saveAsLastRun", true);
         var ruleName = ToolArguments.GetString(args, "ruleName", "Ad-hoc Clearance");
         var severity = ToolArguments.GetString(args, "severity", "Medium");
-        var distanceMode = ToolArguments.GetString(args, "distanceMode", "BoundingBoxApproximation");
+        var distanceMode = ToolArguments.GetString(args, "distanceMode", "ExpandedBoundingBox");
         var returnIssueReport = ToolArguments.GetBool(args, "returnIssueReport", false);
 
         if (sourceCategories.Length == 0) return Task.FromResult(Fail(request, "sourceCategories is required."));

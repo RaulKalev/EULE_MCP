@@ -104,6 +104,50 @@ public static class DeliveryIssueBuilder
             $"Document number '{docNumber}' appears {count} times in the Excel register.",
             "Remove duplicate rows from the register.");
 
+    // ── Folder / structural policy issues ─────────────────────────────────────
+
+    public static IssueDto MissingRequiredFolder(string runId, int seq, string folderName)
+        => Make(runId, seq, IssueSeverity.Warning, "FolderStructure",
+            $"Required folder missing: {folderName}",
+            $"The required sub-folder '{folderName}' was not found inside the delivery folder.",
+            "Create the folder and move the relevant files into it.",
+            filePath: folderName);
+
+    // ── Temp / backup file issues ──────────────────────────────────────────────
+
+    public static IssueDto TempFile(string runId, int seq, string fileName)
+        => Make(runId, seq, IssueSeverity.Warning, "TempFiles",
+            $"Temporary or lock file: {fileName}",
+            $"File '{fileName}' appears to be a temporary, lock, or backup file and should not be in the delivery package.",
+            "Delete or move the file out of the delivery folder.",
+            filePath: fileName);
+
+    // ── Suspicious extension issues ────────────────────────────────────────────
+
+    public static IssueDto SuspiciousExtension(string runId, int seq, string fileName, string extension)
+        => Make(runId, seq, IssueSeverity.Warning, "SuspiciousFile",
+            $"Unexpected file extension: {fileName}",
+            $"File '{fileName}' has extension '{extension}' which is not an expected delivery file type.",
+            "Verify that this file is intentional, or remove it from the delivery folder.",
+            filePath: fileName);
+
+    // ── Revision issues ────────────────────────────────────────────────────────
+
+    public static IssueDto OldRevision(string runId, int seq, string fileName, string sheetNumber, string revision)
+        => Make(runId, seq, IssueSeverity.Warning, "Revision",
+            $"Old revision file: {fileName}",
+            $"File '{fileName}' for sheet '{sheetNumber}' appears to be an older revision ({revision}). A newer revision was also found in the delivery folder.",
+            "Remove the old revision file and keep only the latest.",
+            sheetNumber: sheetNumber, filePath: fileName);
+
+    // ── Required project file issues ──────────────────────────────────────────
+
+    public static IssueDto MissingProjectFile(string runId, int seq, string extension)
+        => Make(runId, seq, IssueSeverity.Warning, "ProjectFiles",
+            $"No {extension.ToUpperInvariant()} project file found",
+            $"No '{extension}' file was found in the delivery folder. The delivery policy requires at least one project file with this extension.",
+            $"Add the required {extension.ToUpperInvariant()} project file to the delivery folder.");
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static IssueDto Make(

@@ -55,5 +55,10 @@
     <Compile Include="..\RevitMCP.Addin\Delivery\DeliveryRevitSheetComparer.cs" Link="Delivery\DeliveryRevitSheetComparer.cs" />
     <Compile Include="..\RevitMCP.Addin\Delivery\DeliveryExcelRegisterComparer.cs" Link="Delivery\DeliveryExcelRegisterComparer.cs" />
     <Compile Include="..\RevitMCP.Addin\Delivery\DeliveryIssueBuilder.cs" Link="Delivery\DeliveryIssueBuilder.cs" />
+    <Compile Include="..\RevitMCP.Addin\Delivery\RevitSheetNumberParser.cs" Link="Delivery\RevitSheetNumberParser.cs" />
+    <Compile Include="..\RevitMCP.Addin\Delivery\DeliveryFolderPolicyChecker.cs" Link="Delivery\DeliveryFolderPolicyChecker.cs" />
+    <!-- ParameterQA pure-logic files (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\ParameterQA\ParameterQaRuleSet.cs" Link="ParameterQA\ParameterQaRuleSet.cs" />
+    <Compile Include="..\RevitMCP.Addin\ParameterQA\ParameterQaRuleSetService.cs" Link="ParameterQA\ParameterQaRuleSetService.cs" />
   </ItemGroup>
 </Project>

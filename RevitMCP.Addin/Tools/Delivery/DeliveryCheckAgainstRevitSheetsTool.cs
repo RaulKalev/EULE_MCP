@@ -54,14 +54,14 @@ public class DeliveryCheckAgainstRevitSheetsTool : IRevitMcpTool
             .Where(s => !s.IsPlaceholder)
             .Select(s =>
             {
-                var num = s.SheetNumber;
-                // Extract discipline from sheet number prefix (e.g. "EL" from "EL-5-01")
-                var discipline = num.Contains('-') ? num.Split('-')[0] : null;
+                var parsed = RevitSheetNumberParser.Parse(s.SheetNumber);
                 return new RevitSheetDescriptor
                 {
-                    SheetNumber = num,
-                    SheetName = s.Name,
-                    Discipline = discipline
+                    SheetNumber   = parsed?.SheetNumberCore ?? s.SheetNumber,
+                    SheetName     = s.Name,
+                    Discipline    = parsed?.Discipline,
+                    Stage         = parsed?.Stage,
+                    ProjectNumber = parsed?.ProjectNumber
                 };
             })
             .Where(s => string.IsNullOrWhiteSpace(sheetNumberFilter) ||

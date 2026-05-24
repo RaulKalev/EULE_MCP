@@ -11,6 +11,9 @@ namespace RevitMCP.Addin.Coordination.Clash.Services;
 /// </summary>
 public class ClashPresetService
 {
+    /// <summary>Increment this when built-in presets gain new rules that users should receive.</summary>
+    private const int BuiltInVersion = 2;
+
     private static readonly string _filePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "RKTools", "RevitMCP", "clash-presets.json");
@@ -24,7 +27,7 @@ public class ClashPresetService
     public void EnsureDefaultFile()
     {
         if (File.Exists(_filePath)) return;
-        var file = new ClashPresetFile { Presets = GetDefaultPresets() };
+        var file = new ClashPresetFile { Version = BuiltInVersion, Presets = GetDefaultPresets() };
         Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
         File.WriteAllText(_filePath, JsonSerializer.Serialize(file, _jsonOpts));
     }
@@ -36,9 +39,60 @@ public class ClashPresetService
         return JsonSerializer.Deserialize<ClashPresetFile>(json, _jsonOpts) ?? new ClashPresetFile();
     }
 
-    public ClashPresetDto? FindByName(string name)
+    /// <summary>
+    /// Loads presets and, when the stored version is older than <see cref="BuiltInVersion"/>,
+    /// merges any missing built-in rules into existing presets without overwriting user changes.
+    /// Returns a list of warning messages describing what was migrated.
+    /// </summary>
+    public (ClashPresetFile file, List<string> migrationWarnings) LoadWithMigration()
     {
         var file = Load();
+        var warnings = new List<string>();
+
+        if (file.Version >= BuiltInVersion)
+            return (file, warnings);
+
+        bool changed = false;
+        foreach (var builtIn in GetDefaultPresets())
+        {
+            var userPreset = file.Presets.FirstOrDefault(p =>
+                p.Name.Equals(builtIn.Name, StringComparison.OrdinalIgnoreCase));
+
+            if (userPreset == null) continue; // user deleted it — don't re-add
+
+            foreach (var builtInRule in builtIn.Rules ?? [])
+            {
+                bool exists = (userPreset.Rules ?? []).Any(r =>
+                    r.Name.Equals(builtInRule.Name, StringComparison.OrdinalIgnoreCase));
+                if (!exists)
+                {
+                    userPreset.Rules ??= [];
+                    userPreset.Rules.Add(builtInRule);
+                    warnings.Add($"Migrated built-in rule '{builtInRule.Name}' into preset '{userPreset.Name}'.");
+                    changed = true;
+                }
+            }
+        }
+
+        if (changed)
+        {
+            file.Version = BuiltInVersion;
+            try
+            {
+                File.WriteAllText(_filePath, JsonSerializer.Serialize(file, _jsonOpts));
+            }
+            catch (Exception ex)
+            {
+                warnings.Add($"Preset migration succeeded in memory but could not be saved: {ex.Message}");
+            }
+        }
+
+        return (file, warnings);
+    }
+
+    public ClashPresetDto? FindByName(string name)
+    {
+        var (file, _) = LoadWithMigration();
         return file.Presets.FirstOrDefault(p =>
             p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
     }
@@ -91,6 +145,14 @@ public class ClashPresetService
                     SourceCategories = ["Cable Trays"],
                     TargetCategories = ["Ducts"],
                     ClashType = "Clearance", ClearanceMm = 50, Severity = "Medium",
+                    TargetScope = "HostAndLinks", IncludeGenericModels = true, IncludeImportedGeometry = true
+                },
+                new ClashRuleDto
+                {
+                    Name = "Cable Trays vs Pipes — Hard Clash",
+                    SourceCategories = ["Cable Trays"],
+                    TargetCategories = ["Pipes"],
+                    ClashType = "HardClash", ToleranceMm = 5, Severity = "High",
                     TargetScope = "HostAndLinks", IncludeGenericModels = true, IncludeImportedGeometry = true
                 },
                 new ClashRuleDto

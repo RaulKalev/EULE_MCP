@@ -56,8 +56,8 @@ public class FilePathPolicy
             "%TEMP%",
             "%TMP%"
         ],
-        AllowNetworkPaths = true,
-        AllowProgramDataWrites = true,
+        AllowNetworkPaths = false,
+        AllowProgramDataWrites = false,
         MaxReadBytesDefault = 1_048_576
     };
 
@@ -66,6 +66,10 @@ public class FilePathPolicy
     {
         var (path, error) = NormalizePath(rawPath);
         if (error != null) return error;
+
+        if (!_config.AllowNetworkPaths && IsNetworkPath(path!))
+            return "Network paths are not permitted by the current FileAccessPolicy.";
+
         return CheckAllowedRoots(path!, _config.AllowedReadRoots, out var msg) ? null : msg;
     }
 
@@ -74,7 +78,29 @@ public class FilePathPolicy
     {
         var (path, error) = NormalizePath(rawPath);
         if (error != null) return error;
+
+        if (!_config.AllowNetworkPaths && IsNetworkPath(path!))
+            return "Network paths are not permitted by the current FileAccessPolicy.";
+
+        if (!_config.AllowProgramDataWrites && IsProgramDataPath(path!))
+            return "Writes to ProgramData are not permitted by the current FileAccessPolicy.";
+
         return CheckAllowedRoots(path!, _config.AllowedWriteRoots, out var msg) ? null : msg;
+    }
+
+    private static bool IsNetworkPath(string normalizedPath) =>
+        normalizedPath.StartsWith(@"\\", StringComparison.Ordinal) ||
+        normalizedPath.StartsWith("//", StringComparison.Ordinal);
+
+    private static bool IsProgramDataPath(string normalizedPath)
+    {
+        var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+        if (string.IsNullOrEmpty(programData)) return false;
+        var root = programData.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                   + Path.DirectorySeparatorChar;
+        var full = normalizedPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                   + Path.DirectorySeparatorChar;
+        return full.StartsWith(root, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Expands environment variables, resolves to full path, and blocks traversal.</summary>

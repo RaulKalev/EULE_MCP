@@ -89,7 +89,14 @@ public class DeliveryFileScanner
             Success = true,
             FolderPath = folderPath,
             Files = files,
-            Warnings = warnings
+            Warnings = warnings,
+            SubFolders = Directory.Exists(folderPath)
+                ? Directory.GetDirectories(folderPath)
+                    .Select(Path.GetFileName)
+                    .Where(n => n != null)
+                    .Select(n => n!)
+                    .ToList()
+                : []
         };
     }
 }
@@ -101,6 +108,7 @@ public sealed class DeliveryScanResult
     public string? Error { get; init; }
     public List<DeliveryFileEntry> Files { get; init; } = new();
     public List<string> Warnings { get; init; } = new();
+    public List<string> SubFolders { get; init; } = new();
 
     public static DeliveryScanResult Fail(string folder, string error) =>
         new() { Success = false, FolderPath = folder, Error = error };

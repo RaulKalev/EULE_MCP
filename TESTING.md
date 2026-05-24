@@ -1756,9 +1756,47 @@ This section enumerates every MCP tool exposed by `RevitMCP.Bridge` and describe
 | Coord | `revit_focus_clash` | RA | "Focus clash CL-0001 in active view." | `approval_required` → active 3D view zooms + elements selected | Pending tab | N/A | Requires an open 3D view |
 | Coord | `revit_create_clash_review_view` | RA | "Create clash review view for clash CL-0001." | `approval_required` → reusable 3D view `MCP Clash Review` created or reused, section box scoped to clash | Pending tab | Revit Undo removes view (if newly created) | Transaction: `"Revit MCP - Create Clash Review View"` |
 
+### 30.21 Issue Reports
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Issues | `revit_export_issues_excel` | RO | "Export the issue report to Excel." | `{filePath}` pointing to a `.xlsx` file with Summary and Issues sheets | N/A | N/A | Pass a valid `IssueReportDto` JSON as argument |
+| Issues | `revit_export_issues_markdown` | RO | "Export the issue report to Markdown." | `{filePath}` pointing to a `.md` file with issue table | N/A | N/A | — |
+| Issues | `revit_merge_issue_reports` | RO | "Merge two issue reports." | Single merged `IssueReportDto` with combined issues and updated metadata | N/A | N/A | Pass `reports` array |
+| Issues | `revit_get_issue_report_summary` | RO | "Summarise this issue report." | `{totalIssues, byCategory, bySeverity, topMessages}` | N/A | N/A | — |
+
+### 30.22 Delivery
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Delivery | `delivery_scan_folder` | RO | "Scan the delivery folder at `C:\Temp\Delivery`." | `{files:[...], issueCount, issues:[...]}` — lists parsed EULE drawing files, flags missing revisions/descriptions | N/A | N/A | Folder must contain EULE-format file names |
+| Delivery | `delivery_check_against_revit_sheets` | RO | "Check delivery folder against current Revit sheets." | `{matchedCount, missingFromRevit:[...], extraInFolder:[...]}` | N/A | N/A | Requires open Revit document with sheets |
+| Delivery | `delivery_check_against_excel_register` | RO | "Check delivery folder against register at `C:\Temp\register.xlsx`." | `{matchedCount, missingFromRegister:[...], missingFiles:[...], duplicates:[...]}` | N/A | N/A | Auto-detects header row by column name |
+| Delivery | `delivery_run_full_check` | RO | "Run full delivery check on `C:\Temp\Delivery`." | Merged `IssueReportDto`; optional `exportExcelReport` / `exportMarkdownReport` flags produce files in the delivery folder | N/A | N/A | Combines all three checks |
+
+### 30.23 File System
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| FileSystem | `file_read_text` | RO | "Read the file at `C:\Temp\test.txt`." | `{filePath, sizeBytes, content}` — UTF-8 content capped at `maxBytes` | N/A | N/A | Path must be inside an allowed-read root |
+| FileSystem | `file_write_text` | RA | "Write 'Hello World' to `C:\Temp\out.txt`." | `approval_required` → `{filePath, sizeBytes}` confirming written | Pending tab | N/A | Path must be in allowed-write root; `overwrite:false` by default |
+| FileSystem | `file_list_directory` | RO | "List files in `C:\Temp`." | `{entries:[{name, path, isDirectory, sizeBytes}], totalCount}` | N/A | N/A | `searchPattern` / `recursive` filter results |
+
+### 30.24 Excel (Standalone)
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Excel | `excel_inspect_workbook` | RO | "Inspect the workbook at `C:\Temp\sample.xlsx`." | `{sheets:[{name, usedRange, rowCount, columnCount, headers}]}` | N/A | N/A | `includePreviewRows:true` adds sample data rows |
+| Excel | `excel_read_range` | RO | "Read range A1:D10 from sheet 'Data' of `C:\Temp\sample.xlsx`." | Array of `{address, value, formula, dataType}` per cell | N/A | N/A | `includeFormulas:true` returns formula strings |
+| Excel | `excel_update_cells` | RA | "Set cell B2 to 'Updated' in sheet 'Data' of `C:\Temp\sample.xlsx`." | `approval_required` → `{updatedCount, backupFilePath}` | Pending tab | Restore from backup | Path must be in allowed-write root |
+| Excel | `excel_insert_rows` | RA | "Insert 1 row at row 5 in sheet 'Data' of `C:\Temp\sample.xlsx`, with A='New', B='Row'." | `approval_required` → `{insertedCount, backupFilePath}` | Pending tab | Restore from backup | Style copied from row above by default |
+| Excel | `excel_append_table_rows` | RA | "Append a row {\"Name\": \"Test\", \"Value\": \"42\"} to sheet 'Data' of `C:\Temp\sample.xlsx`." | `approval_required` → `{appendedCount, backupFilePath}` | Pending tab | Restore from backup | `matchHeaders:true` maps by column name |
+| ParameterQA | `revit_list_parameter_qa_rule_sets` | RO | "List available parameter QA rule sets." | `{count, ruleSets:[{name, description, ruleCount, rules}]}` | N/A | N/A | Reads from `%AppData%\RKTools\RevitMCP\parameter-qa-rules.json`; creates default file on first call |
+| ParameterQA | `revit_run_parameter_qa_rule_set` | RO | "Run the 'ELENEA Basic QA' rule set." | `{ruleSetName, totalElements, totalWithIssues, rules:[…], issueReport}` | N/A | N/A | Each rule checks one Revit category; missing rule-set name returns descriptive error |
+
 ---
 
-**Coverage check:** This matrix covers **114/114** registered MCP tools (verified by enumerating `RevitMCP.Bridge/RevitMcpTools.cs` and `RevitMCP.Addin/Tools/*.cs`). Bridge tool names and addin `Name` properties are in 1:1 parity.
+**Coverage check:** This matrix covers **150/150** registered MCP tools (verified by enumerating `RevitMCP.Bridge/RevitMcpTools.cs` and `RevitMCP.Addin/Tools/*.cs`). Bridge tool names and addin `Name` properties are in 1:1 parity.
 
 
 ---
@@ -2241,4 +2279,57 @@ Export the last clash run to Excel.
 - The generated `.xlsx` file has a `Clashes` sheet with columns `Detection Method` (column 15) and `Confidence` (column 16).
 - High-confidence solid-intersection rows show `SolidIntersection` / `High`.
 - Low-confidence fallback rows (if any) show `BoundingBoxFallback` / `Low`.
+
+---
+
+## 43. Parameter QA Rule Sets
+
+### 43.1 List Rule Sets Returns Default Set
+
+**Prompt:**
+```
+List all parameter QA rule sets.
+```
+
+**Expected:**
+- `success: true`
+- `ruleSets` contains at least one entry: `"ELENEA Basic QA"`.
+- Each rule set entry includes `name`, `description`, `ruleCount`, and `rules` array.
+- If `%AppData%\RKTools\RevitMCP\parameter-qa-rules.json` did not exist, it is created automatically with the default content.
+
+### 43.2 Run Rule Set Against Active Model
+
+**Prompt:**
+```
+Run the 'ELENEA Basic QA' parameter QA rule set.
+```
+
+**Expected:**
+- `success: true`
+- `ruleSetName: "ELENEA Basic QA"`
+- `rules` array contains one entry per rule in the set (e.g. `"Fire Alarm Devices"`, `"Lighting Fixtures"`).
+- Each rule entry includes `totalElements`, `completeElements`, `incompleteElements`, `completionPercent`, and `parameters`.
+- If the model has no elements of a rule's category, `totalElements: 0` is returned for that rule and a warning is added.
+- If `returnIssueReport: true` (default), `issueReport` is included with individual element issues.
+
+### 43.3 Unknown Rule Set Returns Descriptive Error
+
+**Prompt:**
+```
+Run the 'NonExistent QA Set' parameter QA rule set.
+```
+
+**Expected:**
+- `success: false`
+- `message` contains the unknown rule set name and a hint to use `revit_list_parameter_qa_rule_sets`.
+
+### 43.4 Unit Tests Pass (192 tests)
+
+```
+dotnet test RevitMCP.slnx
+```
+
+**Expected:**
+- `Passed! - Failed: 0, Passed: 192`
+- New tests: `RevitSheetNumberParserTests` (11 facts), `DeliveryFolderPolicyCheckerTests` (12 facts/theories), `ParameterQaRuleSetServiceTests` (7 facts).
 

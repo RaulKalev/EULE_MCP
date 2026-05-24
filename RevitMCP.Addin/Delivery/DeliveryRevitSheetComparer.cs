@@ -125,4 +125,6 @@ public sealed class RevitSheetDescriptor
     public string SheetNumber { get; init; } = string.Empty;
     public string SheetName { get; init; } = string.Empty;
     public string? Discipline { get; init; }
+    public string? Stage { get; init; }
+    public string? ProjectNumber { get; init; }
 }

@@ -248,4 +248,110 @@ public class FilePathPolicyTests
             if (Directory.Exists(tempDir)) Directory.Delete(tempDir);
         }
     }
+
+    // ── AllowNetworkPaths ────────────────────────────────────────────────────
+
+    [Fact]
+    public void ValidateRead_NetworkPath_WhenNetworkDisabled_ReturnsError()
+    {
+        var config = new FileAccessPolicyConfig
+        {
+            AllowedReadRoots = [@"\\server\share"],
+            AllowedWriteRoots = [],
+            AllowNetworkPaths = false,
+            MaxReadBytesDefault = 1_048_576
+        };
+        var policy = new FilePathPolicy(config);
+        var error = policy.ValidateRead(@"\\server\share\file.txt");
+        Assert.NotNull(error);
+        Assert.Contains("Network paths", error!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ValidateWrite_NetworkPath_WhenNetworkDisabled_ReturnsError()
+    {
+        var config = new FileAccessPolicyConfig
+        {
+            AllowedReadRoots = [],
+            AllowedWriteRoots = [@"\\server\share"],
+            AllowNetworkPaths = false,
+            MaxReadBytesDefault = 1_048_576
+        };
+        var policy = new FilePathPolicy(config);
+        var error = policy.ValidateWrite(@"\\server\share\output.xlsx");
+        Assert.NotNull(error);
+        Assert.Contains("Network paths", error!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ── AllowProgramDataWrites ────────────────────────────────────────────────
+
+    [Fact]
+    public void ValidateWrite_ProgramDataPath_WhenDisabled_ReturnsError()
+    {
+        var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+        var config = new FileAccessPolicyConfig
+        {
+            AllowedReadRoots = [],
+            AllowedWriteRoots = [programData],
+            AllowNetworkPaths = false,
+            AllowProgramDataWrites = false,
+            MaxReadBytesDefault = 1_048_576
+        };
+        var policy = new FilePathPolicy(config);
+        var error = policy.ValidateWrite(Path.Combine(programData, "SomeApp", "config.json"));
+        Assert.NotNull(error);
+        Assert.Contains("ProgramData", error!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ValidateWrite_ProgramDataPath_WhenEnabled_AllowedByRoot_ReturnsNull()
+    {
+        var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+        var config = new FileAccessPolicyConfig
+        {
+            AllowedReadRoots = [],
+            AllowedWriteRoots = [programData],
+            AllowNetworkPaths = false,
+            AllowProgramDataWrites = true,
+            MaxReadBytesDefault = 1_048_576
+        };
+        var policy = new FilePathPolicy(config);
+        var error = policy.ValidateWrite(Path.Combine(programData, "SomeApp", "config.json"));
+        Assert.Null(error);
+    }
+
+    // ── Excel path policy enforcement ─────────────────────────────────────────
+
+    [Fact]
+    public void ValidateRead_ExcelFile_OutsideAllowedRoots_ReturnsError()
+    {
+        var config = new FileAccessPolicyConfig
+        {
+            AllowedReadRoots = [@"C:\Projects"],
+            AllowedWriteRoots = [],
+            AllowNetworkPaths = false,
+            MaxReadBytesDefault = 1_048_576
+        };
+        var policy = new FilePathPolicy(config);
+        var error = policy.ValidateRead(@"C:\Users\Public\file.xlsx");
+        Assert.NotNull(error);
+        Assert.Contains("outside all allowed roots", error!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ValidateWrite_ExcelFile_InsideAllowedWriteRoot_ReturnsNull()
+    {
+        var tempRoot = Path.GetTempPath();
+        var config = new FileAccessPolicyConfig
+        {
+            AllowedReadRoots = [],
+            AllowedWriteRoots = [tempRoot],
+            AllowNetworkPaths = false,
+            AllowProgramDataWrites = false,
+            MaxReadBytesDefault = 1_048_576
+        };
+        var policy = new FilePathPolicy(config);
+        var error = policy.ValidateWrite(Path.Combine(tempRoot, "report.xlsx"));
+        Assert.Null(error);
+    }
 }

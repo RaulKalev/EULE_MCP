@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Autodesk.Revit.UI;
 using Newtonsoft.Json.Linq;
 using RevitMCP.Addin.Excel;
+using RevitMCP.Addin.FileSystem;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Tools;
 using RevitMCP.Core.Models;
@@ -14,6 +15,8 @@ public class ExcelInsertRowsTool : IRevitMcpTool
     public string Description => "Inserts rows into a worksheet at a given row number, copying styles from a template row. Row values keyed by column letter (A, B, C…). Requires approval.";
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Excel;
+
+    private static readonly FilePathPolicy _policy = new();
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
@@ -29,6 +32,10 @@ public class ExcelInsertRowsTool : IRevitMcpTool
             return Task.FromResult(Fail(request, "worksheetName is required."));
         if (insertAtRow < 1)
             return Task.FromResult(Fail(request, "insertAtRow must be >= 1."));
+
+        var policyError = _policy.ValidateWrite(filePath);
+        if (policyError != null)
+            return Task.FromResult(Fail(request, policyError));
 
         // copyStyleFromRow defaults to the row directly above the insert point
         var copyStyleFromRow = ToolArguments.GetInt(request.Arguments, "copyStyleFromRow",

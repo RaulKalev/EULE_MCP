@@ -20,7 +20,7 @@ public class ClearanceClashDetector
         double clearanceMm,
         int limit,
         int maxPairs,
-        string distanceMode = "BoundingBoxApproximation",
+        string distanceMode = "ExpandedBoundingBox",
         CancellationToken cancellationToken = default)
     {
         var clashes = new List<ClashResultDto>();

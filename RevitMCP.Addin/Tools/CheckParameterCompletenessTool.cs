@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RevitMCP.Addin.Interfaces;
+using RevitMCP.Addin.ParameterQA;
 using RevitMCP.Addin.Query;
 using RevitMCP.Core.Models;
 using RevitMCP.Core.Models.Issues;
@@ -70,158 +71,57 @@ public class CheckParameterCompletenessTool : IRevitMcpTool
             return Task.FromResult(Fail(request, "Provide useSelection=true, elementIds, or category."));
         }
 
-        var reader = new ParameterReader();
-        var readOpts = new ParameterReadOptions
+        var options = new ParameterCompletenessOptions
         {
             IncludeInstanceParameters = includeInstance,
-            IncludeTypeParameters = includeType
+            IncludeTypeParameters     = includeType,
+            TreatWhitespaceAsEmpty    = treatWhitespaceAsEmpty,
+            Limit                     = limit
         };
 
-        // Per-required-parameter stats
-        var paramCheckStats = requiredParams.ToDictionary(
-            name => name,
-            _ => new ParamCheckStats());
-
-        var problemElements = new List<object>();
-        var elementIssueList = new List<(long elementId, List<string> issues)>();
-        int totalElements = 0;
-        int completeElements = 0;
-        int incompleteElements = 0;
-
-        foreach (var elementId in sourceIds)
-        {
-            if (totalElements >= limit) break;
-
-            var element = doc.GetElement(elementId);
-            if (element?.Category == null) continue;
-
-            totalElements++;
-
-            var allParams = reader.ReadParameters(doc, element, readOpts);
-            var elementIssues = new List<string>();
-
-            foreach (var reqName in requiredParams)
-            {
-                var stats = paramCheckStats[reqName];
-
-                var matched = allParams.FirstOrDefault(p =>
-                    ParameterMatcher.Matches(p.Name, reqName, "ContainsNormalized"));
-
-                if (matched == null)
-                {
-                    stats.MissingCount++;
-                    elementIssues.Add($"{reqName} is missing");
-                }
-                else if (IsEmpty(matched.Value, treatWhitespaceAsEmpty))
-                {
-                    stats.EmptyCount++;
-                    elementIssues.Add($"{reqName} is empty");
-                }
-                else
-                {
-                    stats.FilledCount++;
-                }
-            }
-
-            if (elementIssues.Count > 0)
-            {
-                incompleteElements++;
-                elementIssueList.Add((element.Id.Value, elementIssues));
-
-                if (includeElementIds)
-                {
-                    var typeId = element.GetTypeId();
-                    var typeElem = (typeId != null && typeId != ElementId.InvalidElementId) ? doc.GetElement(typeId) : null;
-                    string? familyName = null;
-                    if (element is FamilyInstance fi)
-                        familyName = fi.Symbol?.Family?.Name;
-
-                    problemElements.Add(new
-                    {
-                        elementId = element.Id.Value,
-                        uniqueId = element.UniqueId,
-                        category = element.Category.Name,
-                        family = familyName ?? string.Empty,
-                        type = typeElem?.Name ?? string.Empty,
-                        level = GetLevelName(doc, element),
-                        issues = elementIssues
-                    });
-                }
-            }
-            else
-            {
-                completeElements++;
-            }
-        }
-
-        var completionPercent = totalElements > 0
-            ? Math.Round(100.0 * completeElements / totalElements, 1)
-            : 0.0;
-
-        var parameterResults = requiredParams.Select(name =>
-        {
-            var s = paramCheckStats[name];
-            return new
-            {
-                parameterName = name,
-                missingCount = s.MissingCount,
-                emptyCount = s.EmptyCount,
-                filledCount = s.FilledCount
-            };
-        }).ToList();
+        var result = ParameterCompletenessChecker.Check(doc, sourceIds, requiredParams, options);
 
         sw.Stop();
 
-        IssueReportDto? issueReport = null;
-        if (returnIssueReport)
+        var parameterResults = result.ParameterStats.Select(s => new
         {
-            var runId = Guid.NewGuid().ToString("N")[..8].ToUpper();
-            int seq = 0;
-            var issues = new List<IssueDto>();
-            foreach (var (eid, issueTexts) in elementIssueList)
+            parameterName = s.ParameterName,
+            missingCount  = s.MissingCount,
+            emptyCount    = s.EmptyCount,
+            filledCount   = s.FilledCount
+        }).ToList();
+
+        var problemElements = includeElementIds
+            ? result.ProblemElements.Select(e => (object)new
             {
-                foreach (var iss in issueTexts)
-                {
-                    seq++;
-                    issues.Add(new IssueDto
-                    {
-                        IssueId = $"{runId}-{seq:D4}",
-                        RunId = runId,
-                        SourceTool = Name,
-                        Severity = iss.Contains("missing", StringComparison.OrdinalIgnoreCase)
-                            ? IssueSeverity.Error
-                            : IssueSeverity.Warning,
-                        Status = IssueStatus.Open,
-                        Category = "ParameterQA",
-                        Title = iss,
-                        Description = $"Element {eid}: {iss}",
-                        ElementId = eid,
-                        CreatedAt = DateTimeOffset.UtcNow
-                    });
-                }
-            }
-            issueReport = new IssueReportDto
-            {
-                RunId = runId,
-                Title = $"Parameter Completeness — {category ?? "All Elements"}",
-                SourceTools = [Name],
-                Issues = issues
-            };
-        }
+                elementId = e.ElementId,
+                uniqueId  = e.UniqueId,
+                category  = e.Category,
+                family    = e.Family,
+                type      = e.Type,
+                level     = e.Level,
+                issues    = e.Issues
+            }).ToList()
+            : [];
+
+        IssueReportDto? issueReport = returnIssueReport
+            ? ParameterCompletenessChecker.BuildIssueReport(
+                result, Name, $"Parameter Completeness — {category ?? "All Elements"}")
+            : null;
 
         return Task.FromResult(new McpToolResult
         {
             RequestId = request.RequestId,
             Success = true,
-            Message = $"Checked {totalElements} elements. {completeElements} complete, {incompleteElements} incomplete.",
+            Message = $"Checked {result.TotalElements} elements. {result.CompleteElements} complete, {result.IncompleteElements} incomplete.",
             Data = new
             {
                 category,
-                totalElements,
-                completeElements,
-                incompleteElements,
-                completionPercent,
-                parameters = parameterResults,
+                totalElements      = result.TotalElements,
+                completeElements   = result.CompleteElements,
+                incompleteElements = result.IncompleteElements,
+                completionPercent  = result.CompletionPercent,
+                parameters         = parameterResults,
                 problemElements,
                 issueReport
             },
@@ -229,28 +129,6 @@ public class CheckParameterCompletenessTool : IRevitMcpTool
         });
     }
 
-    private static bool IsEmpty(string value, bool treatWhitespaceAsEmpty) =>
-        treatWhitespaceAsEmpty ? string.IsNullOrWhiteSpace(value) : string.IsNullOrEmpty(value);
-
-    private static string GetLevelName(Document doc, Element element)
-    {
-        try
-        {
-            var lvlId = element.LevelId;
-            if (lvlId != null && lvlId != ElementId.InvalidElementId)
-                return (doc.GetElement(lvlId) as Level)?.Name ?? string.Empty;
-        }
-        catch { }
-        return string.Empty;
-    }
-
     private static McpToolResult Fail(McpToolRequest r, string msg) =>
         new() { RequestId = r.RequestId, Success = false, Message = msg };
-
-    private class ParamCheckStats
-    {
-        public int MissingCount { get; set; }
-        public int EmptyCount { get; set; }
-        public int FilledCount { get; set; }
-    }
 }
