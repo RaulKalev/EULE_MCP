@@ -165,6 +165,9 @@ public class App : IExternalApplication
             // IFC Space to Room — Phase 2 (read-only geometry extraction)
             handler.RegisterTool(new PreviewIfcSpaceGeometryTool());
 
+            // IFC Space to Room — Phase 3 (model-writing room creation)
+            handler.RegisterTool(new ConvertIfcSpacesToRoomsTool());
+
             // Coordination — Phase 1 — Discovery
             handler.RegisterTool(new ListClashableCategoriesTool());
             handler.RegisterTool(new ListClashableLinksTool());

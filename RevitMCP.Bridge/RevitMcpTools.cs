@@ -3366,5 +3366,62 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         var result = await pipeClient.SendAsync("ifc_preview_space_geometry", args, cancellationToken);
         return FormatResult(result);
     }
+
+    [McpServerTool(Name = "convert_ifc_spaces_to_rooms"),
+     Description(
+         "Phase 3 — Converts linked IFC Space elements into native Revit Rooms. " +
+         "For each IFC Space: extracts the floor-plan footprint (solid → bottom face → CurveLoop), " +
+         "matches to a host Level by elevation, creates Room Separation Lines from the boundary, " +
+         "and places a Room at an interior placement point. " +
+         "Number and Name are written from IFC metadata using built-in Room fields only " +
+         "(no shared parameters, no IFC GUIDs, no Comments, no Extensible Storage). " +
+         "Existing Rooms (matched by Number + Name + Level) are never overwritten. " +
+         "One failed space never aborts the whole batch — each space has its own transaction. " +
+         "Set dryRun=true to validate all spaces without making any model changes. " +
+         "Recommended workflow: ifc_list_links → ifc_preview_spaces → ifc_preview_space_geometry " +
+         "(to identify GeometryReady spaces) → convert_ifc_spaces_to_rooms with dryRun=true " +
+         "to confirm → convert_ifc_spaces_to_rooms with dryRun=false to commit.")]
+    public async Task<string> ConvertIfcSpacesToRooms(
+        [Description("Element id of the RevitLinkInstance to convert from (integer). Obtain from ifc_list_links.")]
+        long linkInstanceId,
+        [Description("Optional list of linked element IDs to convert. If empty, all IFC Space candidates in the link are processed. Obtain from ifc_preview_space_geometry (status=GeometryReady).")]
+        long[]? linkedElementIds = null,
+        [Description("How to handle duplicate Rooms: 'skip_existing' (default) skips when Number+Name+Level already exist; 'skip_conflicts' also skips when Number+Level match but Name differs.")]
+        string duplicateMode = "skip_existing",
+        [Description("Maximum vertical offset (mm) between a space bottom elevation and the matched Level. Default 300 mm.")]
+        double levelMatchToleranceMm = 300.0,
+        [Description("Endpoint gap below this threshold (mm) is snapped during loop cleanup. Default 3 mm.")]
+        double endpointSnapToleranceMm = 3.0,
+        [Description("Segments shorter than this threshold (mm) are removed during loop cleanup. Default 1 mm.")]
+        double tinySegmentToleranceMm = 1.0,
+        [Description("If true, write Room Number and Name from IFC metadata using built-in Room fields only. Default true.")]
+        bool setRoomNameAndNumber = true,
+        [Description("If true, create Room Separation Lines from the IFC Space footprint before placing the Room. Recommended. Default true.")]
+        bool createRoomSeparationLines = true,
+        [Description("If true, create Rooms for IFC Spaces with no Name. Default false.")]
+        bool allowCreateWithoutName = false,
+        [Description("If true, create Rooms for IFC Spaces with no Number. Default false.")]
+        bool allowCreateWithoutNumber = false,
+        [Description("If true, perform full validation but make no model modifications. Items that pass all checks are returned with status DryRunReady. Default false.")]
+        bool dryRun = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["linkInstanceId"]            = linkInstanceId,
+            ["linkedElementIds"]          = linkedElementIds ?? [],
+            ["duplicateMode"]             = duplicateMode,
+            ["levelMatchToleranceMm"]     = levelMatchToleranceMm,
+            ["endpointSnapToleranceMm"]   = endpointSnapToleranceMm,
+            ["tinySegmentToleranceMm"]    = tinySegmentToleranceMm,
+            ["setRoomNameAndNumber"]      = setRoomNameAndNumber,
+            ["createRoomSeparationLines"] = createRoomSeparationLines,
+            ["allowCreateWithoutName"]    = allowCreateWithoutName,
+            ["allowCreateWithoutNumber"]  = allowCreateWithoutNumber,
+            ["dryRun"]                    = dryRun
+        };
+        var result = await pipeClient.SendAsync("convert_ifc_spaces_to_rooms", args, cancellationToken);
+        return FormatResult(result);
+    }
 }
 
