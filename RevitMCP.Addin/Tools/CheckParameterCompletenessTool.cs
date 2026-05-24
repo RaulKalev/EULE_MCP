@@ -4,6 +4,7 @@ using Autodesk.Revit.UI;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Query;
 using RevitMCP.Core.Models;
+using RevitMCP.Core.Models.Issues;
 
 namespace RevitMCP.Addin.Tools;
 
@@ -33,6 +34,7 @@ public class CheckParameterCompletenessTool : IRevitMcpTool
         var treatWhitespaceAsEmpty = ToolArguments.GetBool(request.Arguments, "treatWhitespaceAsEmpty", true);
         var includeElementIds = ToolArguments.GetBool(request.Arguments, "includeElementIds", true);
         var limit = ToolArguments.GetInt(request.Arguments, "limit", 5000);
+        var returnIssueReport = ToolArguments.GetBool(request.Arguments, "returnIssueReport", false);
 
         if (requiredParams.Length == 0)
             return Task.FromResult(Fail(request, "requiredParameters is required (list of parameter names to check)."));
@@ -81,6 +83,7 @@ public class CheckParameterCompletenessTool : IRevitMcpTool
             _ => new ParamCheckStats());
 
         var problemElements = new List<object>();
+        var elementIssueList = new List<(long elementId, List<string> issues)>();
         int totalElements = 0;
         int completeElements = 0;
         int incompleteElements = 0;
@@ -123,6 +126,7 @@ public class CheckParameterCompletenessTool : IRevitMcpTool
             if (elementIssues.Count > 0)
             {
                 incompleteElements++;
+                elementIssueList.Add((element.Id.Value, elementIssues));
 
                 if (includeElementIds)
                 {
@@ -167,6 +171,44 @@ public class CheckParameterCompletenessTool : IRevitMcpTool
         }).ToList();
 
         sw.Stop();
+
+        IssueReportDto? issueReport = null;
+        if (returnIssueReport)
+        {
+            var runId = Guid.NewGuid().ToString("N")[..8].ToUpper();
+            int seq = 0;
+            var issues = new List<IssueDto>();
+            foreach (var (eid, issueTexts) in elementIssueList)
+            {
+                foreach (var iss in issueTexts)
+                {
+                    seq++;
+                    issues.Add(new IssueDto
+                    {
+                        IssueId = $"{runId}-{seq:D4}",
+                        RunId = runId,
+                        SourceTool = Name,
+                        Severity = iss.Contains("missing", StringComparison.OrdinalIgnoreCase)
+                            ? IssueSeverity.Error
+                            : IssueSeverity.Warning,
+                        Status = IssueStatus.Open,
+                        Category = "ParameterQA",
+                        Title = iss,
+                        Description = $"Element {eid}: {iss}",
+                        ElementId = eid,
+                        CreatedAt = DateTimeOffset.UtcNow
+                    });
+                }
+            }
+            issueReport = new IssueReportDto
+            {
+                RunId = runId,
+                Title = $"Parameter Completeness — {category ?? "All Elements"}",
+                SourceTools = [Name],
+                Issues = issues
+            };
+        }
+
         return Task.FromResult(new McpToolResult
         {
             RequestId = request.RequestId,
@@ -180,7 +222,8 @@ public class CheckParameterCompletenessTool : IRevitMcpTool
                 incompleteElements,
                 completionPercent,
                 parameters = parameterResults,
-                problemElements
+                problemElements,
+                issueReport
             },
             DurationMs = sw.ElapsedMilliseconds
         });

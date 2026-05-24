@@ -3,6 +3,7 @@ using RevitMCP.Addin.Approval;
 using RevitMCP.Addin.Logging;
 using RevitMCP.Addin.Services;
 using RevitMCP.Addin.Tools;
+using RevitMCP.Addin.Tools.Delivery;
 using RevitMCP.Addin.Tools.Excel;
 using RevitMCP.Addin.Tools.FileSystem;
 using RevitMCP.Addin.Tools.Reports;
@@ -192,6 +193,13 @@ public class App : IExternalApplication
             handler.RegisterTool(new CreateProjectSkillOverrideTool());
             handler.RegisterTool(new UpdateProjectSkillOverrideTool());
             handler.RegisterTool(new ResetProjectSkillOverrideTool());
+            handler.RegisterTool(new ConfigureSheetNamingSkillTool());
+
+            // Delivery Tools
+            handler.RegisterTool(new DeliveryScanFolderTool());
+            handler.RegisterTool(new DeliveryCheckAgainstRevitSheetsTool());
+            handler.RegisterTool(new DeliveryCheckAgainstExcelRegisterTool());
+            handler.RegisterTool(new DeliveryRunFullCheckTool());
 
             // File System Tools
             handler.RegisterTool(new FileReadTextTool());

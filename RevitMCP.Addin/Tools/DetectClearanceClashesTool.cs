@@ -6,13 +6,16 @@ using RevitMCP.Addin.Coordination.Clash.Services;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Tools;
 using RevitMCP.Core.Models;
+using RevitMCP.Core.Models.Issues;
 
 namespace RevitMCP.Addin.Tools;
 
 public class DetectClearanceClashesTool : IRevitMcpTool
 {
     public string Name => "revit_detect_clearance_clashes";
-    public string Description => "Detects clearance violations between two sets of element categories using expanded bounding-box approximation. WARNING: distances reported are conservative estimates, not true surface-to-surface measurements.";
+    public string Description => "Detects clearance violations between two sets of element categories using expanded bounding-box approximation. " +
+        "distanceMode: 'BoundingBoxApproximation' (default) or 'SolidCentroidApproximation'. " +
+        "WARNING: distances reported are conservative estimates, not true surface-to-surface measurements.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Coordination;
 
@@ -39,6 +42,8 @@ public class DetectClearanceClashesTool : IRevitMcpTool
         var saveAsLastRun = ToolArguments.GetBool(args, "saveAsLastRun", true);
         var ruleName = ToolArguments.GetString(args, "ruleName", "Ad-hoc Clearance");
         var severity = ToolArguments.GetString(args, "severity", "Medium");
+        var distanceMode = ToolArguments.GetString(args, "distanceMode", "BoundingBoxApproximation");
+        var returnIssueReport = ToolArguments.GetBool(args, "returnIssueReport", false);
 
         if (sourceCategories.Length == 0) return Task.FromResult(Fail(request, "sourceCategories is required."));
         if (targetCategories.Length == 0) return Task.FromResult(Fail(request, "targetCategories is required."));
@@ -47,7 +52,7 @@ public class DetectClearanceClashesTool : IRevitMcpTool
         var (sources, srcWarn) = _collector.Collect(doc, sourceCategories, includeLinks, includeGenericModels, includeImportedGeometry, linkNameFilters, 0);
         var (targets, tgtWarn) = _collector.Collect(doc, targetCategories, includeLinks, includeGenericModels, includeImportedGeometry, linkNameFilters, 0);
 
-        var (clashes, detectWarn) = _detector.Detect(sources, targets, ruleName, severity, clearanceMm, limit, maxPairs, cancellationToken);
+        var (clashes, detectWarn) = _detector.Detect(sources, targets, ruleName, severity, clearanceMm, limit, maxPairs, distanceMode, cancellationToken);
 
         var allWarnings = srcWarn.Concat(tgtWarn).Concat(detectWarn).Distinct().ToList();
         var run = new ClashRunResultDto
@@ -62,13 +67,47 @@ public class DetectClearanceClashesTool : IRevitMcpTool
 
         if (saveAsLastRun) _cache.Save(run);
 
+        IssueReportDto? issueReport = null;
+        if (returnIssueReport)
+        {
+            var reportRunId = run.RunId;
+            var issues = clashes.Select((c, i) => new IssueDto
+            {
+                IssueId = $"{reportRunId}-{i + 1:D4}",
+                RunId = reportRunId,
+                SourceTool = Name,
+                Severity = c.Severity switch
+                {
+                    "Critical" => IssueSeverity.Critical,
+                    "High" => IssueSeverity.Error,
+                    "Low" => IssueSeverity.Info,
+                    _ => IssueSeverity.Warning
+                },
+                Status = IssueStatus.Open,
+                Category = "ClashDetection",
+                Title = $"Clearance Violation: {c.Source.Category} ↔ {c.Target.Category} ({c.DistanceMm?.ToString("F0") ?? "?"}mm < {clearanceMm}mm)",
+                Description = c.Message,
+                ElementId = c.Source.ElementId,
+                LinkedElementId = c.Target.ElementId,
+                Phase = ruleName,
+                CreatedAt = DateTimeOffset.UtcNow
+            }).ToList();
+            issueReport = new IssueReportDto
+            {
+                RunId = reportRunId,
+                Title = $"Clearance Check — {ruleName} ({clearanceMm}mm, {distanceMode})",
+                SourceTools = [Name],
+                Issues = issues
+            };
+        }
+
         sw.Stop();
         return Task.FromResult(new McpToolResult
         {
             RequestId = request.RequestId,
             Success = true,
-            Message = $"Detected {clashes.Count} clearance violation(s) at {clearanceMm}mm clearance (bounding-box approximation). {(saveAsLastRun ? "Saved as last run." : "")}",
-            Data = run,
+            Message = $"Detected {clashes.Count} clearance violation(s) at {clearanceMm}mm clearance ({distanceMode}). {(saveAsLastRun ? "Saved as last run." : "")}",
+            Data = new { run, distanceMode, issueReport },
             Warnings = allWarnings,
             DurationMs = sw.ElapsedMilliseconds
         });

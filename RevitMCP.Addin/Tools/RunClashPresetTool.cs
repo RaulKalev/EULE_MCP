@@ -5,6 +5,7 @@ using RevitMCP.Addin.Coordination.Clash.Services;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Tools;
 using RevitMCP.Core.Models;
+using RevitMCP.Core.Models.Issues;
 
 namespace RevitMCP.Addin.Tools;
 
@@ -44,6 +45,7 @@ public class RunClashPresetTool : IRevitMcpTool
         var maxPairs = ToolArguments.GetInt(args, "maxPairs", 100_000);
         var saveAsLastRun = ToolArguments.GetBool(args, "saveAsLastRun", true);
         var allowBoundingBoxFallback = ToolArguments.GetBool(args, "allowBoundingBoxFallback", false);
+        var returnIssueReport = ToolArguments.GetBool(args, "returnIssueReport", false);
 
         var allClashes = new List<ClashResultDto>();
         var allWarnings = new List<string>();
@@ -87,7 +89,7 @@ public class RunClashPresetTool : IRevitMcpTool
 
             if (rule.ClashType == "Clearance")
             {
-                (ruleClashes, ruleWarnings) = _clearanceDetector.Detect(sources, targets, rule.Name, rule.Severity, rule.ClearanceMm, limit, maxPairs, cancellationToken);
+                (ruleClashes, ruleWarnings) = _clearanceDetector.Detect(sources, targets, rule.Name, rule.Severity, rule.ClearanceMm, limit, maxPairs, "BoundingBoxApproximation", cancellationToken);
             }
             else
             {
@@ -118,13 +120,47 @@ public class RunClashPresetTool : IRevitMcpTool
 
         if (saveAsLastRun) _cache.Save(run);
 
+        IssueReportDto? issueReport = null;
+        if (returnIssueReport)
+        {
+            var reportRunId = run.RunId;
+            var issues = allClashes.Select((c, i) => new IssueDto
+            {
+                IssueId = $"{reportRunId}-{i + 1:D4}",
+                RunId = reportRunId,
+                SourceTool = Name,
+                Severity = c.Severity switch
+                {
+                    "Critical" => IssueSeverity.Critical,
+                    "High" => IssueSeverity.Error,
+                    "Low" => IssueSeverity.Info,
+                    _ => IssueSeverity.Warning
+                },
+                Status = IssueStatus.Open,
+                Category = c.ClashType == "Clearance" ? "ClashDetection.Clearance" : "ClashDetection.Hard",
+                Title = $"{c.ClashType}: {c.Source.Category} ↔ {c.Target.Category} [{c.RuleName}]",
+                Description = c.Message,
+                ElementId = c.Source.ElementId,
+                LinkedElementId = c.Target.ElementId,
+                Phase = c.RuleName,
+                CreatedAt = DateTimeOffset.UtcNow
+            }).ToList();
+            issueReport = new IssueReportDto
+            {
+                RunId = reportRunId,
+                Title = $"Clash Preset — {presetName}",
+                SourceTools = [Name],
+                Issues = issues
+            };
+        }
+
         sw.Stop();
         return Task.FromResult(new McpToolResult
         {
             RequestId = request.RequestId,
             Success = true,
             Message = $"Preset '{presetName}': {allClashes.Count} total clash(es) across {preset.Rules.Count} rule(s). {(saveAsLastRun ? "Saved as last run." : "")}",
-            Data = run,
+            Data = new { run, issueReport },
             Warnings = run.Warnings,
             DurationMs = sw.ElapsedMilliseconds
         });

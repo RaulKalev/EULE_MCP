@@ -49,5 +49,11 @@
     <Compile Include="..\RevitMCP.Addin\Excel\ExcelStyleCopyService.cs" Link="Excel\ExcelStyleCopyService.cs" />
     <Compile Include="..\RevitMCP.Addin\Excel\ExcelWorkbookInspector.cs" Link="Excel\ExcelWorkbookInspector.cs" />
     <Compile Include="..\RevitMCP.Addin\Excel\ExcelWorkbookModifier.cs" Link="Excel\ExcelWorkbookModifier.cs" />
+    <!-- Delivery pure-logic files (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\Delivery\DeliveryFileNameParser.cs" Link="Delivery\DeliveryFileNameParser.cs" />
+    <Compile Include="..\RevitMCP.Addin\Delivery\DeliveryFileScanner.cs" Link="Delivery\DeliveryFileScanner.cs" />
+    <Compile Include="..\RevitMCP.Addin\Delivery\DeliveryRevitSheetComparer.cs" Link="Delivery\DeliveryRevitSheetComparer.cs" />
+    <Compile Include="..\RevitMCP.Addin\Delivery\DeliveryExcelRegisterComparer.cs" Link="Delivery\DeliveryExcelRegisterComparer.cs" />
+    <Compile Include="..\RevitMCP.Addin\Delivery\DeliveryIssueBuilder.cs" Link="Delivery\DeliveryIssueBuilder.cs" />
   </ItemGroup>
 </Project>

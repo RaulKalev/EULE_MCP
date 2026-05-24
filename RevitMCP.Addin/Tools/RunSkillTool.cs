@@ -2,6 +2,7 @@ using Autodesk.Revit.UI;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Skills;
 using RevitMCP.Core.Models;
+using RevitMCP.Core.Models.Issues;
 using System.Diagnostics;
 
 namespace RevitMCP.Addin.Tools;
@@ -27,8 +28,52 @@ public class RunSkillTool : IRevitMcpTool
 
         var projectId = ToolArguments.GetString(request.Arguments, "projectId");
         var useOverride = ToolArguments.GetBool(request.Arguments, "useProjectOverride", false);
+        var returnIssueReport = ToolArguments.GetBool(request.Arguments, "returnIssueReport", false);
 
         var runResult = SkillRunner.Run(uiapp, skillId, projectId, useOverride);
+
+        IssueReportDto? issueReport = null;
+        if (returnIssueReport)
+        {
+            var runId = runResult.RunId;
+            int seq = 0;
+            var issues = new List<IssueDto>();
+            foreach (var taskResult in runResult.TaskResults)
+            {
+                foreach (var si in taskResult.Issues)
+                {
+                    seq++;
+                    issues.Add(new IssueDto
+                    {
+                        IssueId = $"{runId}-{seq:D4}",
+                        RunId = runId,
+                        SourceTool = Name,
+                        Severity = si.Severity switch
+                        {
+                            "Critical" => IssueSeverity.Critical,
+                            "High" or "Error" => IssueSeverity.Error,
+                            "Low" or "Info" => IssueSeverity.Info,
+                            _ => IssueSeverity.Warning
+                        },
+                        Status = IssueStatus.Open,
+                        Category = $"SheetNaming.{taskResult.TaskId}",
+                        Title = si.Category,
+                        Description = si.Description,
+                        SuggestedFix = si.SuggestedAction,
+                        ElementId = si.HostElementId,
+                        LinkedElementId = si.LinkedElementId,
+                        CreatedAt = DateTimeOffset.UtcNow
+                    });
+                }
+            }
+            issueReport = new IssueReportDto
+            {
+                RunId = runId,
+                Title = $"Skill Run — {runResult.SkillName ?? skillId}",
+                SourceTools = [Name],
+                Issues = issues
+            };
+        }
 
         var result = new McpToolResult
         {
@@ -54,7 +99,8 @@ public class RunSkillTool : IRevitMcpTool
                 excelReportPath = runResult.TaskResults
                     .FirstOrDefault(t => t.TaskId == "export.excel-report" && t.Success)?.Message,
                 jsonReportPath = runResult.TaskResults
-                    .FirstOrDefault(t => t.TaskId == "export.json-report" && t.Success)?.Message
+                    .FirstOrDefault(t => t.TaskId == "export.json-report" && t.Success)?.Message,
+                issueReport
             },
             Warnings = runResult.Warnings,
             DurationMs = sw.ElapsedMilliseconds

@@ -5,6 +5,7 @@ using Autodesk.Revit.UI;
 using RevitMCP.Addin.Electrical;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Core.Models;
+using RevitMCP.Core.Models.Issues;
 
 namespace RevitMCP.Addin.Tools;
 
@@ -32,6 +33,7 @@ public class CheckCircuitHealthTool : IRevitMcpTool
         var requestedChecks = ToolArguments.GetStringArray(request.Arguments, "checks");
         var includeElements = ToolArguments.GetBool(request.Arguments, "includeElements", true);
         var limit = ToolArguments.GetInt(request.Arguments, "limit", 5000);
+        var returnIssueReport = ToolArguments.GetBool(request.Arguments, "returnIssueReport", false);
 
         var activeChecks = requestedChecks.Length > 0
             ? new HashSet<string>(requestedChecks, StringComparer.OrdinalIgnoreCase)
@@ -149,6 +151,66 @@ public class CheckCircuitHealthTool : IRevitMcpTool
         var activeCounts = counts.Where(kv => activeChecks.Contains(kv.Key))
             .ToDictionary(kv => kv.Key, kv => kv.Value);
 
+        IssueReportDto? issueReport = null;
+        if (returnIssueReport)
+        {
+            var runId = Guid.NewGuid().ToString("N")[..8].ToUpper();
+            int seq = 0;
+            var issueDtos = new List<IssueDto>();
+
+            // Second pass — rebuild typed issues for the report
+            foreach (var circuit in checked_)
+            {
+                var panel = CircuitDtoBuilder.TryGetPanel(circuit);
+                var circNum = circuit.CircuitNumber ?? "";
+                bool hasCableType2 = false;
+                try { var id = circuit.CableType; hasCableType2 = id != null && id != ElementId.InvalidElementId; } catch { }
+                string resolvedWireType2 = CircuitDtoBuilder.GetWireTypeName(doc, circuit);
+                bool hasWireType2 = !string.IsNullOrEmpty(resolvedWireType2);
+                string loadName2 = "";
+                try { loadName2 = circuit.LookupParameter("Load Name")?.AsString() ?? ""; } catch { }
+
+                foreach (var checkType in activeChecks)
+                {
+                    bool affected = checkType switch
+                    {
+                        "MissingPanel" => panel == null,
+                        "EmptyCircuitNumber" => string.IsNullOrWhiteSpace(circNum),
+                        "DuplicateCircuitNumbers" => !string.IsNullOrWhiteSpace(circNum) &&
+                            circuitNumMap.TryGetValue($"{panel?.Id?.Value ?? 0}|{circNum}", out var dups2) && dups2.Count > 1,
+                        "MissingCableType" => !hasCableType2,
+                        "MissingWireType" => !hasWireType2,
+                        "MissingLoadName" => string.IsNullOrWhiteSpace(loadName2),
+                        "NoConnectedElements" => false, // expensive, skip second pass
+                        _ => false
+                    };
+                    if (!affected) continue;
+                    seq++;
+                    issueDtos.Add(new IssueDto
+                    {
+                        IssueId = $"{runId}-{seq:D4}",
+                        RunId = runId,
+                        SourceTool = Name,
+                        Severity = checkType is "MissingPanel" or "EmptyCircuitNumber" or "DuplicateCircuitNumbers"
+                            ? IssueSeverity.Error : IssueSeverity.Warning,
+                        Status = IssueStatus.Open,
+                        Category = "CircuitQA",
+                        Title = checkType,
+                        Description = $"Circuit {circuit.Id.Value} ({circNum}): {checkType}",
+                        ElementId = circuit.Id.Value,
+                        CreatedAt = DateTimeOffset.UtcNow
+                    });
+                }
+            }
+            issueReport = new IssueReportDto
+            {
+                RunId = runId,
+                Title = $"Circuit Health — {panelName ?? "All Panels"}",
+                SourceTools = [Name],
+                Issues = issueDtos
+            };
+        }
+
         sw.Stop();
         return Task.FromResult(new McpToolResult
         {
@@ -160,7 +222,8 @@ public class CheckCircuitHealthTool : IRevitMcpTool
                 checkedCount = checked_.Count,
                 circuitsWithIssues = issues.Count,
                 issueSummary = activeCounts,
-                circuits = issues
+                circuits = issues,
+                issueReport
             },
             DurationMs = sw.ElapsedMilliseconds
         });

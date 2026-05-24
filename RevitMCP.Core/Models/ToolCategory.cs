@@ -17,5 +17,6 @@ public enum ToolCategory
     FamilyCreation,
     Skills,
     FileSystem,
-    Excel
+    Excel,
+    Delivery
 }

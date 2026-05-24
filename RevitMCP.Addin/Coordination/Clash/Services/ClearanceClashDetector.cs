@@ -20,10 +20,16 @@ public class ClearanceClashDetector
         double clearanceMm,
         int limit,
         int maxPairs,
+        string distanceMode = "BoundingBoxApproximation",
         CancellationToken cancellationToken = default)
     {
         var clashes = new List<ClashResultDto>();
         var warnings = new List<string> { ApproximationWarning };
+
+        bool useCentroid = distanceMode.Equals("SolidCentroidApproximation", StringComparison.OrdinalIgnoreCase);
+        if (useCentroid)
+            warnings.Add("distanceMode=SolidCentroidApproximation: using bounding-box centroid distance as centroid approximation. Solid geometry is not evaluated.");
+
         int pairCount = 0;
         int clashIndex = 0;
 
@@ -64,7 +70,9 @@ public class ClearanceClashDetector
                     return (clashes, warnings);
                 }
 
-                var distMm = ClashBoundingBoxHelper.ApproximateDistanceMm(src.BoundingBox, tgt.BoundingBox);
+                var distMm = useCentroid
+                    ? ComputeCentroidDistanceMm(src.BoundingBox, tgt.BoundingBox)
+                    : ClashBoundingBoxHelper.ApproximateDistanceMm(src.BoundingBox, tgt.BoundingBox);
                 var (lx, ly, lz) = ClashLocationResolver.ResolveMeters(src.BoundingBox, tgt.BoundingBox);
 
                 clashes.Add(new ClashResultDto
@@ -78,10 +86,10 @@ public class ClearanceClashDetector
                     Location = new ClashLocationDto { X = lx, Y = ly, Z = lz },
                     DistanceMm = Math.Round(distMm, 1),
                     RequiredClearanceMm = clearanceMm,
-                    DetectionMethod = "ExpandedBoundingBox",
-                    Confidence = "Medium",
+                    DetectionMethod = useCentroid ? "CentroidApproximation" : "ExpandedBoundingBox",
+                    Confidence = useCentroid ? "Low" : "Medium",
                     Status = "New",
-                    Message = $"{src.Category} within {clearanceMm}mm clearance of {tgt.Category} (approx)."
+                    Message = $"{src.Category} within {clearanceMm}mm clearance of {tgt.Category} ({(useCentroid ? "centroid" : "bbox")} approx, ~{Math.Round(distMm, 0)}mm)."
                 });
             }
         }
@@ -97,4 +105,19 @@ public class ClearanceClashDetector
         LinkInstanceId = c.LinkInstanceId,
         LinkName = c.LinkName
     };
+
+    private static double ComputeCentroidDistanceMm(
+        Autodesk.Revit.DB.BoundingBoxXYZ a,
+        Autodesk.Revit.DB.BoundingBoxXYZ b)
+    {
+        const double FeetToMm = 304.8;
+        var cx1 = (a.Min.X + a.Max.X) / 2.0;
+        var cy1 = (a.Min.Y + a.Max.Y) / 2.0;
+        var cz1 = (a.Min.Z + a.Max.Z) / 2.0;
+        var cx2 = (b.Min.X + b.Max.X) / 2.0;
+        var cy2 = (b.Min.Y + b.Max.Y) / 2.0;
+        var cz2 = (b.Min.Z + b.Max.Z) / 2.0;
+        var dx = cx2 - cx1; var dy = cy2 - cy1; var dz = cz2 - cz1;
+        return Math.Sqrt(dx * dx + dy * dy + dz * dz) * FeetToMm;
+    }
 }

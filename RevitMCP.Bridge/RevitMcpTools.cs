@@ -2709,4 +2709,145 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         var result = await pipeClient.SendAsync("revit_reset_project_skill_override", args, cancellationToken);
         return FormatResult(result);
     }
+
+    [McpServerTool(Name = "revit_configure_sheet_naming_skill", ReadOnly = true),
+     Description("Convenience tool to configure the sheet naming skill override for a project. " +
+                 "Creates or updates the project skill override for 'company.lehed.nimetamise-kontroll', enabling Excel comparison and report export tasks. " +
+                 "Args: projectId (required), projectName, excelFilePath, enableExcelComparison, enableExcelReport, enableJsonReport, allowedDisciplines, allowedStages.")]
+    public async Task<string> ConfigureSheetNamingSkill(
+        [Description("Project identifier (required)")] string projectId,
+        [Description("Human-readable project name")] string? projectName = null,
+        [Description("Path to the Excel document register used by the sheet naming skill")] string? excelFilePath = null,
+        [Description("Enable Excel register comparison task")] bool enableExcelComparison = false,
+        [Description("Enable Excel report export task")] bool enableExcelReport = false,
+        [Description("Enable JSON report export task")] bool enableJsonReport = false,
+        [Description("Allowed discipline codes, e.g. EL, EN, EA")] string[]? allowedDisciplines = null,
+        [Description("Allowed stage codes, e.g. EP, TP, PP")] string[]? allowedStages = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["projectId"] = projectId,
+            ["projectName"] = projectName ?? projectId,
+            ["excelFilePath"] = excelFilePath ?? string.Empty,
+            ["enableExcelComparison"] = enableExcelComparison,
+            ["enableExcelReport"] = enableExcelReport,
+            ["enableJsonReport"] = enableJsonReport,
+            ["allowedDisciplines"] = allowedDisciplines ?? [],
+            ["allowedStages"] = allowedStages ?? []
+        };
+        var result = await pipeClient.SendAsync("revit_configure_sheet_naming_skill", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    // ── Delivery Tools ────────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "delivery_scan_folder", ReadOnly = true),
+     Description("Scans a delivery folder and returns a structured file inventory with parsed EULE drawing file names. " +
+                 "Args: folderPath (required), recursive (bool, default true), includeExtensions (string[], default [pdf,dwg,ifc,xlsx]), maxResults (default 5000).")]
+    public async Task<string> DeliveryScanFolder(
+        [Description("Path to the delivery folder to scan")] string folderPath,
+        [Description("Recurse into subdirectories")] bool recursive = true,
+        [Description("File extensions to include, e.g. pdf, dwg, ifc")] string[]? includeExtensions = null,
+        [Description("Maximum file results to return")] int maxResults = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["folderPath"] = folderPath,
+            ["recursive"] = recursive,
+            ["includeExtensions"] = includeExtensions ?? [],
+            ["maxResults"] = maxResults
+        };
+        var result = await pipeClient.SendAsync("delivery_scan_folder", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "delivery_check_against_revit_sheets", ReadOnly = true),
+     Description("Compares exported files in a delivery folder against Revit sheets. " +
+                 "Returns an IssueReportDto with missing files, orphan files, stage/discipline mismatches, and duplicate exports. " +
+                 "Args: folderPath (required), requiredExtensions (default [pdf,dwg]), stageFilter, disciplineFilter, sheetNumberFilter, recursive.")]
+    public async Task<string> DeliveryCheckAgainstRevitSheets(
+        [Description("Path to the delivery folder")] string folderPath,
+        [Description("Extensions that must exist per sheet, e.g. pdf, dwg")] string[]? requiredExtensions = null,
+        [Description("Filter by stage codes, e.g. TP, EP")] string[]? stageFilter = null,
+        [Description("Filter by discipline codes, e.g. EL, EN")] string[]? disciplineFilter = null,
+        [Description("Optional substring filter for sheet numbers")] string? sheetNumberFilter = null,
+        [Description("Recurse into subdirectories")] bool recursive = true,
+        [Description("Maximum file results to return")] int maxResults = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["folderPath"] = folderPath,
+            ["requiredExtensions"] = requiredExtensions ?? [],
+            ["stageFilter"] = stageFilter ?? [],
+            ["disciplineFilter"] = disciplineFilter ?? [],
+            ["sheetNumberFilter"] = sheetNumberFilter ?? string.Empty,
+            ["recursive"] = recursive,
+            ["maxResults"] = maxResults
+        };
+        var result = await pipeClient.SendAsync("delivery_check_against_revit_sheets", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "delivery_check_against_excel_register", ReadOnly = true),
+     Description("Compares files in a delivery folder against an Excel document register. " +
+                 "Returns issues for missing files, missing register rows, and duplicate document numbers. " +
+                 "Args: folderPath (required), excelFilePath (required), worksheetName, requiredExtensions, recursive.")]
+    public async Task<string> DeliveryCheckAgainstExcelRegister(
+        [Description("Path to the delivery folder")] string folderPath,
+        [Description("Path to the Excel document register (.xlsx or .xlsm)")] string excelFilePath,
+        [Description("Worksheet name; leave empty to use the first visible sheet")] string? worksheetName = null,
+        [Description("Extensions to check per register row, e.g. pdf, dwg")] string[]? requiredExtensions = null,
+        [Description("Recurse into subdirectories")] bool recursive = true,
+        [Description("Maximum file results to return")] int maxResults = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["folderPath"] = folderPath,
+            ["excelFilePath"] = excelFilePath,
+            ["worksheetName"] = worksheetName ?? string.Empty,
+            ["requiredExtensions"] = requiredExtensions ?? [],
+            ["recursive"] = recursive,
+            ["maxResults"] = maxResults
+        };
+        var result = await pipeClient.SendAsync("delivery_check_against_excel_register", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "delivery_run_full_check", ReadOnly = true),
+     Description("Runs the full delivery QA workflow: folder scan, Revit sheet comparison, optional Excel register comparison, and optional report export. " +
+                 "Args: folderPath (required), excelFilePath (optional), requiredExtensions, stageFilter, disciplineFilter, " +
+                 "exportExcelReport (bool), exportMarkdownReport (bool).")]
+    public async Task<string> DeliveryRunFullCheck(
+        [Description("Path to the delivery folder")] string folderPath,
+        [Description("Path to the Excel document register (optional)")] string? excelFilePath = null,
+        [Description("Worksheet name in the Excel register")] string? worksheetName = null,
+        [Description("Extensions that must exist per sheet, e.g. pdf, dwg")] string[]? requiredExtensions = null,
+        [Description("Filter by stage codes")] string[]? stageFilter = null,
+        [Description("Filter by discipline codes")] string[]? disciplineFilter = null,
+        [Description("Export an Excel issue report to the delivery folder")] bool exportExcelReport = false,
+        [Description("Export a Markdown issue report to the delivery folder")] bool exportMarkdownReport = false,
+        [Description("Recurse into subdirectories")] bool recursive = true,
+        [Description("Maximum file results to return")] int maxResults = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["folderPath"] = folderPath,
+            ["excelFilePath"] = excelFilePath ?? string.Empty,
+            ["worksheetName"] = worksheetName ?? string.Empty,
+            ["requiredExtensions"] = requiredExtensions ?? [],
+            ["stageFilter"] = stageFilter ?? [],
+            ["disciplineFilter"] = disciplineFilter ?? [],
+            ["exportExcelReport"] = exportExcelReport,
+            ["exportMarkdownReport"] = exportMarkdownReport,
+            ["recursive"] = recursive,
+            ["maxResults"] = maxResults
+        };
+        var result = await pipeClient.SendAsync("delivery_run_full_check", args, cancellationToken);
+        return FormatResult(result);
+    }
 }

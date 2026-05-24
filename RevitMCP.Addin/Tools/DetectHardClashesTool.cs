@@ -6,6 +6,7 @@ using RevitMCP.Addin.Coordination.Clash.Services;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Tools;
 using RevitMCP.Core.Models;
+using RevitMCP.Core.Models.Issues;
 
 namespace RevitMCP.Addin.Tools;
 
@@ -40,6 +41,7 @@ public class DetectHardClashesTool : IRevitMcpTool
         var ruleName = ToolArguments.GetString(args, "ruleName", "Ad-hoc Hard Clash");
         var severity = ToolArguments.GetString(args, "severity", "Medium");
         var allowBoundingBoxFallback = ToolArguments.GetBool(args, "allowBoundingBoxFallback", false);
+        var returnIssueReport = ToolArguments.GetBool(args, "returnIssueReport", false);
 
         if (sourceCategories.Length == 0) return Task.FromResult(Fail(request, "sourceCategories is required."));
         if (targetCategories.Length == 0) return Task.FromResult(Fail(request, "targetCategories is required."));
@@ -62,13 +64,47 @@ public class DetectHardClashesTool : IRevitMcpTool
 
         if (saveAsLastRun) _cache.Save(run);
 
+        IssueReportDto? issueReport = null;
+        if (returnIssueReport)
+        {
+            var reportRunId = run.RunId;
+            var issues = clashes.Select((c, i) => new IssueDto
+            {
+                IssueId = $"{reportRunId}-{i + 1:D4}",
+                RunId = reportRunId,
+                SourceTool = Name,
+                Severity = c.Severity switch
+                {
+                    "Critical" => IssueSeverity.Critical,
+                    "High" => IssueSeverity.Error,
+                    "Low" => IssueSeverity.Info,
+                    _ => IssueSeverity.Warning
+                },
+                Status = IssueStatus.Open,
+                Category = "ClashDetection",
+                Title = $"Hard Clash: {c.Source.Category} ↔ {c.Target.Category}",
+                Description = c.Message,
+                ElementId = c.Source.ElementId,
+                LinkedElementId = c.Target.ElementId,
+                Phase = ruleName,
+                CreatedAt = DateTimeOffset.UtcNow
+            }).ToList();
+            issueReport = new IssueReportDto
+            {
+                RunId = reportRunId,
+                Title = $"Hard Clash Detection — {ruleName}",
+                SourceTools = [Name],
+                Issues = issues
+            };
+        }
+
         sw.Stop();
         return Task.FromResult(new McpToolResult
         {
             RequestId = request.RequestId,
             Success = true,
             Message = $"Detected {clashes.Count} hard clash(es) between {sourceCategories.Length} source and {targetCategories.Length} target category group(s). {(saveAsLastRun ? "Saved as last run." : "")}",
-            Data = run,
+            Data = new { run, issueReport },
             Warnings = allWarnings,
             DurationMs = sw.ElapsedMilliseconds
         });
