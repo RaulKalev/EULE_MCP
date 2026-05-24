@@ -606,6 +606,90 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    [McpServerTool(Name = "revit_export_issues_html_dashboard"),
+     Description("Exports an issue report as a standalone offline HTML dashboard with filtering, sorting and severity cards. Pass the IssueReportDto serialised as JSON. Returns filePath.")]
+    public async Task<string> ExportIssuesHtmlDashboard(
+        [Description("The full IssueReportDto serialised as a JSON string.")] string reportJson,
+        [Description("Optional output file name (without path). Defaults to auto-generated name.")] string? fileName = null,
+        [Description("If true, embeds the raw JSON data inside the HTML file for re-import. Default true.")] bool includeEmbeddedJson = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["reportJson"] = reportJson, ["fileName"] = fileName, ["includeEmbeddedJson"] = includeEmbeddedJson };
+        var result = await pipeClient.SendAsync("revit_export_issues_html_dashboard", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    // ── Standards ─────────────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "standards_list_sources", ReadOnly = true),
+     Description("Lists all company standards sources configured in StandardsSources.json, with enabled/disabled status and file counts.")]
+    public async Task<string> StandardsListSources(CancellationToken cancellationToken = default)
+    {
+        var result = await pipeClient.SendAsync("standards_list_sources", new Dictionary<string, object?>(), cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "standards_index_sources", ReadOnly = true),
+     Description("Indexes company standards documents for search. Can target a specific source or all enabled sources. Use force=true to rebuild stale indexes.")]
+    public async Task<string> StandardsIndexSources(
+        [Description("Source ID to index. Leave null to index all enabled sources.")] string? sourceId = null,
+        [Description("Force full re-index even if files are unchanged.")] bool force = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["sourceId"] = sourceId, ["force"] = force };
+        var result = await pipeClient.SendAsync("standards_index_sources", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "standards_search", ReadOnly = true),
+     Description("Searches indexed company standards documents. Returns relevant chunks with source info, heading and score. Best effort — run standards_index_sources first if results are stale.")]
+    public async Task<string> StandardsSearch(
+        [Description("The search query (natural language or keywords).")] string query,
+        [Description("Maximum number of results to return (1-50). Default 10.")] int maxResults = 10,
+        [Description("Limit search to a specific source ID.")] string? sourceId = null,
+        [Description("Discipline hint to boost relevance (e.g. 'electrical', 'hvac').")] string? discipline = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["query"] = query, ["maxResults"] = maxResults, ["sourceId"] = sourceId, ["discipline"] = discipline };
+        var result = await pipeClient.SendAsync("standards_search", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "standards_validate_source_config", ReadOnly = true),
+     Description("Validates the StandardsSources.json configuration. Reports missing paths, misconfigured sources, and creates an example config if none exists.")]
+    public async Task<string> StandardsValidateSourceConfig(CancellationToken cancellationToken = default)
+    {
+        var result = await pipeClient.SendAsync("standards_validate_source_config", new Dictionary<string, object?>(), cancellationToken);
+        return FormatResult(result);
+    }
+
+    // ── Skill Admin ───────────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "revit_compare_skill_override_to_master", ReadOnly = true),
+     Description("Compares a project skill override against the current company master. Returns a diff of changed task settings, enabled/disabled tasks, new tasks in master, and version mismatches.")]
+    public async Task<string> CompareSkillOverrideToMaster(
+        [Description("The skill ID to compare (e.g. 'company.delivery.check').")] string skillId,
+        [Description("The project ID whose override to load.")] string projectId,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["skillId"] = skillId, ["projectId"] = projectId };
+        var result = await pipeClient.SendAsync("revit_compare_skill_override_to_master", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_propose_master_skill_update", ReadOnly = true),
+     Description("Proposes a company master skill update based on a project override. Writes a proposal JSON to the local proposals folder only — NEVER modifies company master files.")]
+    public async Task<string> ProposeSkillMasterUpdate(
+        [Description("The skill ID to propose an update for.")] string skillId,
+        [Description("The project ID whose override contains the proposed changes.")] string projectId,
+        [Description("Optional notes describing the reason for the proposal.")] string? notes = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["skillId"] = skillId, ["projectId"] = projectId, ["notes"] = notes };
+        var result = await pipeClient.SendAsync("revit_propose_master_skill_update", args, cancellationToken);
+        return FormatResult(result);
+    }
+
     // ── File System Tools ─────────────────────────────────────────────────────
 
     [McpServerTool(Name = "file_read_text", ReadOnly = true),

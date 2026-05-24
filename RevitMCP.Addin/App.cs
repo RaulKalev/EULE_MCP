@@ -9,6 +9,7 @@ using RevitMCP.Addin.Tools.Excel;
 using RevitMCP.Addin.Tools.FileSystem;
 using RevitMCP.Addin.Tools.ParameterQA;
 using RevitMCP.Addin.Tools.Reports;
+using RevitMCP.Addin.Tools.Standards;
 using RevitMCP.Addin.UI.ViewModels;
 using RevitMCP.Core.Configuration;
 using ricaun.Revit.UI;
@@ -182,6 +183,7 @@ public class App : IExternalApplication
             handler.RegisterTool(new ExportIssueReportJsonTool());
             handler.RegisterTool(new ExportIssueReportExcelTool());
             handler.RegisterTool(new ExportIssueReportMarkdownTool());
+            handler.RegisterTool(new ExportIssueReportHtmlDashboardTool());
             handler.RegisterTool(new MergeIssueReportsTool());
 
             // Family Creation
@@ -197,6 +199,14 @@ public class App : IExternalApplication
             handler.RegisterTool(new UpdateProjectSkillOverrideTool());
             handler.RegisterTool(new ResetProjectSkillOverrideTool());
             handler.RegisterTool(new ConfigureSheetNamingSkillTool());
+            handler.RegisterTool(new CompareSkillOverrideToMasterTool());
+            handler.RegisterTool(new ProposeSkillMasterUpdateTool());
+
+            // Standards
+            handler.RegisterTool(new StandardsListSourcesTool());
+            handler.RegisterTool(new StandardsIndexSourcesTool());
+            handler.RegisterTool(new StandardsSearchTool());
+            handler.RegisterTool(new StandardsValidateSourceConfigTool());
 
             // Delivery Tools
             handler.RegisterTool(new DeliveryScanFolderTool());

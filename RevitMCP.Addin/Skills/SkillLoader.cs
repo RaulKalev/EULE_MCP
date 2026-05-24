@@ -73,22 +73,33 @@ public class SkillLoader
     /// </summary>
     private static void UpdateStaleBuiltins(List<SkillDefinition> skills)
     {
-        var builtin = BuildDefaultLehtedeNimetamiseKontrollSkill();
-        for (int i = 0; i < skills.Count; i++)
+        foreach (var (_, builtinSkill) in GetAllBuiltinSkills())
         {
-            var loaded = skills[i];
-            if (loaded.Id != builtin.Id || loaded.SourcePath is null) continue;
-            if (!IsOlderVersion(loaded.Version, builtin.Version)) continue;
-
-            builtin.SourcePath = loaded.SourcePath;
-            try
+            for (int i = 0; i < skills.Count; i++)
             {
-                File.WriteAllText(loaded.SourcePath, JsonConvert.SerializeObject(builtin, Formatting.Indented));
-                skills[i] = builtin;
+                var loaded = skills[i];
+                if (loaded.Id != builtinSkill.Id || loaded.SourcePath is null) continue;
+                if (!IsOlderVersion(loaded.Version, builtinSkill.Version)) continue;
+
+                builtinSkill.SourcePath = loaded.SourcePath;
+                try
+                {
+                    File.WriteAllText(loaded.SourcePath, JsonConvert.SerializeObject(builtinSkill, Formatting.Indented));
+                    skills[i] = builtinSkill;
+                }
+                catch { /* write failed — use loaded version, non-fatal */ }
             }
-            catch { /* write failed — use loaded version, non-fatal */ }
         }
     }
+
+    private static List<(string FileName, SkillDefinition Skill)> GetAllBuiltinSkills() =>
+    [
+        ("LehtedeNimetamiseKontroll.skill.json",  BuildDefaultLehtedeNimetamiseKontrollSkill()),
+        ("DeliveryCheck.skill.json",              BuildDefaultDeliveryCheckSkill()),
+        ("ParameterQA.skill.json",                BuildDefaultParameterQASkill()),
+        ("CoordinationQA.skill.json",             BuildDefaultCoordinationQASkill()),
+        ("PreDelivery.skill.json",                BuildDefaultPreDeliverySkill()),
+    ];
 
     private static bool IsOlderVersion(string? loaded, string builtin)
     {
@@ -111,8 +122,6 @@ public class SkillLoader
 
     private void EnsureDefaultSkill(string companyPath, List<SkillDefinition> skills)
     {
-        var defaultSkill = BuildDefaultLehtedeNimetamiseKontrollSkill();
-
         // Write to company path if writable, otherwise to cache
         string targetDir;
         try
@@ -126,17 +135,19 @@ public class SkillLoader
             targetDir = LocalCachePath;
         }
 
-        var targetFile = Path.Combine(targetDir, "LehtedeNimetamiseKontroll.skill.json");
-        // Always write — ensures stale files get replaced when no skills were found via normal load path
-        try
+        foreach (var (fileName, skill) in GetAllBuiltinSkills())
         {
-            var json = JsonConvert.SerializeObject(defaultSkill, Formatting.Indented);
-            File.WriteAllText(targetFile, json);
-        }
-        catch { /* non-fatal if file is locked */ }
+            var targetFile = Path.Combine(targetDir, fileName);
+            try
+            {
+                var json = JsonConvert.SerializeObject(skill, Formatting.Indented);
+                File.WriteAllText(targetFile, json);
+            }
+            catch { /* non-fatal if file is locked */ }
 
-        defaultSkill.SourcePath = targetFile;
-        skills.Add(defaultSkill);
+            skill.SourcePath = targetFile;
+            skills.Add(skill);
+        }
     }
 
     private string ResolveCompanyPath()
@@ -302,5 +313,98 @@ public class SkillLoader
                 Settings = new() { ["fileNamePattern"] = "Lehtede_Nimetamise_Kontroll_{ProjectNumber}.json" }
             },
         }
+    };
+
+    private static SkillDefinition BuildDefaultDeliveryCheckSkill() => new()
+    {
+        Id          = "company.delivery.check",
+        Name        = "Delivery Check",
+        Description = "Scans a delivery folder and compares exported files against Revit sheets. Reports missing, orphaned or duplicate deliverables.",
+        Version     = "1.0.0",
+        Author      = "EULE / RK Tools",
+        IsCompanyMaster = true,
+        DefaultSettings = new()
+        {
+            StopOnCriticalFailure = true,
+            AllowProjectOverride  = true,
+            RequiresUserConfirmationBeforeModelChanges = false,
+        },
+        Tasks =
+        [
+            new() { Id = "delivery.scan.folder",            Enabled = true,  Settings = new() { ["folderPath"] = "", ["recursive"] = true, ["includeExtensions"] = "pdf,dwg" } },
+            new() { Id = "delivery.compare.revit-sheets",   Enabled = true,  Settings = new() { ["requiredExtensions"] = "pdf,dwg" } },
+            new() { Id = "common.export.excel-report",      Enabled = true,  Settings = new() { ["reportTitle"] = "Delivery Check Report" } },
+            new() { Id = "common.export.html-dashboard",    Enabled = true,  Settings = new() { ["reportTitle"] = "Delivery Check Dashboard" } },
+        ]
+    };
+
+    private static SkillDefinition BuildDefaultParameterQASkill() => new()
+    {
+        Id          = "company.parameter.qa",
+        Name        = "Parameter QA",
+        Description = "Runs a parameter QA rule set against the active model, checks completeness of required parameters and exports an issue report.",
+        Version     = "1.0.0",
+        Author      = "EULE / RK Tools",
+        IsCompanyMaster = true,
+        DefaultSettings = new()
+        {
+            StopOnCriticalFailure = false,
+            AllowProjectOverride  = true,
+            RequiresUserConfirmationBeforeModelChanges = false,
+        },
+        Tasks =
+        [
+            new() { Id = "parameterqa.run.rule-set",      Enabled = true,  Settings = new() { ["ruleSetName"] = "", ["limitPerRule"] = 5000 } },
+            new() { Id = "common.export.excel-report",    Enabled = true,  Settings = new() { ["reportTitle"] = "Parameter QA Report" } },
+            new() { Id = "common.export.html-dashboard",  Enabled = true,  Settings = new() { ["reportTitle"] = "Parameter QA Dashboard" } },
+        ]
+    };
+
+    private static SkillDefinition BuildDefaultCoordinationQASkill() => new()
+    {
+        Id          = "company.coordination.qa",
+        Name        = "Coordination QA",
+        Description = "Runs a clash detection preset and exports a filterable HTML dashboard with detected clashes.",
+        Version     = "1.0.0",
+        Author      = "EULE / RK Tools",
+        IsCompanyMaster = true,
+        DefaultSettings = new()
+        {
+            StopOnCriticalFailure = false,
+            AllowProjectOverride  = true,
+            RequiresUserConfirmationBeforeModelChanges = false,
+        },
+        Tasks =
+        [
+            new() { Id = "coordination.run.clash-preset",  Enabled = true,  Settings = new() { ["presetName"] = "", ["limit"] = 1000 } },
+            new() { Id = "common.export.html-dashboard",   Enabled = true,  Settings = new() { ["reportTitle"] = "Coordination QA Dashboard" } },
+            new() { Id = "common.export.excel-report",     Enabled = false, Settings = new() { ["reportTitle"] = "Coordination QA Report" } },
+        ]
+    };
+
+    private static SkillDefinition BuildDefaultPreDeliverySkill() => new()
+    {
+        Id          = "company.project.pre-delivery",
+        Name        = "Pre-Delivery Combined Check",
+        Description = "Runs Delivery Check, Parameter QA and Coordination QA in sequence, merges all issues and exports a combined dashboard. Use before milestone deliveries.",
+        Version     = "1.0.0",
+        Author      = "EULE / RK Tools",
+        IsCompanyMaster = true,
+        DefaultSettings = new()
+        {
+            StopOnCriticalFailure = false,
+            AllowProjectOverride  = true,
+            RequiresUserConfirmationBeforeModelChanges = false,
+        },
+        Tasks =
+        [
+            new() { Id = "delivery.scan.folder",            Enabled = true,  Settings = new() { ["folderPath"] = "", ["recursive"] = true, ["includeExtensions"] = "pdf,dwg" } },
+            new() { Id = "delivery.compare.revit-sheets",   Enabled = true,  Settings = new() { ["requiredExtensions"] = "pdf,dwg" } },
+            new() { Id = "parameterqa.run.rule-set",        Enabled = false, Settings = new() { ["ruleSetName"] = "" } },
+            new() { Id = "coordination.run.clash-preset",   Enabled = false, Settings = new() { ["presetName"] = "" } },
+            new() { Id = "common.merge.issues",             Enabled = true,  Settings = new() },
+            new() { Id = "common.export.excel-report",      Enabled = true,  Settings = new() { ["reportTitle"] = "Pre-Delivery Combined Report" } },
+            new() { Id = "common.export.html-dashboard",    Enabled = true,  Settings = new() { ["reportTitle"] = "Pre-Delivery Dashboard" } },
+        ]
     };
 }

@@ -1,4 +1,8 @@
+using RevitMCP.Addin.Skills.Tasks.Common;
+using RevitMCP.Addin.Skills.Tasks.Coordination;
+using RevitMCP.Addin.Skills.Tasks.Delivery;
 using RevitMCP.Addin.Skills.Tasks.LehtedeNimetamiseKontroll;
+using RevitMCP.Addin.Skills.Tasks.ParameterQA;
 
 namespace RevitMCP.Addin.Skills;
 
@@ -25,6 +29,21 @@ public class SkillTaskRegistry
             new CompareExcelRegisterTask(),
             new ExportSheetNamingExcelReportTask(),
             new ExportSheetNamingJsonReportTask(),
+
+            // Common export + merge tasks
+            new ExportIssueExcelReportTask(),
+            new ExportIssueHtmlDashboardTask(),
+            new MergeIssueReportsTask(),
+
+            // Delivery tasks
+            new ScanDeliveryFolderTask(),
+            new CompareDeliveryRevitSheetsTask(),
+
+            // Coordination tasks
+            new RunClashPresetTask(),
+
+            // Parameter QA tasks
+            new RunParameterQaRuleSetTask(),
         };
 
         _tasks = list.ToDictionary(t => t.Id, t => t, StringComparer.OrdinalIgnoreCase);
