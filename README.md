@@ -2,17 +2,18 @@
 
 A local [Model Context Protocol](https://modelcontextprotocol.io) connector that lets **Claude Code** and **Codex** interrogate and work with a live **Autodesk Revit 2026** model in real time.
 
-**159 tools** across eleven functional areas:
+**168 tools** across twelve functional areas:
 - **General** (25 tools) — element discovery, parameter QA, grouping, Excel exports, selection, write operations, config-driven parameter QA rule sets, and detailed geometry inspection of selected elements
 - **Electrical** (44 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
 - **Documentation** (31 tools) — view and sheet management: discovery, summary, preview/apply workflows for placing views, creating/duplicating/renaming sheets and views, bulk parameter updates, revision tracking, preset inspection, and safe destructive delete with mandatory manual approval
 - **Coordination** (17 tools) — Revit-native clash detection: category/link discovery, solid-intersection hard-clash and clearance checking, preset management, Excel reporting, and step-through review views
 - **Family Creation** (1 tool) — generate Detail Item families (.rfa) from DWG source files using company presets
-- **Skills** (9 tools) — multi-step QA workflow engine: run built-in or project-specific quality-check skill definitions, inspect task breakdowns, manage per-project setting overrides, and configure the sheet naming skill
-- **Issue Reports** (4 tools) — shared structured issue model (`IssueDto` / `IssueReportDto`) with JSON, Excel, and Markdown export; multi-report merge; foundation used by all QA tools
+- **Skills** (12 tools) — multi-step QA workflow engine: run built-in or project-specific quality-check skill definitions, inspect task breakdowns, manage per-project setting overrides, compare overrides against master, propose master updates, and export Markdown diff reports
+- **Issue Reports** (5 tools) — shared structured issue model (`IssueDto` / `IssueReportDto`) with JSON, Excel, Markdown, and interactive HTML export; multi-report merge; foundation used by all QA tools
 - **File System** (6 tools) — read, write, list, inspect, copy, and backup local files with configurable path-policy enforcement (allowed-root lists, traversal blocking, size limits)
 - **Excel** (5 tools) — standalone Excel workbook tools (no open document required): inspect workbooks, read ranges, update cells, insert rows, and append table rows with automatic backup, header-matching, and dry-run preview support
 - **Delivery** (4 tools) — pre-issue delivery folder QA: scan folders for EULE-format drawing files, cross-check against Revit sheets or an Excel document register, and run a combined full-check with optional Issue Report and Excel/Markdown export
+- **Standards** (5 tools) — company document standards lookup: index PDF/Word/Markdown/text files, full-text search with TF-IDF scoring, retrieve specific chunks with surrounding context, and validate source config
 - **Configuration** (5 tools) — read and update JSON config files at company, user, tool-state, and project scopes
 
 ---
@@ -301,6 +302,14 @@ Skills are named multi-step QA workflows stored as `.skill.json` files. Built-in
 | `revit_reset_project_skill_override` | Deletes the project override, reverting the skill to company-master defaults |
 | `revit_configure_sheet_naming_skill` | Helper that creates or updates the project override for the built-in sheet naming skill (`company.lehed.nimetamise-kontroll`). Supports `enableExcelComparison` with optional `excelFilePath` and `worksheetName`, and per-task enable/disable flags. Returns the saved override JSON. |
 
+#### Skill Admin Tools
+
+| Tool | Description |
+|------|-------------|
+| `revit_compare_skill_override_to_master` | Compares a project skill override against the current master definition — returns obsolete tasks, new tasks added to master, changed task settings, and version mismatch flag. Args: `skillId`, `projectId`. |
+| `revit_export_skill_override_diff_markdown` | Exports a human-readable Markdown diff report of a project override vs master to the exports folder (`%USERPROFILE%\Documents\RKTools\RevitMCP\Exports`). Returns `filePath`, `skillId`, `projectId`, `changeCount`. Args: `skillId`, `projectId`. |
+| `revit_propose_master_skill_update` | Analyses a project override and proposes a new master skill definition that incorporates project-level changes. Returns a proposal JSON with `proposedMaster`, `rationale`, and `breakingChanges`. Args: `skillId`, `projectId`, `includeRationale`. |
+
 ### Issue Report Tools
 
 Shared structured issue model used as the output format for all QA tools. Issues carry `severity` (Info / Warning / Error / Critical), `status`, `category`, `discipline`, `phase`, `elementId`, `sheetNumber`, and a run-prefixed ID (`<runId>-<NNNN>`). Three export formats and a multi-report merge tool.
@@ -310,6 +319,7 @@ Shared structured issue model used as the output format for all QA tools. Issues
 | `revit_export_issues_json` | Exports an `IssueReportDto` (passed as `reportJson`) to a `.json` file. Returns `filePath`, `totalIssues`, `runId`. *(requires approval)* |
 | `revit_export_issues_excel` | Exports an `IssueReportDto` to a formatted `.xlsx` file with Summary and Issues sheets, severity colour coding, and auto-filter. Returns `filePath`. *(requires approval)* |
 | `revit_export_issues_markdown` | Exports an `IssueReportDto` to a `.md` file with summary table, category breakdown, and issues table. Returns `filePath`. *(requires approval)* |
+| `revit_export_issues_html_dashboard` | Exports an `IssueReportDto` to a self-contained offline HTML file with interactive filtering by severity/category/status, sortable table, summary cards, and chart. Returns `filePath`. Args: `reportJson`, `title` (optional), `fileName` (optional). *(requires approval)* |
 | `revit_merge_issue_reports` | Merges multiple `IssueReportDto` JSON strings (`reportJsonArray`) into a single consolidated report. Returns the merged report JSON and summary counts. |
 
 ### Delivery Tools
@@ -324,6 +334,22 @@ All four tools accept a `returnIssueReport` flag (default `false`). When `true`,
 | `delivery_check_against_revit_sheets` | Compares files in a delivery folder against sheets in the currently open Revit model. Flags missing PDFs/DWGs, orphan files with no matching sheet, duplicates, and suspiciously small files. Optional `stageFilter` and `disciplineFilter`. Sheet numbers in the format `1626_TP_EL-5-01` are correctly parsed — `disciplineFilter: ["EL"]` matches both short (`EL-5-01`) and full-prefix sheet numbers. |
 | `delivery_check_against_excel_register` | Compares files in a delivery folder against rows in an Excel document register. Auto-detects the header row (looks for columns containing "nr", "number", or "dokumendi nr"). Flags register rows with no matching file, files not in the register, and duplicate document numbers. |
 | `delivery_run_full_check` | Runs all three checks in sequence (scan → Revit sheet check → Excel register check) and merges results into one `IssueReportDto`. Optional `exportExcelReport` and `exportMarkdownReport` flags write output files to the delivery folder. Supports the same folder-policy checks as `delivery_scan_folder` (`checkTempFiles`, `checkOldRevisions`, `checkRequiredFolders`, `requiredFolders[]`, `checkSuspiciousExtensions`, `allowedExtraExtensions[]`, `requiredProjectFileExtensions[]`, `ignoredPatterns[]`). |
+
+---
+
+### Standards Lookup Tools
+
+Indexes company document files (PDF, Word `.docx`, Markdown, plain text) into a local full-text index and provides chunk-level search and retrieval. The source list is configured in `%ProgramData%\RKTools\MCP\Config\StandardsSources.json`.
+
+See [docs/standards-lookup.md](docs/standards-lookup.md) for setup and usage.
+
+| Tool | Description |
+|------|-------------|
+| `standards_list_sources` | Lists all configured standards sources with their ID, label, path, and last-indexed date. |
+| `standards_index_sources` | Indexes (or re-indexes) one or all configured sources — chunks documents by heading/paragraph and writes a local TF-IDF index. Args: `sourceId` (optional; omit to index all). |
+| `standards_search` | Full-text search across indexed standards. Returns ranked chunks with source label, file name, heading path, and relevance score. Args: `query`, `sourceId` (optional filter), `topK` (default 10), `minScore` (default 0.01). |
+| `standards_get_document_chunk` | Retrieves a specific indexed chunk by its `chunkId` with optional surrounding context. Args: `chunkId`, `sourceId` (optional), `contextBefore` (default 1, max 5), `contextAfter` (default 1, max 5). Returns `{ targetChunk, contextChunks }`. |
+| `standards_validate_source_config` | Validates the `StandardsSources.json` config — checks paths exist, IDs are unique, and file types are supported. Returns `isValid`, `errors[]`, `warnings[]`. |
 
 ---
 
