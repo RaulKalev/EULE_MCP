@@ -1,3 +1,5 @@
+using RevitMCP.Core.Safety;
+
 namespace RevitMCP.Addin.Query;
 
 public class ElementQueryResult
@@ -13,6 +15,9 @@ public class ElementQueryResult
     public int PageSize { get; set; }
     public bool HasMore { get; set; }
     public string? NextPageToken { get; set; }
+
+    // Populated when SummaryOnly = true
+    public ElementQuerySummary? Summary { get; set; }
 
     public static ElementQueryResult Failure(string message) =>
         new() { Success = false, Message = message };

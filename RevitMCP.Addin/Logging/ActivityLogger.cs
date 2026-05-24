@@ -1,7 +1,9 @@
 using System.IO;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using RevitMCP.Core.Logging;
 using RevitMCP.Core.Models;
+using RevitMCP.Core.Safety;
 
 namespace RevitMCP.Addin.Logging;
 
@@ -45,11 +47,62 @@ public class ActivityLogger
             entry.RevitUsername = context.RevitUsername;
         }
 
+        entry.QuerySafety = TryExtractQuerySafety(result);
+
         await AppendEntryAsync(entry);
     }
 
-    public async Task WriteRawAsync(string message)
+    /// <summary>
+    /// Inspects <paramref name="result"/>.Data for known pagination/summary fields and
+    /// builds a structured <see cref="QuerySafetyLogEntry"/>. Returns null when the result
+    /// carries no query-safety relevant data.
+    /// </summary>
+    private static QuerySafetyLogEntry? TryExtractQuerySafety(McpToolResult result)
     {
+        try
+        {
+            if (result.Data == null && result.Status != ToolErrorCodes.ResponseTooLarge)
+                return null;
+
+            var entry = new QuerySafetyLogEntry
+            {
+                Truncated = result.Status == ToolErrorCodes.ResponseTooLarge
+            };
+
+            if (result.Data != null)
+            {
+                var token = JToken.FromObject(result.Data);
+                if (token is JObject obj)
+                {
+                    entry.CandidateCount = obj["totalMatched"]?.Value<int?>();
+                    entry.ReturnedCount = obj["returned"]?.Value<int?>();
+                    entry.HasMore = obj["hasMore"]?.Value<bool?>() ?? false;
+                    entry.SummaryMode = obj["summary"] is JObject sumObj && sumObj.HasValues;
+                }
+            }
+
+            // Extract response size from ResponseGuard warning message when truncated
+            if (entry.Truncated)
+            {
+                var guardWarning = result.Warnings.FirstOrDefault(w => w.Contains("[ResponseGuard]"));
+                if (guardWarning != null)
+                {
+                    var m = System.Text.RegularExpressions.Regex.Match(guardWarning, @"([\d,]+) bytes");
+                    if (m.Success && long.TryParse(m.Groups[1].Value.Replace(",", ""), out var bytes))
+                        entry.ResponseSizeBytes = bytes;
+                }
+            }
+
+            // Only write a log entry if there is something meaningful to record
+            return entry.CandidateCount.HasValue || entry.Truncated ? entry : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public async Task WriteRawAsync(string message)    {
         var entry = new LogEntry
         {
             Tool = "system",

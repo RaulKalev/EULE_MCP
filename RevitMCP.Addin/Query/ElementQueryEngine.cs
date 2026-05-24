@@ -45,18 +45,23 @@ public class ElementQueryEngine
             elementIds = collector.ToElementIds();
         }
 
-        // --- 2. Pagination setup ---
-        int effectivePageSize = options.PageSize > 0 ? Math.Min(options.PageSize, options.Limit) : options.Limit;
-        int page = Math.Max(0, options.Page);
-        int pageStart = page * effectivePageSize; // 0-based index of first element on this page
-
-        // --- 3. Scan & filter ---
+        // --- 2. Summary-only fast path ---
         var reader = new ParameterReader();
         var readOpts = new ParameterReadOptions
         {
             IncludeInstanceParameters = options.IncludeInstanceParameters,
             IncludeTypeParameters = options.IncludeTypeParameters
         };
+
+        if (options.SummaryOnly)
+            return BuildSummaryResult(doc, elementIds, options, reader, readOpts, cancellationToken);
+
+        // --- 3. Pagination setup ---
+        int effectivePageSize = options.PageSize > 0 ? Math.Min(options.PageSize, options.Limit) : options.Limit;
+        int page = Math.Max(0, options.Page);
+        int pageStart = page * effectivePageSize; // 0-based index of first element on this page
+
+        // --- 4. Scan & filter ---
 
         var results = new List<ElementInfoDto>();
         var warnings = new List<string>();
@@ -238,5 +243,83 @@ public class ElementQueryEngine
         }
         catch { }
         return string.Empty;
+    }
+
+    /// <summary>
+    /// Fast-path for SummaryOnly mode. Scans all matching elements and returns category/family
+    /// counts without building any parameter maps or element DTOs.
+    /// </summary>
+    private ElementQueryResult BuildSummaryResult(
+        Document doc,
+        IEnumerable<ElementId> elementIds,
+        ElementQueryOptions options,
+        ParameterReader reader,
+        ParameterReadOptions readOpts,
+        CancellationToken cancellationToken)
+    {
+        bool needsParamRead = options.Filters.Count > 0;
+
+        var catCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        var famCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        int totalMatched = 0;
+        int totalScanned = 0;
+
+        foreach (var elementId in elementIds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            totalScanned++;
+
+            var element = doc.GetElement(elementId);
+            if (element?.Category == null) continue;
+
+            if (needsParamRead)
+            {
+                var allParams = reader.ReadParameters(doc, element, readOpts);
+                if (!PassesFilters(allParams, options.Filters)) continue;
+            }
+
+            totalMatched++;
+
+            var cat = element.Category.Name;
+            catCounts[cat] = catCounts.GetValueOrDefault(cat) + 1;
+
+            if (element is FamilyInstance fi)
+            {
+                var fam = fi.Symbol?.Family?.Name ?? string.Empty;
+                if (!string.IsNullOrEmpty(fam))
+                    famCounts[fam] = famCounts.GetValueOrDefault(fam) + 1;
+            }
+        }
+
+        var warnings = new List<string>();
+        if (totalScanned > 5000 && string.IsNullOrWhiteSpace(options.Category))
+            warnings.Add($"Scanned {totalScanned} elements. Provide a 'category' to narrow the search.");
+
+        var summary = new ElementQuerySummary
+        {
+            TotalElements = totalMatched,
+            Categories = catCounts
+                .OrderByDescending(x => x.Value)
+                .Select(x => new CategoryCount { Category = x.Key, Count = x.Value })
+                .ToArray(),
+            Families = famCounts
+                .OrderByDescending(x => x.Value)
+                .Take(50)
+                .Select(x => new FamilyCount { Family = x.Key, Count = x.Value })
+                .ToArray(),
+            Message = totalMatched > 0
+                ? "Use filters, a specific category, or elementIds for detailed element data."
+                : "No matching elements found."
+        };
+
+        return new ElementQueryResult
+        {
+            Success = true,
+            Message = $"Summary: {totalMatched} elements across {catCounts.Count} categories.",
+            Elements = new List<ElementInfoDto>(),
+            TotalMatched = totalMatched,
+            Warnings = warnings,
+            Summary = summary
+        };
     }
 }

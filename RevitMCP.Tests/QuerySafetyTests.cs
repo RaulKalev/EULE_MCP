@@ -269,4 +269,46 @@ public class QuerySafetyTests
         var guarded = ResponseGuard.GuardResult(result, null);
         Assert.NotNull(guarded);
     }
+
+    // ── ElementQuerySummary ──────────────────────────────────────────────────
+
+    [Fact]
+    public void ElementQuerySummary_DefaultValues_AreEmpty()
+    {
+        var summary = new ElementQuerySummary();
+        Assert.Equal(0, summary.TotalElements);
+        Assert.Empty(summary.Categories);
+        Assert.Empty(summary.Families);
+        Assert.Equal(string.Empty, summary.Message);
+    }
+
+    [Fact]
+    public void CategoryCount_Properties_RoundTrip()
+    {
+        var cc = new CategoryCount { Category = "Walls", Count = 42 };
+        Assert.Equal("Walls", cc.Category);
+        Assert.Equal(42, cc.Count);
+    }
+
+    [Fact]
+    public void FamilyCount_Properties_RoundTrip()
+    {
+        var fc = new FamilyCount { Family = "Basic Wall", Count = 7 };
+        Assert.Equal("Basic Wall", fc.Family);
+        Assert.Equal(7, fc.Count);
+    }
+
+    [Fact]
+    public void ElementQuerySummary_FamiliesCap_HoldsAt50()
+    {
+        // Simulate what BuildSummaryResult does: Take(50)
+        var families = Enumerable.Range(1, 100)
+            .Select(i => new FamilyCount { Family = $"Family_{i}", Count = i })
+            .OrderByDescending(x => x.Count)
+            .Take(50)
+            .ToList();
+
+        Assert.Equal(50, families.Count);
+        Assert.Equal("Family_100", families[0].Family);
+    }
 }

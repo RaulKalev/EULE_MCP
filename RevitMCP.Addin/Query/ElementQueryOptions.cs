@@ -19,5 +19,8 @@ public class ElementQueryOptions
     // Per-element safety limits — 0 means "no limit" (backward-compatible default)
     public int MaxParametersPerElement { get; set; } = 0;
     public int TruncateStringLength { get; set; } = 0;
+
+    // When true, return category/family counts only — no element DTOs built
+    public bool SummaryOnly { get; set; } = false;
 }
 

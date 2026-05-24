@@ -37,7 +37,8 @@ public class FindElementsByParameterTool : IRevitMcpTool
             PageSize = ToolArguments.GetInt(request.Arguments, "pageSize", -1),
             Page = ToolArguments.GetInt(request.Arguments, "page", 0),
             MaxParametersPerElement = ToolArguments.GetInt(request.Arguments, "maxParametersPerElement", 0),
-            TruncateStringLength = ToolArguments.GetInt(request.Arguments, "truncateStringLength", 0)
+            TruncateStringLength = ToolArguments.GetInt(request.Arguments, "truncateStringLength", 0),
+            SummaryOnly = ToolArguments.GetBool(request.Arguments, "summaryOnly", false)
         };
 
         var result = _engine.Query(uidoc.Document, uidoc, opts, cancellationToken);
@@ -60,6 +61,7 @@ public class FindElementsByParameterTool : IRevitMcpTool
                 pageSize = result.PageSize,
                 hasMore = result.HasMore,
                 nextPageToken = result.NextPageToken,
+                summary = result.Summary,
                 elements = result.Elements
             },
             Warnings = warnings,

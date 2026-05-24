@@ -42,7 +42,7 @@ public class GroupElementsTool : IRevitMcpTool
             Limit = ToolArguments.GetInt(request.Arguments, "limit", 5000)
         };
 
-        var queryResult = _queryEngine.Query(uidoc.Document, uidoc, queryOpts);
+        var queryResult = _queryEngine.Query(uidoc.Document, uidoc, queryOpts, cancellationToken);
         if (!queryResult.Success)
             return Task.FromResult(Fail(request, queryResult.Message));
 
