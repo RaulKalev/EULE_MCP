@@ -21,9 +21,12 @@ public class IfcSpaceToRoomOptions
     // ── Duplicate handling ─────────────────────────────────────────────────────
 
     /// <summary>
-    /// How to handle duplicate Rooms (Number + Level match):
-    ///   "skip_existing"  — skip without error when an exact Number+Name+Level match exists (default).
-    ///   "skip_conflicts" — also skip when Number+Level match but Name differs.
+    /// How to handle duplicate / conflicting Rooms (same Number + Level):
+    ///   "skip_existing"  — (default) skip when Number+Name+Level exactly match,
+    ///                      AND skip when Number+Level match but Name differs.
+    ///   "skip_conflicts" — alias for skip_existing; kept for backwards compatibility.
+    ///   "allow_conflicts" — only skip exact Number+Name+Level matches;
+    ///                       allows creation when Number+Level match but Name differs.
     /// Phase 3 does NOT support "overwrite" or "recreate".
     /// </summary>
     public string DuplicateMode { get; set; } = "skip_existing";
@@ -68,6 +71,26 @@ public class IfcSpaceToRoomOptions
     /// Set to true to create un-numbered Rooms.
     /// </summary>
     public bool AllowCreateWithoutNumber { get; set; } = false;
+
+    // ── View creation ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// When false (default), do not create floor-plan views for levels that have none.
+    /// If no view exists for a Level, that Level's spaces return <c>SkippedNoView</c>.
+    /// When true, a minimal floor-plan view named
+    /// "MCP IFC Room Boundary - {LevelName}" is created automatically.
+    /// </summary>
+    public bool AllowCreateMissingBoundaryViews { get; set; } = false;
+
+    // ── Probable candidate guard ──────────────────────────────────────────────
+
+    /// <summary>
+    /// When false (default), skip auto-collected elements whose IFC type could not be
+    /// confirmed as IfcSpace (probable candidates only). Applies only when
+    /// <see cref="LinkedElementIds"/> is empty (auto-collect mode).
+    /// Explicit <see cref="LinkedElementIds"/> bypass this guard.
+    /// </summary>
+    public bool AllowProbableConversion { get; set; } = false;
 
     // ── Dry run ───────────────────────────────────────────────────────────────
 

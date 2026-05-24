@@ -60,6 +60,29 @@ public class IfcSpaceCandidate
     /// </summary>
     public string ExistingRoomMatch { get; set; } = "Skipped";
 
+    // ── Detection Metadata ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// How confident the collector is that this element is an IfcSpace.
+    /// "Confirmed" — explicit IfcSpace type parameter found (default).
+    /// "Probable"  — only generic IFC-origin markers found; may be any IFC entity.
+    /// </summary>
+    public string DetectionConfidence { get; set; } = "Confirmed";
+
+    // ── Metadata Sources ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Parameter name from which <see cref="Number"/> was read.
+    /// Null when Number is null. Helps operators understand the data source.
+    /// </summary>
+    public string? NumberSource { get; set; }
+
+    /// <summary>
+    /// Parameter name from which <see cref="Name"/> was read.
+    /// Null when Name is null. Helps operators understand the data source.
+    /// </summary>
+    public string? NameSource { get; set; }
+
     // ── Conversion Readiness ──────────────────────────────────────────────────
 
     /// <summary>True when this candidate could be converted in a later Phase without blocking issues.</summary>

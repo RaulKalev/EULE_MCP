@@ -26,4 +26,12 @@ public class IfcSpacePreviewOptions
     /// Protects against oversized payloads. Default 1000.
     /// </summary>
     public int MaxResults { get; set; } = 1000;
+
+    /// <summary>
+    /// When false (default), only elements with an explicit IfcSpace type parameter are returned.
+    /// When true, also include elements with only generic IFC-origin markers
+    /// (IfcGUID, IfcName, etc.) — these are marked <c>DetectionConfidence = "Probable"</c>
+    /// and have <c>CanConvertLater = false</c>.
+    /// </summary>
+    public bool IncludeProbable { get; set; } = false;
 }

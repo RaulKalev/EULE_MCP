@@ -3293,6 +3293,10 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
          "(GUID, number, name, building storey), the nearest host Level match by elevation, an optional " +
          "comparison against existing Rooms in the host document (using Level + Number + Name only — " +
          "no shared parameters), and a per-space conversion readiness status. " +
+         "By default only elements with a confirmed IfcSpace type parameter are returned; " +
+         "set includeProbable=true to also include elements with only generic IFC-origin markers " +
+         "(IfcGUID, IfcName, etc.) — these are flagged detectionConfidence='Probable' and " +
+         "canConvertLater=false. " +
          "Call ifc_list_links first to get a valid linkInstanceId. " +
          "Phase 1: strictly read-only — does not create rooms, room separation lines, shared parameters, " +
          "or any other model elements.")]
@@ -3305,14 +3309,17 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         double levelMatchToleranceMm = 300.0,
         [Description("Maximum number of space candidates to return. Default 1000.")]
         int maxResults = 1000,
+        [Description("If true, also include elements with only generic IFC-origin markers as probable IFC Space candidates. They are flagged detectionConfidence='Probable' and canConvertLater=false. Default false.")]
+        bool includeProbable = false,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
         {
-            ["linkInstanceId"]          = linkInstanceId,
+            ["linkInstanceId"]           = linkInstanceId,
             ["includeExistingRoomCheck"] = includeExistingRoomCheck,
-            ["levelMatchToleranceMm"]   = levelMatchToleranceMm,
-            ["maxResults"]              = maxResults
+            ["levelMatchToleranceMm"]    = levelMatchToleranceMm,
+            ["maxResults"]               = maxResults,
+            ["includeProbable"]          = includeProbable
         };
         var result = await pipeClient.SendAsync("ifc_preview_spaces", args, cancellationToken);
         return FormatResult(result);
@@ -3378,6 +3385,13 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
          "Existing Rooms (matched by Number + Name + Level) are never overwritten. " +
          "One failed space never aborts the whole batch — each space has its own transaction. " +
          "Set dryRun=true to validate all spaces without making any model changes. " +
+         "duplicateMode: 'skip_existing' (default) skips exact Number+Name+Level matches AND " +
+         "Number+Level conflicts (different Name); 'skip_conflicts' is an alias for skip_existing; " +
+         "'allow_conflicts' only skips exact matches, permitting creation when Number+Level conflict but Name differs. " +
+         "By default, auto-collected elements must have a confirmed IfcSpace type; set " +
+         "allowProbableConversion=true to also process probable candidates (with advisory warnings). " +
+         "By default, floor-plan views are NOT created automatically; set " +
+         "allowCreateMissingBoundaryViews=true to create minimal views when none exist for a Level. " +
          "Recommended workflow: ifc_list_links → ifc_preview_spaces → ifc_preview_space_geometry " +
          "(to identify GeometryReady spaces) → convert_ifc_spaces_to_rooms with dryRun=true " +
          "to confirm → convert_ifc_spaces_to_rooms with dryRun=false to commit.")]
@@ -3386,7 +3400,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         long linkInstanceId,
         [Description("Optional list of linked element IDs to convert. If empty, all IFC Space candidates in the link are processed. Obtain from ifc_preview_space_geometry (status=GeometryReady).")]
         long[]? linkedElementIds = null,
-        [Description("How to handle duplicate Rooms: 'skip_existing' (default) skips when Number+Name+Level already exist; 'skip_conflicts' also skips when Number+Level match but Name differs.")]
+        [Description("Conflict handling: 'skip_existing' (default) skips exact Number+Name+Level matches AND Number+Level conflicts; 'skip_conflicts' is an alias; 'allow_conflicts' only skips exact matches.")]
         string duplicateMode = "skip_existing",
         [Description("Maximum vertical offset (mm) between a space bottom elevation and the matched Level. Default 300 mm.")]
         double levelMatchToleranceMm = 300.0,
@@ -3402,23 +3416,29 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         bool allowCreateWithoutName = false,
         [Description("If true, create Rooms for IFC Spaces with no Number. Default false.")]
         bool allowCreateWithoutNumber = false,
+        [Description("If true, automatically create a minimal floor-plan view for Levels that have none. Default false — spaces on levels without a view are skipped with status SkippedNoView.")]
+        bool allowCreateMissingBoundaryViews = false,
+        [Description("If true, also process auto-collected elements that are probable (not confirmed) IFC Spaces. Applies only when linkedElementIds is empty. Default false.")]
+        bool allowProbableConversion = false,
         [Description("If true, perform full validation but make no model modifications. Items that pass all checks are returned with status DryRunReady. Default false.")]
         bool dryRun = false,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
         {
-            ["linkInstanceId"]            = linkInstanceId,
-            ["linkedElementIds"]          = linkedElementIds ?? [],
-            ["duplicateMode"]             = duplicateMode,
-            ["levelMatchToleranceMm"]     = levelMatchToleranceMm,
-            ["endpointSnapToleranceMm"]   = endpointSnapToleranceMm,
-            ["tinySegmentToleranceMm"]    = tinySegmentToleranceMm,
-            ["setRoomNameAndNumber"]      = setRoomNameAndNumber,
-            ["createRoomSeparationLines"] = createRoomSeparationLines,
-            ["allowCreateWithoutName"]    = allowCreateWithoutName,
-            ["allowCreateWithoutNumber"]  = allowCreateWithoutNumber,
-            ["dryRun"]                    = dryRun
+            ["linkInstanceId"]                  = linkInstanceId,
+            ["linkedElementIds"]                = linkedElementIds ?? [],
+            ["duplicateMode"]                   = duplicateMode,
+            ["levelMatchToleranceMm"]           = levelMatchToleranceMm,
+            ["endpointSnapToleranceMm"]         = endpointSnapToleranceMm,
+            ["tinySegmentToleranceMm"]          = tinySegmentToleranceMm,
+            ["setRoomNameAndNumber"]            = setRoomNameAndNumber,
+            ["createRoomSeparationLines"]       = createRoomSeparationLines,
+            ["allowCreateWithoutName"]          = allowCreateWithoutName,
+            ["allowCreateWithoutNumber"]        = allowCreateWithoutNumber,
+            ["allowCreateMissingBoundaryViews"] = allowCreateMissingBoundaryViews,
+            ["allowProbableConversion"]         = allowProbableConversion,
+            ["dryRun"]                          = dryRun
         };
         var result = await pipeClient.SendAsync("convert_ifc_spaces_to_rooms", args, cancellationToken);
         return FormatResult(result);

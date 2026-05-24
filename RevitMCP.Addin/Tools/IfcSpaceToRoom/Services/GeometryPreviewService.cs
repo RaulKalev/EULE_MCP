@@ -73,9 +73,9 @@ public class GeometryPreviewService
         }
         else
         {
-            // Discover all IFC Space candidates automatically
-            var collectionWarnings = new List<string>();
-            candidates = _collector.Collect(linkedDoc, collectionWarnings);
+            // Discover all IFC Space candidates automatically (confirmed-only by default)
+            var detections = _collector.Collect(linkedDoc, includeProbable: false);
+            candidates = detections.Select(d => d.Element).ToList();
         }
 
         // ── 3. Pre-load host levels ───────────────────────────────────────────

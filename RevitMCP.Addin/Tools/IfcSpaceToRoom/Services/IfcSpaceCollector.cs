@@ -3,104 +3,135 @@ using Autodesk.Revit.DB;
 namespace RevitMCP.Addin.Tools.IfcSpaceToRoom.Services;
 
 /// <summary>
-/// Collects Generic Model / DirectShape elements from a linked document and filters
-/// down to those that are likely IfcSpace representations.
+/// Collects Generic Model / DirectShape elements from a linked document and classifies
+/// them as Confirmed or Probable IFC Space representations.
+///
+/// Detection logic:
+///   Confirmed — one of the explicit IFC type parameters contains "IfcSpace".
+///   Probable  — generic IFC-origin markers exist (GUID, IfcName, etc.)
+///               but no explicit IfcSpace type was found.
+///               Probable elements are NOT returned by default.
+///
 /// Phase 1: read-only, no document modifications.
 /// </summary>
 public class IfcSpaceCollector
 {
-    // Parameter names that confirm an element represents an IfcSpace when they contain "IfcSpace"
+    // Parameters that CONFIRM IfcSpace when their value contains "IfcSpace"
     private static readonly string[] IfcTypeParamNames =
     [
-        "IfcExportAs", "IfcEntity", "IFC Entity", "IfcType", "ObjectType", "Name"
+        "IfcExportAs", "IfcEntity", "IFC Entity", "IfcType", "ObjectType"
     ];
 
-    // Parameter names whose mere presence (with any value) suggests IFC origin
+    // Parameters whose mere non-empty presence suggests IFC origin (but not IfcSpace specifically)
     private static readonly string[] IfcPresenceParamNames =
     [
         "IfcGUID", "IFC GUID", "GlobalId", "IfcName"
     ];
 
+    // ─────────────────────────────────────────────────────────────────────────
+
     /// <summary>
-    /// Returns all elements in <paramref name="linkedDoc"/> that are likely IfcSpace representations.
+    /// Returns detected IFC Space elements from the linked document.
     /// </summary>
     /// <param name="linkedDoc">The linked Revit document to search.</param>
-    /// <param name="warnings">Populated with advisory messages for ambiguous detections.</param>
-    public List<Element> Collect(Document linkedDoc, List<string> warnings)
+    /// <param name="includeProbable">
+    /// When false (default), only elements with a confirmed IfcSpace type are returned.
+    /// When true, elements with only generic IFC markers are also included, marked
+    /// <c>Confidence = "Probable"</c> with explanatory warnings.
+    /// </param>
+    public List<IfcSpaceDetectionResult> Collect(
+        Document linkedDoc,
+        bool includeProbable = false)
     {
-        // Primary sweep: Generic Models (most IFC exporters land IfcSpace here)
         var candidates = new FilteredElementCollector(linkedDoc)
             .OfCategory(BuiltInCategory.OST_GenericModel)
             .WhereElementIsNotElementType()
             .ToElements();
 
-        var result = new List<Element>();
+        var result = new List<IfcSpaceDetectionResult>(candidates.Count);
 
         foreach (var element in candidates)
         {
-            var detection = ClassifyElement(element);
+            var classification = Classify(element);
 
-            switch (detection)
+            if (classification == Classification.Confirmed)
             {
-                case DetectionResult.ConfirmedIfcSpace:
-                    result.Add(element);
-                    break;
-
-                case DetectionResult.ProbableIfcSpace:
-                    // Has IFC-origin markers but no explicit IfcSpace type tag.
-                    // Include with a warning so the caller can decide.
-                    result.Add(element);
-                    warnings.Add($"Element {element.Id.Value} ({element.Name}) included as probable IFC Space (has IFC markers but no IfcSpace type tag). Verify manually.");
-                    break;
-
-                case DetectionResult.NotIfcSpace:
-                default:
-                    break;
+                result.Add(new IfcSpaceDetectionResult
+                {
+                    Element    = element,
+                    Confidence = IfcDetectionConfidence.Confirmed
+                });
             }
+            else if (classification == Classification.Probable && includeProbable)
+            {
+                result.Add(new IfcSpaceDetectionResult
+                {
+                    Element    = element,
+                    Confidence = IfcDetectionConfidence.Probable,
+                    Warnings   =
+                    [
+                        $"Element {element.Id.Value} ({element.Name}) is a probable IFC Space: " +
+                        "IFC-origin markers found but no explicit IfcSpace type parameter. " +
+                        "Verify manually before converting."
+                    ]
+                });
+            }
+            // Rejected elements are silently dropped
         }
 
         return result;
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Legacy compatibility ───────────────────────────────────────────────────
 
-    private enum DetectionResult
+    /// <summary>
+    /// Legacy overload kept for backward compatibility with callers that pass a warnings list.
+    /// Returns only element references; probable-element warnings are appended to
+    /// <paramref name="warnings"/>. New code should call
+    /// <see cref="Collect(Document, bool)"/> directly.
+    /// </summary>
+    [Obsolete("Use Collect(Document, bool) instead.")]
+    public List<Element> Collect(Document linkedDoc, List<string> warnings)
     {
-        ConfirmedIfcSpace,
-        ProbableIfcSpace,
-        NotIfcSpace
+        var results = Collect(linkedDoc, includeProbable: true);
+        foreach (var r in results.Where(r => r.Confidence == IfcDetectionConfidence.Probable))
+            warnings.AddRange(r.Warnings);
+        return results.Select(r => r.Element).ToList();
     }
 
-    private static DetectionResult ClassifyElement(Element element)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private enum Classification { Confirmed, Probable, Rejected }
+
+    private static Classification Classify(Element element)
     {
-        // Check explicit IFC type parameters for "IfcSpace"
+        // 1. Check explicit IFC type parameters for "IfcSpace"
         foreach (var pName in IfcTypeParamNames)
         {
             var value = TryGetString(element, pName);
             if (ContainsIfcSpace(value))
-                return DetectionResult.ConfirmedIfcSpace;
+                return Classification.Confirmed;
         }
 
-        // Fallback: check for IFC presence markers — element is IFC-derived but type unclear
+        // 2. Also check element Name (built-in) — some exporters set the element/family
+        //    Name to "IfcSpace" rather than using a custom parameter
+        if (ContainsIfcSpace(element.Name))
+            return Classification.Confirmed;
+
+        // 3. Fallback: check for generic IFC presence markers
         foreach (var pName in IfcPresenceParamNames)
         {
             var value = TryGetString(element, pName);
             if (!string.IsNullOrWhiteSpace(value))
-                return DetectionResult.ProbableIfcSpace;
+                return Classification.Probable;
         }
 
-        // Also check element's built-in class name for DirectShape (another indicator)
-        if (element is DirectShape)
-        {
-            // DirectShape without any IFC parameter is ambiguous; skip unless confirmed above.
-        }
-
-        return DetectionResult.NotIfcSpace;
+        return Classification.Rejected;
     }
 
     private static bool ContainsIfcSpace(string? value) =>
-        !string.IsNullOrWhiteSpace(value)
-        && value.IndexOf("IfcSpace", StringComparison.OrdinalIgnoreCase) >= 0;
+        !string.IsNullOrWhiteSpace(value) &&
+        value.IndexOf("IfcSpace", StringComparison.OrdinalIgnoreCase) >= 0;
 
     private static string? TryGetString(Element element, string parameterName)
     {

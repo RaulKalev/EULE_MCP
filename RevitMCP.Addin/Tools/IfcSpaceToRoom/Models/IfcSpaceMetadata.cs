@@ -10,12 +10,24 @@ public class IfcSpaceMetadata
     /// <summary>IFC GlobalId / GUID of the original IfcSpace entity.</summary>
     public string? IfcGuid { get; set; }
 
-    /// <summary>Room number / reference (from Number, IfcName, Reference, etc.).</summary>
+    /// <summary>Room number / reference (e.g. "101"). Read from Reference, Number, etc.</summary>
     public string? Number { get; set; }
 
-    /// <summary>Room long name (from LongName, IfcLongName, Name, etc.).</summary>
+    /// <summary>
+    /// Name of the parameter that produced <see cref="Number"/>.
+    /// Null when Number is null. Helps callers understand where the value came from.
+    /// </summary>
+    public string? NumberSource { get; set; }
+
+    /// <summary>Room long name (e.g. "Office"). Read from LongName, Room Name, etc.</summary>
     public string? Name { get; set; }
 
-    /// <summary>Name of the building storey the space belongs to (from IfcBuildingStorey, Storey, Level, etc.).</summary>
+    /// <summary>
+    /// Name of the parameter that produced <see cref="Name"/>.
+    /// Null when Name is null. Helps callers understand where the value came from.
+    /// </summary>
+    public string? NameSource { get; set; }
+
+    /// <summary>Name of the building storey the space belongs to.</summary>
     public string? StoreyName { get; set; }
 }

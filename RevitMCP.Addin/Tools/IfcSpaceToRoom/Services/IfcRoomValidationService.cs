@@ -68,8 +68,9 @@ public class IfcRoomValidationService
         }
         else
         {
-            var warnings = new List<string>();
-            candidates = _collector.Collect(linkedDoc, warnings);
+            // Discover all IFC Space candidates automatically (confirmed-only)
+            var detections = _collector.Collect(linkedDoc, includeProbable: false);
+            candidates = detections.Select(d => d.Element).ToList();
         }
 
         // ── 3. Pre-load host state ─────────────────────────────────────────────

@@ -12,7 +12,7 @@ namespace RevitMCP.Addin.Tools.IfcSpaceToRoom.Services;
 ///   2. Resolve host Level via bbox elevation
 ///   3. Extract geometry (solid → bottom face → loop → clean/validate → placement point)
 ///   4. Check for existing Room (enforce no-overwrite rule)
-///   5. Apply guards (dry-run, missing name/number, no view)
+///   5. Apply guards (dry-run, missing name/number, no view, probable-only detection)
 ///   6. [If writing] Open per-space Transaction:
 ///        a. Create SketchPlane at Level elevation
 ///        b. Create Room Separation Lines from outer loop
@@ -27,19 +27,21 @@ namespace RevitMCP.Addin.Tools.IfcSpaceToRoom.Services;
 ///   - Never overwrites existing Rooms.
 ///   - One bad space must not abort the whole batch.
 ///   - dryRun is honoured strictly.
+///   - Duplicate mode: skip_existing (default) and skip_conflicts both block Number+Level
+///     conflicts; allow_conflicts is the explicit opt-in to permit them.
 /// </summary>
 public class IfcSpaceConversionService
 {
     // ── Sub-services ──────────────────────────────────────────────────────────
 
-    private readonly IfcSpaceCollector        _collector       = new();
-    private readonly IfcParameterReader       _reader          = new();
-    private readonly LevelMatcher             _levelMatcher    = new();
-    private readonly IfcSpaceGeometryExtractor _extractor      = new();
-    private readonly RoomMatchService         _roomMatcher     = new();
-    private readonly BoundaryViewResolver     _viewResolver    = new();
-    private readonly RoomBoundaryCreator      _boundaryCreator = new();
-    private readonly NativeRoomCreator        _roomCreator     = new();
+    private readonly IfcSpaceCollector          _collector       = new();
+    private readonly IfcParameterReader         _reader          = new();
+    private readonly LevelMatcher               _levelMatcher    = new();
+    private readonly IfcSpaceGeometryExtractor  _extractor       = new();
+    private readonly RoomMatchService           _roomMatcher     = new();
+    private readonly BoundaryViewResolver       _viewResolver    = new();
+    private readonly RoomBoundaryCreator        _boundaryCreator = new();
+    private readonly NativeRoomCreator          _roomCreator     = new();
 
     // ── Cached per-run state ──────────────────────────────────────────────────
 
@@ -82,20 +84,35 @@ public class IfcSpaceConversionService
         }
 
         // ── 2. Collect candidate elements ──────────────────────────────────────
-        List<Element> candidates;
+        //
+        // Explicit LinkedElementIds bypass the AllowProbableConversion guard — the caller
+        // has explicitly selected those elements and takes responsibility.
+        // Auto-collect respects AllowProbableConversion (default false → Confirmed-only).
+
+        var candidateElements = new List<Element>();
+        // Tracks which auto-collected elements were only probably IFC Spaces.
+        // Used in ProcessElement to attach an advisory warning if they were allowed through.
+        var probableElementIds = new HashSet<long>();
+
         if (options.LinkedElementIds.Count > 0)
         {
-            candidates = new List<Element>(options.LinkedElementIds.Count);
             foreach (var eid in options.LinkedElementIds)
             {
                 var el = linkedDoc.GetElement(new ElementId(eid));
-                if (el != null) candidates.Add(el);
+                if (el != null) candidateElements.Add(el);
             }
         }
         else
         {
-            var warnings = new List<string>();
-            candidates = _collector.Collect(linkedDoc, warnings);
+            // Auto-collect: use includeProbable flag from options.
+            // When AllowProbableConversion=false (default), only Confirmed elements come back.
+            var detections = _collector.Collect(linkedDoc, options.AllowProbableConversion);
+            foreach (var detection in detections)
+            {
+                candidateElements.Add(detection.Element);
+                if (detection.Confidence == IfcDetectionConfidence.Probable)
+                    probableElementIds.Add(detection.Element.Id.Value);
+            }
         }
 
         // ── 3. Pre-load host state (read-only) ─────────────────────────────────
@@ -110,20 +127,21 @@ public class IfcSpaceConversionService
         LoadLevelElements(hostDoc);
 
         // ── 4. Setup step: ensure ViewPlans exist for all required levels ──────
-        //    This writes to the document (creates views) in a single setup transaction
-        //    so individual per-space transactions only need to create boundaries + rooms.
-        //    Skip setup if dry-run.
+        //    This writes to the document (creates views) only when
+        //    AllowCreateMissingBoundaryViews = true. Otherwise only existing views are used.
+        //    Skip entirely if dry-run.
         if (!options.DryRun)
         {
-            EnsureViewsForCandidates(hostDoc, candidates, linkTransform, options);
+            EnsureViewsForCandidates(hostDoc, candidateElements, linkTransform, options);
         }
 
         // ── 5. Process each candidate ─────────────────────────────────────────
-        var items = new List<IfcSpaceConversionItemResult>(candidates.Count);
+        var items = new List<IfcSpaceConversionItemResult>(candidateElements.Count);
 
-        foreach (var element in candidates)
+        foreach (var element in candidateElements)
         {
-            var item = ProcessElement(hostDoc, element, linkTransform, options);
+            bool isProbable = probableElementIds.Contains(element.Id.Value);
+            var item = ProcessElement(hostDoc, element, linkTransform, options, isProbable);
             items.Add(item);
         }
 
@@ -139,7 +157,8 @@ public class IfcSpaceConversionService
         Document hostDoc,
         Element element,
         Transform linkTransform,
-        IfcSpaceToRoomOptions options)
+        IfcSpaceToRoomOptions options,
+        bool isProbable = false)
     {
         var item = new IfcSpaceConversionItemResult
         {
@@ -150,10 +169,22 @@ public class IfcSpaceConversionService
         {
             // ── a. Read IFC metadata ─────────────────────────────────────────
             var meta = _reader.ReadMetadata(element);
-            item.Number      = meta.Number;
-            item.Name        = meta.Name;
+            item.Number = meta.Number;
+            item.Name   = meta.Name;
 
-            // ── b. Guards: missing number / name ────────────────────────────
+            // ── b. Probable-element advisory warning ─────────────────────────
+            //    Explicit IDs always have isProbable=false (caller's intent).
+            //    Auto-collected probable elements reach here only when
+            //    AllowProbableConversion=true; add a warning so operators know.
+            if (isProbable)
+            {
+                item.Warnings.Add(
+                    $"Element {element.Id.Value} ({element.Name}) was auto-collected as a " +
+                    "probable IFC Space (no explicit IfcSpace type parameter). " +
+                    "Verify this element is actually an IfcSpace before accepting the result.");
+            }
+
+            // ── c. Guards: missing number / name ────────────────────────────
             if (!options.AllowCreateWithoutNumber &&
                 string.IsNullOrWhiteSpace(item.Number))
             {
@@ -170,9 +201,9 @@ public class IfcSpaceConversionService
                 return item;
             }
 
-            // ── c. Level match ────────────────────────────────────────────
-            double? bboxZ = TryGetBboxBottomZ(element, linkTransform);
-            var levelMatch = _levelMatcher.Match(bboxZ, options.LevelMatchToleranceMm);
+            // ── d. Level match ────────────────────────────────────────────
+            double? bboxZ      = TryGetBboxBottomZ(element, linkTransform);
+            var levelMatch     = _levelMatcher.Match(bboxZ, options.LevelMatchToleranceMm);
 
             item.TargetLevelName = levelMatch.LevelName;
 
@@ -183,15 +214,15 @@ public class IfcSpaceConversionService
                 return item;
             }
 
-            long levelId           = levelMatch.LevelId.Value;
-            double levelElevFeet   = levelMatch.LevelElevationFeet;
+            long   levelId       = levelMatch.LevelId.Value;
+            double levelElevFeet = levelMatch.LevelElevationFeet;
 
-            // ── d. Geometry extraction ──────────────────────────────────
+            // ── e. Geometry extraction ──────────────────────────────────
             var geomOptions = new IfcGeometryExtractionOptions
             {
-                EndpointSnapToleranceMm        = options.EndpointSnapToleranceMm,
-                TinySegmentToleranceMm         = options.TinySegmentToleranceMm,
-                LevelMatchToleranceMm          = options.LevelMatchToleranceMm
+                EndpointSnapToleranceMm = options.EndpointSnapToleranceMm,
+                TinySegmentToleranceMm  = options.TinySegmentToleranceMm,
+                LevelMatchToleranceMm   = options.LevelMatchToleranceMm
             };
 
             var footprint = _extractor.Extract(element, linkTransform, levelElevFeet, geomOptions);
@@ -207,7 +238,12 @@ public class IfcSpaceConversionService
 
             item.Warnings.AddRange(footprint.Warnings);
 
-            // ── e. Room conflict check ──────────────────────────────────
+            // ── f. Room conflict check ──────────────────────────────────
+            //    HasStrictMatch  = exact Number + Name + Level → always skip
+            //    HasWarningMatch = Number + Level match but Name differs:
+            //       skip_existing (default) → blocked (SkippedDuplicateWarning)
+            //       skip_conflicts          → alias for skip_existing → blocked
+            //       allow_conflicts         → warned but allowed through
             var roomMatch = _roomMatcher.Check(levelId, item.Number, item.Name);
 
             if (roomMatch.HasStrictMatch)
@@ -224,35 +260,40 @@ public class IfcSpaceConversionService
                 if (roomMatch.Warning != null)
                     item.Warnings.Add(roomMatch.Warning);
 
-                // "skip_conflicts" mode treats warning matches as a hard skip
-                if (options.DuplicateMode == "skip_conflicts")
+                // Default: skip_existing and skip_conflicts both block Number+Level conflicts.
+                // Only allow_conflicts explicitly opts in to creation despite the conflict.
+                if (options.DuplicateMode != "allow_conflicts")
                 {
                     item.Status = ConversionStatus.SkippedDuplicateWarning;
-                    item.Errors.Add("Skipped: Room with same Number + Level exists with a different Name.");
+                    item.Errors.Add(
+                        "Skipped: a Room with the same Number and Level already exists with a different Name. " +
+                        "Set duplicateMode='allow_conflicts' to allow creation despite the conflict.");
                     return item;
                 }
-                // default "skip_existing" mode: allow creation despite name conflict (warning already added)
+                // allow_conflicts: warning already added above; continue to creation
             }
 
-            // ── f. View check ─────────────────────────────────────────
+            // ── g. View check ─────────────────────────────────────────
             if (options.CreateRoomSeparationLines && !options.DryRun)
             {
                 if (!_levelViews.TryGetValue(levelId, out var view) || view == null)
                 {
                     item.Status = ConversionStatus.SkippedNoView;
-                    item.Errors.Add($"No floor-plan view available for level '{item.TargetLevelName}' (id {levelId}).");
+                    item.Errors.Add(
+                        $"No floor-plan view available for level '{item.TargetLevelName}' (id {levelId}). " +
+                        "Set allowCreateMissingBoundaryViews=true to create views automatically.");
                     return item;
                 }
             }
 
-            // ── g. Dry-run short-circuit ──────────────────────────────
+            // ── h. Dry-run short-circuit ──────────────────────────────
             if (options.DryRun)
             {
                 item.Status = ConversionStatus.DryRunReady;
                 return item;
             }
 
-            // ── h. Write: one Transaction per space ───────────────────
+            // ── i. Write: one Transaction per space ───────────────────
             WriteSpace(hostDoc, item, levelId, levelElevFeet, footprint, options);
         }
         catch (Exception ex)
@@ -376,8 +417,11 @@ public class IfcSpaceConversionService
     // ─────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Pre-creates ViewPlans for all Levels that at least one candidate will target.
-    /// Done in a single setup transaction to avoid per-space view creation overhead.
+    /// Resolves ViewPlans for all Levels that at least one candidate will target.
+    /// When <see cref="IfcSpaceToRoomOptions.AllowCreateMissingBoundaryViews"/> is false
+    /// (the default), only existing ViewPlans are used — missing views are NOT created,
+    /// and the per-space check will return <c>SkippedNoView</c> for affected spaces.
+    /// When true, a minimal floor-plan view is created for each Level that has none.
     /// </summary>
     private void EnsureViewsForCandidates(
         Document hostDoc,
@@ -397,17 +441,13 @@ public class IfcSpaceConversionService
 
         if (neededLevelIds.Count == 0) return;
 
-        // For each needed level, resolve (or create) a ViewPlan
-        var viewWarnings = new List<string>();
-        bool needsTransaction = false;
-
-        // Check which levels already have views
+        // For each needed level, try to find an existing ViewPlan
         var levelsThatNeedNewViews = new List<Level>();
+
         foreach (var levelId in neededLevelIds)
         {
             if (!_levelElements.TryGetValue(levelId, out var level)) continue;
 
-            // Dry-check: try to resolve without writing
             var existingView = new FilteredElementCollector(hostDoc)
                 .OfClass(typeof(ViewPlan))
                 .Cast<ViewPlan>()
@@ -420,16 +460,17 @@ public class IfcSpaceConversionService
             {
                 _levelViews[levelId] = existingView;
             }
-            else
+            else if (options.AllowCreateMissingBoundaryViews)
             {
                 levelsThatNeedNewViews.Add(level);
-                needsTransaction = true;
             }
+            // else: no existing view AND creation not allowed → _levelViews[levelId] stays absent.
+            //       Per-space logic will return SkippedNoView.
         }
 
-        if (!needsTransaction) return;
+        if (levelsThatNeedNewViews.Count == 0) return;
 
-        // Create missing views inside one Transaction
+        // Create missing views inside one Transaction (only when AllowCreateMissingBoundaryViews=true)
         using var tx = new Transaction(hostDoc, "MCP: Create IFC Room Boundary Views");
         try
         {
@@ -439,8 +480,9 @@ public class IfcSpaceConversionService
             {
                 string? warning;
                 var view = _viewResolver.Resolve(hostDoc, level, out warning);
-                if (warning != null) viewWarnings.Add(warning);
                 _levelViews[level.Id.Value] = view;
+                // warnings from view resolver are informational; we don't surface them here
+                // as they'll be picked up in per-space processing if the view is null
             }
 
             tx.Commit();
@@ -448,7 +490,7 @@ public class IfcSpaceConversionService
         catch
         {
             try { tx.RollBack(); } catch { /* ignore */ }
-            // View creation failure is non-fatal here: per-space checks will catch missing views
+            // View creation failure is non-fatal: per-space checks will catch missing views
         }
     }
 

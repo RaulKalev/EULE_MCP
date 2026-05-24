@@ -21,6 +21,9 @@ public class PreviewIfcSpacesTool : IRevitMcpTool
         "Inspects a linked IFC model (identified by linkInstanceId from ifc_list_links) and returns " +
         "all detected IFC Space candidates with metadata (GUID, number, name, storey), the nearest " +
         "host level match, optional existing-room comparison, and per-space conversion readiness. " +
+        "By default only elements with a confirmed IfcSpace type are returned; set includeProbable=true " +
+        "to also include elements with only generic IFC-origin markers (they are flagged " +
+        "detectionConfidence='Probable' and canConvertLater=false). " +
         "Phase 1: read-only — does not create rooms, shared parameters, or any model elements.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory   Category   => ToolCategory.Coordination;
@@ -47,10 +50,11 @@ public class PreviewIfcSpacesTool : IRevitMcpTool
 
         var options = new IfcSpacePreviewOptions
         {
-            LinkInstanceId          = linkInstanceId,
-            IncludeExistingRoomCheck = ToolArguments.GetBool(request.Arguments, "includeExistingRoomCheck", true),
-            LevelMatchToleranceMm   = ToolArguments.GetDouble(request.Arguments, "levelMatchToleranceMm",    300.0),
-            MaxResults              = ToolArguments.GetInt(request.Arguments,    "maxResults",                1000)
+            LinkInstanceId           = linkInstanceId,
+            IncludeExistingRoomCheck = ToolArguments.GetBool(request.Arguments,   "includeExistingRoomCheck", true),
+            LevelMatchToleranceMm    = ToolArguments.GetDouble(request.Arguments, "levelMatchToleranceMm",    300.0),
+            MaxResults               = ToolArguments.GetInt(request.Arguments,    "maxResults",                1000),
+            IncludeProbable          = ToolArguments.GetBool(request.Arguments,   "includeProbable",           false)
         };
 
         // — Run preview ———————————————————————————————————————————————————————

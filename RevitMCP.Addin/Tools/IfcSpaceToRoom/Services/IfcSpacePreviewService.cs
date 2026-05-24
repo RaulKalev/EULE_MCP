@@ -19,14 +19,15 @@ public class IfcSpacePreviewService
     private const string StatusWarning         = "Warning";
     private const string StatusMissingMetadata = "MissingMetadata";
     private const string StatusNoLevelMatch    = "NoLevelMatch";
+    private const string StatusNotIfcSpace     = "NotIfcSpace";
     private const string StatusError           = "Error";
 
     // ── Service instances ──────────────────────────────────────────────────────
 
-    private readonly IfcSpaceCollector        _collector  = new();
-    private readonly IfcParameterReader       _reader     = new();
-    private readonly LevelMatcher             _levelMatcher = new();
-    private readonly ExistingRoomPreviewMatcher _roomMatcher  = new();
+    private readonly IfcSpaceCollector           _collector    = new();
+    private readonly IfcParameterReader          _reader       = new();
+    private readonly LevelMatcher                _levelMatcher = new();
+    private readonly ExistingRoomPreviewMatcher  _roomMatcher  = new();
 
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -70,15 +71,15 @@ public class IfcSpacePreviewService
         if (options.IncludeExistingRoomCheck)
             _roomMatcher.LoadRooms(hostDoc);
 
-        // 4. Collect IFC Space candidates from the linked document
-        var collectionWarnings = new List<string>();
-        var rawCandidates = _collector.Collect(linkedDoc, collectionWarnings);
+        // 4. Collect IFC Space candidates from the linked document.
+        //    includeProbable is driven by the option; default is false (confirmed-only).
+        var detections = _collector.Collect(linkedDoc, options.IncludeProbable);
 
         // 5. Process each candidate
         var spaces     = new List<IfcSpaceCandidate>();
         bool truncated = false;
 
-        foreach (var element in rawCandidates)
+        foreach (var detection in detections)
         {
             if (options.MaxResults > 0 && spaces.Count >= options.MaxResults)
             {
@@ -87,8 +88,7 @@ public class IfcSpacePreviewService
             }
 
             var candidate = ProcessCandidate(
-                element, linkInstance, linkTransform, linkedDoc,
-                options, collectionWarnings);
+                detection, linkInstance, linkTransform, options);
 
             spaces.Add(candidate);
         }
@@ -98,37 +98,52 @@ public class IfcSpacePreviewService
 
         return new IfcSpacePreviewResult
         {
-            Success       = true,
+            Success        = true,
             LinkInstanceId = options.LinkInstanceId,
-            Spaces        = spaces,
-            Summary       = summary
+            Spaces         = spaces,
+            Summary        = summary
         };
     }
 
     // ─────────────────────────────────────────────────────────────────────────
 
     private IfcSpaceCandidate ProcessCandidate(
-        Element element,
+        IfcSpaceDetectionResult detection,
         RevitLinkInstance linkInstance,
         Transform linkTransform,
-        Document linkedDoc,
-        IfcSpacePreviewOptions options,
-        List<string> globalWarnings)
+        IfcSpacePreviewOptions options)
     {
+        var element = detection.Element;
+
         var candidate = new IfcSpaceCandidate
         {
-            LinkInstanceId  = linkInstance.Id.Value,
-            LinkedElementId = element.Id.Value
+            LinkInstanceId      = linkInstance.Id.Value,
+            LinkedElementId     = element.Id.Value,
+            DetectionConfidence = detection.Confidence,
+            Warnings            = [..detection.Warnings]   // seed with per-detection warnings
         };
+
+        // Probable elements cannot be safely converted; flag early
+        bool isProbable = detection.Confidence == IfcDetectionConfidence.Probable;
 
         try
         {
             // — Read IFC metadata ————————————————————————————————————————————
             var meta = _reader.ReadMetadata(element);
-            candidate.IfcGuid    = meta.IfcGuid;
-            candidate.Number     = meta.Number;
-            candidate.Name       = meta.Name;
-            candidate.StoreyName = meta.StoreyName;
+            candidate.IfcGuid      = meta.IfcGuid;
+            candidate.Number       = meta.Number;
+            candidate.NumberSource = meta.NumberSource;
+            candidate.Name         = meta.Name;
+            candidate.NameSource   = meta.NameSource;
+            candidate.StoreyName   = meta.StoreyName;
+
+            // Probable elements: mark immediately — short-circuit the rest
+            if (isProbable)
+            {
+                candidate.Status         = StatusNotIfcSpace;
+                candidate.CanConvertLater = false;
+                return candidate;
+            }
 
             // — Bounding box → host coordinates ——————————————————————————————
             double? bottomElevationFeet = null;
@@ -142,10 +157,10 @@ public class IfcSpacePreviewService
                 bottomElevationFeet = hostBbox.Min.Z;
 
                 // Approximate area: width × depth of the floor footprint
-                double widthFeet  = hostBbox.Max.X - hostBbox.Min.X;
-                double depthFeet  = hostBbox.Max.Y - hostBbox.Min.Y;
-                double areaFtSq   = widthFeet * depthFeet;
-                approxAreaM2      = Math.Round(areaFtSq * 0.092903, 2); // ft² → m²
+                double widthFeet = hostBbox.Max.X - hostBbox.Min.X;
+                double depthFeet = hostBbox.Max.Y - hostBbox.Min.Y;
+                double areaFtSq  = widthFeet * depthFeet;
+                approxAreaM2     = Math.Round(areaFtSq * 0.092903, 2); // ft² → m²
             }
             else
             {
@@ -190,9 +205,9 @@ public class IfcSpacePreviewService
         }
         catch (Exception ex)
         {
-            candidate.Status = StatusError;
-            candidate.Warnings.Add($"Unexpected error processing element {element.Id.Value}: {ex.Message}");
+            candidate.Status         = StatusError;
             candidate.CanConvertLater = false;
+            candidate.Warnings.Add($"Unexpected error processing element {element.Id.Value}: {ex.Message}");
         }
 
         return candidate;
@@ -218,7 +233,7 @@ public class IfcSpacePreviewService
         if (!levelMatch.IsWithinTolerance)
             return StatusWarning;
 
-        // Uncertain detection or other advisory warnings present
+        // Detection or other advisory warnings present
         if (candidate.Warnings.Count > 0)
             return StatusWarning;
 
@@ -237,7 +252,7 @@ public class IfcSpacePreviewService
             Warnings        = spaces.Count(s => s.Status == StatusWarning),
             MissingMetadata = spaces.Count(s => s.Status == StatusMissingMetadata),
             NoLevelMatch    = spaces.Count(s => s.Status == StatusNoLevelMatch),
-            Failed          = spaces.Count(s => s.Status == StatusError),
+            Failed          = spaces.Count(s => s.Status is StatusError or StatusNotIfcSpace),
             Truncated       = truncated
         };
     }
@@ -273,7 +288,7 @@ public class IfcSpacePreviewService
             new XYZ(box.Max.X, box.Max.Y, box.Max.Z)
         };
 
-        var pts = corners.Select(c => transform.OfPoint(c)).ToArray();
+        var pts    = corners.Select(c => transform.OfPoint(c)).ToArray();
         var result = new BoundingBoxXYZ();
         result.Min = new XYZ(pts.Min(p => p.X), pts.Min(p => p.Y), pts.Min(p => p.Z));
         result.Max = new XYZ(pts.Max(p => p.X), pts.Max(p => p.Y), pts.Max(p => p.Z));

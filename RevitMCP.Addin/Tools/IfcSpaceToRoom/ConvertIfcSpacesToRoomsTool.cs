@@ -38,6 +38,14 @@ public class ConvertIfcSpacesToRoomsTool : IRevitMcpTool
         "fields only (no shared parameters, no IFC GUIDs, no Comments). " +
         "Existing Rooms are never overwritten. One failed space never aborts the batch. " +
         "Set dryRun=true to validate all spaces without modifying the model. " +
+        "duplicateMode controls conflict handling: 'skip_existing' (default) skips both exact " +
+        "matches and Number+Level conflicts; 'skip_conflicts' is an alias for skip_existing; " +
+        "'allow_conflicts' only skips exact Number+Name+Level matches, allowing creation when " +
+        "Number+Level match but Name differs. " +
+        "By default, auto-collected elements must have a confirmed IfcSpace type; set " +
+        "allowProbableConversion=true to also process probable candidates (with warnings). " +
+        "By default, floor-plan views are NOT created automatically; set " +
+        "allowCreateMissingBoundaryViews=true to create them when none exist. " +
         "Call ifc_list_links to get linkInstanceId, " +
         "then ifc_preview_spaces + ifc_preview_space_geometry to identify GeometryReady candidates, " +
         "then call this tool with those linkedElementIds.";
@@ -68,25 +76,30 @@ public class ConvertIfcSpacesToRoomsTool : IRevitMcpTool
 
         var options = new IfcSpaceToRoomOptions
         {
-            LinkInstanceId           = linkInstanceId,
-            LinkedElementIds         = linkedElementIdRaw.ToList(),
-            DuplicateMode            = ToolArguments.GetString(request.Arguments, "duplicateMode",            "skip_existing"),
-            LevelMatchToleranceMm    = ToolArguments.GetDouble(request.Arguments, "levelMatchToleranceMm",    300.0),
-            EndpointSnapToleranceMm  = ToolArguments.GetDouble(request.Arguments, "endpointSnapToleranceMm",  3.0),
-            TinySegmentToleranceMm   = ToolArguments.GetDouble(request.Arguments, "tinySegmentToleranceMm",   1.0),
-            SetRoomNameAndNumber     = ToolArguments.GetBool(request.Arguments,   "setRoomNameAndNumber",     true),
-            CreateRoomSeparationLines = ToolArguments.GetBool(request.Arguments,  "createRoomSeparationLines", true),
-            AllowCreateWithoutName   = ToolArguments.GetBool(request.Arguments,   "allowCreateWithoutName",   false),
-            AllowCreateWithoutNumber = ToolArguments.GetBool(request.Arguments,   "allowCreateWithoutNumber", false),
-            DryRun                   = ToolArguments.GetBool(request.Arguments,   "dryRun",                   false)
+            LinkInstanceId                 = linkInstanceId,
+            LinkedElementIds               = linkedElementIdRaw.ToList(),
+            DuplicateMode                  = ToolArguments.GetString(request.Arguments, "duplicateMode",                  "skip_existing"),
+            LevelMatchToleranceMm          = ToolArguments.GetDouble(request.Arguments, "levelMatchToleranceMm",          300.0),
+            EndpointSnapToleranceMm        = ToolArguments.GetDouble(request.Arguments, "endpointSnapToleranceMm",        3.0),
+            TinySegmentToleranceMm         = ToolArguments.GetDouble(request.Arguments, "tinySegmentToleranceMm",         1.0),
+            SetRoomNameAndNumber           = ToolArguments.GetBool(request.Arguments,   "setRoomNameAndNumber",           true),
+            CreateRoomSeparationLines      = ToolArguments.GetBool(request.Arguments,   "createRoomSeparationLines",      true),
+            AllowCreateWithoutName         = ToolArguments.GetBool(request.Arguments,   "allowCreateWithoutName",         false),
+            AllowCreateWithoutNumber       = ToolArguments.GetBool(request.Arguments,   "allowCreateWithoutNumber",       false),
+            AllowCreateMissingBoundaryViews = ToolArguments.GetBool(request.Arguments,  "allowCreateMissingBoundaryViews", false),
+            AllowProbableConversion        = ToolArguments.GetBool(request.Arguments,   "allowProbableConversion",        false),
+            DryRun                         = ToolArguments.GetBool(request.Arguments,   "dryRun",                         false)
         };
 
         // Validate duplicateMode value
-        if (options.DuplicateMode != "skip_existing" && options.DuplicateMode != "skip_conflicts")
+        if (options.DuplicateMode != "skip_existing" &&
+            options.DuplicateMode != "skip_conflicts" &&
+            options.DuplicateMode != "allow_conflicts")
         {
             return Task.FromResult(Fail(request,
                 $"Invalid duplicateMode '{options.DuplicateMode}'. " +
-                "Allowed values: 'skip_existing' (default) or 'skip_conflicts'."));
+                "Allowed values: 'skip_existing' (default), 'skip_conflicts' (alias for skip_existing), " +
+                "or 'allow_conflicts' (permits creation when Number+Level conflict but Name differs)."));
         }
 
         // ── Run conversion ─────────────────────────────────────────────────────
