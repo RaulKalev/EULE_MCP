@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Interop;
 using RevitMCP.Addin.UI.ViewModels;
@@ -11,6 +12,10 @@ public partial class McpWindow : Window
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "RevitMCP", "direct_edit_suppress.flag");
 
+    private static readonly string WindowStatePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "RevitMCP", "window-state.json");
+
     public McpWindowViewModel ViewModel { get; }
 
     public McpWindow(McpWindowViewModel viewModel)
@@ -19,6 +24,7 @@ public partial class McpWindow : Window
         ViewModel = viewModel;
         DataContext = viewModel;
         ViewModel.RequestDirectEditConfirmation = ShowDirectEditWarning;
+        Closing += (_, _) => SaveWindowState();
     }
 
     public void SetRevitOwner(IntPtr revitHandle)
@@ -33,7 +39,43 @@ public partial class McpWindow : Window
     {
         base.OnSourceInitialized(e);
         HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(ResizeHook);
+        RestoreWindowState();
     }
+
+    private void RestoreWindowState()
+    {
+        try
+        {
+            if (!File.Exists(WindowStatePath)) return;
+            var state = JsonSerializer.Deserialize<SavedWindowState>(File.ReadAllText(WindowStatePath));
+            if (state == null) return;
+
+            // Clamp so the window stays reachable even if the screen layout changed
+            double virtLeft   = SystemParameters.VirtualScreenLeft;
+            double virtTop    = SystemParameters.VirtualScreenTop;
+            double virtRight  = virtLeft + SystemParameters.VirtualScreenWidth;
+            double virtBottom = virtTop  + SystemParameters.VirtualScreenHeight;
+
+            Left   = Math.Max(virtLeft, Math.Min(state.Left, virtRight  - 100));
+            Top    = Math.Max(virtTop,  Math.Min(state.Top,  virtBottom - 100));
+            Width  = Math.Max(MinWidth,  state.Width);
+            Height = Math.Max(MinHeight, state.Height);
+        }
+        catch { }
+    }
+
+    private void SaveWindowState()
+    {
+        try
+        {
+            var state = new SavedWindowState(Left, Top, Width, Height);
+            Directory.CreateDirectory(Path.GetDirectoryName(WindowStatePath)!);
+            File.WriteAllText(WindowStatePath, JsonSerializer.Serialize(state));
+        }
+        catch { }
+    }
+
+    private sealed record SavedWindowState(double Left, double Top, double Width, double Height);
 
     private IntPtr ResizeHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
