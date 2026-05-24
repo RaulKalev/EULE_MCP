@@ -3,6 +3,7 @@ using RevitMCP.Addin.Approval;
 using RevitMCP.Addin.Logging;
 using RevitMCP.Addin.Services;
 using RevitMCP.Addin.Tools;
+using RevitMCP.Addin.Tools.Reports;
 using RevitMCP.Addin.UI.ViewModels;
 using RevitMCP.Core.Configuration;
 using ricaun.Revit.UI;
@@ -170,6 +171,12 @@ public class App : IExternalApplication
             handler.RegisterTool(new CreateClashReviewViewTool());
             handler.RegisterTool(new FocusClashTool());
             handler.RegisterTool(new SelectClashElementsTool());
+
+            // Issue Reports
+            handler.RegisterTool(new ExportIssueReportJsonTool());
+            handler.RegisterTool(new ExportIssueReportExcelTool());
+            handler.RegisterTool(new ExportIssueReportMarkdownTool());
+            handler.RegisterTool(new MergeIssueReportsTool());
 
             // Family Creation
             handler.RegisterTool(new CreatePanelSchematicSymbolFromDwgTool());

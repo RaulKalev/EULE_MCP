@@ -2,13 +2,14 @@
 
 A local [Model Context Protocol](https://modelcontextprotocol.io) connector that lets **Claude Code** and **Codex** interrogate and work with a live **Autodesk Revit 2026** model in real time.
 
-**123 tools** across six functional areas:
+**127 tools** across seven functional areas:
 - **General** (22 tools) — element discovery, parameter QA, grouping, Excel exports, selection, and write operations
 - **Electrical** (44 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
 - **Documentation** (31 tools) — view and sheet management: discovery, summary, preview/apply workflows for placing views, creating/duplicating/renaming sheets and views, bulk parameter updates, revision tracking, preset inspection, and safe destructive delete with mandatory manual approval
 - **Coordination** (17 tools) — Revit-native clash detection: category/link discovery, solid-intersection hard-clash and clearance checking, preset management, Excel reporting, and step-through review views
 - **Family Creation** (1 tool) — generate Detail Item families (.rfa) from DWG source files using company presets
 - **Skills** (8 tools) — multi-step QA workflow engine: run built-in or project-specific quality-check skill definitions, inspect task breakdowns, and manage per-project setting overrides
+- **Issue Reports** (4 tools) — shared structured issue model (`IssueDto` / `IssueReportDto`) with JSON, Excel, and Markdown export; multi-report merge; foundation used by all QA tools
 
 ---
 
@@ -284,6 +285,17 @@ Skills are named multi-step QA workflows stored as `.skill.json` files. Built-in
 | `revit_create_project_skill_override` | Creates a project-level settings override for a skill. `changesJson` uses the structure `{"tasks":{"<taskId>":{"enabled":true,"settings":{...}}}}` |
 | `revit_update_project_skill_override` | Merges additional changes into an existing project override |
 | `revit_reset_project_skill_override` | Deletes the project override, reverting the skill to company-master defaults |
+
+### Issue Report Tools
+
+Shared structured issue model used as the output format for all QA tools. Issues carry `severity` (Info / Warning / Error / Critical), `status`, `category`, `discipline`, `phase`, `elementId`, `sheetNumber`, and a run-prefixed ID (`<runId>-<NNNN>`). Three export formats and a multi-report merge tool.
+
+| Tool | Description |
+|------|-------------|
+| `revit_export_issues_json` | Exports an `IssueReportDto` (passed as `reportJson`) to a `.json` file. Returns `filePath`, `totalIssues`, `runId`. |
+| `revit_export_issues_excel` | Exports an `IssueReportDto` to a formatted `.xlsx` file with Summary and Issues sheets, severity colour coding, and auto-filter. Returns `filePath`. |
+| `revit_export_issues_markdown` | Exports an `IssueReportDto` to a `.md` file with summary table, category breakdown, and issues table. Returns `filePath`. |
+| `revit_merge_issue_reports` | Merges multiple `IssueReportDto` JSON strings (`reportJsonArray`) into a single consolidated report. Returns the merged report JSON and summary counts. |
 
 ---
 

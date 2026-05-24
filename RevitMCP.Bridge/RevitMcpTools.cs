@@ -531,6 +531,57 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return value;
     }
 
+    // ── Issue Reports ─────────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "revit_export_issues_json", ReadOnly = true),
+     Description("Exports an issue report (passed as JSON in reportJson) to a .json file. Returns filePath, totalIssues, runId.")]
+    public async Task<string> ExportIssuesJson(
+        [Description("The full IssueReportDto serialised as a JSON string.")] string reportJson,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["reportJson"] = reportJson };
+        var result = await pipeClient.SendAsync("revit_export_issues_json", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_export_issues_excel", ReadOnly = true),
+     Description("Exports an issue report (passed as JSON in reportJson) to a formatted Excel (.xlsx) file with Summary and Issues sheets. Returns filePath, totalIssues, runId.")]
+    public async Task<string> ExportIssuesExcel(
+        [Description("The full IssueReportDto serialised as a JSON string.")] string reportJson,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["reportJson"] = reportJson };
+        var result = await pipeClient.SendAsync("revit_export_issues_excel", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_export_issues_markdown", ReadOnly = true),
+     Description("Exports an issue report (passed as JSON in reportJson) to a Markdown (.md) file. Returns filePath, totalIssues, runId.")]
+    public async Task<string> ExportIssuesMarkdown(
+        [Description("The full IssueReportDto serialised as a JSON string.")] string reportJson,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["reportJson"] = reportJson };
+        var result = await pipeClient.SendAsync("revit_export_issues_markdown", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_merge_issue_reports", ReadOnly = true),
+     Description("Merges multiple issue reports into one consolidated report. Pass reportJsonArray (array of IssueReportDto JSON strings) and optional title. Returns mergedReport JSON, runId, and summary counts.")]
+    public async Task<string> MergeIssueReports(
+        [Description("Array of IssueReportDto JSON strings to merge.")] string[] reportJsonArray,
+        [Description("Title for the merged report. Default: 'Merged Issue Report'.")] string title = "Merged Issue Report",
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["reportJsonArray"] = reportJsonArray,
+            ["title"] = title
+        };
+        var result = await pipeClient.SendAsync("revit_merge_issue_reports", args, cancellationToken);
+        return FormatResult(result);
+    }
+
     private static string FormatResult(McpToolResult result)
     {
         var response = new
