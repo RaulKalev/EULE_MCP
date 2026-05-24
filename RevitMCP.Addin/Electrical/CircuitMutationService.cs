@@ -43,6 +43,7 @@ public static class CircuitMutationService
         int UpdatedCount,
         int AlreadyCorrectCount,
         int SkippedCustomPathCount,
+        int SkippedUnsupportedModeCount,
         List<CircuitPathAction> Actions);
 
     public record CircuitPathAction(long CircuitId, string CircuitNumber, string Action);
@@ -245,7 +246,7 @@ public static class CircuitMutationService
         IEnumerable<ElectricalSystem> circuits)
     {
         var actions = new List<CircuitPathAction>();
-        int updatedCount = 0, alreadyCorrectCount = 0, skippedCount = 0;
+        int updatedCount = 0, alreadyCorrectCount = 0, skippedCustomCount = 0, skippedUnsupportedCount = 0;
 
         using var trans = new Transaction(doc, "Revit MCP - Set Circuit Path Mode to All Devices");
         trans.Start();
@@ -254,34 +255,43 @@ public static class CircuitMutationService
             foreach (var circuit in circuits)
             {
                 string num = circuit.CircuitNumber ?? circuit.Id.Value.ToString();
-                if (circuit.CircuitPathMode == ElectricalCircuitPathMode.Custom)
+
+                if (circuit.CircuitPathMode == ElectricalCircuitPathMode.Custom || circuit.HasCustomCircuitPath)
                 {
                     actions.Add(new CircuitPathAction(circuit.Id.Value, num, "skipped_custom"));
-                    skippedCount++;
+                    skippedCustomCount++;
                 }
                 else if (circuit.CircuitPathMode == ElectricalCircuitPathMode.AllDevices)
                 {
                     actions.Add(new CircuitPathAction(circuit.Id.Value, num, "already_correct"));
                     alreadyCorrectCount++;
                 }
-                else
+                else if (circuit.CircuitPathMode == ElectricalCircuitPathMode.FarthestDevice)
                 {
                     circuit.CircuitPathMode = ElectricalCircuitPathMode.AllDevices;
                     actions.Add(new CircuitPathAction(circuit.Id.Value, num, "updated"));
                     updatedCount++;
                 }
+                else
+                {
+                    actions.Add(new CircuitPathAction(
+                        circuit.Id.Value,
+                        num,
+                        $"skipped_unsupported_mode:{circuit.CircuitPathMode}"));
+                    skippedUnsupportedCount++;
+                }
             }
             trans.Commit();
             return new SetPathModeResult(
                 true,
-                $"Updated {updatedCount} circuit(s) to All Devices. {skippedCount} skipped (custom path). {alreadyCorrectCount} already correct.",
-                updatedCount, alreadyCorrectCount, skippedCount, actions);
+                $"Updated {updatedCount} circuit(s) to All Devices. {skippedCustomCount} skipped (custom path). {alreadyCorrectCount} already correct. {skippedUnsupportedCount} skipped (unsupported mode).",
+                updatedCount, alreadyCorrectCount, skippedCustomCount, skippedUnsupportedCount, actions);
         }
         catch (Exception ex)
         {
             trans.RollBack();
             return new SetPathModeResult(
-                false, $"Transaction failed: {ex.Message}", 0, 0, 0, actions);
+                false, $"Transaction failed: {ex.Message}", 0, 0, 0, 0, actions);
         }
     }
 }
