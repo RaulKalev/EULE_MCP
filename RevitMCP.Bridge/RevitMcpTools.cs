@@ -3262,5 +3262,60 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         var result = await pipeClient.SendAsync("config_set_project_config", args, cancellationToken);
         return FormatResult(result);
     }
+
+    // ── IFC Space to Room — Phase 1 (read-only) ───────────────────────────────
+
+    [McpServerTool(Name = "ifc_list_links", ReadOnly = true),
+     Description(
+         "Lists all Revit link instances in the active document and identifies which are likely " +
+         "derived from an IFC model (based on name/path heuristics). " +
+         "Returns linkInstanceId values that can be passed to ifc_preview_spaces. " +
+         "Phase 1: read-only.")]
+    public async Task<string> IfcListLinks(
+        [Description("If true, include all Revit links regardless of IFC heuristics. Default false.")]
+        bool includeAllRevitLinks = false,
+        [Description("If true, include links that are currently unloaded. Default false.")]
+        bool includeUnloaded = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["includeAllRevitLinks"] = includeAllRevitLinks,
+            ["includeUnloaded"]      = includeUnloaded
+        };
+        var result = await pipeClient.SendAsync("ifc_list_links", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "ifc_preview_spaces", ReadOnly = true),
+     Description(
+         "Inspects a linked IFC model and returns all detected IFC Space candidates with metadata " +
+         "(GUID, number, name, building storey), the nearest host Level match by elevation, an optional " +
+         "comparison against existing Rooms in the host document (using Level + Number + Name only — " +
+         "no shared parameters), and a per-space conversion readiness status. " +
+         "Call ifc_list_links first to get a valid linkInstanceId. " +
+         "Phase 1: strictly read-only — does not create rooms, room separation lines, shared parameters, " +
+         "or any other model elements.")]
+    public async Task<string> IfcPreviewSpaces(
+        [Description("Element id of the RevitLinkInstance to inspect (integer). Obtain from ifc_list_links.")]
+        long linkInstanceId,
+        [Description("If true, compare each candidate against existing Rooms using Level + Number + Name. Default true.")]
+        bool includeExistingRoomCheck = true,
+        [Description("Maximum acceptable vertical offset between a space bottom elevation and the matched Level, in millimetres. Default 300.")]
+        double levelMatchToleranceMm = 300.0,
+        [Description("Maximum number of space candidates to return. Default 1000.")]
+        int maxResults = 1000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["linkInstanceId"]          = linkInstanceId,
+            ["includeExistingRoomCheck"] = includeExistingRoomCheck,
+            ["levelMatchToleranceMm"]   = levelMatchToleranceMm,
+            ["maxResults"]              = maxResults
+        };
+        var result = await pipeClient.SendAsync("ifc_preview_spaces", args, cancellationToken);
+        return FormatResult(result);
+    }
 }
 

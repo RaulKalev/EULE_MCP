@@ -55,6 +55,20 @@ internal static class ToolArguments
         };
     }
 
+    public static double GetDouble(Dictionary<string, object?> args, string key, double defaultValue = 0.0)
+    {
+        if (!args.TryGetValue(key, out var val)) return defaultValue;
+        return val switch
+        {
+            double d => d,
+            float f => f,
+            int i => i,
+            long l => l,
+            JValue jv => jv.Value<double>(),
+            _ => defaultValue
+        };
+    }
+
     public static long[] GetLongArray(Dictionary<string, object?> args, string key)
     {
         if (!args.TryGetValue(key, out var val)) return [];

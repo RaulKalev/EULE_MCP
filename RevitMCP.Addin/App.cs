@@ -7,6 +7,7 @@ using RevitMCP.Addin.Tools.Configuration;
 using RevitMCP.Addin.Tools.Delivery;
 using RevitMCP.Addin.Tools.Excel;
 using RevitMCP.Addin.Tools.FileSystem;
+using RevitMCP.Addin.Tools.IfcSpaceToRoom;
 using RevitMCP.Addin.Tools.ParameterQA;
 using RevitMCP.Addin.Tools.Reports;
 using RevitMCP.Addin.Tools.Standards;
@@ -156,6 +157,10 @@ public class App : IExternalApplication
             handler.RegisterTool(new DeleteViewsTool());
             handler.RegisterTool(new PreviewDeleteSheetsTool());
             handler.RegisterTool(new DeleteSheetsTool());
+
+            // IFC Space to Room — Phase 1 (read-only discovery and preview)
+            handler.RegisterTool(new ListIfcLinksTool());
+            handler.RegisterTool(new PreviewIfcSpacesTool());
 
             // Coordination — Phase 1 — Discovery
             handler.RegisterTool(new ListClashableCategoriesTool());
