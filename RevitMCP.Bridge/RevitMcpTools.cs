@@ -655,6 +655,20 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    [McpServerTool(Name = "standards_get_document_chunk", ReadOnly = true),
+     Description("Returns a specific indexed standards document chunk by its chunk ID, with optional surrounding context chunks (contextBefore/contextAfter, 0-5). Use chunk IDs from standards_search results.")]
+    public async Task<string> StandardsGetDocumentChunk(
+        [Description("Chunk ID to retrieve (from standards_search results).")] string chunkId,
+        [Description("Source ID to search within. Leave null to search all indexed sources.")] string? sourceId = null,
+        [Description("Number of context chunks before the target (0-5). Default 1.")] int contextBefore = 1,
+        [Description("Number of context chunks after the target (0-5). Default 1.")] int contextAfter = 1,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["chunkId"] = chunkId, ["sourceId"] = sourceId, ["contextBefore"] = contextBefore, ["contextAfter"] = contextAfter };
+        var result = await pipeClient.SendAsync("standards_get_document_chunk", args, cancellationToken);
+        return FormatResult(result);
+    }
+
     [McpServerTool(Name = "standards_validate_source_config", ReadOnly = true),
      Description("Validates the StandardsSources.json configuration. Reports missing paths, misconfigured sources, and creates an example config if none exists.")]
     public async Task<string> StandardsValidateSourceConfig(CancellationToken cancellationToken = default)
@@ -687,6 +701,18 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     {
         var args = new Dictionary<string, object?> { ["skillId"] = skillId, ["projectId"] = projectId, ["notes"] = notes };
         var result = await pipeClient.SendAsync("revit_propose_master_skill_update", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_export_skill_override_diff_markdown", ReadOnly = true),
+     Description("Exports a Markdown diff report comparing a project skill override to the current company master. Saves to the exports folder. Does not modify any skill files.")]
+    public async Task<string> ExportSkillOverrideDiffMarkdown(
+        [Description("The skill ID to diff (e.g. 'company.delivery.check').")] string skillId,
+        [Description("The project ID whose override to compare.")] string projectId,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["skillId"] = skillId, ["projectId"] = projectId };
+        var result = await pipeClient.SendAsync("revit_export_skill_override_diff_markdown", args, cancellationToken);
         return FormatResult(result);
     }
 

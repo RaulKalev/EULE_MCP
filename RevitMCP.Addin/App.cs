@@ -201,11 +201,13 @@ public class App : IExternalApplication
             handler.RegisterTool(new ConfigureSheetNamingSkillTool());
             handler.RegisterTool(new CompareSkillOverrideToMasterTool());
             handler.RegisterTool(new ProposeSkillMasterUpdateTool());
+            handler.RegisterTool(new ExportSkillOverrideDiffMarkdownTool());
 
             // Standards
             handler.RegisterTool(new StandardsListSourcesTool());
             handler.RegisterTool(new StandardsIndexSourcesTool());
             handler.RegisterTool(new StandardsSearchTool());
+            handler.RegisterTool(new StandardsGetDocumentChunkTool());
             handler.RegisterTool(new StandardsValidateSourceConfigTool());
 
             // Delivery Tools

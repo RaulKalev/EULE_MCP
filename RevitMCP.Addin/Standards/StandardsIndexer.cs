@@ -118,6 +118,40 @@ public class StandardsIndexer
 
     public string GetIndexDirectory() => IndexBase;
 
+    /// <summary>
+    /// Finds a specific chunk by its <paramref name="chunkId"/> across all indexed sources
+    /// (or only in <paramref name="sourceId"/> if provided).
+    /// </summary>
+    public StandardsChunk? GetChunkById(string chunkId, string? sourceId = null)
+    {
+        var chunks = LoadAllChunks(sourceId is null ? null : [sourceId]);
+        return chunks.FirstOrDefault(c => c.ChunkId.Equals(chunkId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Returns the chunk identified by <paramref name="chunkId"/> plus up to
+    /// <paramref name="before"/> chunks before it and <paramref name="after"/> chunks after it
+    /// from the same file, in document order.
+    /// </summary>
+    public List<StandardsChunk> GetChunksAround(string chunkId, int before = 1, int after = 1, string? sourceId = null)
+    {
+        var allChunks = LoadAllChunks(sourceId is null ? null : [sourceId]);
+        var target    = allChunks.FirstOrDefault(c => c.ChunkId.Equals(chunkId, StringComparison.OrdinalIgnoreCase));
+        if (target == null) return [];
+
+        // Get all chunks from the same file, in their natural order
+        var sameFile = allChunks
+            .Where(c => c.FilePath == target.FilePath && c.SourceId == target.SourceId)
+            .ToList();
+
+        var idx = sameFile.FindIndex(c => c.ChunkId.Equals(chunkId, StringComparison.OrdinalIgnoreCase));
+        if (idx < 0) return [target];
+
+        var start = Math.Max(0, idx - before);
+        var end   = Math.Min(sameFile.Count - 1, idx + after);
+        return sameFile.Skip(start).Take(end - start + 1).ToList();
+    }
+
     // -------------------------------------------------------------------------
 
     private static string GetSourceDir(string sourceId)
