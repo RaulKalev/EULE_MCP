@@ -17,8 +17,8 @@ namespace RevitMCP.Addin.Tools.Reports;
 public class ExportIssueReportJsonTool : IRevitMcpTool
 {
     public string Name => "revit_export_issues_json";
-    public string Description => "Exports an issue report (passed as JSON) to a .json file on disk. Returns the output file path.";
-    public ToolPermission Permission => ToolPermission.ReadOnly;
+    public string Description => "Exports an issue report (passed as JSON) to a .json file on disk. Returns the output file path. Requires approval — writes a file to disk.";
+    public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Reports;
 
     private static readonly ExportPathService _pathService = new();

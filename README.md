@@ -2,17 +2,18 @@
 
 A local [Model Context Protocol](https://modelcontextprotocol.io) connector that lets **Claude Code** and **Codex** interrogate and work with a live **Autodesk Revit 2026** model in real time.
 
-**150 tools** across ten functional areas:
-- **General** (24 tools) — element discovery, parameter QA, grouping, Excel exports, selection, write operations, and config-driven parameter QA rule sets
+**159 tools** across eleven functional areas:
+- **General** (25 tools) — element discovery, parameter QA, grouping, Excel exports, selection, write operations, config-driven parameter QA rule sets, and detailed geometry inspection of selected elements
 - **Electrical** (44 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
 - **Documentation** (31 tools) — view and sheet management: discovery, summary, preview/apply workflows for placing views, creating/duplicating/renaming sheets and views, bulk parameter updates, revision tracking, preset inspection, and safe destructive delete with mandatory manual approval
 - **Coordination** (17 tools) — Revit-native clash detection: category/link discovery, solid-intersection hard-clash and clearance checking, preset management, Excel reporting, and step-through review views
 - **Family Creation** (1 tool) — generate Detail Item families (.rfa) from DWG source files using company presets
 - **Skills** (9 tools) — multi-step QA workflow engine: run built-in or project-specific quality-check skill definitions, inspect task breakdowns, manage per-project setting overrides, and configure the sheet naming skill
 - **Issue Reports** (4 tools) — shared structured issue model (`IssueDto` / `IssueReportDto`) with JSON, Excel, and Markdown export; multi-report merge; foundation used by all QA tools
-- **File System** (3 tools) — read, write, and list local files with configurable path-policy enforcement (allowed-root lists, traversal blocking, size limits)
-- **Excel** (5 tools) — standalone Excel workbook tools (no open document required): inspect workbooks, read ranges, update cells, insert rows, and append table rows with automatic backup and header-matching
+- **File System** (6 tools) — read, write, list, inspect, copy, and backup local files with configurable path-policy enforcement (allowed-root lists, traversal blocking, size limits)
+- **Excel** (5 tools) — standalone Excel workbook tools (no open document required): inspect workbooks, read ranges, update cells, insert rows, and append table rows with automatic backup, header-matching, and dry-run preview support
 - **Delivery** (4 tools) — pre-issue delivery folder QA: scan folders for EULE-format drawing files, cross-check against Revit sheets or an Excel document register, and run a combined full-check with optional Issue Report and Excel/Markdown export
+- **Configuration** (5 tools) — read and update JSON config files at company, user, tool-state, and project scopes
 
 ---
 
@@ -66,6 +67,7 @@ All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no 
 |------|-------------|
 | `revit_get_connection_status` | Revit version, document title, active view, worksharing info, selection count |
 | `revit_get_selected_elements` | Category, family, type, level, location, bounding box for selected elements |
+| `revit_inspect_selected_elements` | Detailed inspection of selected elements: category, family/type, level, mm location (point or curve), mm bounding box (min/max/size/center), optional parameters preview, geometry summary (solid/mesh/curve counts, volume mm³). Args: `includeParameters` (true), `parameterNames[]`, `includeGeometrySummary` (true), `limit` (50). |
 | `revit_list_views` | All non-template printable views with type, scale, discipline, sheet placement |
 | `revit_list_sheets` | All sheets with number, name, and placed view names |
 | `revit_list_schedules` | All schedules with category and field names |
@@ -305,9 +307,9 @@ Shared structured issue model used as the output format for all QA tools. Issues
 
 | Tool | Description |
 |------|-------------|
-| `revit_export_issues_json` | Exports an `IssueReportDto` (passed as `reportJson`) to a `.json` file. Returns `filePath`, `totalIssues`, `runId`. |
-| `revit_export_issues_excel` | Exports an `IssueReportDto` to a formatted `.xlsx` file with Summary and Issues sheets, severity colour coding, and auto-filter. Returns `filePath`. |
-| `revit_export_issues_markdown` | Exports an `IssueReportDto` to a `.md` file with summary table, category breakdown, and issues table. Returns `filePath`. |
+| `revit_export_issues_json` | Exports an `IssueReportDto` (passed as `reportJson`) to a `.json` file. Returns `filePath`, `totalIssues`, `runId`. *(requires approval)* |
+| `revit_export_issues_excel` | Exports an `IssueReportDto` to a formatted `.xlsx` file with Summary and Issues sheets, severity colour coding, and auto-filter. Returns `filePath`. *(requires approval)* |
+| `revit_export_issues_markdown` | Exports an `IssueReportDto` to a `.md` file with summary table, category breakdown, and issues table. Returns `filePath`. *(requires approval)* |
 | `revit_merge_issue_reports` | Merges multiple `IssueReportDto` JSON strings (`reportJsonArray`) into a single consolidated report. Returns the merged report JSON and summary counts. |
 
 ### Delivery Tools
@@ -332,8 +334,11 @@ General-purpose file utilities. Access is controlled by `FileAccessPolicy` — a
 | Tool | Description |
 |------|-------------|
 | `file_read_text` | Reads a text file and returns its content. `maxBytes` caps the read (default 1 MB). |
-| `file_write_text` | Writes text to a file. `overwrite=false` (default) refuses to clobber existing files. `createDirectories=true` creates missing parent folders. *(requires approval)* |
+| `file_write_text` | Writes text to a file. `overwrite=false` (default) refuses to clobber existing files. `createDirectories=true` creates missing parent folders. `backupBeforeOverwrite=true` creates a timestamped backup before overwriting. *(requires approval)* |
 | `file_list_directory` | Lists files and subdirectories in a folder. Supports `searchPattern`, `recursive`, and `maxResults`. |
+| `file_inspect` | Returns metadata for a file or directory: existence, type, size, extension, created/modified timestamps, read-only flag, and optional SHA-256 hash (`includeHash=true`, skipped for files > 100 MB). |
+| `file_copy` | Copies a file to a destination path. Args: `sourcePath`, `destinationPath`, `overwrite` (false), `createDirectories` (true), `preserveTimestamps` (true). *(requires approval)* |
+| `file_backup` | Creates a timestamped copy of a file — `{stem}_{suffix}_{yyyy-MM-dd_HHmmss}{ext}`. Args: `filePath`, `backupDirectory` (default: same directory), `suffix` (default `backup`), `preserveTimestamps` (true). *(requires approval)* |
 
 **FileAccessPolicy config** (`FileAccessPolicy.json`):
 ```json
@@ -346,6 +351,27 @@ General-purpose file utilities. Access is controlled by `FileAccessPolicy` — a
 }
 ```
 
+### Configuration / State Tools
+
+Read and update JSON config files at four scopes without requiring a running Revit session. All paths are resolved by `ConfigPathResolver`:
+
+| Scope | Path |
+|-------|------|
+| `company` | `%ProgramData%\RKTools\MCP\Config\company.config.json` |
+| `user` | `%AppData%\RKTools\MCP\user.config.json` |
+| `tool-state` | `%AppData%\RKTools\MCP\State\tool-state.json` |
+| `project` | `<projectRoot>\.rktools\mcp.project.config.json` |
+
+| Tool | Description |
+|------|-------------|
+| `config_read` | Reads a config file at the given scope. `createIfMissing=true` (default false) creates an empty `{}` file if absent. |
+| `config_write` | Writes a full JSON object to a config file, replacing existing content. Atomic write (`.tmp` → validate → rename). `backupBeforeOverwrite=true` creates a timestamped backup. *(requires approval)* |
+| `config_update` | Merges a set of key/value pairs into an existing config file. Supports dot-path keys (`$.excel.defaultBackupBeforeSave`). `createIfMissing=true` creates the file if absent. `backupBeforeOverwrite=true` takes a backup before changes. *(requires approval)* |
+| `config_get_project_config` | Reads the project-scoped config (`mcp.project.config.json`) for a given `projectRoot` folder. |
+| `config_set_project_config` | Writes or updates the project-scoped config. Accepts a `jsonContent` string (full replace) or `updates` object (partial merge). *(requires approval)* |
+
+---
+
 ### Excel Tools
 
 Standalone Excel workbook tools — operate directly on `.xlsx`/`.xlsm` files on disk. No open Revit document required; compatible with any Excel file on the allowed-write paths.
@@ -354,9 +380,9 @@ Standalone Excel workbook tools — operate directly on `.xlsx`/`.xlsm` files on
 |------|-------------|
 | `excel_inspect_workbook` | Returns worksheet names, used ranges, row/column counts, detected headers, and optional preview rows for each visible sheet. |
 | `excel_read_range` | Reads a specific cell range from a worksheet — returns rows of cells with address, value, formula, and data type. |
-| `excel_update_cells` | Updates one or more cells by address (e.g. `"B2"`, `"C5"`) — preserves existing cell styles. Optional backup. *(requires approval)* |
-| `excel_insert_rows` | Inserts new rows at a specified row number — copies style from a template row, writes cell values by column letter key. Optional backup. *(requires approval)* |
-| `excel_append_table_rows` | Appends rows after the last data row in a sheet or named table. `matchHeaders=true` maps values by header name; falls back to column letter (`"A"`, `"B"`) when unmatched. Extends named table if present. Optional backup. *(requires approval)* |
+| `excel_update_cells` | Updates one or more cells by address (e.g. `"B2"`, `"C5"`) — preserves existing cell styles. Optional backup. `dryRun=true` returns a preview of planned changes without modifying the file. *(requires approval)* |
+| `excel_insert_rows` | Inserts new rows at a specified row number — copies style from a template row, writes cell values by column letter key. Optional backup. `dryRun=true` returns row/range preview without modifying the file. *(requires approval)* |
+| `excel_append_table_rows` | Appends rows after the last data row in a sheet or named table. `matchHeaders=true` maps values by header name; falls back to column letter (`"A"`, `"B"`) when unmatched. Extends named table if present. Optional backup. `dryRun=true` returns append-position preview without modifying the file. *(requires approval)* |
 
 > **Excel write limitations (MVP):** Write tools copy row height and cell styles (number format, font, fill, border, alignment). Advanced Excel features — merged cells, data validation, conditional formatting, and existing cell formulas — are preserved in cells that are not written to, but are **not** carried over to newly inserted rows. Verify complex worksheets manually after insertion or appending.
 
@@ -665,8 +691,9 @@ EULE_MCP/
 │   ├── Commands/        OpenMcpWindowCommand
 │   ├── Electrical/      Circuit services, QA helpers, dashboard, voltage-drop prep, fire alarm preset, cable resistance
 │   ├── Documentation/   Pure-logic helpers: RenameEngine, FuzzyNameMatcher, PlacementPointResolver, ViewSheetMatchingService
-│   ├── FileSystem/      FilePathPolicy (allowed-root enforcement), FileSystemService (read/write/list)
-│   ├── Excel/           ExcelWorkbookInspector, ExcelWorkbookModifier, ExcelBackupService, ExcelHeaderDetector, ExcelStyleCopyService
+│   ├── FileSystem/      FilePathPolicy (allowed-root enforcement), FileSystemService (read/write/list/inspect/copy/backup)
+│   ├── Configuration/   ConfigPathResolver (scope → path), JsonConfigService (read/write/update with atomic write)
+│   ├── Excel/           ExcelWorkbookInspector, ExcelWorkbookModifier (dryRun support), ExcelBackupService, ExcelHeaderDetector, ExcelStyleCopyService
 │   ├── Services/        PipeServer, ExternalEventHandler, ConnectorService
 │   ├── Tools/           One file per MCP tool
 │   ├── UI/              WPF window (Status + Pending + Activity tabs) + ViewModels + themes

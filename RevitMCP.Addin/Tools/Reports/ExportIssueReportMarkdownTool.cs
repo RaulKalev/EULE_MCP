@@ -16,7 +16,7 @@ public class ExportIssueReportMarkdownTool : IRevitMcpTool
 {
     public string Name => "revit_export_issues_markdown";
     public string Description => "Exports an issue report (passed as JSON) to a Markdown (.md) file. Returns the output file path.";
-    public ToolPermission Permission => ToolPermission.ReadOnly;
+    public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Reports;
 
     private static readonly IssueMarkdownExporter _exporter = new();

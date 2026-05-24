@@ -12,7 +12,7 @@ namespace RevitMCP.Addin.Tools.Excel;
 public class ExcelAppendTableRowsTool : IRevitMcpTool
 {
     public string Name => "excel_append_table_rows";
-    public string Description => "Appends rows after the last data row in a worksheet, matching values to columns by header name. Optionally targets a named Excel table. Requires approval.";
+    public string Description => "Appends rows after the last data row in a worksheet, matching values to columns by header name. Optionally targets a named Excel table. Requires approval. Set dryRun=true to preview without modifying.";
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Excel;
 
@@ -26,6 +26,7 @@ public class ExcelAppendTableRowsTool : IRevitMcpTool
         var tableName = ToolArguments.GetString(request.Arguments, "tableName");
         var matchHeaders = ToolArguments.GetBool(request.Arguments, "matchHeaders", true);
         var backup = ToolArguments.GetBool(request.Arguments, "backupBeforeSave", true);
+        var dryRun = ToolArguments.GetBool(request.Arguments, "dryRun", false);
 
         if (string.IsNullOrWhiteSpace(filePath))
             return Task.FromResult(Fail(request, "filePath is required."));
@@ -41,7 +42,7 @@ public class ExcelAppendTableRowsTool : IRevitMcpTool
             return Task.FromResult(Fail(request, "No rows provided in 'rows' array."));
 
         var (result, error) = ExcelWorkbookModifier.AppendTableRows(
-            filePath, worksheetName, tableName, matchHeaders, rows, backup);
+            filePath, worksheetName, tableName, matchHeaders, rows, backup, dryRun);
         sw.Stop();
 
         if (error != null)
@@ -57,7 +58,9 @@ public class ExcelAppendTableRowsTool : IRevitMcpTool
         {
             RequestId = request.RequestId,
             Success = true,
-            Message = $"Appended rows to '{worksheetName}'.",
+            Message = dryRun
+                ? $"[DRY RUN] Would append rows to '{worksheetName}'."
+                : $"Appended rows to '{worksheetName}'.",
             Data = result,
             DurationMs = sw.ElapsedMilliseconds
         });

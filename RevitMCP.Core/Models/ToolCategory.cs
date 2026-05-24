@@ -18,5 +18,6 @@ public enum ToolCategory
     Skills,
     FileSystem,
     Excel,
-    Delivery
+    Delivery,
+    Configuration
 }

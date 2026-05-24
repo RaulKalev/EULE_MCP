@@ -3,6 +3,7 @@ using RevitMCP.Addin.Approval;
 using RevitMCP.Addin.Logging;
 using RevitMCP.Addin.Services;
 using RevitMCP.Addin.Tools;
+using RevitMCP.Addin.Tools.Configuration;
 using RevitMCP.Addin.Tools.Delivery;
 using RevitMCP.Addin.Tools.Excel;
 using RevitMCP.Addin.Tools.FileSystem;
@@ -43,6 +44,7 @@ public class App : IExternalApplication
             var handler = new ExternalEventHandler();
             handler.RegisterTool(new GetConnectionStatusTool());
             handler.RegisterTool(new GetSelectedElementsTool());
+            handler.RegisterTool(new InspectSelectedElementsTool());
             handler.RegisterTool(new ListViewsTool());
             handler.RegisterTool(new ListSheetsTool());
             handler.RegisterTool(new ListSchedulesTool());
@@ -206,6 +208,9 @@ public class App : IExternalApplication
             handler.RegisterTool(new FileReadTextTool());
             handler.RegisterTool(new FileWriteTextTool());
             handler.RegisterTool(new FileListDirectoryTool());
+            handler.RegisterTool(new FileInspectTool());
+            handler.RegisterTool(new FileCopyTool());
+            handler.RegisterTool(new FileBackupTool());
 
             // Excel Modifier Tools
             handler.RegisterTool(new ExcelInspectWorkbookTool());
@@ -217,6 +222,13 @@ public class App : IExternalApplication
             // Parameter QA Rule Set Tools
             handler.RegisterTool(new ListParameterQaRuleSetsTool());
             handler.RegisterTool(new RunParameterQaRuleSetTool());
+
+            // Configuration / State Tools
+            handler.RegisterTool(new ConfigReadTool());
+            handler.RegisterTool(new ConfigWriteTool());
+            handler.RegisterTool(new ConfigUpdateTool());
+            handler.RegisterTool(new ConfigGetProjectConfigTool());
+            handler.RegisterTool(new ConfigSetProjectConfigTool());
 
             var eventService = new ExternalEventService(handler);
 

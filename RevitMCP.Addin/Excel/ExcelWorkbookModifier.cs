@@ -11,18 +11,20 @@ public static class ExcelWorkbookModifier
 {
     /// <summary>
     /// Updates specific cells in a worksheet. Preserves all other formatting.
+    /// When dryRun=true, previews changes without saving or creating a backup.
     /// </summary>
     public static (object? Result, string? Error) UpdateCells(
         string filePath,
         string worksheetName,
         List<(string Cell, string? Value)> updates,
-        bool backupBeforeSave)
+        bool backupBeforeSave,
+        bool dryRun = false)
     {
         if (!File.Exists(filePath))
             return (null, $"File not found: {filePath}");
 
         string? backupPath = null;
-        if (backupBeforeSave)
+        if (!dryRun && backupBeforeSave)
         {
             try { backupPath = ExcelBackupService.CreateBackup(filePath); }
             catch (Exception ex) { return (null, $"Backup failed: {ex.Message}"); }
@@ -44,7 +46,7 @@ public static class ExcelWorkbookModifier
                 {
                     var cell = ws.Cell(cellAddr);
                     var oldValue = cell.GetString();
-                    cell.SetValue(value ?? string.Empty);
+                    if (!dryRun) cell.SetValue(value ?? string.Empty);
                     applied.Add(new { cell = cellAddr, oldValue, newValue = value ?? string.Empty });
                 }
                 catch (Exception ex)
@@ -53,13 +55,15 @@ public static class ExcelWorkbookModifier
                 }
             }
 
-            wb.Save();
+            if (!dryRun) wb.Save();
 
             return (new
             {
+                dryRun,
                 filePath,
                 worksheetName,
-                updatedCount = applied.Count,
+                updatedCount = dryRun ? 0 : applied.Count,
+                plannedUpdateCount = dryRun ? applied.Count : (int?)null,
                 errorCount = errors.Count,
                 updates = applied,
                 errors,
@@ -75,6 +79,7 @@ public static class ExcelWorkbookModifier
     /// <summary>
     /// Inserts rows at a given position, copying style from a template row.
     /// Row values are keyed by column letter (e.g. "A", "B").
+    /// When dryRun=true, previews the operation without saving or creating a backup.
     /// </summary>
     public static (object? Result, string? Error) InsertRows(
         string filePath,
@@ -82,7 +87,8 @@ public static class ExcelWorkbookModifier
         int insertAtRow,
         int copyStyleFromRow,
         List<Dictionary<string, string>> rows,
-        bool backupBeforeSave)
+        bool backupBeforeSave,
+        bool dryRun = false)
     {
         if (!File.Exists(filePath))
             return (null, $"File not found: {filePath}");
@@ -91,7 +97,7 @@ public static class ExcelWorkbookModifier
             return (null, "No rows to insert.");
 
         string? backupPath = null;
-        if (backupBeforeSave)
+        if (!dryRun && backupBeforeSave)
         {
             try { backupPath = ExcelBackupService.CreateBackup(filePath); }
             catch (Exception ex) { return (null, $"Backup failed: {ex.Message}"); }
@@ -103,6 +109,27 @@ public static class ExcelWorkbookModifier
 
             if (!wb.TryGetWorksheet(worksheetName, out var ws))
                 return (null, $"Worksheet '{worksheetName}' not found.");
+
+            if (dryRun)
+            {
+                // Build preview without mutating
+                var usedRange = ws.RangeUsed();
+                var previewRange = usedRange != null
+                    ? $"{ws.Cell(insertAtRow, usedRange.FirstColumn().ColumnNumber()).Address}:" +
+                      $"{ws.Cell(insertAtRow + rows.Count - 1, usedRange.LastColumn().ColumnNumber()).Address}"
+                    : $"Row {insertAtRow}–{insertAtRow + rows.Count - 1}";
+
+                return (new
+                {
+                    dryRun = true,
+                    worksheetName,
+                    insertAtRow,
+                    copyStyleFromRow,
+                    plannedRowCount = rows.Count,
+                    affectedRange = previewRange,
+                    rows
+                }, null);
+            }
 
             // Insert blank rows above the target row
             ws.Row(insertAtRow).InsertRowsAbove(rows.Count);
@@ -160,6 +187,7 @@ public static class ExcelWorkbookModifier
     /// Appends rows after the last data row, copying style from the last data row.
     /// When matchHeaders=true, row dictionaries are keyed by header name.
     /// When a named table is provided, the table range is extended to include the new rows.
+    /// When dryRun=true, previews the operation without saving or creating a backup.
     /// </summary>
     public static (object? Result, string? Error) AppendTableRows(
         string filePath,
@@ -167,7 +195,8 @@ public static class ExcelWorkbookModifier
         string tableName,
         bool matchHeaders,
         List<Dictionary<string, string>> rows,
-        bool backupBeforeSave)
+        bool backupBeforeSave,
+        bool dryRun = false)
     {
         if (!File.Exists(filePath))
             return (null, $"File not found: {filePath}");
@@ -176,7 +205,7 @@ public static class ExcelWorkbookModifier
             return (null, "No rows to append.");
 
         string? backupPath = null;
-        if (backupBeforeSave)
+        if (!dryRun && backupBeforeSave)
         {
             try { backupPath = ExcelBackupService.CreateBackup(filePath); }
             catch (Exception ex) { return (null, $"Backup failed: {ex.Message}"); }
@@ -196,6 +225,31 @@ public static class ExcelWorkbookModifier
             var used = ws.RangeUsed();
             int lastDataRow = used?.LastRow().RowNumber() ?? headerRowNum;
             int styleTemplateRow = lastDataRow > headerRowNum ? lastDataRow : headerRowNum;
+
+            if (dryRun)
+            {
+                var unmatchedDry = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (matchHeaders)
+                {
+                    foreach (var rowData in rows)
+                        foreach (var key in rowData.Keys)
+                        {
+                            int col = ExcelHeaderDetector.FindColumnByHeader(ws, headerRowNum, key);
+                            if (col == 0) unmatchedDry.Add(key);
+                        }
+                }
+
+                return (new
+                {
+                    dryRun = true,
+                    worksheetName,
+                    headerRow = headerRowNum,
+                    lastDataRow,
+                    plannedStartRow = lastDataRow + 1,
+                    plannedRowCount = rows.Count,
+                    unmatchedHeaders = unmatchedDry.ToList()
+                }, null);
+            }
 
             var unmatchedHeaders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             int appendedCount = 0;

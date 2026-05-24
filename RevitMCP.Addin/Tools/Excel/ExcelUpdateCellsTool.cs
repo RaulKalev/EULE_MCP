@@ -12,7 +12,7 @@ namespace RevitMCP.Addin.Tools.Excel;
 public class ExcelUpdateCellsTool : IRevitMcpTool
 {
     public string Name => "excel_update_cells";
-    public string Description => "Updates specific cells in an existing Excel file without changing formatting. Requires approval. Creates a timestamped backup by default.";
+    public string Description => "Updates specific cells in an existing Excel file without changing formatting. Requires approval. Creates a timestamped backup by default. Set dryRun=true to preview changes without saving.";
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Excel;
 
@@ -24,6 +24,7 @@ public class ExcelUpdateCellsTool : IRevitMcpTool
         var filePath = ToolArguments.GetString(request.Arguments, "filePath");
         var worksheetName = ToolArguments.GetString(request.Arguments, "worksheetName");
         var backup = ToolArguments.GetBool(request.Arguments, "backupBeforeSave", true);
+        var dryRun = ToolArguments.GetBool(request.Arguments, "dryRun", false);
 
         if (string.IsNullOrWhiteSpace(filePath))
             return Task.FromResult(Fail(request, "filePath is required."));
@@ -38,7 +39,7 @@ public class ExcelUpdateCellsTool : IRevitMcpTool
         if (updates.Count == 0)
             return Task.FromResult(Fail(request, "No cell updates provided in 'updates' array."));
 
-        var (result, error) = ExcelWorkbookModifier.UpdateCells(filePath, worksheetName, updates, backup);
+        var (result, error) = ExcelWorkbookModifier.UpdateCells(filePath, worksheetName, updates, backup, dryRun);
         sw.Stop();
 
         if (error != null)
@@ -54,7 +55,9 @@ public class ExcelUpdateCellsTool : IRevitMcpTool
         {
             RequestId = request.RequestId,
             Success = true,
-            Message = $"Updated {updates.Count} cell(s) in '{worksheetName}'.",
+            Message = dryRun
+                ? $"[DRY RUN] Would update {updates.Count} cell(s) in '{worksheetName}'."
+                : $"Updated {updates.Count} cell(s) in '{worksheetName}'.",
             Data = result,
             DurationMs = sw.ElapsedMilliseconds
         });

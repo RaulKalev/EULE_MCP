@@ -24,6 +24,26 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    [McpServerTool(Name = "revit_inspect_selected_elements", ReadOnly = true),
+     Description("Returns detailed inspection data for the selected Revit elements: structured bounding box (mm), location (mm), geometry summary (solid/mesh/curve counts, volume), and parameter values.")]
+    public async Task<string> InspectSelectedElements(
+        [Description("If true, include a preview of all element parameters. Default true.")] bool includeParameters = true,
+        [Description("Subset of parameter names to return. Leave empty to include all. Case-insensitive.")] string[]? parameterNames = null,
+        [Description("If true, include a geometry summary (solid/mesh/curve counts, estimated volume). Default true.")] bool includeGeometrySummary = true,
+        [Description("Maximum number of elements to process. Default 50.")] int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["includeParameters"]    = includeParameters,
+            ["parameterNames"]       = parameterNames ?? [],
+            ["includeGeometrySummary"] = includeGeometrySummary,
+            ["limit"]                = limit
+        };
+        var result = await pipeClient.SendAsync("revit_inspect_selected_elements", args, cancellationToken);
+        return FormatResult(result);
+    }
+
     [McpServerTool(Name = "revit_list_views", ReadOnly = true),
      Description("Lists views in the active Revit document. Supports viewTypes, includeTemplates, nameFilter, includePlacedStatus, returnParameters, and limit.")]
     public async Task<string> ListViews(
@@ -601,12 +621,13 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "file_write_text"),
-     Description("Writes a UTF-8 text file to disk. Requires user approval. Will not overwrite an existing file unless overwrite=true. Creates parent directories when createDirectories=true.")]
+     Description("Writes a UTF-8 text file to disk. Requires user approval. Will not overwrite an existing file unless overwrite=true. Creates parent directories when createDirectories=true. When overwrite=true, creates a timestamped backup by default (backupBeforeOverwrite=true).")]
     public async Task<string> FileWriteText(
         [Description("Absolute local path to write the file to.")] string filePath,
         [Description("Text content to write to the file.")] string content,
         [Description("If true, overwrite the file if it already exists. Default false.")] bool overwrite = false,
         [Description("If true, create missing parent directories automatically. Default true.")] bool createDirectories = true,
+        [Description("If true and overwrite=true, create a timestamped backup before overwriting. Default true when overwrite=true.")] bool backupBeforeOverwrite = true,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -614,9 +635,68 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["filePath"] = filePath,
             ["content"] = content,
             ["overwrite"] = overwrite,
-            ["createDirectories"] = createDirectories
+            ["createDirectories"] = createDirectories,
+            ["backupBeforeOverwrite"] = backupBeforeOverwrite
         };
         var result = await pipeClient.SendAsync("file_write_text", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "file_inspect", ReadOnly = true),
+     Description("Inspects a file or folder: returns existence, type, size, timestamps, attributes and optional SHA-256 hash. Read-only — does not modify any files.")]
+    public async Task<string> FileInspect(
+        [Description("Absolute local path to the file or folder to inspect.")] string filePath,
+        [Description("If true, compute and return the SHA-256 hash of the file. Skipped for files over 100 MB. Default false.")] bool includeHash = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["filePath"] = filePath,
+            ["includeHash"] = includeHash
+        };
+        var result = await pipeClient.SendAsync("file_inspect", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "file_copy"),
+     Description("Copies a file to a destination path. Requires user approval. Will not overwrite an existing destination unless overwrite=true.")]
+    public async Task<string> FileCopy(
+        [Description("Absolute local path of the source file.")] string sourcePath,
+        [Description("Absolute local path for the copy destination.")] string destinationPath,
+        [Description("If true, overwrite the destination if it already exists. Default false.")] bool overwrite = false,
+        [Description("If true, create missing destination directories automatically. Default true.")] bool createDirectories = true,
+        [Description("If true, preserve source file creation/modification timestamps on the copy. Default true.")] bool preserveTimestamps = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["sourcePath"] = sourcePath,
+            ["destinationPath"] = destinationPath,
+            ["overwrite"] = overwrite,
+            ["createDirectories"] = createDirectories,
+            ["preserveTimestamps"] = preserveTimestamps
+        };
+        var result = await pipeClient.SendAsync("file_copy", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "file_backup"),
+     Description("Creates a timestamped backup copy of a file. Requires user approval. Backup name format: <stem>_<suffix>_<yyyy-MM-dd_HHmmss><ext>. Default suffix is 'backup'.")]
+    public async Task<string> FileBackup(
+        [Description("Absolute local path of the file to back up.")] string filePath,
+        [Description("Directory to write the backup into. Defaults to the same directory as the source file.")] string backupDirectory = "",
+        [Description("Suffix to include in the backup file name, e.g. 'pre-import'. Default 'backup'.")] string suffix = "backup",
+        [Description("If true, preserve source file creation/modification timestamps on the backup. Default true.")] bool preserveTimestamps = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["filePath"] = filePath,
+            ["backupDirectory"] = backupDirectory,
+            ["suffix"] = suffix,
+            ["preserveTimestamps"] = preserveTimestamps
+        };
+        var result = await pipeClient.SendAsync("file_backup", args, cancellationToken);
         return FormatResult(result);
     }
 
@@ -681,12 +761,13 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "excel_update_cells"),
-     Description("Updates specific cells in an existing Excel file without changing workbook formatting. Requires user approval. Creates a timestamped backup by default.")]
+     Description("Updates specific cells in an existing Excel file without changing workbook formatting. Requires user approval. Creates a timestamped backup by default. Set dryRun=true to preview changes without saving.")]
     public async Task<string> ExcelUpdateCells(
         [Description("Absolute path to the .xlsx file.")] string filePath,
         [Description("Exact worksheet name.")] string worksheetName,
         [Description("Array of cell updates: [{\"cell\": \"B12\", \"value\": \"New text\"}, ...]")] object[] updates,
         [Description("If true, create a timestamped backup copy before saving. Default true.")] bool backupBeforeSave = true,
+        [Description("If true, preview changes without saving or creating a backup. Default false.")] bool dryRun = false,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -694,14 +775,15 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["filePath"] = filePath,
             ["worksheetName"] = worksheetName,
             ["updates"] = updates,
-            ["backupBeforeSave"] = backupBeforeSave
+            ["backupBeforeSave"] = backupBeforeSave,
+            ["dryRun"] = dryRun
         };
         var result = await pipeClient.SendAsync("excel_update_cells", args, cancellationToken);
         return FormatResult(result);
     }
 
     [McpServerTool(Name = "excel_insert_rows"),
-     Description("Inserts rows at a given row number in an Excel worksheet, copying styles from a template row. Row values are keyed by column letter (A, B, C…). Requires user approval.")]
+     Description("Inserts rows at a given row number in an Excel worksheet, copying styles from a template row. Row values are keyed by column letter (A, B, C…). Requires user approval. Set dryRun=true to preview without modifying.")]
     public async Task<string> ExcelInsertRows(
         [Description("Absolute path to the .xlsx file.")] string filePath,
         [Description("Exact worksheet name.")] string worksheetName,
@@ -709,6 +791,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("1-based row number to copy styles from. Defaults to the row above insertAtRow.")] int copyStyleFromRow = 0,
         [Description("Rows to insert as objects keyed by column letter: [{\"A\": \"val1\", \"B\": \"val2\"}, ...]")] object[]? rows = null,
         [Description("If true, create a timestamped backup before saving. Default true.")] bool backupBeforeSave = true,
+        [Description("If true, preview the insert without saving or creating a backup. Default false.")] bool dryRun = false,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -718,14 +801,15 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["insertAtRow"] = insertAtRow,
             ["copyStyleFromRow"] = copyStyleFromRow > 0 ? copyStyleFromRow : (insertAtRow > 1 ? insertAtRow - 1 : 1),
             ["rows"] = rows ?? [],
-            ["backupBeforeSave"] = backupBeforeSave
+            ["backupBeforeSave"] = backupBeforeSave,
+            ["dryRun"] = dryRun
         };
         var result = await pipeClient.SendAsync("excel_insert_rows", args, cancellationToken);
         return FormatResult(result);
     }
 
     [McpServerTool(Name = "excel_append_table_rows"),
-     Description("Appends rows after the last data row in an Excel worksheet, matching values to columns by header name. Optionally targets a named Excel table. Requires user approval.")]
+     Description("Appends rows after the last data row in an Excel worksheet, matching values to columns by header name. Optionally targets a named Excel table. Requires user approval. Set dryRun=true to preview without modifying.")]
     public async Task<string> ExcelAppendTableRows(
         [Description("Absolute path to the .xlsx file.")] string filePath,
         [Description("Exact worksheet name.")] string worksheetName,
@@ -733,6 +817,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("If true, match row keys to column headers by name (case-insensitive). Default true.")] bool matchHeaders = true,
         [Description("Rows to append as objects keyed by header name: [{\"Dokumendi nr\": \"1626_EL\", \"Nimetus\": \"Plaan\"}, ...]")] object[]? rows = null,
         [Description("If true, create a timestamped backup before saving. Default true.")] bool backupBeforeSave = true,
+        [Description("If true, preview the append without saving or creating a backup. Default false.")] bool dryRun = false,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -742,7 +827,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["tableName"] = tableName,
             ["matchHeaders"] = matchHeaders,
             ["rows"] = rows ?? [],
-            ["backupBeforeSave"] = backupBeforeSave
+            ["backupBeforeSave"] = backupBeforeSave,
+            ["dryRun"] = dryRun
         };
         var result = await pipeClient.SendAsync("excel_append_table_rows", args, cancellationToken);
         return FormatResult(result);
@@ -2880,6 +2966,102 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["returnIssueReport"] = returnIssueReport
         };
         var result = await pipeClient.SendAsync("revit_run_parameter_qa_rule_set", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    // ── Configuration / State Tools ───────────────────────────────────────────
+
+    [McpServerTool(Name = "config_read", ReadOnly = true),
+     Description("Reads a JSON configuration file for a given scope (company, user, project, tool-state). Read-only. Returns the config as a JSON object.")]
+    public async Task<string> ConfigRead(
+        [Description("Configuration scope: company | user | project | tool-state")] string scope,
+        [Description("Project root directory — required when scope=project.")] string projectRoot = "",
+        [Description("If true and the file does not exist, create it with an empty object {}. Default false.")] bool createIfMissing = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["scope"] = scope,
+            ["projectRoot"] = projectRoot,
+            ["createIfMissing"] = createIfMissing
+        };
+        var result = await pipeClient.SendAsync("config_read", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "config_write"),
+     Description("Replaces the entire content of a JSON config file for a given scope. Requires user approval. Creates a timestamped backup by default.")]
+    public async Task<string> ConfigWrite(
+        [Description("Configuration scope: company | user | project | tool-state")] string scope,
+        [Description("Complete JSON object to write (replaces all existing content).")] string jsonContent,
+        [Description("Project root directory — required when scope=project.")] string projectRoot = "",
+        [Description("If true, create a timestamped backup before overwriting. Default true.")] bool backupBeforeOverwrite = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["scope"] = scope,
+            ["jsonContent"] = jsonContent,
+            ["projectRoot"] = projectRoot,
+            ["backupBeforeOverwrite"] = backupBeforeOverwrite
+        };
+        var result = await pipeClient.SendAsync("config_write", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "config_update"),
+     Description("Updates specific properties in a JSON config file using dot-path keys (e.g. '$.excel.defaultBackupBeforeSave'). Requires user approval. Missing intermediate objects are created automatically.")]
+    public async Task<string> ConfigUpdate(
+        [Description("Configuration scope: company | user | project | tool-state")] string scope,
+        [Description("Object mapping dot-path keys to new values, e.g. {\"$.excel.defaultBackupBeforeSave\": \"true\"}")] object updates,
+        [Description("Project root directory — required when scope=project.")] string projectRoot = "",
+        [Description("If true, create a timestamped backup before saving. Default true.")] bool backupBeforeOverwrite = true,
+        [Description("If true, create the file if it does not yet exist. Default false.")] bool createIfMissing = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["scope"] = scope,
+            ["updates"] = updates,
+            ["projectRoot"] = projectRoot,
+            ["backupBeforeOverwrite"] = backupBeforeOverwrite,
+            ["createIfMissing"] = createIfMissing
+        };
+        var result = await pipeClient.SendAsync("config_update", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "config_get_project_config", ReadOnly = true),
+     Description("Reads the project-scoped MCP config file (.rktools/mcp.project.config.json) inside the specified project root. Read-only.")]
+    public async Task<string> ConfigGetProjectConfig(
+        [Description("Project root directory (folder that contains the .rktools subfolder).")] string projectRoot,
+        [Description("If true and the file does not exist, create it with an empty object {}. Default false.")] bool createIfMissing = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["projectRoot"] = projectRoot,
+            ["createIfMissing"] = createIfMissing
+        };
+        var result = await pipeClient.SendAsync("config_get_project_config", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "config_set_project_config"),
+     Description("Writes or replaces the project-scoped MCP config file (.rktools/mcp.project.config.json). Requires user approval. Creates a timestamped backup by default.")]
+    public async Task<string> ConfigSetProjectConfig(
+        [Description("Project root directory (folder that contains or will contain the .rktools subfolder).")] string projectRoot,
+        [Description("Complete JSON object to write (replaces all existing content).")] string jsonContent,
+        [Description("If true, create a timestamped backup before overwriting. Default true.")] bool backupBeforeOverwrite = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["projectRoot"] = projectRoot,
+            ["jsonContent"] = jsonContent,
+            ["backupBeforeOverwrite"] = backupBeforeOverwrite
+        };
+        var result = await pipeClient.SendAsync("config_set_project_config", args, cancellationToken);
         return FormatResult(result);
     }
 }

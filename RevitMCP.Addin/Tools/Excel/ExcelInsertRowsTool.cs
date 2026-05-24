@@ -12,7 +12,7 @@ namespace RevitMCP.Addin.Tools.Excel;
 public class ExcelInsertRowsTool : IRevitMcpTool
 {
     public string Name => "excel_insert_rows";
-    public string Description => "Inserts rows into a worksheet at a given row number, copying styles from a template row. Row values keyed by column letter (A, B, C…). Requires approval.";
+    public string Description => "Inserts rows into a worksheet at a given row number, copying styles from a template row. Row values keyed by column letter (A, B, C…). Requires approval. Set dryRun=true to preview without modifying.";
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Excel;
 
@@ -25,6 +25,7 @@ public class ExcelInsertRowsTool : IRevitMcpTool
         var worksheetName = ToolArguments.GetString(request.Arguments, "worksheetName");
         var insertAtRow = ToolArguments.GetInt(request.Arguments, "insertAtRow");
         var backup = ToolArguments.GetBool(request.Arguments, "backupBeforeSave", true);
+        var dryRun = ToolArguments.GetBool(request.Arguments, "dryRun", false);
 
         if (string.IsNullOrWhiteSpace(filePath))
             return Task.FromResult(Fail(request, "filePath is required."));
@@ -46,7 +47,7 @@ public class ExcelInsertRowsTool : IRevitMcpTool
             return Task.FromResult(Fail(request, "No rows provided in 'rows' array."));
 
         var (result, error) = ExcelWorkbookModifier.InsertRows(
-            filePath, worksheetName, insertAtRow, copyStyleFromRow, rows, backup);
+            filePath, worksheetName, insertAtRow, copyStyleFromRow, rows, backup, dryRun);
         sw.Stop();
 
         if (error != null)
@@ -62,7 +63,9 @@ public class ExcelInsertRowsTool : IRevitMcpTool
         {
             RequestId = request.RequestId,
             Success = true,
-            Message = $"Inserted {rows.Count} row(s) at row {insertAtRow} in '{worksheetName}'.",
+            Message = dryRun
+                ? $"[DRY RUN] Would insert {rows.Count} row(s) at row {insertAtRow} in '{worksheetName}'."
+                : $"Inserted {rows.Count} row(s) at row {insertAtRow} in '{worksheetName}'.",
             Data = result,
             DurationMs = sw.ElapsedMilliseconds
         });

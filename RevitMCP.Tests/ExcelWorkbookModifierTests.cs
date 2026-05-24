@@ -311,4 +311,150 @@ public class ExcelWorkbookModifierTests
             if (File.Exists(path)) File.Delete(path);
         }
     }
+
+    // ── DryRun: UpdateCells ────────────────────────────────────────────────────
+
+    [Fact]
+    public void UpdateCells_DryRun_DoesNotModifyFile()
+    {
+        var path = CreateTempWorkbook("Data", new string[,]
+        {
+            { "Name", "Value" },
+            { "Item", "Original" }
+        });
+        try
+        {
+            var updates = new List<(string, string?)> { ("B2", "Changed") };
+            var (result, error) = ExcelWorkbookModifier.UpdateCells(
+                path, "Data", updates, backupBeforeSave: false, dryRun: true);
+
+            Assert.Null(error);
+            Assert.NotNull(result);
+
+            // File must be unchanged
+            using var wb = new XLWorkbook(path);
+            Assert.Equal("Original", wb.Worksheet("Data").Cell("B2").GetString());
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    [Fact]
+    public void UpdateCells_DryRun_ReturnsPreviewData()
+    {
+        var path = CreateTempWorkbook("Sheet1", new string[,] { { "A1" }, { "B1" } });
+        try
+        {
+            var updates = new List<(string, string?)> { ("A1", "NewA"), ("A2", "NewB") };
+            var (result, _) = ExcelWorkbookModifier.UpdateCells(
+                path, "Sheet1", updates, backupBeforeSave: false, dryRun: true);
+
+            Assert.NotNull(result);
+            // dryRun flag must be present in result
+            var json = System.Text.Json.JsonSerializer.Serialize(result);
+            Assert.Contains("dryRun", json);
+            Assert.Contains("plannedUpdateCount", json);
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    [Fact]
+    public void UpdateCells_DryRun_DoesNotCreateBackup()
+    {
+        var path = CreateTempWorkbook("S", new string[,] { { "X" } });
+        try
+        {
+            var dir  = Path.GetDirectoryName(path)!;
+            var stem = Path.GetFileNameWithoutExtension(path);
+
+            var updates = new List<(string, string?)> { ("A1", "Y") };
+            ExcelWorkbookModifier.UpdateCells(path, "S", updates, backupBeforeSave: true, dryRun: true);
+
+            var backups = Directory.GetFiles(dir, $"{stem}_backup_*.xlsx");
+            Assert.Empty(backups);
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    // ── DryRun: InsertRows ────────────────────────────────────────────────────
+
+    [Fact]
+    public void InsertRows_DryRun_DoesNotModifyFile()
+    {
+        var path = CreateTempWorkbook("Sheet1", new string[,]
+        {
+            { "H1", "H2" },
+            { "R1C1", "R1C2" }
+        });
+        try
+        {
+            var rows = new List<Dictionary<string, string>>
+            {
+                new() { ["A"] = "new", ["B"] = "row" }
+            };
+            var (result, error) = ExcelWorkbookModifier.InsertRows(
+                path, "Sheet1", insertAtRow: 2, copyStyleFromRow: 2, rows, backupBeforeSave: false, dryRun: true);
+
+            Assert.Null(error);
+
+            using var wb = new XLWorkbook(path);
+            // Should still have only 2 rows of data
+            var ws = wb.Worksheet("Sheet1");
+            Assert.Equal("R1C1", ws.Cell("A2").GetString()); // original row 2 unchanged
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    // ── DryRun: AppendTableRows ───────────────────────────────────────────────
+
+    [Fact]
+    public void AppendTableRows_DryRun_DoesNotModifyFile()
+    {
+        var path = CreateTempWorkbook("Data", new string[,]
+        {
+            { "Name", "Value" },
+            { "Row1", "100" }
+        });
+        try
+        {
+            var rows = new List<Dictionary<string, string>>
+            {
+                new() { ["Name"] = "Row2", ["Value"] = "200" }
+            };
+            var (result, error) = ExcelWorkbookModifier.AppendTableRows(
+                path, "Data", tableName: "", matchHeaders: true, rows, backupBeforeSave: false, dryRun: true);
+
+            Assert.Null(error);
+
+            using var wb = new XLWorkbook(path);
+            var ws = wb.Worksheet("Data");
+            // Row 3 should be empty
+            Assert.Equal(string.Empty, ws.Cell("A3").GetString());
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    [Fact]
+    public void AppendTableRows_DryRun_ReturnsPlannedRowInfo()
+    {
+        var path = CreateTempWorkbook("Data", new string[,]
+        {
+            { "Name", "Value" },
+            { "Row1", "100" }
+        });
+        try
+        {
+            var rows = new List<Dictionary<string, string>>
+            {
+                new() { ["Name"] = "Row2", ["Value"] = "200" }
+            };
+            var (result, error) = ExcelWorkbookModifier.AppendTableRows(
+                path, "Data", tableName: "", matchHeaders: true, rows, backupBeforeSave: false, dryRun: true);
+
+            Assert.Null(error);
+            var json = System.Text.Json.JsonSerializer.Serialize(result);
+            Assert.Contains("plannedStartRow", json);
+            Assert.Contains("plannedRowCount", json);
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
 }

@@ -1717,6 +1717,103 @@ This section enumerates every MCP tool exposed by `RevitMCP.Bridge` and describe
 |------|------|------------|--------------|-----------------|----------|------|-------|
 | Docs | `revit_place_views_on_sheets` | RA | "Place those previewed views on those sheets." | Approval flow → views placed | Required (DE bypasses) | Single Undo | Run preview first |
 | Docs | `revit_duplicate_sheets` | RA | "Duplicate sheets ['A-101'] with suffix '_COPY'." | Approval flow → new sheets created | Required (DE bypasses) | Single Undo | — |
+
+---
+
+## Phase 1 New Tool Smoke Tests
+
+These tests cover tools added in the Phase 1 finalization pass. Run them against a real Revit model after deployment.
+
+### S1 — `revit_inspect_selected_elements`
+
+**Manual steps:**
+
+1. Open a test Revit model and load the add-in.
+2. Select one fire alarm device in the model.
+3. Run `revit_inspect_selected_elements` with default arguments.
+4. Confirm `category`, `familyName`, `typeName`, `level` are correct.
+5. Confirm `location.kind` is `"Point"` and `location.pointMm.x/y/z` are non-zero millimeter values (not internal feet values — a typical room coordinate should be in the thousands of mm, not tens of feet).
+6. Confirm `boundingBoxMm.min`, `max`, `size`, `center` are all present and `size` values are small (device footprint ~60–200 mm).
+7. Select a cable tray or conduit.
+8. Run again. Confirm `location.kind` is `"Curve"` and `curveStartMm`, `curveEndMm`, `lengthMm` are present.
+9. Select 60+ elements. Confirm response includes `warnings` indicating the result was limited and `totalSelected` vs `returned` counts differ.
+10. Select nothing. Confirm the tool returns a clear message like `"No elements selected."`.
+
+**Pass criteria:**
+- Coordinates are in mm (point coordinates > 1 000 for typical project grid).
+- `boundingBoxMm.size` values are non-zero for geometry-bearing elements.
+- `geometrySummary.solidCount >= 1` for most family instances.
+- No exception or null reference errors for system families, generic models, or annotation elements.
+
+---
+
+### S2 — `file_inspect`
+
+1. Run `file_inspect` on an existing `.xlsx` file in the project folder.
+2. Confirm `exists=true`, `type="file"`, `extension=".xlsx"`, `sizeBytes > 0`, `createdAtUtc` and `modifiedAtUtc` are valid ISO timestamps.
+3. Run with `includeHash=true`. Confirm `hashSha256` is a 64-character hex string.
+4. Run on a folder path. Confirm `type="folder"` and `sizeBytes` is null/absent.
+5. Run on a path that does not exist. Confirm `exists=false` and `success=true` (not an error).
+6. Run on a path outside the allowed roots. Confirm the tool returns an error and does not reveal file system info.
+
+---
+
+### S3 — `file_copy`
+
+1. Run `file_copy` from an existing source to a new destination in the allowed write root.
+2. Confirm the destination file exists and its content matches the source.
+3. Run again without `overwrite=true`. Confirm the tool returns an error (destination already exists).
+4. Run again with `overwrite=true`. Confirm success and `overwritten=true` in the response.
+5. Run with `createDirectories=false` and a destination whose parent folder does not exist. Confirm the tool returns an error without creating the folder.
+
+---
+
+### S4 — `file_backup`
+
+1. Run `file_backup` on an existing file with no `backupDirectory` specified (same-folder backup).
+2. Confirm a new file exists in the same folder with the pattern `{stem}_backup_{yyyy-MM-dd_HHmmss}.{ext}`.
+3. Confirm the backup content matches the original.
+4. Run with a specific `backupDirectory`. Confirm the backup is created in that folder.
+5. Run on a file that does not exist. Confirm a clear error is returned.
+
+---
+
+### S5 — `file_write_text` with `backupBeforeOverwrite`
+
+1. Write a text file using `file_write_text` with `overwrite=false` and confirm success.
+2. Write again with `overwrite=true` and `backupBeforeOverwrite=true` (default).
+3. Confirm `backupPath` is present in the response and the backup file exists.
+4. Confirm the original file now has the new content and the backup has the original content.
+5. Write again with `backupBeforeOverwrite=false`. Confirm no backup file is created this time.
+
+---
+
+### S6 — Config tools
+
+1. Run `config_read` with `scope="user"` and `createIfMissing=false`. If the file doesn't exist, confirm a clear "not found" error.
+2. Run again with `createIfMissing=true`. Confirm the file is created with an empty `{}` object.
+3. Run `config_update` with `scope="user"` and `updates={"testKey":"testValue"}`. Confirm success.
+4. Run `config_read` again. Confirm `testKey` is present in the returned JSON.
+5. Run `config_update` with a dot-path key: `{"$.nested.setting":"true"}`. Confirm `nested.setting` is present after reading back.
+6. Run `config_set_project_config` with a `projectRoot` pointing to a test folder. Confirm the `.rktools\mcp.project.config.json` file is created.
+7. Run `config_get_project_config` for the same root. Confirm the saved values are returned.
+8. Run `config_write` with invalid JSON. Confirm the tool returns an error and the existing config file is unchanged.
+
+---
+
+### S7 — Excel dry-run
+
+1. Open an existing `.xlsx` file. Run `excel_update_cells` with `dryRun=true`. Confirm:
+   - Response contains `dryRun=true`.
+   - `plannedUpdateCount` matches the number of cells provided.
+   - `updates` array contains `oldValue` (current cell content) and `newValue`.
+   - File modified timestamp is unchanged after the call.
+2. Run `excel_insert_rows` with `dryRun=true`. Confirm:
+   - Response contains `dryRun=true`, `affectedRange`, `plannedRowCount`.
+   - File is not modified.
+3. Run `excel_append_table_rows` with `dryRun=true`. Confirm:
+   - Response contains `plannedStartRow`, `plannedRowCount`.
+   - File is not modified.
 | Docs | `revit_create_sheets_from_table` | RA | "Create sheets from this 3-row table." | Approval summary shows row count → flow → sheets created | Required (DE bypasses) | Single Undo | Row count must match input rows |
 | Docs | `revit_duplicate_views` | RA | "Duplicate views [12345] with suffix '_COPY'." | Approval flow → new views created | Required (DE bypasses) | Single Undo | — |
 | Docs | `revit_apply_view_template` | RA | "Apply view template id 67890 to FloorPlans matching 'L1_*'." | Approval summary lists template name + filter + matched view count → flow → applied | Required (DE bypasses) | Single Undo | Summary uses `viewTemplateId` + filters |

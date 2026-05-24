@@ -23,11 +23,12 @@ public class FileWriteTextTool : IRevitMcpTool
         var content = ToolArguments.GetString(request.Arguments, "content");
         var overwrite = ToolArguments.GetBool(request.Arguments, "overwrite", false);
         var createDirs = ToolArguments.GetBool(request.Arguments, "createDirectories", true);
+        var backupBeforeOverwrite = ToolArguments.GetBool(request.Arguments, "backupBeforeOverwrite", overwrite);
 
         if (string.IsNullOrWhiteSpace(filePath))
             return Task.FromResult(Fail(request, "filePath is required."));
 
-        var result = _service.WriteText(filePath, content, overwrite, createDirs);
+        var result = _service.WriteText(filePath, content, overwrite, createDirs, backupBeforeOverwrite);
         sw.Stop();
 
         if (!result.Success)
@@ -51,7 +52,8 @@ public class FileWriteTextTool : IRevitMcpTool
                 filePath = result.FilePath,
                 sizeBytes = result.SizeBytes,
                 wasOverwritten = result.WasOverwritten,
-                createdNew = !result.WasOverwritten
+                createdNew = !result.WasOverwritten,
+                backupPath = result.BackupPath
             },
             DurationMs = sw.ElapsedMilliseconds
         });
