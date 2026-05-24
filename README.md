@@ -1,6 +1,6 @@
 # EULE MCP — Revit MCP Connector
 
-A local [Model Context Protocol](https://modelcontextprotocol.io) connector that lets **Claude Code** and **Codex** interrogate and work with a live **Autodesk Revit 2026** model in real time.
+Ask your AI assistant about a live **Autodesk Revit 2026** model in plain English — count elements, inspect circuits, run QA checks, generate Excel reports — without writing scripts or code. EULE MCP is a local [Model Context Protocol](https://modelcontextprotocol.io) connector that gives Claude Code, Codex, and Gemini CLI direct read/write access to an open Revit model through 161 tools across twelve functional areas.
 
 **161 tools** across twelve functional areas:
 - **General** (25 tools) — element discovery, parameter QA, grouping, Excel exports, selection, write operations, config-driven parameter QA rule sets, and detailed geometry inspection of selected elements
@@ -18,6 +18,28 @@ A local [Model Context Protocol](https://modelcontextprotocol.io) connector that
 
 ---
 
+## You can ask things like
+
+```
+How many fire alarm devices are in the model?
+List all electrical circuits on panel "DB-L1".
+Detect hard clashes between Electrical Equipment and Mechanical Equipment.
+Run the ELENEA Basic QA rule set and export the issue report to Excel.
+Scan delivery folder C:\Projects\1626\Export for temp files and old revisions.
+```
+
+→ [See the full list of example prompts](#example-prompts)
+
+---
+
+## Requirements
+
+- Revit 2026
+- .NET 8 SDK
+- Claude Code CLI (`claude`), Codex CLI (`codex`), **or** Gemini CLI (`gemini`)
+
+---
+
 ## Supported Clients
 
 | Client | Status | Setup |
@@ -31,34 +53,102 @@ All clients connect through the same `RevitMCP.Bridge.exe`. The bridge is starte
 
 ---
 
-## Architecture
+## Getting Started
 
-```
-Claude Code / Codex / Gemini CLI
-    │  MCP JSON-RPC 2.0 over STDIO
-    ▼
-RevitMCP.Bridge.exe          ← .NET 8 console app
-    │  Named Pipe (RKTools.RevitMCP.2026)
-    ▼
-RevitMCP.Addin.dll           ← Revit 2026 add-in
-    │  ExternalEvent (Revit API thread)
-    ▼
-Revit 2026 model             ← live read-only access
+### Step 1 — Build
+
+```bash
+# Release
+dotnet build RevitMCP.slnx -c Release
+
+# Debug (faster — recommended during development)
+dotnet build RevitMCP.Addin/RevitMCP.Addin.csproj -c Debug
 ```
 
-All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no threading violations, no crashes.
+`RevitMCP.Addin.dll` is a **single self-contained DLL** — all dependencies (MaterialDesignThemes, Newtonsoft.Json, etc.) are embedded via Costura.Fody, so no extra files need to be deployed.
+
+### Step 2 — Load the Add-in into Revit
+
+#### Option A — ricaun AppLoader (recommended for development)
+
+Costura.Fody embeds all dependencies, so the addin is a true single-DLL plugin compatible with [ricaun.Revit.AppLoader](https://github.com/ricaun-io/ricaun.Revit.AppLoader) and similar hot-reload tools.
+
+Point AppLoader at:
+```
+RevitMCP.Addin\bin\Debug\net8.0-windows\RevitMCP.Addin.dll
+```
+
+AppLoader shadow-copies the DLL so the file stays writable — rebuild while Revit is running, hit Reload, done. No Revit restart needed.
+
+#### Option B — `.addin` manifest (permanent install)
+
+Run `RevitMCP.Config\Install\Install-RevitMCP-Addin.bat`
+
+This creates a manifest in `%ProgramData%\Autodesk\Revit\Addins\2026\` that points to the Release build output. Revit loads the plugin automatically on startup.
+
+> **Note:** Don't use both options at the same time — Revit will load the plugin twice.
+
+### Step 3 — Register with your AI client
+
+**Claude Code**
+
+Run `RevitMCP.Config\Install\Install-Claude-MCP.bat`
+
+This registers `RevitMCP.Bridge.exe` as a user-scoped MCP server named `revit-mcp` with `--client "Claude Code"` so logs show the correct client name.
+
+**Codex**
+
+Run `RevitMCP.Config\Install\Install-Codex-MCP.bat`
+
+This generates `RevitMCP.Config\Install\codex-mcp-snippet.toml` with the absolute bridge path already filled in. Paste its contents into `%USERPROFILE%\.codex\config.toml` and restart Codex.
+
+**Gemini CLI**
+
+Run `RevitMCP.Config\Install\Install-GeminiCLI-MCP.bat`
+
+This registers `RevitMCP.Bridge.exe` in `%USERPROFILE%\.gemini\settings.json` with `--client GeminiCLI`. Gemini CLI reads this file automatically on startup — no manual config editing required.
+
+### Step 4 — Connect and start asking
+
+1. Open Revit 2026 and load a model
+2. Load the addin (via AppLoader or the `.addin` manifest)
+3. On the **RK Tools** ribbon tab, click **MCP Connector**
+4. Click **Start Connector** in the window
+5. Ask anything about your model from Claude Code, Codex, or Gemini CLI:
+
+```
+How many walls are in this model?
+List all floor plan views on sheets.
+What parameters does element 12345 have?
+Group all fire alarm devices by the ELENEA_Nimetus parameter.
+```
 
 ---
 
-## Projects
+## MCP Window
 
-| Project | Target | Role |
-|---------|--------|------|
-| `RevitMCP.Core` | net8.0 | Shared DTOs — `McpToolRequest`, `McpToolResult`, enums, `Safety/` guard classes |
-| `RevitMCP.Addin` | net8.0-windows | Revit add-in DLL — pipe server, tool registry, WPF UI |
-| `RevitMCP.Bridge` | net8.0 | STDIO MCP server — forwards tool calls over named pipe |
-| `RevitMCP.Config` | — | Install scripts and default configs |
-| `RevitMCP.Tests` | net8.0 | xUnit unit tests for pure-logic helpers (no Revit runtime required) |
+The **MCP Connector** window has three tabs:
+
+| Tab | Contents |
+|-----|----------|
+| **Status** | Running/Stopped chip, pipe name, active model, active view, worksharing flag, selected element count, Start/Stop/Panic controls |
+| **Pending** | Queue of tool calls awaiting approval — Approve / Reject per request. Auto-switches to this tab when a new approval arrives |
+| **Activity** | Live DataGrid of tool call history — Time, Tool, Duration (ms), Status (colour-coded); row tooltip shows the result message. "Open Log Folder" and "Clear" buttons at the bottom |
+
+### Approval Required Toggle
+
+The **Approval Required** button in the title bar controls whether write tools (`RequiresApproval`) must be confirmed in the Pending tab before executing.
+
+- **Enabled** (default) — all write operations queue for manual approval inside Revit
+- **Disabled** (Direct Edit mode) — write operations execute immediately without queuing; a confirmation dialog warns before enabling this mode
+
+> **Safety note:** Direct Edit mode is intended for development and admin testing only. In normal company use, keep Approval Required enabled so every write action appears in the Pending tab before execution. Direct Edit always starts disabled when Revit loads. A confirmation dialog must be acknowledged before it can be enabled.
+
+---
+
+## Logging
+
+Activity is logged to `%AppData%\RKTools\RevitMCP\Logs\{date}.jsonl` — one JSON line per tool call. The **Activity** tab in the MCP window shows a live view; click **Open Log Folder** to browse the raw files.
 
 ---
 
@@ -141,6 +231,8 @@ Config-driven rule sets stored in `%AppData%\RKTools\RevitMCP\parameter-qa-rules
 
 ### Electrical Circuit Tools
 
+These tools cover the full electrical circuit lifecycle in a live Revit model — from reading panel data and checking QA to creating circuits, applying numbering, and setting load names. All write operations require approval unless Direct Edit mode is enabled.
+
 | Tool | Description |
 |------|-------------|
 | `revit_get_electrical_circuits` | Lists electrical circuits with optional filters by panel name, circuit number, and system type (PowerCircuit / Data / FireAlarm / etc.) |
@@ -205,6 +297,8 @@ Config-driven rule sets stored in `%AppData%\RKTools\RevitMCP\parameter-qa-rules
 | `revit_get_matching_cable_resistance_profile` | Finds the best-matching cable resistance profile for a given cable type name |
 
 ### Documentation / View and Sheet Tools
+
+Browse and manage views, sheets, viewports, and revisions in your open model. All write tools have a matching read-only preview step — check what would change before committing anything.
 
 #### Discovery
 
@@ -277,6 +371,8 @@ Config-driven rule sets stored in `%AppData%\RKTools\RevitMCP\parameter-qa-rules
 
 ### Coordination / Clash Detection Tools
 
+Run clash detection directly from your AI session without leaving the chat. Define rules as reusable JSON presets, step through results one clash at a time, and export findings to Excel — all against the live model.
+
 > **Note:** Hard clash detection uses bounding-box overlap as a fast candidate pre-filter only. Reported hard clashes are confirmed by solid-geometry boolean intersection — elements without extractable solids (e.g. some fire alarm devices, imported DWG geometry) are skipped by default (`Confidence = High`). Pass `allowBoundingBoxFallback = true` to also return unconfirmed bounding-box overlaps (`Confidence = Low`). Clearance detection uses expanded bounding-box approximation — distances are conservative estimates, not true surface-to-surface. Linked models must be loaded to be clashable.
 
 #### Discovery
@@ -329,7 +425,7 @@ Config-driven rule sets stored in `%AppData%\RKTools\RevitMCP\parameter-qa-rules
 
 ### Skills Tools
 
-Skills are named multi-step QA workflows stored as `.skill.json` files. Built-in skills ship with the addin; project overrides let you enable/disable tasks or change settings per job.
+Skills are named multi-step QA workflows stored as `.skill.json` files. Built-in skills ship with the addin; project overrides let you enable/disable tasks or change settings per job. Use `revit_preview_skill_run` to inspect what a skill will do before running it.
 
 | Tool | Description |
 |------|-------------|
@@ -396,7 +492,7 @@ See [docs/standards-lookup.md](docs/standards-lookup.md) for setup and usage.
 
 ### File System Tools
 
-General-purpose file utilities. Access is controlled by `FileAccessPolicy` — a JSON config file at `%ProgramData%\RKTools\MCP\Config\FileAccessPolicy.json`. If the config is absent, permissive defaults apply (user home, `C:\Projects`, temp).
+General-purpose file utilities for reading, writing, copying, and backing up files on disk. Access is restricted by the `FileAccessPolicy` config — if absent, permissive defaults apply (user home, `C:\Projects`, temp).
 
 | Tool | Description |
 |------|-------------|
@@ -441,7 +537,7 @@ Read and update JSON config files at four scopes without requiring a running Rev
 
 ### Excel Tools
 
-Standalone Excel workbook tools — operate directly on `.xlsx`/`.xlsm` files on disk. No open Revit document required; compatible with any Excel file on the allowed-write paths.
+Operate on `.xlsx` and `.xlsm` files directly on disk — no open Revit document required, compatible with any Excel file on the allowed-write paths. All write tools support a `dryRun` preview mode and go through the approval queue.
 
 | Tool | Description |
 |------|-------------|
@@ -638,118 +734,36 @@ revit_create_electrical_circuit(
 
 ---
 
-## MCP Window
+## For Developers
 
-The **MCP Connector** window has three tabs:
-
-| Tab | Contents |
-|-----|----------|
-| **Status** | Running/Stopped chip, pipe name, active model, active view, worksharing flag, selected element count, Start/Stop/Panic controls |
-| **Pending** | Queue of tool calls awaiting approval — Approve / Reject per request. Auto-switches to this tab when a new approval arrives |
-| **Activity** | Live DataGrid of tool call history — Time, Tool, Duration (ms), Status (colour-coded); row tooltip shows the result message. "Open Log Folder" and "Clear" buttons at the bottom |
-
-### Approval Required Toggle
-
-The **Approval Required** button in the title bar controls whether write tools (`RequiresApproval`) must be confirmed in the Pending tab before executing.
-
-- **Enabled** (default) — all write operations queue for manual approval inside Revit
-- **Disabled** (Direct Edit mode) — write operations execute immediately without queuing; a confirmation dialog warns before enabling this mode
-
-> **Safety note:** Direct Edit mode is intended for development and admin testing only. In normal company use, keep Approval Required enabled so every write action appears in the Pending tab before execution. Direct Edit always starts disabled when Revit loads. A confirmation dialog must be acknowledged before it can be enabled.
-
----
-
-## Requirements
-
-- Revit 2026
-- .NET 8 SDK
-- Claude Code CLI (`claude`), Codex CLI (`codex`), **or** Gemini CLI (`gemini`)
-
----
-
-## Build
-
-```bash
-# Release
-dotnet build RevitMCP.slnx -c Release
-
-# Debug (faster — recommended during development)
-dotnet build RevitMCP.Addin/RevitMCP.Addin.csproj -c Debug
-```
-
-`RevitMCP.Addin.dll` is a **single self-contained DLL** — all dependencies (MaterialDesignThemes, Newtonsoft.Json, etc.) are embedded via Costura.Fody, so no extra files need to be deployed.
-
----
-
-## Loading the Add-in
-
-### Option A — ricaun AppLoader (recommended for development)
-
-Costura.Fody embeds all dependencies, so the addin is a true single-DLL plugin compatible with [ricaun.Revit.AppLoader](https://github.com/ricaun-io/ricaun.Revit.AppLoader) and similar hot-reload tools.
-
-Point AppLoader at:
-```
-RevitMCP.Addin\bin\Debug\net8.0-windows\RevitMCP.Addin.dll
-```
-
-AppLoader shadow-copies the DLL so the file stays writable — rebuild while Revit is running, hit Reload, done. No Revit restart needed.
-
-### Option B — `.addin` manifest (permanent install)
-
-Run `RevitMCP.Config\Install\Install-RevitMCP-Addin.bat`
-
-This creates a manifest in `%ProgramData%\Autodesk\Revit\Addins\2026\` that points to the Release build output. Revit loads the plugin automatically on startup.
-
-> **Note:** Don't use both options at the same time — Revit will load the plugin twice.
-
----
-
-## MCP Server Setup
-
-### Claude Code
-
-Run `RevitMCP.Config\Install\Install-Claude-MCP.bat`
-
-This registers `RevitMCP.Bridge.exe` as a user-scoped MCP server named `revit-mcp` with `--client "Claude Code"` so logs show the correct client name.
-
-### Codex
-
-Run `RevitMCP.Config\Install\Install-Codex-MCP.bat`
-
-This generates `RevitMCP.Config\Install\codex-mcp-snippet.toml` with the absolute bridge path already filled in. Paste its contents into `%USERPROFILE%\.codex\config.toml` and restart Codex.
-
-### Gemini CLI
-
-Run `RevitMCP.Config\Install\Install-GeminiCLI-MCP.bat`
-
-This registers `RevitMCP.Bridge.exe` in `%USERPROFILE%\.gemini\settings.json` with `--client GeminiCLI`. Gemini CLI reads this file automatically on startup — no manual config editing required.
-
----
-
-## Usage
-
-1. Open Revit 2026 and load a model
-2. Load the addin (via AppLoader or the `.addin` manifest)
-3. On the **RK Tools** ribbon tab, click **MCP Connector**
-4. Click **Start Connector** in the window
-5. Ask anything about your model from Claude Code or Codex:
+### Architecture
 
 ```
-How many walls are in this model?
-List all floor plan views on sheets.
-What parameters does element 12345 have?
-Group all fire alarm devices by the ELENEA_Nimetus parameter.
+Claude Code / Codex / Gemini CLI
+    │  MCP JSON-RPC 2.0 over STDIO
+    ▼
+RevitMCP.Bridge.exe          ← .NET 8 console app
+    │  Named Pipe (RKTools.RevitMCP.2026)
+    ▼
+RevitMCP.Addin.dll           ← Revit 2026 add-in
+    │  ExternalEvent (Revit API thread)
+    ▼
+Revit 2026 model             ← live read-only access
 ```
 
----
+All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no threading violations, no crashes.
 
-## Logging
+### Projects
 
-Activity is logged to `%AppData%\RKTools\RevitMCP\Logs\{date}.jsonl` — one JSON line per tool call. The **Activity** tab in the MCP window shows a live view; click **Open Log Folder** to browse the raw files.
+| Project | Target | Role |
+|---------|--------|------|
+| `RevitMCP.Core` | net8.0 | Shared DTOs — `McpToolRequest`, `McpToolResult`, enums, `Safety/` guard classes |
+| `RevitMCP.Addin` | net8.0-windows | Revit add-in DLL — pipe server, tool registry, WPF UI |
+| `RevitMCP.Bridge` | net8.0 | STDIO MCP server — forwards tool calls over named pipe |
+| `RevitMCP.Config` | — | Install scripts and default configs |
+| `RevitMCP.Tests` | net8.0 | xUnit unit tests for pure-logic helpers (no Revit runtime required) |
 
----
-
-## Project Structure
+### Project Structure
 
 ```
 EULE_MCP/
