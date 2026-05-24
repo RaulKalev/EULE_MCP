@@ -557,8 +557,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
 
     // ── Issue Reports ─────────────────────────────────────────────────────────
 
-    [McpServerTool(Name = "revit_export_issues_json", ReadOnly = true),
-     Description("Exports an issue report (passed as JSON in reportJson) to a .json file. Returns filePath, totalIssues, runId.")]
+    [McpServerTool(Name = "revit_export_issues_json"),
+     Description("Exports an issue report (passed as JSON in reportJson) to a .json file. Writes a file to disk and requires approval in the Revit add-in. Returns filePath, totalIssues, runId.")]
     public async Task<string> ExportIssuesJson(
         [Description("The full IssueReportDto serialised as a JSON string.")] string reportJson,
         CancellationToken cancellationToken = default)
@@ -568,8 +568,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
-    [McpServerTool(Name = "revit_export_issues_excel", ReadOnly = true),
-     Description("Exports an issue report (passed as JSON in reportJson) to a formatted Excel (.xlsx) file with Summary and Issues sheets. Returns filePath, totalIssues, runId.")]
+    [McpServerTool(Name = "revit_export_issues_excel"),
+     Description("Exports an issue report (passed as JSON in reportJson) to a formatted Excel (.xlsx) file with Summary and Issues sheets. Writes a file to disk and requires approval in the Revit add-in. Returns filePath, totalIssues, runId.")]
     public async Task<string> ExportIssuesExcel(
         [Description("The full IssueReportDto serialised as a JSON string.")] string reportJson,
         CancellationToken cancellationToken = default)
@@ -579,8 +579,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
-    [McpServerTool(Name = "revit_export_issues_markdown", ReadOnly = true),
-     Description("Exports an issue report (passed as JSON in reportJson) to a Markdown (.md) file. Returns filePath, totalIssues, runId.")]
+    [McpServerTool(Name = "revit_export_issues_markdown"),
+     Description("Exports an issue report (passed as JSON in reportJson) to a Markdown (.md) file. Writes a file to disk and requires approval in the Revit add-in. Returns filePath, totalIssues, runId.")]
     public async Task<string> ExportIssuesMarkdown(
         [Description("The full IssueReportDto serialised as a JSON string.")] string reportJson,
         CancellationToken cancellationToken = default)

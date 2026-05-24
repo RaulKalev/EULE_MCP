@@ -259,6 +259,25 @@ public class JsonConfigServiceTests
     }
 
     [Fact]
+    public void Update_PreservesDecimalType()
+    {
+        var path = TempFile("{}");
+        try
+        {
+            var svc = CreateSvc();
+            var (success, _, _, _) = svc.Update(
+                path,
+                new Dictionary<string, JsonNode?> { ["$.cable.resistance"] = JsonValue.Create(12.5) },
+                backupBeforeOverwrite: false);
+
+            Assert.True(success);
+            var (config, _) = svc.Read(path);
+            Assert.Equal(12.5, config!["cable"]!["resistance"]!.GetValue<double>(), precision: 10);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
     public void Update_PreservesNullValue()
     {
         var path = TempFile("{\"key\":\"old\"}");
@@ -347,6 +366,134 @@ public class JsonConfigServiceTests
             Assert.True(config!["excel"]!["defaultBackupBeforeSave"]!.GetValue<bool>());
             Assert.Equal(5000, config["limits"]!["maxRows"]!.GetValue<int>());
             Assert.Equal("RK", config["naming"]!["prefix"]!.GetValue<string>());
+        }
+        finally { File.Delete(path); }
+    }
+
+    // ── Atomic write behavior ─────────────────────────────────────────────────
+
+    [Fact]
+    public void Write_NewFile_CreatesValidJson()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"rkmcp_new_{Guid.NewGuid():N}.json");
+        try
+        {
+            var svc = CreateSvc();
+            var (success, error, _) = svc.Write(path, "{\"key\":\"value\"}", backupBeforeOverwrite: false);
+
+            Assert.True(success);
+            Assert.Null(error);
+            Assert.True(File.Exists(path));
+            var (config, _) = svc.Read(path);
+            Assert.Equal("value", config!["key"]!.GetValue<string>());
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Write_ExistingFile_ReplacesContentAndKeepsJsonValid()
+    {
+        var path = TempFile("{\"original\":1}");
+        try
+        {
+            var svc = CreateSvc();
+            var (success, error, _) = svc.Write(path, "{\"replaced\":true}", backupBeforeOverwrite: false);
+
+            Assert.True(success);
+            Assert.Null(error);
+            var (config, _) = svc.Read(path);
+            Assert.Null(config!["original"]);
+            Assert.True(config["replaced"]!.GetValue<bool>());
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Write_InvalidJson_DoesNotTouchExistingFile()
+    {
+        const string original = "{\"safe\":true}";
+        var path = TempFile(original);
+        try
+        {
+            var svc = CreateSvc();
+            var (success, error, _) = svc.Write(path, "NOT_VALID_JSON{{", backupBeforeOverwrite: false);
+
+            Assert.False(success);
+            Assert.NotNull(error);
+            // Existing file must be untouched
+            Assert.Equal(original, File.ReadAllText(path));
+            Assert.False(File.Exists(path + ".tmp"));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Write_WithBackup_CreatesBackupFile()
+    {
+        var path = TempFile("{\"v\":1}");
+        string? backupPath = null;
+        try
+        {
+            var svc = CreateSvc();
+            var (success, _, bp) = svc.Write(path, "{\"v\":2}", backupBeforeOverwrite: true);
+
+            Assert.True(success);
+            Assert.NotNull(bp);
+            backupPath = bp;
+            Assert.True(File.Exists(backupPath));
+            var (config, _) = svc.Read(path);
+            Assert.Equal(2, config!["v"]!.GetValue<int>());
+        }
+        finally
+        {
+            File.Delete(path);
+            if (backupPath != null && File.Exists(backupPath)) File.Delete(backupPath);
+        }
+    }
+
+    [Fact]
+    public void Update_WithBackup_CreatesBackupFile()
+    {
+        var path = TempFile("{\"key\":\"old\"}");
+        string? backupPath = null;
+        try
+        {
+            var svc = CreateSvc();
+            var (success, _, bp, _) = svc.Update(
+                path,
+                new Dictionary<string, JsonNode?> { ["key"] = JsonValue.Create("new") },
+                backupBeforeOverwrite: true);
+
+            Assert.True(success);
+            Assert.NotNull(bp);
+            backupPath = bp;
+            Assert.True(File.Exists(backupPath));
+            // Backup contains original content
+            var (backupConfig, _) = svc.Read(backupPath!);
+            Assert.Equal("old", backupConfig!["key"]!.GetValue<string>());
+        }
+        finally
+        {
+            File.Delete(path);
+            if (backupPath != null && File.Exists(backupPath)) File.Delete(backupPath);
+        }
+    }
+
+    [Fact]
+    public void Write_NoTmpFileLeftAfterFailure()
+    {
+        const string original = "{\"safe\":true}";
+        var path = TempFile(original);
+        try
+        {
+            var svc = CreateSvc();
+            svc.Write(path, "{invalid", backupBeforeOverwrite: false);
+
+            // Temp file must be cleaned up
+            Assert.False(File.Exists(path + ".tmp"));
         }
         finally { File.Delete(path); }
     }

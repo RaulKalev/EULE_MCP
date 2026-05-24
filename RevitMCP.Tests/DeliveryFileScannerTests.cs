@@ -111,4 +111,87 @@ public class DeliveryFileScannerTests : IDisposable
         Assert.True(result.Success);
         Assert.NotEmpty(result.Warnings);
     }
+
+    // ── Extension filter / wildcard tests ────────────────────────────────────
+
+    private void WriteMixedFiles()
+    {
+        WriteFile("A.pdf");
+        WriteFile("B.dwg");
+        WriteFile("C.ifc");
+        WriteFile("D.xlsx");
+        WriteFile("E.txt");
+        WriteFile("F.bak");
+    }
+
+    [Fact]
+    public void Scan_WithNullExtensions_ReturnsAllFiles()
+    {
+        WriteMixedFiles();
+        var scanner = new DeliveryFileScanner(new FilePathPolicy());
+        var result = scanner.Scan(_tempDir, false, null, 5000);
+        Assert.True(result.Success);
+        Assert.Equal(6, result.Files.Count);
+    }
+
+    [Fact]
+    public void Scan_WithEmptyExtensions_ReturnsAllFiles()
+    {
+        WriteMixedFiles();
+        var scanner = new DeliveryFileScanner(new FilePathPolicy());
+        var result = scanner.Scan(_tempDir, false, [], 5000);
+        Assert.True(result.Success);
+        Assert.Equal(6, result.Files.Count);
+    }
+
+    [Fact]
+    public void Scan_WithStarExtension_ReturnsAllFiles()
+    {
+        WriteMixedFiles();
+        var scanner = new DeliveryFileScanner(new FilePathPolicy());
+        var result = scanner.Scan(_tempDir, false, new[] { "*" }, 5000);
+        Assert.True(result.Success);
+        Assert.Equal(6, result.Files.Count);
+    }
+
+    [Fact]
+    public void Scan_WithDotStarExtension_ReturnsAllFiles()
+    {
+        WriteMixedFiles();
+        var scanner = new DeliveryFileScanner(new FilePathPolicy());
+        var result = scanner.Scan(_tempDir, false, new[] { ".*" }, 5000);
+        Assert.True(result.Success);
+        Assert.Equal(6, result.Files.Count);
+    }
+
+    [Fact]
+    public void Scan_WithAllKeyword_ReturnsAllFiles()
+    {
+        WriteMixedFiles();
+        var scanner = new DeliveryFileScanner(new FilePathPolicy());
+        var result = scanner.Scan(_tempDir, false, new[] { "all" }, 5000);
+        Assert.True(result.Success);
+        Assert.Equal(6, result.Files.Count);
+    }
+
+    [Fact]
+    public void Scan_WithPdfDwgExtensions_ReturnsOnlyPdfAndDwg()
+    {
+        WriteMixedFiles();
+        var scanner = new DeliveryFileScanner(new FilePathPolicy());
+        var result = scanner.Scan(_tempDir, false, new[] { "pdf", "dwg" }, 5000);
+        Assert.True(result.Success);
+        Assert.Equal(2, result.Files.Count);
+        Assert.All(result.Files, f => Assert.True(f.Extension == "pdf" || f.Extension == "dwg"));
+    }
+
+    [Fact]
+    public void Scan_WithDotPrefixedExtensions_NormalizesCorrectly()
+    {
+        WriteMixedFiles();
+        var scanner = new DeliveryFileScanner(new FilePathPolicy());
+        var result = scanner.Scan(_tempDir, false, new[] { ".pdf", ".dwg" }, 5000);
+        Assert.True(result.Success);
+        Assert.Equal(2, result.Files.Count);
+    }
 }

@@ -29,9 +29,7 @@ public class DeliveryFileScanner
         if (!Directory.Exists(folderPath))
             return DeliveryScanResult.Fail(folderPath, $"Folder not found: {folderPath}");
 
-        var allowedExts = includeExtensions?
-            .Select(e => e.TrimStart('.').ToLowerInvariant())
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var allowedExts = BuildAllowedExtensions(includeExtensions);
 
         var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
         IEnumerable<string> allFiles;
@@ -98,6 +96,30 @@ public class DeliveryFileScanner
                     .ToList()
                 : []
         };
+    }
+
+    /// <summary>
+    /// Converts an optional extension list into a filter set.
+    /// Returns null (= scan all) when the input is null, empty, or contains "*" or "all".
+    /// Strips leading dots and normalises to lower-case.
+    /// </summary>
+    private static HashSet<string>? BuildAllowedExtensions(IEnumerable<string>? includeExtensions)
+    {
+        if (includeExtensions == null)
+            return null;
+
+        var normalized = includeExtensions
+            .Where(e => !string.IsNullOrWhiteSpace(e))
+            .Select(e => e.Trim().TrimStart('.').ToLowerInvariant())
+            .ToList();
+
+        if (normalized.Count == 0)
+            return null;
+
+        if (normalized.Contains("*") || normalized.Contains("all"))
+            return null;
+
+        return normalized.ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 }
 
