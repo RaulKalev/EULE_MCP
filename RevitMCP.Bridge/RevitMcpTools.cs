@@ -3423,5 +3423,96 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         var result = await pipeClient.SendAsync("convert_ifc_spaces_to_rooms", args, cancellationToken);
         return FormatResult(result);
     }
+
+    [McpServerTool(Name = "validate_ifc_space_room_conversion", ReadOnly = true),
+     Description(
+         "Phase 4 — Compares linked IFC Space elements against existing native Revit Rooms " +
+         "using built-in fields only (Level, Number, Name, Location, Area). " +
+         "Returns per-space match confidence (High/Medium/Low/Ambiguous/None), " +
+         "location and area deltas (mm / %), detected possible renames, geometry changes, " +
+         "and missing Rooms. " +
+         "Read-only — makes no model changes. " +
+         "Confidence levels: High = same Level+Number+Name; " +
+         "Medium = same Level + one of Number/Name + location/area within tolerance; " +
+         "Low = same Level + location/area only; " +
+         "Ambiguous = multiple plausible matches; None = MissingRoom. " +
+         "Recommended workflow: run this after convert_ifc_spaces_to_rooms to verify results, " +
+         "or to identify stale data after IFC model updates. " +
+         "Then use sync_ifc_space_room_data to apply controlled updates.")]
+    public async Task<string> ValidateIfcSpaceRoomConversion(
+        [Description("Element id of the RevitLinkInstance to validate against (integer). Obtain from ifc_list_links.")]
+        long linkInstanceId,
+        [Description("Optional list of linked element IDs to validate. If empty, all IFC Space candidates in the link are processed.")]
+        long[]? linkedElementIds = null,
+        [Description("Maximum vertical offset (mm) for Level matching. Default 300 mm.")]
+        double levelMatchToleranceMm = 300.0,
+        [Description("Maximum 2D distance (mm) between IFC placement point and Room location for co-location scoring. Default 1000 mm.")]
+        double locationToleranceMm = 1000.0,
+        [Description("Maximum relative area difference (%) between IFC Space area and Room area for area scoring. Default 10%.")]
+        double areaTolerancePercent = 10.0,
+        [Description("If true (default), run Phase 2 geometry extraction for precise location/area comparison. If false, use bounding-box approximations.")]
+        bool includeGeometryComparison = true,
+        [Description("Endpoint snap tolerance for geometry extraction (mm). Default 3 mm.")]
+        double endpointSnapToleranceMm = 3.0,
+        [Description("Tiny segment removal threshold for geometry extraction (mm). Default 1 mm.")]
+        double tinySegmentToleranceMm = 1.0,
+        [Description("Maximum number of validation items to return. Default 1000.")]
+        int maxResults = 1000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["linkInstanceId"]            = linkInstanceId,
+            ["linkedElementIds"]          = linkedElementIds ?? [],
+            ["levelMatchToleranceMm"]     = levelMatchToleranceMm,
+            ["locationToleranceMm"]       = locationToleranceMm,
+            ["areaTolerancePercent"]      = areaTolerancePercent,
+            ["includeGeometryComparison"] = includeGeometryComparison,
+            ["endpointSnapToleranceMm"]   = endpointSnapToleranceMm,
+            ["tinySegmentToleranceMm"]    = tinySegmentToleranceMm,
+            ["maxResults"]                = maxResults
+        };
+        var result = await pipeClient.SendAsync("validate_ifc_space_room_conversion", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "sync_ifc_space_room_data"),
+     Description(
+         "Phase 4 — Updates built-in Room Number and/or Name for selected Rooms to match " +
+         "their corresponding IFC Space's current metadata. " +
+         "Only Room.Number and Room.Name (built-in fields) are written — " +
+         "no shared parameters, no IFC GUIDs, no Comments, no Extensible Storage. " +
+         "Defaults to dryRun=true. Set dryRun=false only after previewing planned changes. " +
+         "Ambiguous matches are always blocked. " +
+         "Medium-confidence updates require allowMediumConfidenceUpdates=true. " +
+         "Low-confidence updates require allowLowConfidenceUpdates=true (strongly discouraged). " +
+         "Each item is updated in its own transaction — one failure never aborts the batch. " +
+         "items format: [{linkedElementId, roomId, updateName, updateNumber}]. " +
+         "Recommended workflow: validate_ifc_space_room_conversion → " +
+         "sync_ifc_space_room_data dryRun=true → sync_ifc_space_room_data dryRun=false.")]
+    public async Task<string> SyncIfcSpaceRoomData(
+        [Description("Element id of the RevitLinkInstance (integer). Obtain from ifc_list_links.")]
+        long linkInstanceId,
+        [Description("Array of sync items. Each item: {linkedElementId: long, roomId: long, updateName: bool, updateNumber: bool}. Obtain linkedElementId and roomId from validate_ifc_space_room_conversion results.")]
+        object[] items,
+        [Description("If true (default), report planned changes without modifying the model. Set false to commit updates.")]
+        bool dryRun = true,
+        [Description("If true, allow updates for Medium-confidence matches. Default false.")]
+        bool allowMediumConfidenceUpdates = false,
+        [Description("If true, allow updates for Low-confidence matches. Default false. Strongly discouraged.")]
+        bool allowLowConfidenceUpdates = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["linkInstanceId"]               = linkInstanceId,
+            ["items"]                        = items,
+            ["dryRun"]                       = dryRun,
+            ["allowMediumConfidenceUpdates"] = allowMediumConfidenceUpdates,
+            ["allowLowConfidenceUpdates"]    = allowLowConfidenceUpdates
+        };
+        var result = await pipeClient.SendAsync("sync_ifc_space_room_data", args, cancellationToken);
+        return FormatResult(result);
+    }
 }
 

@@ -168,6 +168,10 @@ public class App : IExternalApplication
             // IFC Space to Room — Phase 3 (model-writing room creation)
             handler.RegisterTool(new ConvertIfcSpacesToRoomsTool());
 
+            // IFC Space to Room — Phase 4 (validation and controlled sync)
+            handler.RegisterTool(new ValidateIfcSpaceRoomConversionTool());
+            handler.RegisterTool(new SyncIfcSpaceRoomDataTool());
+
             // Coordination — Phase 1 — Discovery
             handler.RegisterTool(new ListClashableCategoriesTool());
             handler.RegisterTool(new ListClashableLinksTool());
