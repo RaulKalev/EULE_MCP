@@ -30,7 +30,10 @@ public class DeliveryScanFolderTool : IRevitMcpTool
         var extArr = ToolArguments.GetStringArray(request.Arguments, "includeExtensions");
         var maxResults = ToolArguments.GetInt(request.Arguments, "maxResults", 5000);
 
-        IEnumerable<string>? includeExtensions = extArr.Length > 0 ? extArr : null;
+        // ["*"] means scan all files; empty array falls back to all as well (defensive)
+        IEnumerable<string>? includeExtensions = (extArr.Length > 0 && !extArr.Any(e => e == "*"))
+            ? extArr
+            : null;
 
         var policy = new FilePathPolicy();
         var scanner = new DeliveryFileScanner(policy);

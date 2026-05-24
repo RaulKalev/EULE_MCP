@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json.Nodes;
 using Autodesk.Revit.UI;
 using Newtonsoft.Json.Linq;
 using RevitMCP.Addin.Configuration;
@@ -62,17 +63,23 @@ public class ConfigUpdateTool : IRevitMcpTool
         });
     }
 
-    private static Dictionary<string, object?> ParseUpdates(Dictionary<string, object?> args)
+    private static Dictionary<string, JsonNode?> ParseUpdates(Dictionary<string, object?> args)
     {
-        var result = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        var result = new Dictionary<string, JsonNode?>(StringComparer.OrdinalIgnoreCase);
         if (!args.TryGetValue("updates", out var raw)) return result;
 
         if (raw is JObject jo)
         {
             foreach (var prop in jo.Properties())
-                result[prop.Name] = prop.Value.Type == JTokenType.Null ? null : prop.Value.ToString();
+                result[prop.Name] = ToJsonNode(prop.Value);
         }
         return result;
+    }
+
+    private static JsonNode? ToJsonNode(JToken token)
+    {
+        if (token.Type == JTokenType.Null) return null;
+        return JsonNode.Parse(token.ToString(Newtonsoft.Json.Formatting.None));
     }
 
     private static McpToolResult Fail(McpToolRequest r, string msg) =>

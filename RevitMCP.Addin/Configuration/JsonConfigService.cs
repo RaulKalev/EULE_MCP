@@ -108,7 +108,7 @@ public class JsonConfigService
     /// </summary>
     public (bool Success, string? Error, string? BackupPath, List<string> Applied) Update(
         string filePath,
-        Dictionary<string, object?> updates,
+        Dictionary<string, JsonNode?> updates,
         bool backupBeforeOverwrite,
         bool createIfMissing = false)
     {
@@ -141,7 +141,7 @@ public class JsonConfigService
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
-    private static void SetByPath(JsonObject root, string[] parts, object? value)
+    private static void SetByPath(JsonObject root, string[] parts, JsonNode? value)
     {
         JsonObject current = root;
 
@@ -157,9 +157,7 @@ public class JsonConfigService
         }
 
         var lastKey = parts[^1];
-        current[lastKey] = value is null
-            ? null
-            : JsonValue.Create(value.ToString());
+        current[lastKey] = value?.DeepClone();
     }
 
     /// <summary>
@@ -181,8 +179,15 @@ public class JsonConfigService
             var verify = JsonNode.Parse(File.ReadAllText(tmpPath, Encoding.UTF8));
             if (verify == null) throw new InvalidDataException("Written file could not be parsed.");
 
-            if (File.Exists(filePath)) File.Delete(filePath);
-            File.Move(tmpPath, filePath);
+            if (File.Exists(filePath))
+            {
+                // File.Replace atomically swaps tmp → target (no backup needed here — caller handles backup)
+                File.Replace(tmpPath, filePath, destinationBackupFileName: null, ignoreMetadataErrors: true);
+            }
+            else
+            {
+                File.Move(tmpPath, filePath);
+            }
             return null;
         }
         catch (Exception ex)

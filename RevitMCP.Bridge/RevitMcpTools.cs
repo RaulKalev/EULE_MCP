@@ -539,16 +539,20 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         if (value is null) return null;
         if (value is System.Text.Json.JsonElement je)
             return Newtonsoft.Json.Linq.JToken.Parse(je.GetRawText());
+        if (value is Newtonsoft.Json.Linq.JToken jt)
+            return jt;
         if (value is object[] arr)
         {
             var ja = new Newtonsoft.Json.Linq.JArray();
             foreach (var item in arr)
-                ja.Add(item is System.Text.Json.JsonElement je2
-                    ? Newtonsoft.Json.Linq.JToken.Parse(je2.GetRawText())
-                    : Newtonsoft.Json.Linq.JToken.FromObject(item));
+            {
+                if (item is null) { ja.Add(Newtonsoft.Json.Linq.JValue.CreateNull()); continue; }
+                var converted = ToJToken(item);
+                ja.Add(converted is Newtonsoft.Json.Linq.JToken token ? token : Newtonsoft.Json.Linq.JToken.FromObject(item));
+            }
             return ja;
         }
-        return value;
+        return Newtonsoft.Json.Linq.JToken.FromObject(value);
     }
 
     // ── Issue Reports ─────────────────────────────────────────────────────────
@@ -774,7 +778,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         {
             ["filePath"] = filePath,
             ["worksheetName"] = worksheetName,
-            ["updates"] = updates,
+            ["updates"] = ToJToken(updates),
             ["backupBeforeSave"] = backupBeforeSave,
             ["dryRun"] = dryRun
         };
@@ -800,7 +804,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["worksheetName"] = worksheetName,
             ["insertAtRow"] = insertAtRow,
             ["copyStyleFromRow"] = copyStyleFromRow > 0 ? copyStyleFromRow : (insertAtRow > 1 ? insertAtRow - 1 : 1),
-            ["rows"] = rows ?? [],
+            ["rows"] = ToJToken(rows ?? []),
             ["backupBeforeSave"] = backupBeforeSave,
             ["dryRun"] = dryRun
         };
@@ -826,7 +830,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["worksheetName"] = worksheetName,
             ["tableName"] = tableName,
             ["matchHeaders"] = matchHeaders,
-            ["rows"] = rows ?? [],
+            ["rows"] = ToJToken(rows ?? []),
             ["backupBeforeSave"] = backupBeforeSave,
             ["dryRun"] = dryRun
         };
@@ -2409,7 +2413,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_detect_clearance_clashes", ReadOnly = true),
-     Description("Detects clearance violations between two sets of element categories using expanded bounding-box approximation. Reported distances are conservative estimates, not true surface-to-surface measurements.")]
+     Description("Detects clearance violations between two sets of element categories using expanded bounding-box approximation. Reported distances are conservative estimates, not true surface-to-surface measurements. Results should be visually reviewed in the Revit clash review view.")]
     public async Task<string> DetectClearanceClashes(
         [Description("Source element categories")] string[] sourceCategories,
         [Description("Target element categories")] string[] targetCategories,
@@ -2830,20 +2834,39 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
 
     [McpServerTool(Name = "delivery_scan_folder", ReadOnly = true),
      Description("Scans a delivery folder and returns a structured file inventory with parsed EULE drawing file names. " +
-                 "Args: folderPath (required), recursive (bool, default true), includeExtensions (string[], default [pdf,dwg,ifc,xlsx]), maxResults (default 5000).")]
+                 "Args: folderPath (required), recursive (bool, default true), includeExtensions (string[], default [pdf,dwg,ifc,xlsx]), maxResults (default 5000). " +
+                 "Optional policy checks: checkTempFiles, checkOldRevisions, checkSuspiciousExtensions, checkRequiredFolders, " +
+                 "requiredFolders, allowedExtraExtensions, requiredProjectFileExtensions, ignoredPatterns. " +
+                 "Pass includeExtensions=[\"*\"] to scan all file types.")]
     public async Task<string> DeliveryScanFolder(
         [Description("Path to the delivery folder to scan")] string folderPath,
         [Description("Recurse into subdirectories")] bool recursive = true,
-        [Description("File extensions to include, e.g. pdf, dwg, ifc")] string[]? includeExtensions = null,
+        [Description("File extensions to include, e.g. pdf, dwg, ifc. Defaults to [pdf,dwg,ifc,xlsx]. Pass [\"*\"] to include all files.")] string[]? includeExtensions = null,
         [Description("Maximum file results to return")] int maxResults = 5000,
+        [Description("Check for temp/lock/backup files (e.g. ~$*, *.bak)")] bool checkTempFiles = false,
+        [Description("Check for multiple revisions of the same sheet")] bool checkOldRevisions = false,
+        [Description("Check for files with suspicious (unexpected) extensions")] bool checkSuspiciousExtensions = false,
+        [Description("Check that required sub-folders exist in the delivery folder")] bool checkRequiredFolders = false,
+        [Description("Sub-folder names that must exist when checkRequiredFolders=true")] string[]? requiredFolders = null,
+        [Description("Extra file extensions allowed beyond requiredExtensions (for suspicious-extension check)")] string[]? allowedExtraExtensions = null,
+        [Description("At least one file with each of these extensions must be present (e.g. ifc, nwc)")] string[]? requiredProjectFileExtensions = null,
+        [Description("File name patterns to ignore during policy checks (e.g. thumbs.db)")] string[]? ignoredPatterns = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
         {
             ["folderPath"] = folderPath,
             ["recursive"] = recursive,
-            ["includeExtensions"] = includeExtensions ?? [],
-            ["maxResults"] = maxResults
+            ["includeExtensions"] = includeExtensions ?? ["pdf", "dwg", "ifc", "xlsx"],
+            ["maxResults"] = maxResults,
+            ["checkTempFiles"] = checkTempFiles,
+            ["checkOldRevisions"] = checkOldRevisions,
+            ["checkSuspiciousExtensions"] = checkSuspiciousExtensions,
+            ["checkRequiredFolders"] = checkRequiredFolders,
+            ["requiredFolders"] = requiredFolders ?? [],
+            ["allowedExtraExtensions"] = allowedExtraExtensions ?? [],
+            ["requiredProjectFileExtensions"] = requiredProjectFileExtensions ?? [],
+            ["ignoredPatterns"] = ignoredPatterns ?? []
         };
         var result = await pipeClient.SendAsync("delivery_scan_folder", args, cancellationToken);
         return FormatResult(result);
@@ -2906,7 +2929,9 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     [McpServerTool(Name = "delivery_run_full_check", ReadOnly = true),
      Description("Runs the full delivery QA workflow: folder scan, Revit sheet comparison, optional Excel register comparison, and optional report export. " +
                  "Args: folderPath (required), excelFilePath (optional), requiredExtensions, stageFilter, disciplineFilter, " +
-                 "exportExcelReport (bool), exportMarkdownReport (bool).")]
+                 "exportExcelReport (bool), exportMarkdownReport (bool). " +
+                 "Optional policy checks: checkTempFiles, checkOldRevisions, checkSuspiciousExtensions, checkRequiredFolders, " +
+                 "requiredFolders, allowedExtraExtensions, requiredProjectFileExtensions, ignoredPatterns.")]
     public async Task<string> DeliveryRunFullCheck(
         [Description("Path to the delivery folder")] string folderPath,
         [Description("Path to the Excel document register (optional)")] string? excelFilePath = null,
@@ -2918,6 +2943,14 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Export a Markdown issue report to the delivery folder")] bool exportMarkdownReport = false,
         [Description("Recurse into subdirectories")] bool recursive = true,
         [Description("Maximum file results to return")] int maxResults = 5000,
+        [Description("Check for temp/lock/backup files (e.g. ~$*, *.bak)")] bool checkTempFiles = false,
+        [Description("Check for multiple revisions of the same sheet")] bool checkOldRevisions = false,
+        [Description("Check for files with suspicious (unexpected) extensions")] bool checkSuspiciousExtensions = false,
+        [Description("Check that required sub-folders exist in the delivery folder")] bool checkRequiredFolders = false,
+        [Description("Sub-folder names that must exist when checkRequiredFolders=true")] string[]? requiredFolders = null,
+        [Description("Extra file extensions allowed beyond requiredExtensions (for suspicious-extension check)")] string[]? allowedExtraExtensions = null,
+        [Description("At least one file with each of these extensions must be present (e.g. ifc, nwc)")] string[]? requiredProjectFileExtensions = null,
+        [Description("File name patterns to ignore during policy checks (e.g. thumbs.db)")] string[]? ignoredPatterns = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -2931,7 +2964,15 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["exportExcelReport"] = exportExcelReport,
             ["exportMarkdownReport"] = exportMarkdownReport,
             ["recursive"] = recursive,
-            ["maxResults"] = maxResults
+            ["maxResults"] = maxResults,
+            ["checkTempFiles"] = checkTempFiles,
+            ["checkOldRevisions"] = checkOldRevisions,
+            ["checkSuspiciousExtensions"] = checkSuspiciousExtensions,
+            ["checkRequiredFolders"] = checkRequiredFolders,
+            ["requiredFolders"] = requiredFolders ?? [],
+            ["allowedExtraExtensions"] = allowedExtraExtensions ?? [],
+            ["requiredProjectFileExtensions"] = requiredProjectFileExtensions ?? [],
+            ["ignoredPatterns"] = ignoredPatterns ?? []
         };
         var result = await pipeClient.SendAsync("delivery_run_full_check", args, cancellationToken);
         return FormatResult(result);
@@ -3022,7 +3063,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         var args = new Dictionary<string, object?>
         {
             ["scope"] = scope,
-            ["updates"] = updates,
+            ["updates"] = ToJToken(updates),
             ["projectRoot"] = projectRoot,
             ["backupBeforeOverwrite"] = backupBeforeOverwrite,
             ["createIfMissing"] = createIfMissing

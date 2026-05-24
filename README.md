@@ -380,9 +380,11 @@ Standalone Excel workbook tools — operate directly on `.xlsx`/`.xlsm` files on
 |------|-------------|
 | `excel_inspect_workbook` | Returns worksheet names, used ranges, row/column counts, detected headers, and optional preview rows for each visible sheet. |
 | `excel_read_range` | Reads a specific cell range from a worksheet — returns rows of cells with address, value, formula, and data type. |
-| `excel_update_cells` | Updates one or more cells by address (e.g. `"B2"`, `"C5"`) — preserves existing cell styles. Optional backup. `dryRun=true` returns a preview of planned changes without modifying the file. *(requires approval)* |
-| `excel_insert_rows` | Inserts new rows at a specified row number — copies style from a template row, writes cell values by column letter key. Optional backup. `dryRun=true` returns row/range preview without modifying the file. *(requires approval)* |
-| `excel_append_table_rows` | Appends rows after the last data row in a sheet or named table. `matchHeaders=true` maps values by header name; falls back to column letter (`"A"`, `"B"`) when unmatched. Extends named table if present. Optional backup. `dryRun=true` returns append-position preview without modifying the file. *(requires approval)* |
+| `excel_update_cells` | Updates one or more cells by address (e.g. `"B2"`, `"C5"`) — preserves existing cell styles. Optional backup. `dryRun=true` returns a preview of planned changes without modifying the file. *(requires approval — even in dry-run mode)* |
+| `excel_insert_rows` | Inserts new rows at a specified row number — copies style from a template row, writes cell values by column letter key. Optional backup. `dryRun=true` returns row/range preview without modifying the file. *(requires approval — even in dry-run mode)* |
+| `excel_append_table_rows` | Appends rows after the last data row in a sheet or named table. `matchHeaders=true` maps values by header name; falls back to column letter (`"A"`, `"B"`) when unmatched. Extends named table if present. Optional backup. `dryRun=true` returns append-position preview without modifying the file. *(requires approval — even in dry-run mode)* |
+
+> **Excel dry-run and approval:** All three Excel write tools go through the approval queue regardless of `dryRun` setting. This ensures the Revit user always has visibility over pending operations. If you only want a preview without triggering an approval request, use `excel_inspect_workbook` or `excel_read_range` instead.
 
 > **Excel write limitations (MVP):** Write tools copy row height and cell styles (number format, font, fill, border, alignment). Advanced Excel features — merged cells, data validation, conditional formatting, and existing cell formulas — are preserved in cells that are not written to, but are **not** carried over to newly inserted rows. Verify complex worksheets manually after insertion or appending.
 

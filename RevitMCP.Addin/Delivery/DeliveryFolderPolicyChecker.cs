@@ -146,6 +146,34 @@ public static class DeliveryFolderPolicyChecker
 
     // ── Old revision detection ────────────────────────────────────────────────
 
+    private sealed record RevisionSortKey(string Prefix, int? Number, string Original)
+        : IComparable<RevisionSortKey>
+    {
+        public int CompareTo(RevisionSortKey? other)
+        {
+            if (other is null) return 1;
+            int cmp = string.Compare(Prefix, other.Prefix, StringComparison.OrdinalIgnoreCase);
+            if (cmp != 0) return cmp;
+            if (Number.HasValue && other.Number.HasValue)
+                return Number.Value.CompareTo(other.Number.Value);
+            if (Number.HasValue) return 1;
+            if (other.Number.HasValue) return -1;
+            return string.Compare(Original, other.Original, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private static RevisionSortKey ParseRevisionSortKey(string revision)
+    {
+        var upper = revision.Trim().ToUpperInvariant();
+        // Split into alphabetic prefix + numeric suffix, e.g. "R10" → ("R", 10), "REV02" → ("REV", 2), "10" → ("", 10), "C" → ("C", null)
+        int i = upper.Length - 1;
+        while (i >= 0 && char.IsDigit(upper[i])) i--;
+        var prefix = upper[..(i + 1)];
+        var numPart = upper[(i + 1)..];
+        int? number = numPart.Length > 0 && int.TryParse(numPart, out var n) ? n : null;
+        return new RevisionSortKey(prefix, number, upper);
+    }
+
     private static void CheckOldRevisions(
         DeliveryScanResult scan,
         DeliveryFolderPolicy policy,
@@ -169,13 +197,13 @@ public static class DeliveryFolderPolicyChecker
 
             if (withRevision.Count <= 1) continue;
 
-            // Sort alphabetically desc so the first item is the "latest" (e.g. Rev02 > Rev01)
+            // Sort by numeric-aware revision key ascending; last item is the latest
             var sorted = withRevision
-                .OrderByDescending(f => f.Parsed!.Revision, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(f => ParseRevisionSortKey(f.Parsed!.Revision!))
                 .ToList();
 
             // Flag everything except the latest
-            foreach (var old in sorted.Skip(1))
+            foreach (var old in sorted.Take(sorted.Count - 1))
             {
                 issues.Add(DeliveryIssueBuilder.OldRevision(
                     runId, seq++,

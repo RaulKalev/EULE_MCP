@@ -6,6 +6,13 @@ namespace RevitMCP.Addin.Coordination.Clash.Services;
 /// <summary>
 /// Clearance clash detection via expanded bounding-box approximation.
 /// NOTE: This is an approximation — see warnings in results.
+///
+/// TODO (Phase 2.5 / Phase 3): Implement true geometry-based clearance distance detection.
+/// Approach options:
+///   - Use solid tessellation and nearest-point approximation.
+///   - Use ReferenceIntersector / ray methods for specific categories.
+///   - Use element geometry faces to compute face-to-face distance.
+///   - Use bounding box as broad-phase, then geometry distance as narrow-phase.
 /// </summary>
 public class ClearanceClashDetector
 {

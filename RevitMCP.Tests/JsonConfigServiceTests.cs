@@ -1,4 +1,5 @@
 using RevitMCP.Addin.Configuration;
+using System.Text.Json.Nodes;
 using Xunit;
 
 namespace RevitMCP.Tests;
@@ -149,7 +150,7 @@ public class JsonConfigServiceTests
             var svc = CreateSvc();
             var (success, error, _, applied) = svc.Update(
                 path,
-                new Dictionary<string, object?> { ["key"] = "new" },
+                new Dictionary<string, JsonNode?> { ["key"] = JsonValue.Create("new") },
                 backupBeforeOverwrite: false);
 
             Assert.True(success);
@@ -171,7 +172,7 @@ public class JsonConfigServiceTests
             var svc = CreateSvc();
             var (success, error, _, _) = svc.Update(
                 path,
-                new Dictionary<string, object?> { ["$.excel.defaultBackupBeforeSave"] = "true" },
+                new Dictionary<string, JsonNode?> { ["$.excel.defaultBackupBeforeSave"] = JsonValue.Create("true") },
                 backupBeforeOverwrite: false);
 
             Assert.True(success);
@@ -189,7 +190,7 @@ public class JsonConfigServiceTests
         var path = Path.Combine(Path.GetTempPath(), $"rkmcp_missing_{Guid.NewGuid():N}.json");
         var (success, error, _, _) = svc.Update(
             path,
-            new Dictionary<string, object?> { ["key"] = "val" },
+            new Dictionary<string, JsonNode?> { ["key"] = JsonValue.Create("val") },
             backupBeforeOverwrite: false,
             createIfMissing: false);
 
@@ -213,6 +214,139 @@ public class JsonConfigServiceTests
             // Original must be intact
             var content = File.ReadAllText(path);
             Assert.Contains("safe", content);
+        }
+        finally { File.Delete(path); }
+    }
+
+    // ── JSON type preservation ────────────────────────────────────────────────
+
+    [Fact]
+    public void Update_PreservesBooleanType()
+    {
+        var path = TempFile("{}");
+        try
+        {
+            var svc = CreateSvc();
+            var (success, _, _, _) = svc.Update(
+                path,
+                new Dictionary<string, JsonNode?> { ["$.excel.defaultBackupBeforeSave"] = JsonValue.Create(true) },
+                backupBeforeOverwrite: false);
+
+            Assert.True(success);
+            var (config, _) = svc.Read(path);
+            Assert.True(config!["excel"]!["defaultBackupBeforeSave"]!.GetValue<bool>());
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Update_PreservesIntegerType()
+    {
+        var path = TempFile("{}");
+        try
+        {
+            var svc = CreateSvc();
+            var (success, _, _, _) = svc.Update(
+                path,
+                new Dictionary<string, JsonNode?> { ["$.limits.maxRows"] = JsonValue.Create(5000) },
+                backupBeforeOverwrite: false);
+
+            Assert.True(success);
+            var (config, _) = svc.Read(path);
+            Assert.Equal(5000, config!["limits"]!["maxRows"]!.GetValue<int>());
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Update_PreservesNullValue()
+    {
+        var path = TempFile("{\"key\":\"old\"}");
+        try
+        {
+            var svc = CreateSvc();
+            var (success, _, _, _) = svc.Update(
+                path,
+                new Dictionary<string, JsonNode?> { ["key"] = null },
+                backupBeforeOverwrite: false);
+
+            Assert.True(success);
+            var (config, _) = svc.Read(path);
+            Assert.True(config!.ContainsKey("key"));
+            Assert.Null(config["key"]);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Update_PreservesArray()
+    {
+        var path = TempFile("{}");
+        try
+        {
+            var svc = CreateSvc();
+            var arr = JsonNode.Parse("[\"EL\",\"EN\",\"EA\"]");
+            var (success, _, _, _) = svc.Update(
+                path,
+                new Dictionary<string, JsonNode?> { ["$.naming.allowedDisciplines"] = arr },
+                backupBeforeOverwrite: false);
+
+            Assert.True(success);
+            var (config, _) = svc.Read(path);
+            var node = config!["naming"]!["allowedDisciplines"] as JsonArray;
+            Assert.NotNull(node);
+            Assert.Equal(3, node!.Count);
+            Assert.Equal("EL", node[0]!.GetValue<string>());
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Update_PreservesNestedObject()
+    {
+        var path = TempFile("{}");
+        try
+        {
+            var svc = CreateSvc();
+            var obj = JsonNode.Parse("{\"enabled\":true,\"count\":2}");
+            var (success, _, _, _) = svc.Update(
+                path,
+                new Dictionary<string, JsonNode?> { ["$.nested.object"] = obj },
+                backupBeforeOverwrite: false);
+
+            Assert.True(success);
+            var (config, _) = svc.Read(path);
+            var nested = config!["nested"]!["object"] as JsonObject;
+            Assert.NotNull(nested);
+            Assert.True(nested!["enabled"]!.GetValue<bool>());
+            Assert.Equal(2, nested["count"]!.GetValue<int>());
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Update_MultipleTypes_AllPreserved()
+    {
+        var path = TempFile("{}");
+        try
+        {
+            var svc = CreateSvc();
+            var (success, _, _, applied) = svc.Update(
+                path,
+                new Dictionary<string, JsonNode?>
+                {
+                    ["$.excel.defaultBackupBeforeSave"] = JsonValue.Create(true),
+                    ["$.limits.maxRows"] = JsonValue.Create(5000),
+                    ["$.naming.prefix"] = JsonValue.Create("RK"),
+                },
+                backupBeforeOverwrite: false);
+
+            Assert.True(success);
+            Assert.Equal(3, applied.Count);
+            var (config, _) = svc.Read(path);
+            Assert.True(config!["excel"]!["defaultBackupBeforeSave"]!.GetValue<bool>());
+            Assert.Equal(5000, config["limits"]!["maxRows"]!.GetValue<int>());
+            Assert.Equal("RK", config["naming"]!["prefix"]!.GetValue<string>());
         }
         finally { File.Delete(path); }
     }
