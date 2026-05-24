@@ -2,7 +2,7 @@
 
 A local [Model Context Protocol](https://modelcontextprotocol.io) connector that lets **Claude Code** and **Codex** interrogate and work with a live **Autodesk Revit 2026** model in real time.
 
-**127 tools** across seven functional areas:
+**135 tools** across nine functional areas:
 - **General** (22 tools) — element discovery, parameter QA, grouping, Excel exports, selection, and write operations
 - **Electrical** (44 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
 - **Documentation** (31 tools) — view and sheet management: discovery, summary, preview/apply workflows for placing views, creating/duplicating/renaming sheets and views, bulk parameter updates, revision tracking, preset inspection, and safe destructive delete with mandatory manual approval
@@ -10,6 +10,8 @@ A local [Model Context Protocol](https://modelcontextprotocol.io) connector that
 - **Family Creation** (1 tool) — generate Detail Item families (.rfa) from DWG source files using company presets
 - **Skills** (8 tools) — multi-step QA workflow engine: run built-in or project-specific quality-check skill definitions, inspect task breakdowns, and manage per-project setting overrides
 - **Issue Reports** (4 tools) — shared structured issue model (`IssueDto` / `IssueReportDto`) with JSON, Excel, and Markdown export; multi-report merge; foundation used by all QA tools
+- **File System** (3 tools) — read, write, and list local files with configurable path-policy enforcement (allowed-root lists, traversal blocking, size limits)
+- **Excel** (5 tools) — standalone Excel workbook tools (no open document required): inspect workbooks, read ranges, update cells, insert rows, and append table rows with automatic backup and header-matching
 
 ---
 
@@ -296,6 +298,39 @@ Shared structured issue model used as the output format for all QA tools. Issues
 | `revit_export_issues_excel` | Exports an `IssueReportDto` to a formatted `.xlsx` file with Summary and Issues sheets, severity colour coding, and auto-filter. Returns `filePath`. |
 | `revit_export_issues_markdown` | Exports an `IssueReportDto` to a `.md` file with summary table, category breakdown, and issues table. Returns `filePath`. |
 | `revit_merge_issue_reports` | Merges multiple `IssueReportDto` JSON strings (`reportJsonArray`) into a single consolidated report. Returns the merged report JSON and summary counts. |
+
+### File System Tools
+
+General-purpose file utilities. Access is controlled by `FileAccessPolicy` — a JSON config file at `%ProgramData%\RKTools\MCP\Config\FileAccessPolicy.json`. If the config is absent, permissive defaults apply (user home, `C:\Projects`, temp).
+
+| Tool | Description |
+|------|-------------|
+| `file_read_text` | Reads a text file and returns its content. `maxBytes` caps the read (default 1 MB). |
+| `file_write_text` | Writes text to a file. `overwrite=false` (default) refuses to clobber existing files. `createDirectories=true` creates missing parent folders. *(requires approval)* |
+| `file_list_directory` | Lists files and subdirectories in a folder. Supports `searchPattern`, `recursive`, and `maxResults`. |
+
+**FileAccessPolicy config** (`FileAccessPolicy.json`):
+```json
+{
+  "AllowedReadRoots": ["%USERPROFILE%", "C:\\Projects", "%TEMP%"],
+  "AllowedWriteRoots": ["%USERPROFILE%\\Documents", "C:\\Projects", "%TEMP%"],
+  "AllowNetworkPaths": false,
+  "AllowProgramDataWrites": false,
+  "MaxReadBytesDefault": 1048576
+}
+```
+
+### Excel Tools
+
+Standalone Excel workbook tools — operate directly on `.xlsx`/`.xlsm` files on disk. No open Revit document required; compatible with any Excel file on the allowed-write paths.
+
+| Tool | Description |
+|------|-------------|
+| `excel_inspect_workbook` | Returns worksheet names, used ranges, row/column counts, detected headers, and optional preview rows for each visible sheet. |
+| `excel_read_range` | Reads a specific cell range from a worksheet — returns rows of cells with address, value, formula, and data type. |
+| `excel_update_cells` | Updates one or more cells by address (e.g. `"B2"`, `"C5"`) — preserves existing cell styles. Optional backup. *(requires approval)* |
+| `excel_insert_rows` | Inserts new rows at a specified row number — copies style from a template row, writes cell values by column letter key. Optional backup. *(requires approval)* |
+| `excel_append_table_rows` | Appends rows after the last data row in a sheet or named table. `matchHeaders=true` maps values by header name; falls back to column letter (`"A"`, `"B"`) when unmatched. Extends named table if present. Optional backup. *(requires approval)* |
 
 ---
 
@@ -592,6 +627,8 @@ EULE_MCP/
 │   ├── Commands/        OpenMcpWindowCommand
 │   ├── Electrical/      Circuit services, QA helpers, dashboard, voltage-drop prep, fire alarm preset, cable resistance
 │   ├── Documentation/   Pure-logic helpers: RenameEngine, FuzzyNameMatcher, PlacementPointResolver, ViewSheetMatchingService
+│   ├── FileSystem/      FilePathPolicy (allowed-root enforcement), FileSystemService (read/write/list)
+│   ├── Excel/           ExcelWorkbookInspector, ExcelWorkbookModifier, ExcelBackupService, ExcelHeaderDetector, ExcelStyleCopyService
 │   ├── Services/        PipeServer, ExternalEventHandler, ConnectorService
 │   ├── Tools/           One file per MCP tool
 │   ├── UI/              WPF window (Status + Pending + Activity tabs) + ViewModels + themes

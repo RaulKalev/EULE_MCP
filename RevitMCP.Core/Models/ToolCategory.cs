@@ -15,5 +15,7 @@ public enum ToolCategory
     Documentation,
     Coordination,
     FamilyCreation,
-    Skills
+    Skills,
+    FileSystem,
+    Excel
 }

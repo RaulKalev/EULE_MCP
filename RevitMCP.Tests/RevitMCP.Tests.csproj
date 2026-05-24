@@ -13,6 +13,14 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <!-- ClosedXML for Excel service tests (same pinned versions as Addin) -->
+    <PackageReference Include="ClosedXML" Version="0.102.1" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="2.20.0" />
+  </ItemGroup>
+
+  <!-- RevitMCP.Core has no Revit dependency — safe to reference directly -->
+  <ItemGroup>
+    <ProjectReference Include="..\RevitMCP.Core\RevitMCP.Core.csproj" />
   </ItemGroup>
 
   <!-- Reference only the pure-logic types; no Revit API dependency -->
@@ -32,5 +40,14 @@
     <Compile Include="..\RevitMCP.Addin\Coordination\Clash\Services\ClashSummaryService.cs" Link="Coordination\Clash\Services\ClashSummaryService.cs" />
     <Compile Include="..\RevitMCP.Addin\Coordination\Clash\Services\ClashPresetService.cs" Link="Coordination\Clash\Services\ClashPresetService.cs" />
     <Compile Include="..\RevitMCP.Addin\Coordination\Clash\Services\ClashRunCacheService.cs" Link="Coordination\Clash\Services\ClashRunCacheService.cs" />
+    <!-- FileSystem pure-logic files -->
+    <Compile Include="..\RevitMCP.Addin\FileSystem\FilePathPolicy.cs" Link="FileSystem\FilePathPolicy.cs" />
+    <Compile Include="..\RevitMCP.Addin\FileSystem\FileSystemService.cs" Link="FileSystem\FileSystemService.cs" />
+    <!-- Excel pure-logic files (ClosedXML, no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\Excel\ExcelBackupService.cs" Link="Excel\ExcelBackupService.cs" />
+    <Compile Include="..\RevitMCP.Addin\Excel\ExcelHeaderDetector.cs" Link="Excel\ExcelHeaderDetector.cs" />
+    <Compile Include="..\RevitMCP.Addin\Excel\ExcelStyleCopyService.cs" Link="Excel\ExcelStyleCopyService.cs" />
+    <Compile Include="..\RevitMCP.Addin\Excel\ExcelWorkbookInspector.cs" Link="Excel\ExcelWorkbookInspector.cs" />
+    <Compile Include="..\RevitMCP.Addin\Excel\ExcelWorkbookModifier.cs" Link="Excel\ExcelWorkbookModifier.cs" />
   </ItemGroup>
 </Project>

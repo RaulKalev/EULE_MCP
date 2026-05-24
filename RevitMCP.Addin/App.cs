@@ -3,6 +3,8 @@ using RevitMCP.Addin.Approval;
 using RevitMCP.Addin.Logging;
 using RevitMCP.Addin.Services;
 using RevitMCP.Addin.Tools;
+using RevitMCP.Addin.Tools.Excel;
+using RevitMCP.Addin.Tools.FileSystem;
 using RevitMCP.Addin.Tools.Reports;
 using RevitMCP.Addin.UI.ViewModels;
 using RevitMCP.Core.Configuration;
@@ -190,6 +192,18 @@ public class App : IExternalApplication
             handler.RegisterTool(new CreateProjectSkillOverrideTool());
             handler.RegisterTool(new UpdateProjectSkillOverrideTool());
             handler.RegisterTool(new ResetProjectSkillOverrideTool());
+
+            // File System Tools
+            handler.RegisterTool(new FileReadTextTool());
+            handler.RegisterTool(new FileWriteTextTool());
+            handler.RegisterTool(new FileListDirectoryTool());
+
+            // Excel Modifier Tools
+            handler.RegisterTool(new ExcelInspectWorkbookTool());
+            handler.RegisterTool(new ExcelReadRangeTool());
+            handler.RegisterTool(new ExcelUpdateCellsTool());
+            handler.RegisterTool(new ExcelInsertRowsTool());
+            handler.RegisterTool(new ExcelAppendTableRowsTool());
 
             var eventService = new ExternalEventService(handler);
 

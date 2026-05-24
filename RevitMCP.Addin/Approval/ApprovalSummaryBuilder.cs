@@ -44,6 +44,12 @@ public static class ApprovalSummaryBuilder
             "revit_create_clash_review_view"    => BuildCreateClashReviewView(request),
             "revit_focus_clash"                 => BuildFocusClash(request),
             "revit_select_clash_elements"       => BuildSelectClashElements(request),
+            // File System
+            "file_write_text"           => BuildFileWriteText(request),
+            // Excel Modifier
+            "excel_update_cells"        => BuildExcelUpdateCells(request),
+            "excel_insert_rows"         => BuildExcelInsertRows(request),
+            "excel_append_table_rows"   => BuildExcelAppendTableRows(request),
             _ => $"Execute {request.ToolName}"
         };
     }
@@ -265,6 +271,54 @@ public static class ApprovalSummaryBuilder
         if (val is Newtonsoft.Json.Linq.JObject jo) return jo.Count;
         if (val is System.Collections.IDictionary d) return d.Count;
         return 0;
+    }
+
+    /// <summary>Counts items in a named JArray argument (e.g. "updates", "rows").</summary>
+    private static int CountArray(Dictionary<string, object?> args, string key)
+    {
+        if (!args.TryGetValue(key, out var val)) return 0;
+        if (val is Newtonsoft.Json.Linq.JArray ja) return ja.Count;
+        if (val is string s) { try { return Newtonsoft.Json.Linq.JArray.Parse(s).Count; } catch { return 0; } }
+        if (val is System.Collections.IEnumerable e) { try { return e.Cast<object>().Count(); } catch { return 0; } }
+        return 0;
+    }
+
+    // ── File System ───────────────────────────────────────────────────────────
+
+    private static string BuildFileWriteText(McpToolRequest request)
+    {
+        var path = ToolArguments.GetString(request.Arguments, "filePath");
+        var overwrite = ToolArguments.GetBool(request.Arguments, "overwrite");
+        var content = ToolArguments.GetString(request.Arguments, "content");
+        var preview = content.Length > 80 ? content[..80] + "…" : content;
+        return $"Write file: {path} ({content.Length:N0} chars). Overwrite={overwrite}.\nPreview: {preview}";
+    }
+
+    // ── Excel Modifier ────────────────────────────────────────────────────────
+
+    private static string BuildExcelUpdateCells(McpToolRequest request)
+    {
+        var path = ToolArguments.GetString(request.Arguments, "filePath");
+        var sheet = ToolArguments.GetString(request.Arguments, "worksheetName");
+        var count = CountArray(request.Arguments, "updates");
+        return $"Update {count} cell(s) in sheet '{sheet}'\nFile: {path}";
+    }
+
+    private static string BuildExcelInsertRows(McpToolRequest request)
+    {
+        var path = ToolArguments.GetString(request.Arguments, "filePath");
+        var sheet = ToolArguments.GetString(request.Arguments, "worksheetName");
+        var insertAt = ToolArguments.GetInt(request.Arguments, "insertAtRow");
+        var count = CountArray(request.Arguments, "rows");
+        return $"Insert {count} row(s) at row {insertAt} in sheet '{sheet}'\nFile: {path}";
+    }
+
+    private static string BuildExcelAppendTableRows(McpToolRequest request)
+    {
+        var path = ToolArguments.GetString(request.Arguments, "filePath");
+        var sheet = ToolArguments.GetString(request.Arguments, "worksheetName");
+        var count = CountArray(request.Arguments, "rows");
+        return $"Append {count} row(s) to sheet '{sheet}'\nFile: {path}";
     }
 
     private static string BuildDeleteViews(McpToolRequest request)

@@ -582,6 +582,172 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    // ── File System Tools ─────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "file_read_text", ReadOnly = true),
+     Description("Reads a UTF-8 text file from a local path. Returns file content and metadata. Default max size 1 MB. Returns an error for missing files, oversized files, or paths outside allowed roots.")]
+    public async Task<string> FileReadText(
+        [Description("Absolute local path to the file to read.")] string filePath,
+        [Description("Maximum file size in bytes to read. 0 uses the default (1 MB).")] int maxBytes = 0,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["filePath"] = filePath,
+            ["maxBytes"] = maxBytes
+        };
+        var result = await pipeClient.SendAsync("file_read_text", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "file_write_text"),
+     Description("Writes a UTF-8 text file to disk. Requires user approval. Will not overwrite an existing file unless overwrite=true. Creates parent directories when createDirectories=true.")]
+    public async Task<string> FileWriteText(
+        [Description("Absolute local path to write the file to.")] string filePath,
+        [Description("Text content to write to the file.")] string content,
+        [Description("If true, overwrite the file if it already exists. Default false.")] bool overwrite = false,
+        [Description("If true, create missing parent directories automatically. Default true.")] bool createDirectories = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["filePath"] = filePath,
+            ["content"] = content,
+            ["overwrite"] = overwrite,
+            ["createDirectories"] = createDirectories
+        };
+        var result = await pipeClient.SendAsync("file_write_text", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "file_list_directory", ReadOnly = true),
+     Description("Lists files and folders in a local directory. Supports glob-style searchPattern (e.g. *.xlsx), optional recursive traversal, and a maxResults cap.")]
+    public async Task<string> FileListDirectory(
+        [Description("Absolute local path to the directory to list.")] string folderPath,
+        [Description("File search pattern, e.g. *.xlsx or *. Default '*'.")] string searchPattern = "*",
+        [Description("If true, include all subdirectory contents recursively. Default false.")] bool recursive = false,
+        [Description("Maximum number of entries to return. Default 500.")] int maxResults = 500,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["folderPath"] = folderPath,
+            ["searchPattern"] = searchPattern,
+            ["recursive"] = recursive,
+            ["maxResults"] = maxResults
+        };
+        var result = await pipeClient.SendAsync("file_list_directory", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    // ── Excel Tools ───────────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "excel_inspect_workbook", ReadOnly = true),
+     Description("Reads Excel workbook metadata — sheet names, used ranges, detected headers — without modifying the file. Optionally returns preview rows.")]
+    public async Task<string> ExcelInspectWorkbook(
+        [Description("Absolute path to the .xlsx or .xlsm file.")] string filePath,
+        [Description("If true, include preview data rows from each sheet. Default false.")] bool includePreviewRows = false,
+        [Description("Number of preview data rows to return per sheet. Default 10.")] int previewRowCount = 10,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["filePath"] = filePath,
+            ["includePreviewRows"] = includePreviewRows,
+            ["previewRowCount"] = previewRowCount
+        };
+        var result = await pipeClient.SendAsync("excel_inspect_workbook", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "excel_read_range", ReadOnly = true),
+     Description("Reads a specific cell range from an Excel worksheet. Returns cell values, optional formulas, and data types. Read-only.")]
+    public async Task<string> ExcelReadRange(
+        [Description("Absolute path to the .xlsx or .xlsm file.")] string filePath,
+        [Description("Exact worksheet name.")] string worksheetName,
+        [Description("Cell range address, e.g. A1:H20.")] string rangeAddress,
+        [Description("If true, include formula strings in addition to computed values. Default false.")] bool includeFormulas = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["filePath"] = filePath,
+            ["worksheetName"] = worksheetName,
+            ["rangeAddress"] = rangeAddress,
+            ["includeFormulas"] = includeFormulas
+        };
+        var result = await pipeClient.SendAsync("excel_read_range", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "excel_update_cells"),
+     Description("Updates specific cells in an existing Excel file without changing workbook formatting. Requires user approval. Creates a timestamped backup by default.")]
+    public async Task<string> ExcelUpdateCells(
+        [Description("Absolute path to the .xlsx file.")] string filePath,
+        [Description("Exact worksheet name.")] string worksheetName,
+        [Description("Array of cell updates: [{\"cell\": \"B12\", \"value\": \"New text\"}, ...]")] object[] updates,
+        [Description("If true, create a timestamped backup copy before saving. Default true.")] bool backupBeforeSave = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["filePath"] = filePath,
+            ["worksheetName"] = worksheetName,
+            ["updates"] = updates,
+            ["backupBeforeSave"] = backupBeforeSave
+        };
+        var result = await pipeClient.SendAsync("excel_update_cells", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "excel_insert_rows"),
+     Description("Inserts rows at a given row number in an Excel worksheet, copying styles from a template row. Row values are keyed by column letter (A, B, C…). Requires user approval.")]
+    public async Task<string> ExcelInsertRows(
+        [Description("Absolute path to the .xlsx file.")] string filePath,
+        [Description("Exact worksheet name.")] string worksheetName,
+        [Description("1-based row number to insert before.")] int insertAtRow,
+        [Description("1-based row number to copy styles from. Defaults to the row above insertAtRow.")] int copyStyleFromRow = 0,
+        [Description("Rows to insert as objects keyed by column letter: [{\"A\": \"val1\", \"B\": \"val2\"}, ...]")] object[]? rows = null,
+        [Description("If true, create a timestamped backup before saving. Default true.")] bool backupBeforeSave = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["filePath"] = filePath,
+            ["worksheetName"] = worksheetName,
+            ["insertAtRow"] = insertAtRow,
+            ["copyStyleFromRow"] = copyStyleFromRow > 0 ? copyStyleFromRow : (insertAtRow > 1 ? insertAtRow - 1 : 1),
+            ["rows"] = rows ?? [],
+            ["backupBeforeSave"] = backupBeforeSave
+        };
+        var result = await pipeClient.SendAsync("excel_insert_rows", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "excel_append_table_rows"),
+     Description("Appends rows after the last data row in an Excel worksheet, matching values to columns by header name. Optionally targets a named Excel table. Requires user approval.")]
+    public async Task<string> ExcelAppendTableRows(
+        [Description("Absolute path to the .xlsx file.")] string filePath,
+        [Description("Exact worksheet name.")] string worksheetName,
+        [Description("Named Excel table to extend. Leave empty to auto-detect the header region.")] string tableName = "",
+        [Description("If true, match row keys to column headers by name (case-insensitive). Default true.")] bool matchHeaders = true,
+        [Description("Rows to append as objects keyed by header name: [{\"Dokumendi nr\": \"1626_EL\", \"Nimetus\": \"Plaan\"}, ...]")] object[]? rows = null,
+        [Description("If true, create a timestamped backup before saving. Default true.")] bool backupBeforeSave = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["filePath"] = filePath,
+            ["worksheetName"] = worksheetName,
+            ["tableName"] = tableName,
+            ["matchHeaders"] = matchHeaders,
+            ["rows"] = rows ?? [],
+            ["backupBeforeSave"] = backupBeforeSave
+        };
+        var result = await pipeClient.SendAsync("excel_append_table_rows", args, cancellationToken);
+        return FormatResult(result);
+    }
+
     private static string FormatResult(McpToolResult result)
     {
         var response = new
