@@ -3317,5 +3317,54 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         var result = await pipeClient.SendAsync("ifc_preview_spaces", args, cancellationToken);
         return FormatResult(result);
     }
+
+    [McpServerTool(Name = "ifc_preview_space_geometry", ReadOnly = true),
+     Description(
+         "Extracts geometry from linked IFC Space elements (Generic Models / DirectShapes) and " +
+         "returns per-space geometry readiness results: solid detection, bottom horizontal face " +
+         "selection, footprint CurveLoop extraction, approximate area in m², and an interior " +
+         "placement point for later Room placement. " +
+         "If linkedElementIds is omitted, all IFC Space candidates in the link are processed. " +
+         "Set includeLoopCoordinates=true to receive tessellated XY coordinates for each loop " +
+         "(increases response size). " +
+         "Only items with status=GeometryReady are eligible for Phase 3 room creation. " +
+         "Phase 2: strictly read-only — does not create rooms, room separation lines, " +
+         "shared parameters, or any other model elements.")]
+    public async Task<string> IfcPreviewSpaceGeometry(
+        [Description("Element id of the RevitLinkInstance to inspect (integer). Obtain from ifc_list_links.")]
+        long linkInstanceId,
+        [Description("Optional list of linked element IDs to process. If empty, all IFC Space candidates in the link are processed.")]
+        long[]? linkedElementIds = null,
+        [Description("If true, include tessellated loop coordinates in the response. Increases response size. Default false.")]
+        bool includeLoopCoordinates = false,
+        [Description("Maximum number of XY coordinate points returned per loop when includeLoopCoordinates is true. Default 250.")]
+        int maxCoordinatePoints = 250,
+        [Description("Endpoint gap below this threshold (mm) is snapped during loop cleanup. Default 3 mm.")]
+        double endpointSnapToleranceMm = 3.0,
+        [Description("Segments shorter than this threshold (mm) are removed during loop cleanup. Default 1 mm.")]
+        double tinySegmentToleranceMm = 1.0,
+        [Description("Maximum angle in degrees from vertical for a face normal to be classified as horizontal. Default 2 degrees.")]
+        double horizontalFaceToleranceDegrees = 2.0,
+        [Description("Maximum vertical offset (mm) between a space bottom elevation and the matched Level. Default 300 mm.")]
+        double levelMatchToleranceMm = 300.0,
+        [Description("Maximum number of space candidates to return. Default 1000.")]
+        int maxResults = 1000,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["linkInstanceId"]                = linkInstanceId,
+            ["linkedElementIds"]              = linkedElementIds ?? [],
+            ["includeLoopCoordinates"]        = includeLoopCoordinates,
+            ["maxCoordinatePoints"]           = maxCoordinatePoints,
+            ["endpointSnapToleranceMm"]       = endpointSnapToleranceMm,
+            ["tinySegmentToleranceMm"]        = tinySegmentToleranceMm,
+            ["horizontalFaceToleranceDegrees"] = horizontalFaceToleranceDegrees,
+            ["levelMatchToleranceMm"]         = levelMatchToleranceMm,
+            ["maxResults"]                    = maxResults
+        };
+        var result = await pipeClient.SendAsync("ifc_preview_space_geometry", args, cancellationToken);
+        return FormatResult(result);
+    }
 }
 
