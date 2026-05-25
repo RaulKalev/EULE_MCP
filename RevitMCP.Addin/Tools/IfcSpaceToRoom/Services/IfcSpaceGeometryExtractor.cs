@@ -61,9 +61,9 @@ public class IfcSpaceGeometryExtractor
 
             var bottomFace = _faceFinder.Find(
                 solids,
+                out string? faceWarning,
                 options.HorizontalFaceToleranceDegrees,
-                minAreaFt2,
-                out string? faceWarning);
+                minAreaFt2);
 
             if (bottomFace == null)
             {

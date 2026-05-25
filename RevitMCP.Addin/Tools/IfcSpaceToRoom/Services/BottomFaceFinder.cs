@@ -24,9 +24,9 @@ public class BottomFaceFinder
     /// <param name="warning">Set to a diagnostic string when no face is found.</param>
     public PlanarFace? Find(
         IEnumerable<Solid> solids,
+        out string? warning,
         double toleranceDegrees   = 2.0,
-        double minimumAreaFt2     = 0.0,   // caller converts from m²
-        out string? warning)
+        double minimumAreaFt2     = 0.0)   // caller converts from m²
     {
         warning = null;
 
