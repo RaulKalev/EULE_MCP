@@ -18,6 +18,14 @@ public static class ResponseGuard
     /// with remediation guidance. Otherwise returns <paramref name="result"/> unchanged.
     /// </summary>
     public static McpToolResult GuardResult(McpToolResult result, QueryLimits? limits = null)
+        => GuardSerialized(result, limits).Result;
+
+    /// <summary>
+    /// Same guard logic as <see cref="GuardResult"/>, but also returns the serialized JSON so the
+    /// caller does not have to serialize a second time. On the hot path (every pipe response) this
+    /// avoids a redundant full serialization of the result graph.
+    /// </summary>
+    public static (McpToolResult Result, string Json) GuardSerialized(McpToolResult result, QueryLimits? limits = null)
     {
         limits ??= QueryLimits.Default;
 
@@ -25,8 +33,14 @@ public static class ResponseGuard
         var byteCount = Encoding.UTF8.GetByteCount(json);
 
         if (byteCount <= limits.MaxResponseBytes)
-            return result;
+            return (result, json);
 
+        var fallback = BuildOversizeFallback(result, byteCount, limits);
+        return (fallback, JsonConvert.SerializeObject(fallback, Formatting.None));
+    }
+
+    private static McpToolResult BuildOversizeFallback(McpToolResult result, int byteCount, QueryLimits limits)
+    {
         var warnings = new List<string>(result.Warnings)
         {
             $"[ResponseGuard] Response was {byteCount:N0} bytes — exceeded {limits.MaxResponseBytes:N0} byte limit. Response replaced with safe fallback."

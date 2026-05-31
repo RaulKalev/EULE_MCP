@@ -52,11 +52,9 @@ public static class CircuitDtoBuilder
         if (includeParameters)
             parameters = BuildParameters(circuit);
 
-        double apparentLoad = 0, voltage = 0;
-        int poles = 0;
-        try { apparentLoad = circuit.ApparentLoad; } catch { }
-        try { voltage = circuit.Voltage; } catch { }
-        try { poles = circuit.PolesNumber; } catch { }
+        double apparentLoad = RevitProp.TryRead(() => circuit.ApparentLoad);
+        double voltage = RevitProp.TryRead(() => circuit.Voltage);
+        int poles = RevitProp.TryRead(() => circuit.PolesNumber);
 
         return new
         {

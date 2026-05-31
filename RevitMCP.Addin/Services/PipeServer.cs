@@ -136,7 +136,7 @@ public class PipeServer
                 sw.Stop();
                 result.DurationMs = sw.ElapsedMilliseconds;
 
-                var responseJson = JsonConvert.SerializeObject(ResponseGuard.GuardResult(result));
+                var (_, responseJson) = ResponseGuard.GuardSerialized(result);
                 var responseBytes = System.Text.Encoding.UTF8.GetByteCount(responseJson);
                 await writer.WriteLineAsync(responseJson);
 

@@ -56,7 +56,7 @@ public class SetSheetParametersBulkTool : IRevitMcpTool
             {
                 try
                 {
-                    var p = FindParameter(sheet, pName);
+                    var p = ParameterFinder.Find(sheet, pName);
                     if (p == null) { warnings.Add($"Sheet '{sheet.SheetNumber}': param '{pName}' not found."); continue; }
                     if (p.IsReadOnly) { warnings.Add($"Sheet '{sheet.SheetNumber}': param '{pName}' is read-only."); continue; }
                     SetParam(p, pVal?.ToString() ?? "");
@@ -108,21 +108,4 @@ public class SetSheetParametersBulkTool : IRevitMcpTool
 
     private static McpToolResult Fail(McpToolRequest r, string msg) =>
         new() { RequestId = r.RequestId, Success = false, Message = msg };
-
-    /// <summary>Looks up a parameter by exact name, then falls back to case-insensitive contains match.</summary>
-    private static Parameter? FindParameter(Element element, string name)
-    {
-        var exact = element.LookupParameter(name);
-        if (exact != null) return exact;
-        Parameter? match = null;
-        foreach (Parameter p in element.Parameters)
-        {
-            if (p.Definition.Name.Contains(name, StringComparison.OrdinalIgnoreCase))
-            {
-                if (match != null) return null; // ambiguous — require exact name
-                match = p;
-            }
-        }
-        return match;
-    }
 }
