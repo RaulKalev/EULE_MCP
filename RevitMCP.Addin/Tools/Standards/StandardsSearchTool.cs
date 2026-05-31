@@ -40,7 +40,7 @@ public class StandardsSearchTool : IRevitMcpTool
             });
         }
 
-        maxResults = Math.Clamp(maxResults, 1, 50);
+        maxResults = Math.Max(1, Math.Min(maxResults, 50));
 
         IEnumerable<string>? sourceIds = !string.IsNullOrWhiteSpace(sourceIdFilter)
             ? new[] { sourceIdFilter }

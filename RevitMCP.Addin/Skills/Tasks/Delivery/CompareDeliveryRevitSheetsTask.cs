@@ -37,14 +37,17 @@ internal sealed class CompareDeliveryRevitSheetsTask : ISkillTask
 
             // Settings
             var requiredExtsRaw     = SkillSettings.GetString(taskDef.Settings, "requiredExtensions", "pdf,dwg");
-            var requiredExtensions  = requiredExtsRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                                                     .Select(e => e.TrimStart('.').ToLowerInvariant()).ToList();
+            var requiredExtensions  = requiredExtsRaw.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                                                     .Select(e => e.Trim().TrimStart('.').ToLowerInvariant())
+                                                     .Where(e => e.Length > 0).ToList();
             var stageFilterRaw      = SkillSettings.GetString(taskDef.Settings, "stageFilter");
             var stageFilter         = string.IsNullOrWhiteSpace(stageFilterRaw) ? new List<string>()
-                : stageFilterRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+                : stageFilterRaw.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
             var disciplineFilterRaw = SkillSettings.GetString(taskDef.Settings, "disciplineFilter");
             var disciplineFilter    = string.IsNullOrWhiteSpace(disciplineFilterRaw) ? new List<string>()
-                : disciplineFilterRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+                : disciplineFilterRaw.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
 
             // Collect Revit sheets
             var revitSheets = new FilteredElementCollector(ctx.Document)

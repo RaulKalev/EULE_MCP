@@ -97,12 +97,14 @@ public static class ElectricalDashboardService
             var circNum = c.CircuitNumber ?? "";
             var wt = CircuitDtoBuilder.GetWireTypeName(doc, c);
             bool hasCableType = false;
+#if !REVIT2024
             try
             {
                 var cableId = c.CableType;
                 hasCableType = cableId != null && cableId != ElementId.InvalidElementId;
             }
             catch { }
+#endif
             string loadName = "";
             try { loadName = c.LookupParameter("Load Name")?.AsString() ?? ""; } catch { }
             var stName = c.SystemType.ToString();
@@ -309,7 +311,9 @@ public static class ElectricalDashboardService
             var circNum = c.CircuitNumber ?? "";
             var wt = CircuitDtoBuilder.GetWireTypeName(doc, c);
             bool hasCableType = false;
+#if !REVIT2024
             try { var id = c.CableType; hasCableType = id != null && id != ElementId.InvalidElementId; } catch { }
+#endif
             string ln = ""; try { ln = c.LookupParameter("Load Name")?.AsString() ?? ""; } catch { }
 
             if (!panelMap.ContainsKey(pName))

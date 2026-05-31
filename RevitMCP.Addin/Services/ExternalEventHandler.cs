@@ -98,7 +98,12 @@ public class ExternalEventHandler : IExternalEventHandler
             // defer execution until user approves in the UI.
             // Approved requests (re-dispatched after user clicks Approve) skip this check.
             // Direct Edit mode bypasses RequiresApproval, but NEVER bypasses Destructive.
+#if REVIT2024
+            // Revit 2024 build has no UI window — direct edit is always disabled (headless).
+            var isDirectEditEnabled = false;
+#else
             var isDirectEditEnabled = RevitMCP.Addin.App.GetViewModel()?.IsDirectEditEnabled ?? false;
+#endif
             var needsApproval =
                 ((tool.Permission == ToolPermission.RequiresApproval && !isDirectEditEnabled)
                  || tool.Permission == ToolPermission.DestructiveRequiresManualApproval)

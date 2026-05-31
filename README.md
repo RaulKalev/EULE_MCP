@@ -34,9 +34,14 @@ Scan delivery folder C:\Projects\1626\Export for temp files and old revisions.
 
 ## Requirements
 
-- Revit 2026
-- .NET 8 SDK
+- **Revit 2026** (.NET 8) — full feature set, all 161 tools
+- **Revit 2024** (.NET Framework 4.8) — *read-only subset* (~125 tools): write/edit tools, WPF approval window, IFC space-to-room, and skill-run tools are disabled
+- .NET 8 SDK (to build)
 - Claude Code CLI (`claude`), Codex CLI (`codex`), **or** Gemini CLI (`gemini`)
+
+### Revit 2024 read-only mode
+
+The addin multi-targets `net8.0-windows` and `net48`. In Revit 2024 the AppLoader picks up `RevitMCP.Addin\bin\Release\net48\RevitMCP.Addin.dll`; in Revit 2026 it loads the `net8.0-windows` build. The bridge and pipe protocol are unchanged. Tools that mutate the model, write parameters, place/duplicate/rename/delete sheets or views, create circuits, run skills, or open the WPF UI are not registered for the net48 build — clients see a smaller tool list. Approvals are auto-bypassed (no UI) but **destructive tools are also unavailable**, so safety is preserved.
 
 ---
 

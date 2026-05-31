@@ -62,7 +62,9 @@ public class GetVoltageDropPrecheckTool : IRevitMcpTool
             // Cable/wire type
             var wireType = CircuitDtoBuilder.GetWireTypeName(doc, circuit);
             bool hasCableType = false;
+#if !REVIT2024
             try { var id = circuit.CableType; hasCableType = id != null && id != ElementId.InvalidElementId; } catch { }
+#endif
             bool hasWireType = !string.IsNullOrEmpty(wireType);
 
             // Panel location

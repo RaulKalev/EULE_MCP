@@ -96,14 +96,18 @@ public class PipeServer
     private async Task HandleClientAsync(NamedPipeServerStream pipe, CancellationToken ct)
     {
         using var _ = pipe;
-        using var reader = new StreamReader(pipe, leaveOpen: true);
-        using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
+        using var reader = new StreamReader(pipe, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
+        using var writer = new StreamWriter(pipe, System.Text.Encoding.UTF8, bufferSize: 1024, leaveOpen: true) { AutoFlush = true };
 
         try
         {
             while (!ct.IsCancellationRequested && pipe.IsConnected)
             {
+#if REVIT2024
+                var line = await reader.ReadLineAsync();
+#else
                 var line = await reader.ReadLineAsync(ct);
+#endif
                 if (line == null) break;
 
                 var sw = System.Diagnostics.Stopwatch.StartNew();

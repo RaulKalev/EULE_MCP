@@ -70,14 +70,16 @@ public class CheckCircuitHealthTool : IRevitMcpTool
             var panel = CircuitDtoBuilder.TryGetPanel(circuit);
             var circNum = circuit.CircuitNumber ?? "";
 
-            // CableType (Revit 2026 API)
+            // CableType (Revit 2025+ API)
             bool hasCableType = false;
+#if !REVIT2024
             try
             {
                 var id = circuit.CableType;
                 hasCableType = id != null && id != ElementId.InvalidElementId;
             }
             catch { }
+#endif
 
             // WireType: use the same resolver as the DTO builder (CableType first, deprecated WireType as fallback)
             // This prevents false positives when CableType is set but the deprecated WireType is null.
@@ -164,7 +166,9 @@ public class CheckCircuitHealthTool : IRevitMcpTool
                 var panel = CircuitDtoBuilder.TryGetPanel(circuit);
                 var circNum = circuit.CircuitNumber ?? "";
                 bool hasCableType2 = false;
+#if !REVIT2024
                 try { var id = circuit.CableType; hasCableType2 = id != null && id != ElementId.InvalidElementId; } catch { }
+#endif
                 string resolvedWireType2 = CircuitDtoBuilder.GetWireTypeName(doc, circuit);
                 bool hasWireType2 = !string.IsNullOrEmpty(resolvedWireType2);
                 string loadName2 = "";

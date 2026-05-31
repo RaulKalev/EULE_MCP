@@ -59,7 +59,7 @@ public static class QueryGuard
     {
         if (string.IsNullOrEmpty(value)) return string.Empty;
         if (maxLength <= 0 || value.Length <= maxLength) return value;
-        return string.Concat(value.AsSpan(0, maxLength), "... [truncated]");
+        return value.Substring(0, maxLength) + "... [truncated]";
     }
 
     /// <summary>

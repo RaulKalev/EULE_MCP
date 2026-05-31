@@ -28,7 +28,8 @@ internal sealed class MergeIssueReportsTask : ISkillTask
 
             var candidates = string.IsNullOrWhiteSpace(sourceKeysRaw)
                 ? ctx.SharedData.ToList()
-                : sourceKeysRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                : sourceKeysRaw.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                               .Select(k => k.Trim()).Where(k => k.Length > 0)
                                .Where(k => ctx.SharedData.ContainsKey(k))
                                .Select(k => new KeyValuePair<string, object?>(k, ctx.SharedData[k]))
                                .ToList();

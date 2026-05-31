@@ -60,7 +60,7 @@ public class ClashRunCacheService
     public (ClashResultDto? Clash, int Index, int Total) GetCurrent(ClashRunResultDto run)
     {
         if (run.Clashes.Count == 0) return (null, 0, 0);
-        var idx = Math.Clamp(_cursor, 0, run.Clashes.Count - 1);
+        var idx = Math.Max(0, Math.Min(_cursor, run.Clashes.Count - 1));
         return (run.Clashes[idx], idx + 1, run.Clashes.Count);
     }
 

@@ -58,8 +58,7 @@ public class GroupElementsTool : IRevitMcpTool
         // Build flat output as list of plain dicts for JSON serialization
         var flatRows = groupResult.GroupsFlat.Select(row =>
         {
-            var d = new Dictionary<string, object>(row.Keys.Select(kv =>
-                new KeyValuePair<string, object>(kv.Key, kv.Value)));
+            var d = row.Keys.ToDictionary(kv => kv.Key, kv => (object)kv.Value);
             d["count"] = row.Count;
             if (row.ElementIds != null)
                 d["elementIds"] = row.ElementIds;

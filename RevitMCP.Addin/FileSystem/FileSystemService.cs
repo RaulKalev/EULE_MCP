@@ -40,7 +40,7 @@ public class FileSystemService
                 {
                     using var sha = SHA256.Create();
                     using var stream = File.OpenRead(normalized!);
-                    hash = Convert.ToHexString(sha.ComputeHash(stream)).ToLowerInvariant();
+                    hash = BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "").ToLowerInvariant();
                 }
                 else
                 {
@@ -48,7 +48,7 @@ public class FileSystemService
                 }
             }
 
-            var attrs = Enum.GetValues<FileAttributes>()
+            var attrs = ((FileAttributes[])Enum.GetValues(typeof(FileAttributes)))
                 .Where(a => info.Attributes.HasFlag(a))
                 .Select(a => a.ToString())
                 .ToList();

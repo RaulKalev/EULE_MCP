@@ -38,8 +38,8 @@ public class StandardsGetDocumentChunkTool : IRevitMcpTool
             });
         }
 
-        before = Math.Clamp(before, 0, 5);
-        after  = Math.Clamp(after,  0, 5);
+        before = Math.Max(0, Math.Min(before, 5));
+        after  = Math.Max(0, Math.Min(after,  5));
 
         var srcArg = string.IsNullOrWhiteSpace(sourceId) ? null : sourceId;
 

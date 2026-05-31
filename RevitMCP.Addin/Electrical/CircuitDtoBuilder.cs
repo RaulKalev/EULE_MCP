@@ -88,10 +88,12 @@ public static class CircuitDtoBuilder
     {
         try
         {
-            // CableType is the Revit 2026 API; WireType is deprecated but kept as fallback
+#if !REVIT2024
+            // CableType is the Revit 2025+ API; WireType is deprecated but kept as fallback
             var cableTypeId = circuit.CableType;
             if (cableTypeId != null && cableTypeId != ElementId.InvalidElementId)
                 return doc.GetElement(cableTypeId)?.Name ?? "";
+#endif
         }
         catch { }
 #pragma warning disable CS0618

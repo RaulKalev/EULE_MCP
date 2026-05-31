@@ -126,7 +126,11 @@ public class ActivityLogger
         await _lock.WaitAsync();
         try
         {
+#if REVIT2024
+            await System.Threading.Tasks.Task.Run(() => File.AppendAllText(filePath, line));
+#else
             await File.AppendAllTextAsync(filePath, line);
+#endif
         }
         finally
         {

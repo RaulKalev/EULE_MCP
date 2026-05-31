@@ -35,8 +35,9 @@ internal sealed class ScanDeliveryFolderTask : ISkillTask
             var recursive   = SkillSettings.GetBool(taskDef.Settings, "recursive", true);
             var maxResults  = SkillSettings.GetInt(taskDef.Settings, "maxResults", 5000);
             var extsRaw     = SkillSettings.GetString(taskDef.Settings, "includeExtensions", "pdf,dwg");
-            var extensions  = extsRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                                     .Select(e => e.TrimStart('.').ToLowerInvariant())
+            var extensions  = extsRaw.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                                     .Select(e => e.Trim().TrimStart('.').ToLowerInvariant())
+                                     .Where(e => e.Length > 0)
                                      .ToList();
 
             var policy  = new FilePathPolicy();
