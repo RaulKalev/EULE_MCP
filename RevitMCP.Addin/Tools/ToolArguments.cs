@@ -152,6 +152,20 @@ internal static class ToolArguments
         return result;
     }
 
+    /// <summary>Parses a JSON string into a <see cref="JArray"/>, returning null on any failure or non-array JSON.</summary>
+    public static JArray? TryParseJArray(string s)
+    {
+        try { return JToken.Parse(s) as JArray; }
+        catch { return null; }
+    }
+
+    /// <summary>Parses a JSON string into a <see cref="JObject"/>, returning null on any failure or non-object JSON.</summary>
+    public static JObject? TryParseJObject(string s)
+    {
+        try { return JToken.Parse(s) as JObject; }
+        catch { return null; }
+    }
+
     private static JArray? ToJArray(object? value)
     {
         if (value == null)
@@ -161,17 +175,7 @@ internal static class ToolArguments
             return ja;
 
         if (value is string s)
-        {
-            try
-            {
-                var parsed = JToken.Parse(s);
-                return parsed as JArray;
-            }
-            catch
-            {
-                return null;
-            }
-        }
+            return TryParseJArray(s);
 
         if (value is IEnumerable<object> enumerable)
         {

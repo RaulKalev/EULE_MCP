@@ -2,6 +2,12 @@
 
 Run through this checklist after any code change to verify nothing is broken. All MCP responses should be valid JSON with `"success": true`.
 
+> **Note:** Several tool families were consolidated into discriminator-based tools
+> (e.g. `revit_delete_views`/`revit_delete_sheets` → `revit_delete` with
+> `target`). Some tool names referenced below are the pre-consolidation names.
+> See [docs/tool-consolidation.md](docs/tool-consolidation.md) for the full
+> old → new mapping.
+
 ---
 
 ## 1. Revit Startup

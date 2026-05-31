@@ -241,53 +241,37 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
-    [McpServerTool(Name = "revit_export_view_list_to_excel", ReadOnly = true),
-     Description("Exports all views to a formatted .xlsx file.")]
-    public async Task<string> ExportViewListToExcel(
-        [Description("Include template views")] bool includeTemplates = false,
-        [Description("Include views not placed on sheets")] bool includeUnplacedViews = true,
-        [Description("Output file name")] string fileName = "Revit_View_List.xlsx",
+    [McpServerTool(Name = "revit_export_list_to_excel", ReadOnly = true),
+     Description("Exports a views/sheets/schedules list to .xlsx. Per-kind options: views=includeTemplates,includeUnplacedViews; sheets=includePlacedViews; schedules=includeFields.")]
+    public async Task<string> ExportListToExcel(
+        [Description("What to export: views | sheets | schedules")] string kind,
+        [Description("views only: include template views. Default false.")] bool includeTemplates = false,
+        [Description("views only: include views not placed on sheets. Default true.")] bool includeUnplacedViews = true,
+        [Description("sheets only: include placed views per sheet. Default true.")] bool includePlacedViews = true,
+        [Description("schedules only: include field names. Default true.")] bool includeFields = true,
+        [Description("Output file name. Empty = default per kind.")] string? fileName = null,
         CancellationToken cancellationToken = default)
     {
-        var args = new Dictionary<string, object?>
+        var (toolName, defaultFile, args) = (kind?.Trim().ToLowerInvariant()) switch
         {
-            ["includeTemplates"] = includeTemplates,
-            ["includeUnplacedViews"] = includeUnplacedViews,
-            ["fileName"] = fileName
+            "views" => ("revit_export_view_list_to_excel", "Revit_View_List.xlsx",
+                new Dictionary<string, object?>
+                {
+                    ["includeTemplates"] = includeTemplates,
+                    ["includeUnplacedViews"] = includeUnplacedViews
+                }),
+            "sheets" => ("revit_export_sheet_list_to_excel", "Revit_Sheet_List.xlsx",
+                new Dictionary<string, object?> { ["includePlacedViews"] = includePlacedViews }),
+            "schedules" => ("revit_export_schedule_list_to_excel", "Revit_Schedule_List.xlsx",
+                new Dictionary<string, object?> { ["includeFields"] = includeFields }),
+            _ => (null, null, null)
         };
-        var result = await pipeClient.SendAsync("revit_export_view_list_to_excel", args, cancellationToken);
-        return FormatResult(result);
-    }
 
-    [McpServerTool(Name = "revit_export_sheet_list_to_excel", ReadOnly = true),
-     Description("Exports all sheets to a formatted .xlsx file.")]
-    public async Task<string> ExportSheetListToExcel(
-        [Description("Include list of placed views per sheet")] bool includePlacedViews = true,
-        [Description("Output file name")] string fileName = "Revit_Sheet_List.xlsx",
-        CancellationToken cancellationToken = default)
-    {
-        var args = new Dictionary<string, object?>
-        {
-            ["includePlacedViews"] = includePlacedViews,
-            ["fileName"] = fileName
-        };
-        var result = await pipeClient.SendAsync("revit_export_sheet_list_to_excel", args, cancellationToken);
-        return FormatResult(result);
-    }
+        if (toolName == null)
+            return FormatBridgeError($"Invalid kind '{kind}'. Expected: views, sheets, or schedules.");
 
-    [McpServerTool(Name = "revit_export_schedule_list_to_excel", ReadOnly = true),
-     Description("Exports all schedules to a formatted .xlsx file.")]
-    public async Task<string> ExportScheduleListToExcel(
-        [Description("Include field names")] bool includeFields = true,
-        [Description("Output file name")] string fileName = "Revit_Schedule_List.xlsx",
-        CancellationToken cancellationToken = default)
-    {
-        var args = new Dictionary<string, object?>
-        {
-            ["includeFields"] = includeFields,
-            ["fileName"] = fileName
-        };
-        var result = await pipeClient.SendAsync("revit_export_schedule_list_to_excel", args, cancellationToken);
+        args!["fileName"] = string.IsNullOrWhiteSpace(fileName) ? defaultFile : fileName;
+        var result = await pipeClient.SendAsync(toolName, args, cancellationToken);
         return FormatResult(result);
     }
 
@@ -374,7 +358,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Explicit element IDs to query.")] long[]? elementIds = null,
         [Description("Optional list of parameter names to include in returned elements")] string[]? returnParameters = null,
         [Description("Include instance parameters. Default true.")] bool includeInstanceParameters = true,
-        [Description("Include type parameters. Default true.")] bool includeTypeParameters = true,
+        [Description("Include type parameters. Heavy/repetitive per element; opt-in. Default false.")] bool includeTypeParameters = false,
         [Description("Max elements to scan/return (default 500).")] int limit = 500,
         [Description("Optional page size for paged results. Clamped by QueryLimits.MaxPageSize (500). Defaults to QueryLimits.DefaultPageSize (100) when omitted.")] int pageSize = -1,
         [Description("Zero-based page index for paged results.")] int page = 0,
@@ -415,7 +399,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("JSON array of parameter filters: [{parameterName, operator, value, matchMode, scope}]")] string? filters = null,
         [Description("Parameter names to return (partial match). Leave empty for all.")] string[]? parameterNames = null,
         [Description("Include instance parameters. Default true.")] bool includeInstanceParameters = true,
-        [Description("Include type parameters. Default true.")] bool includeTypeParameters = true,
+        [Description("Include type parameters. Heavy/repetitive per element; opt-in. Default false.")] bool includeTypeParameters = false,
         [Description("Max elements to scan/return (default 500).")] int limit = 500,
         [Description("Optional page size for paged results. Clamped by QueryLimits.MaxPageSize (500). Defaults to QueryLimits.DefaultPageSize (100) when omitted.")] int pageSize = -1,
         [Description("Zero-based page index for paged results.")] int page = 0,
@@ -585,36 +569,33 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
 
     // ── Issue Reports ─────────────────────────────────────────────────────────
 
-    [McpServerTool(Name = "revit_export_issues_json"),
-     Description("Exports an issue report (passed as JSON in reportJson) to a .json file. Writes a file to disk and requires approval in the Revit add-in. Returns filePath, totalIssues, runId.")]
-    public async Task<string> ExportIssuesJson(
+    [McpServerTool(Name = "revit_export_issues"),
+     Description("Exports an issue report (IssueReportDto JSON in reportJson) to a file. format: json | excel | markdown | html_dashboard. Writes to disk; requires approval. Returns filePath (+ totalIssues, runId for json/excel/markdown). html_dashboard supports fileName and includeEmbeddedJson.")]
+    public async Task<string> ExportIssues(
+        [Description("Output format: json | excel | markdown | html_dashboard")] string format,
         [Description("The full IssueReportDto serialised as a JSON string.")] string reportJson,
+        [Description("html_dashboard only: output file name (no path). Empty = auto.")] string? fileName = null,
+        [Description("html_dashboard only: embed raw JSON for re-import. Default true.")] bool includeEmbeddedJson = true,
         CancellationToken cancellationToken = default)
     {
-        var args = new Dictionary<string, object?> { ["reportJson"] = reportJson };
-        var result = await pipeClient.SendAsync("revit_export_issues_json", args, cancellationToken);
-        return FormatResult(result);
-    }
+        var (toolName, args) = (format?.Trim().ToLowerInvariant()) switch
+        {
+            "json" => ("revit_export_issues_json", new Dictionary<string, object?> { ["reportJson"] = reportJson }),
+            "excel" => ("revit_export_issues_excel", new Dictionary<string, object?> { ["reportJson"] = reportJson }),
+            "markdown" => ("revit_export_issues_markdown", new Dictionary<string, object?> { ["reportJson"] = reportJson }),
+            "html_dashboard" => ("revit_export_issues_html_dashboard", new Dictionary<string, object?>
+            {
+                ["reportJson"] = reportJson,
+                ["fileName"] = fileName,
+                ["includeEmbeddedJson"] = includeEmbeddedJson
+            }),
+            _ => (null, null)
+        };
 
-    [McpServerTool(Name = "revit_export_issues_excel"),
-     Description("Exports an issue report (passed as JSON in reportJson) to a formatted Excel (.xlsx) file with Summary and Issues sheets. Writes a file to disk and requires approval in the Revit add-in. Returns filePath, totalIssues, runId.")]
-    public async Task<string> ExportIssuesExcel(
-        [Description("The full IssueReportDto serialised as a JSON string.")] string reportJson,
-        CancellationToken cancellationToken = default)
-    {
-        var args = new Dictionary<string, object?> { ["reportJson"] = reportJson };
-        var result = await pipeClient.SendAsync("revit_export_issues_excel", args, cancellationToken);
-        return FormatResult(result);
-    }
+        if (toolName == null)
+            return FormatBridgeError($"Invalid format '{format}'. Expected: json, excel, markdown, or html_dashboard.");
 
-    [McpServerTool(Name = "revit_export_issues_markdown"),
-     Description("Exports an issue report (passed as JSON in reportJson) to a Markdown (.md) file. Writes a file to disk and requires approval in the Revit add-in. Returns filePath, totalIssues, runId.")]
-    public async Task<string> ExportIssuesMarkdown(
-        [Description("The full IssueReportDto serialised as a JSON string.")] string reportJson,
-        CancellationToken cancellationToken = default)
-    {
-        var args = new Dictionary<string, object?> { ["reportJson"] = reportJson };
-        var result = await pipeClient.SendAsync("revit_export_issues_markdown", args, cancellationToken);
+        var result = await pipeClient.SendAsync(toolName, args!, cancellationToken);
         return FormatResult(result);
     }
 
@@ -631,19 +612,6 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["title"] = title
         };
         var result = await pipeClient.SendAsync("revit_merge_issue_reports", args, cancellationToken);
-        return FormatResult(result);
-    }
-
-    [McpServerTool(Name = "revit_export_issues_html_dashboard"),
-     Description("Exports an issue report as a standalone offline HTML dashboard with filtering, sorting and severity cards. Pass the IssueReportDto serialised as JSON. Returns filePath.")]
-    public async Task<string> ExportIssuesHtmlDashboard(
-        [Description("The full IssueReportDto serialised as a JSON string.")] string reportJson,
-        [Description("Optional output file name (without path). Defaults to auto-generated name.")] string? fileName = null,
-        [Description("If true, embeds the raw JSON data inside the HTML file for re-import. Default true.")] bool includeEmbeddedJson = true,
-        CancellationToken cancellationToken = default)
-    {
-        var args = new Dictionary<string, object?> { ["reportJson"] = reportJson, ["fileName"] = fileName, ["includeEmbeddedJson"] = includeEmbeddedJson };
-        var result = await pipeClient.SendAsync("revit_export_issues_html_dashboard", args, cancellationToken);
         return FormatResult(result);
     }
 
@@ -976,6 +944,12 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    private static readonly JsonSerializerSettings ResultSerializerSettings = new()
+    {
+        Formatting = Formatting.None,
+        NullValueHandling = NullValueHandling.Ignore
+    };
+
     private static string FormatResult(McpToolResult result)
     {
         var response = new
@@ -985,10 +959,10 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             message = result.Message,
             durationMs = result.DurationMs,
             data = result.Data,
-            warnings = result.Warnings,
-            errors = result.Errors
+            warnings = result.Warnings is { Count: > 0 } ? result.Warnings : null,
+            errors = result.Errors is { Count: > 0 } ? result.Errors : null
         };
-        return JsonConvert.SerializeObject(response, Formatting.Indented);
+        return JsonConvert.SerializeObject(response, ResultSerializerSettings);
     }
 
     // ── Electrical Circuit Tools ──────────────────────────────────────────────
@@ -999,7 +973,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Optional panel name filter (partial match)")] string? panelName = null,
         [Description("Optional circuit number filter (partial match)")] string? circuitNumber = null,
         [Description("Optional system type filter (e.g. PowerCircuit, Data, FireAlarm)")] string? systemType = null,
-        [Description("Include connected elements in response")] bool includeElements = true,
+        [Description("Include connected elements per circuit. Heavy on large models; opt-in. Default false.")] bool includeElements = false,
         [Description("Include circuit parameters in response")] bool includeParameters = false,
         [Description("Max circuits to return (default 500)")] int limit = 500,
         CancellationToken cancellationToken = default)
@@ -1704,37 +1678,30 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_estimate_circuit_length", ReadOnly = true),
-     Description("Estimates the total cable length for a single circuit by computing distances from panel to connected elements in the model. Length method: StraightLineMax, StraightLineSum, ManhattanMax (default), ManhattanSum, NearestNeighborPath. Results are PRELIMINARY. Accepts: circuitId (required), method (string), routingMultiplier (double, default 1.25), includeElementBreakdown (bool).")]
+     Description("Estimates cable length(s) by computing panel-to-element distances. Results are PRELIMINARY. Single circuit: pass circuitId (>0) — returns detail, supports includeElementBreakdown. Batch: omit circuitId and filter by panelName/systemType/circuitIds — returns one row per circuit. method: StraightLineMax, StraightLineSum, ManhattanMax (default), ManhattanSum, NearestNeighborPath.")]
     public async Task<string> EstimateCircuitLength(
-        [Description("Circuit element ID (required)")] long circuitId,
+        [Description("Single mode: circuit element ID (>0). Omit/0 for batch mode.")] long circuitId = 0,
         [Description("Length estimation method (default ManhattanMax)")] string method = "ManhattanMax",
         [Description("Multiplier to account for routing overhead (default 1.25)")] double routingMultiplier = 1.25,
-        [Description("Include per-element distance breakdown")] bool includeElementBreakdown = false,
+        [Description("Single mode only: include per-element distance breakdown")] bool includeElementBreakdown = false,
+        [Description("Batch mode: panel name filter")] string? panelName = null,
+        [Description("Batch mode: system type filter")] string? systemType = null,
+        [Description("Batch mode: explicit circuit element IDs")] long[]? circuitIds = null,
+        [Description("Batch mode: max circuits (default 1000)")] int limit = 1000,
         CancellationToken cancellationToken = default)
     {
-        var args = new Dictionary<string, object?>
+        if (circuitId > 0)
         {
-            ["circuitId"] = circuitId,
-            ["method"] = method,
-            ["routingMultiplier"] = routingMultiplier,
-            ["includeElementBreakdown"] = includeElementBreakdown
-        };
-        var result = await pipeClient.SendAsync("revit_estimate_circuit_length", args, cancellationToken);
-        return FormatResult(result);
-    }
-
-    [McpServerTool(Name = "revit_estimate_circuit_lengths", ReadOnly = true),
-     Description("Estimates cable lengths for multiple circuits at once. Filter by panelName, systemType, or explicit circuitIds. Returns a row per circuit with raw and routed length estimates. Results are PRELIMINARY. Accepts: panelName, systemType, circuitIds (long[]), method, routingMultiplier, limit.")]
-    public async Task<string> EstimateCircuitLengths(
-        [Description("Optional panel name filter")] string? panelName = null,
-        [Description("Optional system type filter")] string? systemType = null,
-        [Description("Explicit circuit element IDs (optional)")] long[]? circuitIds = null,
-        [Description("Length estimation method (default ManhattanMax)")] string method = "ManhattanMax",
-        [Description("Routing multiplier (default 1.25)")] double routingMultiplier = 1.25,
-        [Description("Max circuits (default 1000)")] int limit = 1000,
-        CancellationToken cancellationToken = default)
-    {
-        var args = new Dictionary<string, object?>
+            var singleArgs = new Dictionary<string, object?>
+            {
+                ["circuitId"] = circuitId,
+                ["method"] = method,
+                ["routingMultiplier"] = routingMultiplier,
+                ["includeElementBreakdown"] = includeElementBreakdown
+            };
+            return FormatResult(await pipeClient.SendAsync("revit_estimate_circuit_length", singleArgs, cancellationToken));
+        }
+        var batchArgs = new Dictionary<string, object?>
         {
             ["panelName"] = panelName ?? string.Empty,
             ["systemType"] = systemType ?? string.Empty,
@@ -1743,8 +1710,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["routingMultiplier"] = routingMultiplier,
             ["limit"] = limit
         };
-        var result = await pipeClient.SendAsync("revit_estimate_circuit_lengths", args, cancellationToken);
-        return FormatResult(result);
+        return FormatResult(await pipeClient.SendAsync("revit_estimate_circuit_lengths", batchArgs, cancellationToken));
     }
 
     [McpServerTool(Name = "revit_export_voltage_drop_input_to_excel", ReadOnly = true),
@@ -2023,28 +1989,50 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
-    [McpServerTool(Name = "revit_preview_duplicate_sheets", ReadOnly = true),
-     Description("Previews sheet duplication WITHOUT changes. Required: sourceSheetIds or sourceSheetNumbers. Optional: newNumberSuffix (default \"_COPY\"), newNameSuffix (default \" - Copy\"), keepTitleBlock, copyParameters.")]
-    public async Task<string> PreviewDuplicateSheets(
-        [Description("Source sheet element IDs")] long[]? sourceSheetIds = null,
-        [Description("Source sheet numbers")] string[]? sourceSheetNumbers = null,
-        [Description("Suffix appended to sheet number (default _COPY)")] string newNumberSuffix = "_COPY",
-        [Description("Suffix appended to sheet name (default ' - Copy')")] string newNameSuffix = " - Copy",
-        [Description("Keep same title block (default true)")] bool keepTitleBlock = true,
-        [Description("Copy instance parameters (default true)")] bool copyParameters = true,
+    [McpServerTool(Name = "revit_preview_duplicate", ReadOnly = true),
+     Description("Previews view/sheet duplication WITHOUT changes. entity=sheets: sourceSheetIds or sourceSheetNumbers; newNumberSuffix (default _COPY), newNameSuffix (default ' - Copy'), keepTitleBlock, copyParameters. entity=views: viewIds; duplicateOption (Duplicate|DuplicateWithDetailing|AsDependent), nameSuffix, namePrefix.")]
+    public async Task<string> PreviewDuplicate(
+        [Description("What to duplicate: views | sheets")] string entity,
+        [Description("sheets only: source sheet element IDs")] long[]? sourceSheetIds = null,
+        [Description("sheets only: source sheet numbers")] string[]? sourceSheetNumbers = null,
+        [Description("sheets only: suffix for new sheet number (default _COPY)")] string newNumberSuffix = "_COPY",
+        [Description("sheets only: suffix for new sheet name (default ' - Copy')")] string newNameSuffix = " - Copy",
+        [Description("sheets only: keep same title block (default true)")] bool keepTitleBlock = true,
+        [Description("sheets only: copy instance parameters (default true)")] bool copyParameters = true,
+        [Description("views only: view element IDs to duplicate")] long[]? viewIds = null,
+        [Description("views only: Duplicate|DuplicateWithDetailing|AsDependent")] string duplicateOption = "DuplicateWithDetailing",
+        [Description("views only: suffix for new view name (default ' - Copy')")] string nameSuffix = " - Copy",
+        [Description("views only: prefix for new view name")] string namePrefix = "",
         CancellationToken cancellationToken = default)
     {
-        var args = new Dictionary<string, object?>
+        var e = entity?.Trim().ToLowerInvariant();
+        if (e == "sheets")
         {
-            ["sourceSheetIds"] = sourceSheetIds ?? [],
-            ["sourceSheetNumbers"] = sourceSheetNumbers ?? [],
-            ["newNumberSuffix"] = newNumberSuffix,
-            ["newNameSuffix"] = newNameSuffix,
-            ["keepTitleBlock"] = keepTitleBlock,
-            ["copyParameters"] = copyParameters
-        };
-        var result = await pipeClient.SendAsync("revit_preview_duplicate_sheets", args, cancellationToken);
-        return FormatResult(result);
+            var sheetArgs = new Dictionary<string, object?>
+            {
+                ["sourceSheetIds"] = sourceSheetIds ?? [],
+                ["sourceSheetNumbers"] = sourceSheetNumbers ?? [],
+                ["newNumberSuffix"] = newNumberSuffix,
+                ["newNameSuffix"] = newNameSuffix,
+                ["keepTitleBlock"] = keepTitleBlock,
+                ["copyParameters"] = copyParameters
+            };
+            return FormatResult(await pipeClient.SendAsync("revit_preview_duplicate_sheets", sheetArgs, cancellationToken));
+        }
+        if (e == "views")
+        {
+            if (viewIds == null || viewIds.Length == 0)
+                return FormatBridgeError("entity=views requires viewIds.");
+            var viewArgs = new Dictionary<string, object?>
+            {
+                ["viewIds"] = viewIds,
+                ["duplicateOption"] = duplicateOption,
+                ["nameSuffix"] = nameSuffix,
+                ["namePrefix"] = namePrefix
+            };
+            return FormatResult(await pipeClient.SendAsync("revit_preview_duplicate_views", viewArgs, cancellationToken));
+        }
+        return FormatBridgeError($"Invalid entity '{entity}'. Expected: views or sheets.");
     }
 
     [McpServerTool(Name = "revit_preview_create_sheets_from_table", ReadOnly = true),
@@ -2059,32 +2047,16 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
-    [McpServerTool(Name = "revit_preview_duplicate_views", ReadOnly = true),
-     Description("Previews view duplication WITHOUT changes. Required: viewIds. Optional: duplicateOption (Duplicate|DuplicateWithDetailing|AsDependent), nameSuffix, namePrefix.")]
-    public async Task<string> PreviewDuplicateViews(
-        [Description("View element IDs to duplicate")] long[] viewIds,
-        [Description("Duplicate option: Duplicate|DuplicateWithDetailing|AsDependent")] string duplicateOption = "DuplicateWithDetailing",
-        [Description("Suffix for new view name (default ' - Copy')")] string nameSuffix = " - Copy",
-        [Description("Prefix for new view name")] string namePrefix = "",
-        CancellationToken cancellationToken = default)
-    {
-        var args = new Dictionary<string, object?>
-        {
-            ["viewIds"] = viewIds,
-            ["duplicateOption"] = duplicateOption,
-            ["nameSuffix"] = nameSuffix,
-            ["namePrefix"] = namePrefix
-        };
-        var result = await pipeClient.SendAsync("revit_preview_duplicate_views", args, cancellationToken);
-        return FormatResult(result);
-    }
-
-    [McpServerTool(Name = "revit_preview_rename_views", ReadOnly = true),
-     Description("Previews view renames WITHOUT changes. Required: mode (FindReplace|PrefixSuffix|Template|RegexFindReplace). Mode params: find/replace, prefix/suffix, template with {Name}. Optional: viewIds, viewTypes, nameFilter.")]
-    public async Task<string> PreviewRenameViews(
+    [McpServerTool(Name = "revit_preview_rename", ReadOnly = true),
+     Description("Previews view/sheet renames WITHOUT changes. mode=FindReplace|PrefixSuffix|Template|RegexFindReplace (params: find/replace, prefix/suffix, template with {Name}). entity=views: viewIds/viewTypes/nameFilter. entity=sheets: sheetIds/nameFilter/numberFilter + target (Name|Number|Both).")]
+    public async Task<string> PreviewRename(
+        [Description("What to rename: views | sheets")] string entity,
         [Description("Rename mode: FindReplace|PrefixSuffix|Template|RegexFindReplace")] string mode,
-        [Description("View element IDs (or use viewTypes+nameFilter)")] long[]? viewIds = null,
-        [Description("Filter by view types")] string[]? viewTypes = null,
+        [Description("views only: view element IDs")] long[]? viewIds = null,
+        [Description("views only: filter by view types")] string[]? viewTypes = null,
+        [Description("sheets only: sheet element IDs")] long[]? sheetIds = null,
+        [Description("sheets only: target field Name|Number|Both (default Name)")] string target = "Name",
+        [Description("sheets only: filter by number substring")] string? numberFilter = null,
         [Description("Filter by name substring")] string? nameFilter = null,
         [Description("Text to find (FindReplace/Regex modes)")] string? find = null,
         [Description("Replacement text")] string? replace = null,
@@ -2093,40 +2065,29 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Template pattern using {Name} (Template mode)")] string? template = null,
         CancellationToken cancellationToken = default)
     {
-        var args = new Dictionary<string, object?>
+        var e = entity?.Trim().ToLowerInvariant();
+        if (e == "views")
         {
-            ["mode"] = mode, ["viewIds"] = viewIds ?? [], ["viewTypes"] = viewTypes ?? [],
-            ["nameFilter"] = nameFilter ?? "", ["find"] = find ?? "", ["replace"] = replace ?? "",
-            ["prefix"] = prefix ?? "", ["suffix"] = suffix ?? "", ["template"] = template ?? ""
-        };
-        var result = await pipeClient.SendAsync("revit_preview_rename_views", args, cancellationToken);
-        return FormatResult(result);
-    }
-
-    [McpServerTool(Name = "revit_preview_rename_sheets", ReadOnly = true),
-     Description("Previews sheet renames WITHOUT changes. Required: mode (FindReplace|PrefixSuffix|Template|RegexFindReplace), target (Name|Number|Both). Optional: sheetIds, nameFilter, numberFilter, plus mode params.")]
-    public async Task<string> PreviewRenameSheets(
-        [Description("Rename mode: FindReplace|PrefixSuffix|Template|RegexFindReplace")] string mode,
-        [Description("Target field: Name|Number|Both (default Name)")] string target = "Name",
-        [Description("Sheet element IDs (or use nameFilter/numberFilter)")] long[]? sheetIds = null,
-        [Description("Filter sheets by name substring")] string? nameFilter = null,
-        [Description("Filter sheets by number substring")] string? numberFilter = null,
-        [Description("Text to find")] string? find = null,
-        [Description("Replacement text")] string? replace = null,
-        [Description("Prefix to add")] string? prefix = null,
-        [Description("Suffix to add")] string? suffix = null,
-        [Description("Template with {Name} or {Number}")] string? template = null,
-        CancellationToken cancellationToken = default)
-    {
-        var args = new Dictionary<string, object?>
+            var viewArgs = new Dictionary<string, object?>
+            {
+                ["mode"] = mode, ["viewIds"] = viewIds ?? [], ["viewTypes"] = viewTypes ?? [],
+                ["nameFilter"] = nameFilter ?? "", ["find"] = find ?? "", ["replace"] = replace ?? "",
+                ["prefix"] = prefix ?? "", ["suffix"] = suffix ?? "", ["template"] = template ?? ""
+            };
+            return FormatResult(await pipeClient.SendAsync("revit_preview_rename_views", viewArgs, cancellationToken));
+        }
+        if (e == "sheets")
         {
-            ["mode"] = mode, ["target"] = target, ["sheetIds"] = sheetIds ?? [],
-            ["nameFilter"] = nameFilter ?? "", ["numberFilter"] = numberFilter ?? "",
-            ["find"] = find ?? "", ["replace"] = replace ?? "",
-            ["prefix"] = prefix ?? "", ["suffix"] = suffix ?? "", ["template"] = template ?? ""
-        };
-        var result = await pipeClient.SendAsync("revit_preview_rename_sheets", args, cancellationToken);
-        return FormatResult(result);
+            var sheetArgs = new Dictionary<string, object?>
+            {
+                ["mode"] = mode, ["target"] = target, ["sheetIds"] = sheetIds ?? [],
+                ["nameFilter"] = nameFilter ?? "", ["numberFilter"] = numberFilter ?? "",
+                ["find"] = find ?? "", ["replace"] = replace ?? "",
+                ["prefix"] = prefix ?? "", ["suffix"] = suffix ?? "", ["template"] = template ?? ""
+            };
+            return FormatResult(await pipeClient.SendAsync("revit_preview_rename_sheets", sheetArgs, cancellationToken));
+        }
+        return FormatBridgeError($"Invalid entity '{entity}'. Expected: views or sheets.");
     }
 
     // ── View / Sheet / Documentation — Phase 3 Write ─────────────────────────
@@ -2157,25 +2118,45 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
-    [McpServerTool(Name = "revit_duplicate_sheets"),
-     Description("Duplicates sheets (empty shell with same titleblock + copied parameters). Requires approval. Required: sourceSheetIds or sourceSheetNumbers. Run revit_preview_duplicate_sheets first.")]
-    public async Task<string> DuplicateSheets(
-        [Description("Source sheet element IDs")] long[]? sourceSheetIds = null,
-        [Description("Source sheet numbers")] string[]? sourceSheetNumbers = null,
-        [Description("Suffix for new sheet number (default _COPY)")] string newNumberSuffix = "_COPY",
-        [Description("Suffix for new sheet name")] string newNameSuffix = " - Copy",
-        [Description("Keep same title block")] bool keepTitleBlock = true,
-        [Description("Copy instance parameters")] bool copyParameters = true,
+    [McpServerTool(Name = "revit_duplicate"),
+     Description("Duplicates views/sheets. Requires approval. Run revit_preview_duplicate first. entity=sheets: sourceSheetIds or sourceSheetNumbers (empty shell, same titleblock + copied params). entity=views: viewIds; duplicateOption, nameSuffix, namePrefix.")]
+    public async Task<string> Duplicate(
+        [Description("What to duplicate: views | sheets")] string entity,
+        [Description("sheets only: source sheet element IDs")] long[]? sourceSheetIds = null,
+        [Description("sheets only: source sheet numbers")] string[]? sourceSheetNumbers = null,
+        [Description("sheets only: suffix for new sheet number (default _COPY)")] string newNumberSuffix = "_COPY",
+        [Description("sheets only: suffix for new sheet name (default ' - Copy')")] string newNameSuffix = " - Copy",
+        [Description("sheets only: keep same title block (default true)")] bool keepTitleBlock = true,
+        [Description("sheets only: copy instance parameters (default true)")] bool copyParameters = true,
+        [Description("views only: view element IDs to duplicate")] long[]? viewIds = null,
+        [Description("views only: Duplicate|DuplicateWithDetailing|AsDependent")] string duplicateOption = "DuplicateWithDetailing",
+        [Description("views only: suffix for new view name (default ' - Copy')")] string nameSuffix = " - Copy",
+        [Description("views only: prefix for new view name")] string namePrefix = "",
         CancellationToken cancellationToken = default)
     {
-        var args = new Dictionary<string, object?>
+        var e = entity?.Trim().ToLowerInvariant();
+        if (e == "sheets")
         {
-            ["sourceSheetIds"] = sourceSheetIds ?? [], ["sourceSheetNumbers"] = sourceSheetNumbers ?? [],
-            ["newNumberSuffix"] = newNumberSuffix, ["newNameSuffix"] = newNameSuffix,
-            ["keepTitleBlock"] = keepTitleBlock, ["copyParameters"] = copyParameters
-        };
-        var result = await pipeClient.SendAsync("revit_duplicate_sheets", args, cancellationToken);
-        return FormatResult(result);
+            var sheetArgs = new Dictionary<string, object?>
+            {
+                ["sourceSheetIds"] = sourceSheetIds ?? [], ["sourceSheetNumbers"] = sourceSheetNumbers ?? [],
+                ["newNumberSuffix"] = newNumberSuffix, ["newNameSuffix"] = newNameSuffix,
+                ["keepTitleBlock"] = keepTitleBlock, ["copyParameters"] = copyParameters
+            };
+            return FormatResult(await pipeClient.SendAsync("revit_duplicate_sheets", sheetArgs, cancellationToken));
+        }
+        if (e == "views")
+        {
+            if (viewIds == null || viewIds.Length == 0)
+                return FormatBridgeError("entity=views requires viewIds.");
+            var viewArgs = new Dictionary<string, object?>
+            {
+                ["viewIds"] = viewIds, ["duplicateOption"] = duplicateOption,
+                ["nameSuffix"] = nameSuffix, ["namePrefix"] = namePrefix
+            };
+            return FormatResult(await pipeClient.SendAsync("revit_duplicate_views", viewArgs, cancellationToken));
+        }
+        return FormatBridgeError($"Invalid entity '{entity}'. Expected: views or sheets.");
     }
 
     [McpServerTool(Name = "revit_create_sheets_from_table"),
@@ -2187,24 +2168,6 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     {
         var args = new Dictionary<string, object?> { ["rows"] = ToJToken(rows), ["titleBlockId"] = titleBlockId };
         var result = await pipeClient.SendAsync("revit_create_sheets_from_table", args, cancellationToken);
-        return FormatResult(result);
-    }
-
-    [McpServerTool(Name = "revit_duplicate_views"),
-     Description("Duplicates views. Requires approval. Required: viewIds. Optional: duplicateOption, nameSuffix, namePrefix. Run revit_preview_duplicate_views first.")]
-    public async Task<string> DuplicateViews(
-        [Description("View element IDs to duplicate")] long[] viewIds,
-        [Description("Duplicate option: Duplicate|DuplicateWithDetailing|AsDependent")] string duplicateOption = "DuplicateWithDetailing",
-        [Description("Suffix for new view name")] string nameSuffix = " - Copy",
-        [Description("Prefix for new view name")] string namePrefix = "",
-        CancellationToken cancellationToken = default)
-    {
-        var args = new Dictionary<string, object?>
-        {
-            ["viewIds"] = viewIds, ["duplicateOption"] = duplicateOption,
-            ["nameSuffix"] = nameSuffix, ["namePrefix"] = namePrefix
-        };
-        var result = await pipeClient.SendAsync("revit_duplicate_views", args, cancellationToken);
         return FormatResult(result);
     }
 
@@ -2227,51 +2190,53 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
-    [McpServerTool(Name = "revit_set_sheet_parameters_bulk"),
-     Description("Sets parameters on multiple sheets in one transaction. Requires approval. Required: sheetIds or sheetNumbers, parameters (object with paramName:value). Optional: nameFilter.")]
-    public async Task<string> SetSheetParametersBulk(
-        [Description("Sheet element IDs")] long[]? sheetIds = null,
-        [Description("Sheet numbers")] string[]? sheetNumbers = null,
-        [Description("Filter by name substring")] string? nameFilter = null,
-        [Description("Parameter name→value map (e.g. {\"Märkus\": \"Rev A\"})")] object? parameters = null,
-        CancellationToken cancellationToken = default)
-    {
-        var args = new Dictionary<string, object?>
-        {
-            ["sheetIds"] = sheetIds ?? [], ["sheetNumbers"] = sheetNumbers ?? [],
-            ["nameFilter"] = nameFilter ?? "", ["parameters"] = ToJToken(parameters)
-        };
-        var result = await pipeClient.SendAsync("revit_set_sheet_parameters_bulk", args, cancellationToken);
-        return FormatResult(result);
-    }
-
-    [McpServerTool(Name = "revit_set_view_parameters_bulk"),
-     Description("Sets parameters on multiple views in one transaction. Requires approval. Required: viewIds or (viewTypes+nameFilter), parameters (object with paramName:value). Optional: includeTemplates, limit.")]
-    public async Task<string> SetViewParametersBulk(
-        [Description("View element IDs")] long[]? viewIds = null,
-        [Description("Filter by view types")] string[]? viewTypes = null,
-        [Description("Filter by name substring")] string? nameFilter = null,
-        [Description("Include view templates (default false)")] bool includeTemplates = false,
-        [Description("Max views to update (default 500)")] int limit = 500,
+    [McpServerTool(Name = "revit_set_parameters_bulk"),
+     Description("Sets parameters on multiple views/sheets in one transaction. Requires approval. parameters = name→value map (e.g. {\"Märkus\": \"Rev A\"}). entity=views: viewIds or viewTypes+nameFilter, includeTemplates, limit. entity=sheets: sheetIds or sheetNumbers, nameFilter.")]
+    public async Task<string> SetParametersBulk(
+        [Description("What to update: views | sheets")] string entity,
         [Description("Parameter name→value map")] object? parameters = null,
+        [Description("views only: view element IDs")] long[]? viewIds = null,
+        [Description("views only: filter by view types")] string[]? viewTypes = null,
+        [Description("views only: include view templates (default false)")] bool includeTemplates = false,
+        [Description("views only: max views to update (default 500)")] int limit = 500,
+        [Description("sheets only: sheet element IDs")] long[]? sheetIds = null,
+        [Description("sheets only: sheet numbers")] string[]? sheetNumbers = null,
+        [Description("Filter by name substring")] string? nameFilter = null,
         CancellationToken cancellationToken = default)
     {
-        var args = new Dictionary<string, object?>
+        var e = entity?.Trim().ToLowerInvariant();
+        if (e == "views")
         {
-            ["viewIds"] = viewIds ?? [], ["viewTypes"] = viewTypes ?? [],
-            ["nameFilter"] = nameFilter ?? "", ["includeTemplates"] = includeTemplates,
-            ["limit"] = limit, ["parameters"] = ToJToken(parameters)
-        };
-        var result = await pipeClient.SendAsync("revit_set_view_parameters_bulk", args, cancellationToken);
-        return FormatResult(result);
+            var viewArgs = new Dictionary<string, object?>
+            {
+                ["viewIds"] = viewIds ?? [], ["viewTypes"] = viewTypes ?? [],
+                ["nameFilter"] = nameFilter ?? "", ["includeTemplates"] = includeTemplates,
+                ["limit"] = limit, ["parameters"] = ToJToken(parameters)
+            };
+            return FormatResult(await pipeClient.SendAsync("revit_set_view_parameters_bulk", viewArgs, cancellationToken));
+        }
+        if (e == "sheets")
+        {
+            var sheetArgs = new Dictionary<string, object?>
+            {
+                ["sheetIds"] = sheetIds ?? [], ["sheetNumbers"] = sheetNumbers ?? [],
+                ["nameFilter"] = nameFilter ?? "", ["parameters"] = ToJToken(parameters)
+            };
+            return FormatResult(await pipeClient.SendAsync("revit_set_sheet_parameters_bulk", sheetArgs, cancellationToken));
+        }
+        return FormatBridgeError($"Invalid entity '{entity}'. Expected: views or sheets.");
     }
 
-    [McpServerTool(Name = "revit_rename_views"),
-     Description("Renames views. Requires approval. Required: mode (FindReplace|PrefixSuffix|Template|RegexFindReplace), viewIds or viewTypes+nameFilter. Run revit_preview_rename_views first.")]
-    public async Task<string> RenameViews(
+    [McpServerTool(Name = "revit_rename"),
+     Description("Renames views/sheets. Requires approval. Run revit_preview_rename first. mode=FindReplace|PrefixSuffix|Template|RegexFindReplace. entity=views: viewIds or viewTypes+nameFilter. entity=sheets: target (Name|Number|Both), sheetIds/nameFilter/numberFilter.")]
+    public async Task<string> Rename(
+        [Description("What to rename: views | sheets")] string entity,
         [Description("Rename mode")] string mode,
-        [Description("View element IDs")] long[]? viewIds = null,
-        [Description("Filter by view types")] string[]? viewTypes = null,
+        [Description("views only: view element IDs")] long[]? viewIds = null,
+        [Description("views only: filter by view types")] string[]? viewTypes = null,
+        [Description("sheets only: sheet element IDs")] long[]? sheetIds = null,
+        [Description("sheets only: target field Name|Number|Both (default Name)")] string target = "Name",
+        [Description("sheets only: filter by number substring")] string? numberFilter = null,
         [Description("Filter by name substring")] string? nameFilter = null,
         [Description("Find text (FindReplace/Regex)")] string? find = null,
         [Description("Replace text")] string? replace = null,
@@ -2280,110 +2245,100 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Template with {Name} (Template)")] string? template = null,
         CancellationToken cancellationToken = default)
     {
-        var args = new Dictionary<string, object?>
+        var e = entity?.Trim().ToLowerInvariant();
+        if (e == "views")
         {
-            ["mode"] = mode, ["viewIds"] = viewIds ?? [], ["viewTypes"] = viewTypes ?? [],
-            ["nameFilter"] = nameFilter ?? "", ["find"] = find ?? "", ["replace"] = replace ?? "",
-            ["prefix"] = prefix ?? "", ["suffix"] = suffix ?? "", ["template"] = template ?? ""
-        };
-        var result = await pipeClient.SendAsync("revit_rename_views", args, cancellationToken);
-        return FormatResult(result);
-    }
-
-    [McpServerTool(Name = "revit_rename_sheets"),
-     Description("Renames sheets. Requires approval. Required: mode, target (Name|Number|Both). Optional: sheetIds, nameFilter, numberFilter. Run revit_preview_rename_sheets first.")]
-    public async Task<string> RenameSheets(
-        [Description("Rename mode")] string mode,
-        [Description("Target field: Name|Number|Both")] string target = "Name",
-        [Description("Sheet element IDs")] long[]? sheetIds = null,
-        [Description("Filter by name substring")] string? nameFilter = null,
-        [Description("Filter by number substring")] string? numberFilter = null,
-        [Description("Find text")] string? find = null,
-        [Description("Replace text")] string? replace = null,
-        [Description("Prefix")] string? prefix = null,
-        [Description("Suffix")] string? suffix = null,
-        [Description("Template")] string? template = null,
-        CancellationToken cancellationToken = default)
-    {
-        var args = new Dictionary<string, object?>
+            var viewArgs = new Dictionary<string, object?>
+            {
+                ["mode"] = mode, ["viewIds"] = viewIds ?? [], ["viewTypes"] = viewTypes ?? [],
+                ["nameFilter"] = nameFilter ?? "", ["find"] = find ?? "", ["replace"] = replace ?? "",
+                ["prefix"] = prefix ?? "", ["suffix"] = suffix ?? "", ["template"] = template ?? ""
+            };
+            return FormatResult(await pipeClient.SendAsync("revit_rename_views", viewArgs, cancellationToken));
+        }
+        if (e == "sheets")
         {
-            ["mode"] = mode, ["target"] = target, ["sheetIds"] = sheetIds ?? [],
-            ["nameFilter"] = nameFilter ?? "", ["numberFilter"] = numberFilter ?? "",
-            ["find"] = find ?? "", ["replace"] = replace ?? "",
-            ["prefix"] = prefix ?? "", ["suffix"] = suffix ?? "", ["template"] = template ?? ""
-        };
-        var result = await pipeClient.SendAsync("revit_rename_sheets", args, cancellationToken);
-        return FormatResult(result);
+            var sheetArgs = new Dictionary<string, object?>
+            {
+                ["mode"] = mode, ["target"] = target, ["sheetIds"] = sheetIds ?? [],
+                ["nameFilter"] = nameFilter ?? "", ["numberFilter"] = numberFilter ?? "",
+                ["find"] = find ?? "", ["replace"] = replace ?? "",
+                ["prefix"] = prefix ?? "", ["suffix"] = suffix ?? "", ["template"] = template ?? ""
+            };
+            return FormatResult(await pipeClient.SendAsync("revit_rename_sheets", sheetArgs, cancellationToken));
+        }
+        return FormatBridgeError($"Invalid entity '{entity}'. Expected: views or sheets.");
     }
 
     // ── View / Sheet / Documentation — Phase 4 Destructive ───────────────────
 
-    [McpServerTool(Name = "revit_preview_delete_views", ReadOnly = true),
-     Description("Previews which views would be deleted WITHOUT changes. Required: viewIds or (viewTypes+nameFilter). Optional: skipPlacedOnSheets (bool, default true).")]
-    public async Task<string> PreviewDeleteViews(
-        [Description("View element IDs")] long[]? viewIds = null,
-        [Description("Filter by view types")] string[]? viewTypes = null,
+    [McpServerTool(Name = "revit_preview_delete", ReadOnly = true),
+     Description("Previews which views/sheets would be deleted WITHOUT changes. target=views: viewIds or viewTypes+nameFilter, skipPlacedOnSheets (default true). target=sheets: sheetIds/sheetNumbers/nameFilter, skipSheetsWithViews (default true).")]
+    public async Task<string> PreviewDelete(
+        [Description("What to preview: views | sheets")] string target,
+        [Description("views only: view element IDs")] long[]? viewIds = null,
+        [Description("views only: filter by view types")] string[]? viewTypes = null,
+        [Description("sheets only: sheet element IDs")] long[]? sheetIds = null,
+        [Description("sheets only: sheet numbers")] string[]? sheetNumbers = null,
         [Description("Filter by name substring")] string? nameFilter = null,
-        [Description("Skip views placed on sheets (default true)")] bool skipPlacedOnSheets = true,
+        [Description("views only: skip views placed on sheets (default true)")] bool skipPlacedOnSheets = true,
+        [Description("sheets only: skip sheets with placed views (default true)")] bool skipSheetsWithViews = true,
         CancellationToken cancellationToken = default)
     {
-        var args = new Dictionary<string, object?>
+        var t = target?.Trim().ToLowerInvariant();
+        if (t == "views")
         {
-            ["viewIds"] = viewIds ?? [], ["viewTypes"] = viewTypes ?? [],
-            ["nameFilter"] = nameFilter ?? "", ["skipPlacedOnSheets"] = skipPlacedOnSheets
-        };
-        var result = await pipeClient.SendAsync("revit_preview_delete_views", args, cancellationToken);
-        return FormatResult(result);
+            var viewArgs = new Dictionary<string, object?>
+            {
+                ["viewIds"] = viewIds ?? [], ["viewTypes"] = viewTypes ?? [],
+                ["nameFilter"] = nameFilter ?? "", ["skipPlacedOnSheets"] = skipPlacedOnSheets
+            };
+            return FormatResult(await pipeClient.SendAsync("revit_preview_delete_views", viewArgs, cancellationToken));
+        }
+        if (t == "sheets")
+        {
+            var sheetArgs = new Dictionary<string, object?>
+            {
+                ["sheetIds"] = sheetIds ?? [], ["sheetNumbers"] = sheetNumbers ?? [],
+                ["nameFilter"] = nameFilter ?? "", ["skipSheetsWithViews"] = skipSheetsWithViews
+            };
+            return FormatResult(await pipeClient.SendAsync("revit_preview_delete_sheets", sheetArgs, cancellationToken));
+        }
+        return FormatBridgeError($"Invalid target '{target}'. Expected: views or sheets.");
     }
 
-    [McpServerTool(Name = "revit_delete_views"),
-     Description("DESTRUCTIVE: Permanently deletes views. Always requires manual approval — cannot be bypassed by Direct Edit. Required: viewIds. Optional: skipPlacedOnSheets (default true). Run preview first.")]
-    public async Task<string> DeleteViews(
-        [Description("View element IDs to delete")] long[] viewIds,
-        [Description("Skip views placed on sheets (default true)")] bool skipPlacedOnSheets = true,
+    [McpServerTool(Name = "revit_delete"),
+     Description("DESTRUCTIVE: permanently deletes views/sheets. Always requires manual approval — cannot be bypassed by Direct Edit. Run revit_preview_delete first. target=views: viewIds required. target=sheets: sheetIds or sheetNumbers required.")]
+    public async Task<string> Delete(
+        [Description("What to delete: views | sheets")] string target,
+        [Description("views only: view element IDs to delete")] long[]? viewIds = null,
+        [Description("sheets only: sheet element IDs to delete")] long[]? sheetIds = null,
+        [Description("sheets only: sheet numbers to delete")] string[]? sheetNumbers = null,
+        [Description("views only: skip views placed on sheets (default true)")] bool skipPlacedOnSheets = true,
+        [Description("sheets only: skip sheets with placed views (default true)")] bool skipSheetsWithViews = true,
         CancellationToken cancellationToken = default)
     {
-        var args = new Dictionary<string, object?>
+        var t = target?.Trim().ToLowerInvariant();
+        if (t == "views")
         {
-            ["viewIds"] = viewIds, ["skipPlacedOnSheets"] = skipPlacedOnSheets
-        };
-        var result = await pipeClient.SendAsync("revit_delete_views", args, cancellationToken);
-        return FormatResult(result);
-    }
-
-    [McpServerTool(Name = "revit_preview_delete_sheets", ReadOnly = true),
-     Description("Previews which sheets would be deleted WITHOUT changes. Required: sheetIds, sheetNumbers, or nameFilter. Optional: skipSheetsWithViews (bool, default true).")]
-    public async Task<string> PreviewDeleteSheets(
-        [Description("Sheet element IDs")] long[]? sheetIds = null,
-        [Description("Sheet numbers")] string[]? sheetNumbers = null,
-        [Description("Filter by name substring")] string? nameFilter = null,
-        [Description("Skip sheets with placed views (default true)")] bool skipSheetsWithViews = true,
-        CancellationToken cancellationToken = default)
-    {
-        var args = new Dictionary<string, object?>
+            if (viewIds == null || viewIds.Length == 0)
+                return FormatBridgeError("target=views requires viewIds.");
+            var viewArgs = new Dictionary<string, object?>
+            {
+                ["viewIds"] = viewIds, ["skipPlacedOnSheets"] = skipPlacedOnSheets
+            };
+            return FormatResult(await pipeClient.SendAsync("revit_delete_views", viewArgs, cancellationToken));
+        }
+        if (t == "sheets")
         {
-            ["sheetIds"] = sheetIds ?? [], ["sheetNumbers"] = sheetNumbers ?? [],
-            ["nameFilter"] = nameFilter ?? "", ["skipSheetsWithViews"] = skipSheetsWithViews
-        };
-        var result = await pipeClient.SendAsync("revit_preview_delete_sheets", args, cancellationToken);
-        return FormatResult(result);
-    }
-
-    [McpServerTool(Name = "revit_delete_sheets"),
-     Description("DESTRUCTIVE: Permanently deletes sheets. Always requires manual approval — cannot be bypassed by Direct Edit. Required: sheetIds or sheetNumbers. Optional: skipSheetsWithViews (default true). Run preview first.")]
-    public async Task<string> DeleteSheets(
-        [Description("Sheet element IDs to delete")] long[]? sheetIds = null,
-        [Description("Sheet numbers to delete")] string[]? sheetNumbers = null,
-        [Description("Skip sheets that have placed views (default true)")] bool skipSheetsWithViews = true,
-        CancellationToken cancellationToken = default)
-    {
-        var args = new Dictionary<string, object?>
-        {
-            ["sheetIds"] = sheetIds ?? [], ["sheetNumbers"] = sheetNumbers ?? [],
-            ["skipSheetsWithViews"] = skipSheetsWithViews
-        };
-        var result = await pipeClient.SendAsync("revit_delete_sheets", args, cancellationToken);
-        return FormatResult(result);
+            var sheetArgs = new Dictionary<string, object?>
+            {
+                ["sheetIds"] = sheetIds ?? [], ["sheetNumbers"] = sheetNumbers ?? [],
+                ["skipSheetsWithViews"] = skipSheetsWithViews
+            };
+            return FormatResult(await pipeClient.SendAsync("revit_delete_sheets", sheetArgs, cancellationToken));
+        }
+        return FormatBridgeError($"Invalid target '{target}'. Expected: views or sheets.");
     }
 
     // -----------------------------------------------------------------------
@@ -2533,69 +2488,56 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
-    [McpServerTool(Name = "revit_detect_hard_clashes", ReadOnly = true),
-     Description("Detects hard (physical intersection) clashes between two sets of element categories. " +
-                 "By default, only reports clashes confirmed by solid-geometry intersection (Confidence=High). " +
-                 "Set allowBoundingBoxFallback=true to also return low-confidence bbox-only results when solids cannot be extracted. " +
-                 "Saves results as last run by default.")]
-    public async Task<string> DetectHardClashes(
+    [McpServerTool(Name = "revit_detect_clashes", ReadOnly = true),
+     Description("Detects clashes between two category sets. mode=hard: physical solid intersection (Confidence=High; set allowBoundingBoxFallback for low-confidence bbox results; toleranceMm). mode=clearance: expanded-bbox clearance violations (clearanceMm; conservative estimates, review visually). Saves as last run by default.")]
+    public async Task<string> DetectClashes(
+        [Description("Detection mode: hard | clearance")] string mode,
         [Description("Source element categories")] string[] sourceCategories,
         [Description("Target element categories")] string[] targetCategories,
+        [Description("clearance only: required clearance in mm (default 50)")] double clearanceMm = 50,
+        [Description("hard only: min intersection volume tolerance in mm³ (default 5)")] double toleranceMm = 5,
+        [Description("hard only: allow low-confidence bbox fallback when solids fail. Default false.")] bool allowBoundingBoxFallback = false,
         [Description("Include linked models (default true)")] bool includeLinks = true,
         [Description("Include Generic Models (default true)")] bool includeGenericModels = true,
         [Description("Include imported geometry (default true)")] bool includeImportedGeometry = true,
         [Description("Filter by link name substrings")] string[]? linkNameFilters = null,
-        [Description("Minimum intersection volume tolerance in mm³ (default 5)")] double toleranceMm = 5,
         [Description("Maximum clashes to return (default 1000)")] int limit = 1000,
-        [Description("Stop testing after this many element pairs (default 100000)")] int maxPairs = 100000,
+        [Description("Stop after this many element pairs (default 100000)")] int maxPairs = 100000,
         [Description("Save as last run for navigation tools (default true)")] bool saveAsLastRun = true,
-        [Description("Rule name label for results (default 'Ad-hoc Hard Clash')")] string ruleName = "Ad-hoc Hard Clash",
+        [Description("Rule name label. Empty = default per mode.")] string? ruleName = null,
         [Description("Severity: Low | Medium | High | Critical (default Medium)")] string severity = "Medium",
-        [Description("Allow low-confidence bounding-box fallback results when solids cannot be extracted or boolean intersection fails. Default false.")]
-        bool allowBoundingBoxFallback = false,
         CancellationToken cancellationToken = default)
     {
+        var m = mode?.Trim().ToLowerInvariant();
+        if (m != "hard" && m != "clearance")
+            return FormatBridgeError($"Invalid mode '{mode}'. Expected: hard or clearance.");
+
         var args = new Dictionary<string, object?>
         {
             ["sourceCategories"] = sourceCategories, ["targetCategories"] = targetCategories,
             ["includeLinks"] = includeLinks, ["includeGenericModels"] = includeGenericModels,
             ["includeImportedGeometry"] = includeImportedGeometry,
-            ["linkNameFilters"] = linkNameFilters ?? [], ["toleranceMm"] = toleranceMm,
-            ["limit"] = limit, ["maxPairs"] = maxPairs, ["saveAsLastRun"] = saveAsLastRun,
-            ["ruleName"] = ruleName, ["severity"] = severity,
-            ["allowBoundingBoxFallback"] = allowBoundingBoxFallback
-        };
-        var result = await pipeClient.SendAsync("revit_detect_hard_clashes", args, cancellationToken);
-        return FormatResult(result);
-    }
-
-    [McpServerTool(Name = "revit_detect_clearance_clashes", ReadOnly = true),
-     Description("Detects clearance violations between two sets of element categories using expanded bounding-box approximation. Reported distances are conservative estimates, not true surface-to-surface measurements. Results should be visually reviewed in the Revit clash review view.")]
-    public async Task<string> DetectClearanceClashes(
-        [Description("Source element categories")] string[] sourceCategories,
-        [Description("Target element categories")] string[] targetCategories,
-        [Description("Required clearance in mm (default 50)")] double clearanceMm = 50,
-        [Description("Include linked models (default true)")] bool includeLinks = true,
-        [Description("Include Generic Models (default true)")] bool includeGenericModels = true,
-        [Description("Include imported geometry (default true)")] bool includeImportedGeometry = true,
-        [Description("Filter by link name substrings")] string[]? linkNameFilters = null,
-        [Description("Maximum results (default 1000)")] int limit = 1000,
-        [Description("Stop after this many element pairs (default 100000)")] int maxPairs = 100000,
-        [Description("Save as last run (default true)")] bool saveAsLastRun = true,
-        [Description("Rule name label")] string ruleName = "Ad-hoc Clearance",
-        [Description("Severity: Low | Medium | High | Critical (default Medium)")] string severity = "Medium",
-        CancellationToken cancellationToken = default)
-    {
-        var args = new Dictionary<string, object?>
-        {
-            ["sourceCategories"] = sourceCategories, ["targetCategories"] = targetCategories,
-            ["clearanceMm"] = clearanceMm, ["includeLinks"] = includeLinks,
-            ["includeGenericModels"] = includeGenericModels, ["includeImportedGeometry"] = includeImportedGeometry,
             ["linkNameFilters"] = linkNameFilters ?? [], ["limit"] = limit,
             ["maxPairs"] = maxPairs, ["saveAsLastRun"] = saveAsLastRun,
-            ["ruleName"] = ruleName, ["severity"] = severity
+            ["severity"] = severity
         };
-        var result = await pipeClient.SendAsync("revit_detect_clearance_clashes", args, cancellationToken);
+
+        string toolName;
+        if (m == "hard")
+        {
+            toolName = "revit_detect_hard_clashes";
+            args["toleranceMm"] = toleranceMm;
+            args["allowBoundingBoxFallback"] = allowBoundingBoxFallback;
+            args["ruleName"] = string.IsNullOrWhiteSpace(ruleName) ? "Ad-hoc Hard Clash" : ruleName;
+        }
+        else
+        {
+            toolName = "revit_detect_clearance_clashes";
+            args["clearanceMm"] = clearanceMm;
+            args["ruleName"] = string.IsNullOrWhiteSpace(ruleName) ? "Ad-hoc Clearance" : ruleName;
+        }
+
+        var result = await pipeClient.SendAsync(toolName, args, cancellationToken);
         return FormatResult(result);
     }
 
@@ -2714,19 +2656,23 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
-    [McpServerTool(Name = "revit_get_next_clash", ReadOnly = true),
-     Description("Navigates to the next clash in the last run result. Returns clash details and position. Wraps around from last to first.")]
-    public async Task<string> GetNextClash(CancellationToken cancellationToken = default)
+    [McpServerTool(Name = "revit_get_adjacent_clash", ReadOnly = true),
+     Description("Navigates to the next/previous clash in the last run result. direction=next|previous. Returns clash details and position; wraps around.")]
+    public async Task<string> GetAdjacentClash(
+        [Description("Direction: next | previous")] string direction,
+        CancellationToken cancellationToken = default)
     {
-        var result = await pipeClient.SendAsync("revit_get_next_clash", [], cancellationToken);
-        return FormatResult(result);
-    }
+        var d = direction?.Trim().ToLowerInvariant();
+        var toolName = d switch
+        {
+            "next" => "revit_get_next_clash",
+            "previous" or "prev" => "revit_get_previous_clash",
+            _ => null
+        };
+        if (toolName == null)
+            return FormatBridgeError($"Invalid direction '{direction}'. Expected: next or previous.");
 
-    [McpServerTool(Name = "revit_get_previous_clash", ReadOnly = true),
-     Description("Navigates to the previous clash in the last run result. Returns clash details and position. Wraps around from first to last.")]
-    public async Task<string> GetPreviousClash(CancellationToken cancellationToken = default)
-    {
-        var result = await pipeClient.SendAsync("revit_get_previous_clash", [], cancellationToken);
+        var result = await pipeClient.SendAsync(toolName, [], cancellationToken);
         return FormatResult(result);
     }
 
@@ -2897,63 +2843,52 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
-    [McpServerTool(Name = "revit_create_project_skill_override", ReadOnly = true),
-     Description("Creates a new project-specific override for a company skill. " +
-                 "changesJson is a JSON string with structure: " +
-                 "{\"tasks\":{\"<taskId>\":{\"enabled\":true,\"settings\":{\"clearanceMm\":100}}}}. " +
-                 "Args: skillId (required), projectId (required), projectName, changesJson, note.")]
-    public async Task<string> CreateProjectSkillOverride(
+    [McpServerTool(Name = "revit_manage_project_skill_override", ReadOnly = true),
+     Description("Manages a project-specific override for a company skill. action=create (new override; supports projectName, changesJson, note), update (merge changesJson into existing; supports note), reset (delete override, revert to master). changesJson structure: {\"tasks\":{\"<taskId>\":{\"enabled\":true,\"settings\":{\"clearanceMm\":100}}}}.")]
+    public async Task<string> ManageProjectSkillOverride(
+        [Description("Action: create | update | reset")] string action,
         [Description("ID of the skill to override")] string skillId,
         [Description("Project identifier (e.g. job number)")] string projectId,
-        [Description("Human-readable project name")] string? projectName = null,
-        [Description("JSON string of override data (tasks + settings)")] string? changesJson = null,
-        [Description("Optional note describing the reason for the override")] string? note = null,
+        [Description("create only: human-readable project name")] string? projectName = null,
+        [Description("create/update only: JSON string of override data (tasks + settings)")] string? changesJson = null,
+        [Description("create/update only: optional note describing the override")] string? note = null,
         CancellationToken cancellationToken = default)
     {
-        var args = new Dictionary<string, object?>
+        var a = action?.Trim().ToLowerInvariant();
+        string toolName;
+        Dictionary<string, object?> args;
+        switch (a)
         {
-            ["skillId"]     = skillId,
-            ["projectId"]   = projectId,
-            ["projectName"] = projectName ?? string.Empty,
-            ["changesJson"] = changesJson ?? "{}",
-            ["note"]        = note ?? string.Empty
-        };
-        var result = await pipeClient.SendAsync("revit_create_project_skill_override", args, cancellationToken);
-        return FormatResult(result);
-    }
+            case "create":
+                toolName = "revit_create_project_skill_override";
+                args = new Dictionary<string, object?>
+                {
+                    ["skillId"] = skillId,
+                    ["projectId"] = projectId,
+                    ["projectName"] = projectName ?? string.Empty,
+                    ["changesJson"] = changesJson ?? "{}",
+                    ["note"] = note ?? string.Empty
+                };
+                break;
+            case "update":
+                toolName = "revit_update_project_skill_override";
+                args = new Dictionary<string, object?>
+                {
+                    ["skillId"] = skillId,
+                    ["projectId"] = projectId,
+                    ["changesJson"] = changesJson ?? "{}",
+                    ["note"] = note ?? string.Empty
+                };
+                break;
+            case "reset":
+                toolName = "revit_reset_project_skill_override";
+                args = new Dictionary<string, object?> { ["skillId"] = skillId, ["projectId"] = projectId };
+                break;
+            default:
+                return FormatBridgeError($"Invalid action '{action}'. Expected: create, update, or reset.");
+        }
 
-    [McpServerTool(Name = "revit_update_project_skill_override", ReadOnly = true),
-     Description("Updates an existing project skill override by merging changesJson into it. " +
-                 "changesJson uses the same structure as revit_create_project_skill_override. " +
-                 "Args: skillId (required), projectId (required), changesJson, note.")]
-    public async Task<string> UpdateProjectSkillOverride(
-        [Description("ID of the skill")] string skillId,
-        [Description("Project identifier")] string projectId,
-        [Description("JSON string of override changes to merge in")] string? changesJson = null,
-        [Description("Optional note to append to the override history")] string? note = null,
-        CancellationToken cancellationToken = default)
-    {
-        var args = new Dictionary<string, object?>
-        {
-            ["skillId"]     = skillId,
-            ["projectId"]   = projectId,
-            ["changesJson"] = changesJson ?? "{}",
-            ["note"]        = note ?? string.Empty
-        };
-        var result = await pipeClient.SendAsync("revit_update_project_skill_override", args, cancellationToken);
-        return FormatResult(result);
-    }
-
-    [McpServerTool(Name = "revit_reset_project_skill_override", ReadOnly = true),
-     Description("Deletes the project-specific skill override, reverting to the company master skill. " +
-                 "Args: skillId (required), projectId (required).")]
-    public async Task<string> ResetProjectSkillOverride(
-        [Description("ID of the skill")] string skillId,
-        [Description("Project identifier")] string projectId,
-        CancellationToken cancellationToken = default)
-    {
-        var args = new Dictionary<string, object?> { ["skillId"] = skillId, ["projectId"] = projectId };
-        var result = await pipeClient.SendAsync("revit_reset_project_skill_override", args, cancellationToken);
+        var result = await pipeClient.SendAsync(toolName, args, cancellationToken);
         return FormatResult(result);
     }
 

@@ -11,7 +11,7 @@ public class ValveLabipaasAuditTests
     [Theory]
     [InlineData(1000.0, 30.0, 100, 1300)]   // 1000 * 1.30 = 1300 → exactly 1300
     [InlineData(1001.0, 30.0, 100, 1400)]   // 1001 * 1.30 = 1301.3 → ceil to 1400
-    [InlineData(769.0,  30.0, 100,  800)]   // 769  * 1.30 = 999.7  → ceil to 1000? actually ceil(999.7/100)*100 = 1000
+    [InlineData(769.0,  30.0, 100, 1000)]   // 769  * 1.30 = 999.7  → ceil(999.7/100)*100 = 1000
     [InlineData(500.0,  30.0, 100,  700)]   // 500  * 1.30 = 650    → ceil(650/100)*100 = 700
     [InlineData(600.0,  30.0, 100,  800)]   // 600  * 1.30 = 780    → ceil(780/100)*100 = 800
     [InlineData(0.0,    30.0, 100,    0)]   // zero input → 0

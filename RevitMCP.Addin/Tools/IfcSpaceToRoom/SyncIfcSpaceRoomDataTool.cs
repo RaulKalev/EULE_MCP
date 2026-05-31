@@ -160,7 +160,7 @@ public class SyncIfcSpaceRoomDataTool : IRevitMcpTool
         JArray? ja = raw switch
         {
             JArray arr                  => arr,
-            string s                    => TryParseJArray(s),
+            string s                    => ToolArguments.TryParseJArray(s),
             IEnumerable<object> enumerable => TryFromObject(enumerable),
             _                           => TryFromObject(raw)
         };
@@ -187,12 +187,6 @@ public class SyncIfcSpaceRoomDataTool : IRevitMcpTool
         }
 
         return result;
-    }
-
-    private static JArray? TryParseJArray(string s)
-    {
-        try { return JToken.Parse(s) as JArray; }
-        catch { return null; }
     }
 
     private static JArray? TryFromObject(object o)

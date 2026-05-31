@@ -3,13 +3,12 @@
   <PropertyGroup>
     <OutputType>Library</OutputType>
     <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <LangVersion>latest</LangVersion>
     <PlatformTarget>x64</PlatformTarget>
     <AssemblyName>RevitMCP.Addin</AssemblyName>
     <RootNamespace>RevitMCP.Addin</RootNamespace>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <!-- Generate version attributes from Directory.Build.props. AssemblyInfo.cs holds only the
+         WPF ThemeInfo attribute (net8 only), so there is no duplicate-attribute conflict. -->
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <NoWarn>CA1416</NoWarn>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
@@ -34,30 +33,27 @@
 
   <!-- Common packages -->
   <ItemGroup>
-    <PackageReference Include="Fody" Version="6.8.2" PrivateAssets="All" ExcludeAssets="runtime" />
-    <PackageReference Include="Costura.Fody" Version="5.7.0" PrivateAssets="All" />
-    <!-- ClosedXML 0.102.1 uses DocumentFormat.OpenXml >= 2.16.0 (no 3.x requirement).
-         OpenXml 3.x uses reflection-based part validation that fails at runtime in Revit's
-         Costura.Fody assembly-embedding context. Pinning both packages to stable 2.x resolves this. -->
-    <PackageReference Include="ClosedXML" Version="0.102.1" />
-    <PackageReference Include="DocumentFormat.OpenXml" Version="2.20.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="ricaun.Revit.UI" Version="0.7.1" />
+    <PackageReference Include="Fody" PrivateAssets="All" ExcludeAssets="runtime" />
+    <PackageReference Include="Costura.Fody" PrivateAssets="All" />
+    <PackageReference Include="ClosedXML" />
+    <PackageReference Include="DocumentFormat.OpenXml" />
+    <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="ricaun.Revit.UI" />
   </ItemGroup>
 
   <!-- Revit SDK — TFM-conditional -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
-    <PackageReference Include="Autodesk.Revit.SDK" Version="2026.*" IncludeAssets="build; compile" PrivateAssets="All" />
-    <PackageReference Include="MaterialDesignColors" Version="5.2.1" />
-    <PackageReference Include="MaterialDesignThemes" Version="5.2.1" />
+    <PackageReference Include="Autodesk.Revit.SDK" VersionOverride="2026.*" IncludeAssets="build; compile" PrivateAssets="All" />
+    <PackageReference Include="MaterialDesignColors" />
+    <PackageReference Include="MaterialDesignThemes" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
-    <PackageReference Include="Autodesk.Revit.SDK" Version="2024.*" IncludeAssets="build; compile" PrivateAssets="All" />
+    <PackageReference Include="Autodesk.Revit.SDK" VersionOverride="2024.*" IncludeAssets="build; compile" PrivateAssets="All" />
     <!-- Polyfills: enables `init`, `required`, records, etc. on .NET Framework 4.8 -->
-    <PackageReference Include="PolySharp" Version="1.14.1" PrivateAssets="all" />
+    <PackageReference Include="PolySharp" PrivateAssets="all" />
     <!-- System.Text.Json (JsonNode/JsonObject/JsonSerializerOptions) is in-box on .NET 8 but a separate package on net48 -->
-    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    <PackageReference Include="System.Text.Json" />
   </ItemGroup>
 
   <ItemGroup>

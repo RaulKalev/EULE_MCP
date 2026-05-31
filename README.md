@@ -1,15 +1,15 @@
 # EULE MCP — Revit MCP Connector
 
-Ask your AI assistant about a live **Autodesk Revit 2026** model in plain English — count elements, inspect circuits, run QA checks, generate Excel reports — without writing scripts or code. EULE MCP is a local [Model Context Protocol](https://modelcontextprotocol.io) connector that gives Claude Code, Codex, and Gemini CLI direct read/write access to an open Revit model through 161 tools across twelve functional areas.
+Ask your AI assistant about a live **Autodesk Revit 2026** model in plain English — count elements, inspect circuits, run QA checks, generate Excel reports — without writing scripts or code. EULE MCP is a local [Model Context Protocol](https://modelcontextprotocol.io) connector that gives Claude Code, Codex, and Gemini CLI direct read/write access to an open Revit model through 150 tools across twelve functional areas.
 
-**161 tools** across twelve functional areas:
+**150 tools** across twelve functional areas:
 - **General** (25 tools) — element discovery, parameter QA, grouping, Excel exports, selection, write operations, config-driven parameter QA rule sets, and detailed geometry inspection of selected elements
-- **Electrical** (45 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, path mode control, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
-- **Documentation** (31 tools) — view and sheet management: discovery, summary, preview/apply workflows for placing views, creating/duplicating/renaming sheets and views, bulk parameter updates, revision tracking, preset inspection, and safe destructive delete with mandatory manual approval
-- **Coordination** (17 tools) — Revit-native clash detection: category/link discovery, solid-intersection hard-clash and clearance checking, preset management, Excel reporting, and step-through review views
+- **Electrical** (44 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, path mode control, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
+- **Documentation** (22 tools) — view and sheet management: discovery, summary, preview/apply workflows for placing views, creating/duplicating/renaming sheets and views, bulk parameter updates, revision tracking, preset inspection, and safe destructive delete with mandatory manual approval
+- **Coordination** (15 tools) — Revit-native clash detection: category/link discovery, solid-intersection hard-clash and clearance checking, preset management, Excel reporting, and step-through review views
 - **Family Creation** (1 tool) — generate Detail Item families (.rfa) from DWG source files using company presets
-- **Skills** (12 tools) — multi-step QA workflow engine: run built-in or project-specific quality-check skill definitions, inspect task breakdowns, manage per-project setting overrides, compare overrides against master, propose master updates, and export Markdown diff reports
-- **Issue Reports** (5 tools) — shared structured issue model (`IssueDto` / `IssueReportDto`) with JSON, Excel, Markdown, and interactive HTML export; multi-report merge; foundation used by all QA tools
+- **Skills** (10 tools) — multi-step QA workflow engine: run built-in or project-specific quality-check skill definitions, inspect task breakdowns, manage per-project setting overrides, compare overrides against master, propose master updates, and export Markdown diff reports
+- **Issue Reports** (2 tools) — shared structured issue model (`IssueDto` / `IssueReportDto`) with JSON, Excel, Markdown, and interactive HTML export; multi-report merge; foundation used by all QA tools
 - **File System** (6 tools) — read, write, list, inspect, copy, and backup local files with configurable path-policy enforcement (allowed-root lists, traversal blocking, size limits)
 - **Excel** (5 tools) — standalone Excel workbook tools (no open document required): inspect workbooks, read ranges, update cells, insert rows, and append table rows with automatic backup, header-matching, and dry-run preview support
 - **Delivery** (4 tools) — pre-issue delivery folder QA: scan folders for EULE-format drawing files, cross-check against Revit sheets or an Excel document register, and run a combined full-check with optional Issue Report and Excel/Markdown export
@@ -34,8 +34,8 @@ Scan delivery folder C:\Projects\1626\Export for temp files and old revisions.
 
 ## Requirements
 
-- **Revit 2026** (.NET 8) — full feature set, all 161 tools
-- **Revit 2024** (.NET Framework 4.8) — *read-only subset* (~125 tools): write/edit tools, WPF approval window, IFC space-to-room, and skill-run tools are disabled
+- **Revit 2026** (.NET 8) — full feature set, all 150 tools
+- **Revit 2024** (.NET Framework 4.8) — *read-only subset* (~114 tools): write/edit tools, WPF approval window, IFC space-to-room, and skill-run tools are disabled
 - .NET 8 SDK (to build)
 - Claude Code CLI (`claude`), Codex CLI (`codex`), **or** Gemini CLI (`gemini`)
 

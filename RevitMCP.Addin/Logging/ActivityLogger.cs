@@ -20,7 +20,7 @@ public class ActivityLogger
         Directory.CreateDirectory(_logDir);
     }
 
-    public async Task WriteAsync(McpToolRequest request, McpToolResult result, RevitDocumentContext? context = null)
+    public async Task WriteAsync(McpToolRequest request, McpToolResult result, RevitDocumentContext? context = null, long? responseSizeBytes = null)
     {
         var entry = new LogEntry
         {
@@ -32,6 +32,7 @@ public class ActivityLogger
             Permission = request.Permission.ToString(),
             Status = result.Success ? "Success" : "Failed",
             DurationMs = result.DurationMs,
+            ResponseSizeBytes = responseSizeBytes,
             Message = result.Message,
             Warnings = result.Warnings,
             Errors = result.Errors

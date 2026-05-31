@@ -99,14 +99,12 @@ public class SetSheetParametersBulkTool : IRevitMcpTool
         {
             JObject j => j,
             JToken t  => t as JObject,
-            string s  => TryParseJObject(s),
+            string s  => ToolArguments.TryParseJObject(s),
             _         => null
         };
         if (jo == null) return [];
         return jo.Properties().ToDictionary(p => p.Name, p => (object?)p.Value.ToObject<object>());
     }
-
-    private static JObject? TryParseJObject(string s) { try { return JObject.Parse(s); } catch { return null; } }
 
     private static McpToolResult Fail(McpToolRequest r, string msg) =>
         new() { RequestId = r.RequestId, Success = false, Message = msg };

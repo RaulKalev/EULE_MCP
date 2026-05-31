@@ -49,6 +49,9 @@ public class LogEntry
     [JsonProperty("durationMs")]
     public long DurationMs { get; set; }
 
+    [JsonProperty("responseSizeBytes", NullValueHandling = NullValueHandling.Ignore)]
+    public long? ResponseSizeBytes { get; set; }
+
     [JsonProperty("modifiedElementIds")]
     public List<long> ModifiedElementIds { get; set; } = new();
 

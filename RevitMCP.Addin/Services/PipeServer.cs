@@ -136,10 +136,12 @@ public class PipeServer
                 sw.Stop();
                 result.DurationMs = sw.ElapsedMilliseconds;
 
-                await writer.WriteLineAsync(JsonConvert.SerializeObject(ResponseGuard.GuardResult(result)));
+                var responseJson = JsonConvert.SerializeObject(ResponseGuard.GuardResult(result));
+                var responseBytes = System.Text.Encoding.UTF8.GetByteCount(responseJson);
+                await writer.WriteLineAsync(responseJson);
 
                 if (request != null)
-                    await _logger.WriteAsync(request, result, _eventService.GetLastContext());
+                    await _logger.WriteAsync(request, result, _eventService.GetLastContext(), responseBytes);
             }
         }
         catch (OperationCanceledException) { }
