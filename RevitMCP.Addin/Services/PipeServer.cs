@@ -12,6 +12,15 @@ namespace RevitMCP.Addin.Services;
 /// </summary>
 public class PipeServer
 {
+    private static readonly string DiagLogPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "RevitMCP_startup.log");
+
+    private static void DiagLog(string msg)
+    {
+        try { File.AppendAllText(DiagLogPath, $"[PIPE {DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); } catch { }
+    }
+
     private readonly string _pipeName;
     private readonly ExternalEventService _eventService;
     private readonly Logging.ActivityLogger _logger;
@@ -77,6 +86,7 @@ public class PipeServer
 
                 await pipe.WaitForConnectionAsync(ct);
 
+                DiagLog("Client connected to pipe");
                 // Pass a linked token so client tasks are cancelled when the server stops.
                 _ = Task.Run(() => HandleClientAsync(pipe, ct), CancellationToken.None);
             }
@@ -95,21 +105,29 @@ public class PipeServer
 
     private async Task HandleClientAsync(NamedPipeServerStream pipe, CancellationToken ct)
     {
-        using var _ = pipe;
-        using var reader = new StreamReader(pipe, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
-        using var writer = new StreamWriter(pipe, System.Text.Encoding.UTF8, bufferSize: 1024, leaveOpen: true) { AutoFlush = true };
-
+        DiagLog("HandleClientAsync started");
+        // NOTE: ALL construction is inside the try so any exception is caught and logged.
         try
         {
+            var enc = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+            DiagLog($"Pipe state before readers: IsConnected={pipe.IsConnected}, CanRead={pipe.CanRead}, CanWrite={pipe.CanWrite}");
+            using var reader = new StreamReader(pipe, enc, detectEncodingFromByteOrderMarks: false, bufferSize: 4096, leaveOpen: true);
+            DiagLog("StreamReader created");
+            using var writer = new StreamWriter(pipe, enc, bufferSize: 4096, leaveOpen: true);
+            writer.AutoFlush = true;
+            DiagLog("StreamWriter created");
+
             while (!ct.IsCancellationRequested && pipe.IsConnected)
             {
+                DiagLog("Waiting for ReadLineAsync...");
 #if REVIT2024
                 var line = await reader.ReadLineAsync();
 #else
                 var line = await reader.ReadLineAsync(ct);
 #endif
-                if (line == null) break;
+                if (line == null) { DiagLog("ReadLineAsync returned null (client disconnected)"); break; }
 
+                DiagLog($"Read line ({line.Length} chars), dispatching...");
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 McpToolRequest? request = null;
                 McpToolResult result;
@@ -119,12 +137,15 @@ public class PipeServer
                     request = JsonConvert.DeserializeObject<McpToolRequest>(line);
                     if (request == null) throw new InvalidOperationException("Null request deserialized.");
 
+                    DiagLog($"Dispatching tool: {request.ToolName}");
                     // QueryLimits controls the maximum time a tool may run before the dispatch layer returns a timeout.
                     var timeoutMs = Math.Max(1, QueryLimits.Default.TimeoutSeconds) * 1000;
                     result = await _eventService.DispatchAsync(request, timeoutMs: timeoutMs);
+                    DiagLog($"DispatchAsync returned: success={result.Success} in {sw.ElapsedMilliseconds}ms");
                 }
                 catch (Exception ex)
                 {
+                    DiagLog($"Inner exception: {ex.GetType().Name}: {ex.Message}");
                     result = new McpToolResult
                     {
                         RequestId = request?.RequestId ?? string.Empty,
@@ -136,18 +157,25 @@ public class PipeServer
                 sw.Stop();
                 result.DurationMs = sw.ElapsedMilliseconds;
 
-                var (_, responseJson) = ResponseGuard.GuardSerialized(result);
+                var (__, responseJson) = ResponseGuard.GuardSerialized(result);
                 var responseBytes = System.Text.Encoding.UTF8.GetByteCount(responseJson);
                 await writer.WriteLineAsync(responseJson);
 
                 if (request != null)
                     await _logger.WriteAsync(request, result, _eventService.GetLastContext(), responseBytes);
             }
+            DiagLog($"While loop exited: IsCancelled={ct.IsCancellationRequested}, IsConnected={pipe.IsConnected}");
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
+            DiagLog($"OUTER EXCEPTION in HandleClientAsync: {ex.GetType().Name}: {ex.Message}");
             await _logger.WriteRawAsync($"Client handler error: {ex.Message}");
+        }
+        finally
+        {
+            DiagLog("HandleClientAsync finally - disposing pipe");
+            pipe.Dispose();
         }
     }
 }
