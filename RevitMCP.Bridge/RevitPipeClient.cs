@@ -180,6 +180,11 @@ public class RevitPipeClient
         {
             return false;
         }
+        catch (InvalidOperationException)
+        {
+            // The process exited between GetProcessById and the HasExited check.
+            return false;
+        }
         catch
         {
             // If we cannot inspect the process, assume it is alive and let the

@@ -131,7 +131,7 @@
                             <TextBlock Grid.Row="5" Grid.Column="1" Margin="0,3,0,0">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock" BasedOn="{StaticResource StatusLabelStyle}">
-                                        <Setter Property="Text" Value="No — auto-detect (newest Revit wins)" />
+                                        <Setter Property="Text" Value="No — auto-detect (highest Revit version wins)" />
                                         <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsActiveInstance}" Value="True">

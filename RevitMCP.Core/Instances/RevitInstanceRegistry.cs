@@ -16,6 +16,12 @@ public class RevitInstanceRegistry
     private const string InstanceFilePrefix = "instance-";
     private const string ActiveMarkerFileName = "active-instance.json";
 
+    /// <summary>Contents of the active-instance marker file.</summary>
+    private class ActiveInstanceMarker
+    {
+        public int ProcessId { get; set; }
+    }
+
     /// <summary>Default registry location: %LOCALAPPDATA%\RevitMCP\Instances.</summary>
     public static string DefaultDirectory => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -73,7 +79,7 @@ public class RevitInstanceRegistry
         try
         {
             System.IO.Directory.CreateDirectory(_directory);
-            File.WriteAllText(ActiveMarkerPath, JsonConvert.SerializeObject(new { ProcessId = processId }));
+            File.WriteAllText(ActiveMarkerPath, JsonConvert.SerializeObject(new ActiveInstanceMarker { ProcessId = processId }));
             return true;
         }
         catch
@@ -89,7 +95,7 @@ public class RevitInstanceRegistry
         {
             if (!File.Exists(ActiveMarkerPath)) return null;
             var json = File.ReadAllText(ActiveMarkerPath);
-            var marker = JsonConvert.DeserializeAnonymousType(json, new { ProcessId = 0 });
+            var marker = JsonConvert.DeserializeObject<ActiveInstanceMarker>(json);
             return marker?.ProcessId;
         }
         catch
