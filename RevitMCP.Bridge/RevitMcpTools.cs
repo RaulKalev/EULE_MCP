@@ -16,6 +16,60 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    [McpServerTool(Name = "revit_list_instances", ReadOnly = true),
+     Description("Lists all running Revit instances that host a RevitMCP connector (useful when several Revit projects, e.g. 2024 and 2026, are open at the same time). Shows process id, Revit version, document title, and which instance requests are currently routed to.")]
+    public Task<string> ListInstances(CancellationToken cancellationToken)
+    {
+        var activePid = pipeClient.GetActiveProcessId();
+        var instances = pipeClient.DiscoverLiveInstances();
+        var response = new
+        {
+            success = true,
+            activeProcessId = activePid,
+            routingOrder = "user-selected active instance first, then highest Revit version, then most recently started",
+            instances = instances.Select((i, index) => new
+            {
+                processId = i.ProcessId,
+                revitVersion = i.RevitVersion,
+                documentTitle = i.DocumentTitle ?? "(unknown)",
+                pipeName = i.PipeName,
+                isActive = activePid.HasValue && i.ProcessId == activePid.Value,
+                isCurrentTarget = index == 0
+            }).ToList(),
+            message = instances.Count == 0
+                ? "No running Revit instances with an active MCP connector were found."
+                : $"{instances.Count} Revit instance(s) found. Requests are routed to the first entry."
+        };
+        return Task.FromResult(JsonConvert.SerializeObject(response, ResultSerializerSettings));
+    }
+
+    [McpServerTool(Name = "revit_select_instance"),
+     Description("Selects which running Revit instance MCP requests should be routed to, by process id (see revit_list_instances). Use this when multiple Revit projects are open and the wrong one is being targeted.")]
+    public Task<string> SelectInstance(
+        [Description("Process id of the Revit instance to route requests to.")] int processId,
+        CancellationToken cancellationToken)
+    {
+        var instances = pipeClient.DiscoverLiveInstances();
+        var match = instances.FirstOrDefault(i => i.ProcessId == processId);
+        if (match == null)
+        {
+            return Task.FromResult(JsonConvert.SerializeObject(new
+            {
+                success = false,
+                message = $"No running Revit instance with process id {processId} was found. Use revit_list_instances to see available instances."
+            }, ResultSerializerSettings));
+        }
+
+        var ok = pipeClient.SelectInstance(processId);
+        return Task.FromResult(JsonConvert.SerializeObject(new
+        {
+            success = ok,
+            message = ok
+                ? $"Requests will now be routed to Revit {match.RevitVersion} (pid {processId}, document: {match.DocumentTitle ?? "unknown"})."
+                : "Failed to persist the instance selection."
+        }, ResultSerializerSettings));
+    }
+
     [McpServerTool(Name = "revit_get_selected_elements", ReadOnly = true),
      Description("Returns the currently selected elements from the active Revit document with category, family, type, level, location, and bounding box.")]
     public async Task<string> GetSelectedElements(CancellationToken cancellationToken)

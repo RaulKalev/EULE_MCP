@@ -84,6 +84,7 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Pipe: " Style="{StaticResource StatusLabelStyle}" />
@@ -124,6 +125,23 @@
                             <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedElementCount}"
                                        Style="{StaticResource StatusLabelStyle}"
                                        Foreground="{DynamicResource ForegroundBrush}" Margin="0,3,0,0" />
+
+                            <TextBlock Grid.Row="5" Grid.Column="0" Text="Active: " Style="{StaticResource StatusLabelStyle}" Margin="0,3,0,0"
+                                       ToolTip="When multiple Revit instances are running, the MCP bridge routes requests to the active instance first." />
+                            <TextBlock Grid.Row="5" Grid.Column="1" Margin="0,3,0,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource StatusLabelStyle}">
+                                        <Setter Property="Text" Value="No — auto-detect (newest Revit wins)" />
+                                        <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsActiveInstance}" Value="True">
+                                                <Setter Property="Text" Value="Yes — bridge targets this Revit" />
+                                                <Setter Property="Foreground" Value="{DynamicResource StatusRunningBrush}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
                         </Grid>
 
                         <!-- Permission Mode -->
@@ -190,6 +208,12 @@
                                 Style="{StaticResource DangerButtonStyle}"
                                 HorizontalAlignment="Stretch"
                                 Margin="0,0,0,6" />
+                        <Button Content="Make This Project Active"
+                                Command="{Binding MakeActiveCommand}"
+                                Style="{StaticResource ActionButtonStyle}"
+                                HorizontalAlignment="Stretch"
+                                Margin="0,0,0,6"
+                                ToolTip="Route AI agent requests to this Revit instance when several Revit windows (e.g. 2024 and 2026) are open at the same time." />
 
                     </StackPanel>
                 </TabItem>
