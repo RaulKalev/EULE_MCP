@@ -2,5 +2,6 @@
   <Project Path="RevitMCP.Addin/RevitMCP.Addin.csproj" />
   <Project Path="RevitMCP.Bridge/RevitMCP.Bridge.csproj" />
   <Project Path="RevitMCP.Core/RevitMCP.Core.csproj" />
+  <Project Path="RevitMCP.Setup/RevitMCP.Setup.csproj" />
   <Project Path="RevitMCP.Tests/RevitMCP.Tests.csproj" />
 </Solution>
