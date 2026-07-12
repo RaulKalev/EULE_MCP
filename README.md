@@ -1,11 +1,11 @@
 # EULE MCP — Revit MCP Connector
 
-Ask your AI assistant about a live **Autodesk Revit 2026** model in plain English — count elements, inspect circuits, run QA checks, generate Excel reports — without writing scripts or code. EULE MCP is a local [Model Context Protocol](https://modelcontextprotocol.io) connector that gives Claude Code, Codex, and Antigravity CLI direct read/write access to an open Revit model through 151 tools across twelve functional areas.
+Ask your AI assistant about a live **Autodesk Revit 2026** model in plain English — count elements, inspect circuits, run QA checks, generate Excel reports — without writing scripts or code. EULE MCP is a local [Model Context Protocol](https://modelcontextprotocol.io) connector that gives Claude Code, Codex, and Antigravity CLI direct read/write access to an open Revit model through 147 tools across twelve functional areas.
 
-**151 tools** across twelve functional areas:
+**147 tools** across twelve functional areas:
 - **General** (25 tools) — element discovery, parameter QA, grouping, Excel exports, selection, write operations, config-driven parameter QA rule sets, and detailed geometry inspection of selected elements
 - **Electrical** (45 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, path mode control, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
-- **Documentation** (22 tools) — view and sheet management: discovery, summary, preview/apply workflows for placing views, creating/duplicating/renaming sheets and views, bulk parameter updates, revision tracking, preset inspection, and safe destructive delete with mandatory manual approval
+- **Documentation** (24 tools) — view and sheet management: discovery, summary, preview/apply workflows for placing views, creating/duplicating/renaming sheets and views, bulk parameter updates, revision tracking, preset inspection, and safe destructive delete with mandatory manual approval
 - **Coordination** (15 tools) — Revit-native clash detection: category/link discovery, solid-intersection hard-clash and clearance checking, preset management, Excel reporting, and step-through review views
 - **Family Creation** (1 tool) — generate Detail Item families (.rfa) from DWG source files using company presets
 - **Skills** (10 tools) — multi-step QA workflow engine: run built-in or project-specific quality-check skill definitions, inspect task breakdowns, manage per-project setting overrides, compare overrides against master, propose master updates, and export Markdown diff reports
@@ -34,7 +34,7 @@ Scan delivery folder C:\Projects\1626\Export for temp files and old revisions.
 
 ## Requirements
 
-- **Revit 2026** (.NET 8) — full feature set, all 151 tools
+- **Revit 2026** (.NET 8) — full feature set, all 147 tools
 - **Revit 2024** (.NET Framework 4.8) — *read-only subset* (~114 tools): write/edit tools, WPF approval window, IFC space-to-room, and skill-run tools are disabled
 - .NET 9 SDK (to build the `.slnx`; the Revit 2026 add-in targets .NET 8)
 - Claude Code CLI (`claude`), Codex CLI (`codex`), **or** Antigravity CLI (`agy`)
@@ -178,6 +178,8 @@ Activity is logged to `%AppData%\RKTools\RevitMCP\Logs\{date}.jsonl` — one JSO
 | Tool | Description |
 |------|-------------|
 | `revit_get_connection_status` | Revit version, document title, active view, worksharing info, selection count |
+| `revit_list_instances` | Lists all running Revit instances with a live MCP connector — process id, Revit version, document title, and which one requests are currently routed to |
+| `revit_select_instance` | Selects which running Revit instance MCP requests should be routed to, by process id (see `revit_list_instances`) |
 | `revit_get_selected_elements` | Category, family, type, level, location, bounding box for selected elements |
 | `revit_inspect_selected_elements` | Detailed inspection of selected elements: category, family/type, level, mm location (point or curve), mm bounding box (min/max/size/center), optional parameters preview, geometry summary (solid/mesh/curve counts, volume mm³). Args: `includeParameters` (true), `parameterNames[]`, `includeGeometrySummary` (true), `limit` (50). |
 | `revit_list_views` | All non-template printable views with type, scale, discipline, sheet placement |
@@ -194,9 +196,7 @@ Activity is logged to `%AppData%\RKTools\RevitMCP\Logs\{date}.jsonl` — one JSO
 | `revit_list_query_presets` | Lists reusable query presets from config |
 | `revit_run_query_preset` | Runs a saved preset by name, optionally exports to Excel |
 | `revit_check_parameter_completeness` | Checks required parameters exist and are filled (model QA). Pass `returnIssueReport=true` to include a structured `IssueReportDto` in the response. |
-| `revit_export_view_list_to_excel` | Exports all views to `.xlsx` with type, scale, sheet placement |
-| `revit_export_sheet_list_to_excel` | Exports all sheets to `.xlsx` with placed views |
-| `revit_export_schedule_list_to_excel` | Exports all schedules to `.xlsx` with fields |
+| `revit_export_list_to_excel` | Exports a views/sheets/schedules list to `.xlsx`. `kind` = `views` \| `sheets` \| `schedules`. Per-kind options: views=`includeTemplates`,`includeUnplacedViews`; sheets=`includePlacedViews`; schedules=`includeFields` |
 | `revit_select_elements` | Selects elements by IDs in Revit UI *(requires approval)* |
 | `revit_select_elements_by_query` | Selects elements by query in Revit UI *(requires approval)* |
 | `revit_set_parameter` | Sets a parameter value on elements — supports String, Integer, Double, and **ElementId** storage types *(requires approval, runs in transaction)* |
@@ -306,8 +306,7 @@ These tools cover the full electrical circuit lifecycle in a live Revit model �
 | Tool | Description |
 |------|-------------|
 | `revit_get_circuit_route_assumptions` | Returns the routing assumptions for a circuit (installation method, conductor material, temperature rating) used as voltage drop inputs |
-| `revit_estimate_circuit_length` | Estimates the cable length for a single circuit using element locations and a configurable method (StraightLine, Manhattan, Estimate) |
-| `revit_estimate_circuit_lengths` | Bulk version of `revit_estimate_circuit_length` — estimates lengths for multiple circuits in one call |
+| `revit_estimate_circuit_length` | Estimates cable length(s) using panel-to-element distances. Single mode: pass `circuitId` (>0) — returns detail, supports `includeElementBreakdown`. Batch mode: omit `circuitId` and filter by `panelName`/`systemType`/`circuitIds` — returns one row per circuit. `method` = `StraightLineMax` \| `StraightLineSum` \| `ManhattanMax` (default) \| `ManhattanSum` \| `NearestNeighborPath` |
 | `revit_export_voltage_drop_input_to_excel` | Exports voltage drop input data (circuit, panel, load, estimated length, cable type) to `.xlsx`. Accepts `circuitIds` (array — exports only those circuits), or `panelName`/`systemType` filters when no IDs given |
 | `revit_get_voltage_drop_precheck` | Pre-checks one or more circuits for voltage drop calculation readiness. Accepts `circuitIds` (array, preferred) or single `circuitId`. Flags missing cable type, load, voltage, and unreachable locations. Returns per-circuit results with a bulk summary when multiple IDs are provided |
 
@@ -360,40 +359,33 @@ Browse and manage views, sheets, viewports, and revisions in your open model. Al
 | Tool | Description |
 |------|-------------|
 | `revit_preview_place_views_on_sheets` | Shows which views would be placed on which sheets using configurable match modes (ExactName, Contains, Fuzzy, SheetNumberPrefix, SheetNumberSuffix, CustomParameter) |
-| `revit_preview_duplicate_sheets` | Shows new sheet numbers/names that would result from duplicating selected sheets |
+| `revit_preview_duplicate` | Previews view/sheet duplication without changes. `entity` = `views` \| `sheets`. sheets: `sourceSheetIds`/`sourceSheetNumbers`, `newNumberSuffix`, `newNameSuffix`, `keepTitleBlock`, `copyParameters`. views: `viewIds`, `duplicateOption`, `nameSuffix`, `namePrefix` |
 | `revit_preview_create_sheets_from_table` | Validates a table of `{sheetNumber, sheetName, ...params}` rows — flags conflicts and issues without creating anything |
-| `revit_preview_duplicate_views` | Shows new view names that would result from duplicating views with configurable duplicate option |
-| `revit_preview_rename_views` | Shows before/after names for a batch rename using FindReplace, PrefixSuffix, Template, or RegexFindReplace mode |
-| `revit_preview_rename_sheets` | Same as above for sheets — targets Name, Number, or Both |
+| `revit_preview_rename` | Previews view/sheet renames without changes. `entity` = `views` \| `sheets`, `mode` = `FindReplace` \| `PrefixSuffix` \| `Template` \| `RegexFindReplace`. sheets also take `target` = `Name` \| `Number` \| `Both` |
 
 #### Write Tools (requires approval)
 
 | Tool | Description |
 |------|-------------|
 | `revit_place_views_on_sheets` | Places views on matched sheets in a transaction — same parameters as the preview tool |
-| `revit_duplicate_sheets` | Creates empty sheet copies with the same title block and optionally copied parameters |
+| `revit_duplicate` | Duplicates views/sheets. Run `revit_preview_duplicate` first. `entity` = `views` \| `sheets`, same parameters as the preview tool |
 | `revit_create_sheets_from_table` | Creates multiple sheets from a row table in one transaction |
-| `revit_duplicate_views` | Duplicates views with Duplicate, DuplicateWithDetailing, or AsDependent option |
 | `revit_apply_view_template` | Applies a view template to one or more views filtered by ID, type, or name |
-| `revit_set_sheet_parameters_bulk` | Sets parameters on multiple sheets in one transaction |
-| `revit_set_view_parameters_bulk` | Sets parameters on multiple views in one transaction |
-| `revit_rename_views` | Renames views using FindReplace, PrefixSuffix, Template, or RegexFindReplace mode |
-| `revit_rename_sheets` | Renames sheet names, numbers, or both using the same rename modes |
+| `revit_set_parameters_bulk` | Sets parameters on multiple views/sheets in one transaction. `entity` = `views` \| `sheets`, `parameters` = name→value map |
+| `revit_rename` | Renames views/sheets. Run `revit_preview_rename` first. Same `entity`/`mode`/`target` parameters as the preview tool |
 
 > **Deferred (not yet implemented):**
-> - `EmptyDetailOnly` duplicate option: `revit_duplicate_views` and `revit_preview_duplicate_views` return a clear error if `duplicateOption="EmptyDetailOnly"` is requested. Only `Duplicate`, `DuplicateWithDetailing`, and `AsDependent` are supported.
-> - `revit_create_sheets_from_preset`: Creating sheets directly from a PlaceViews preset file is not yet implemented. Use `revit_run_view_sheet_workflow_preset` to plan the workflow, then execute steps manually with `revit_create_sheets_from_table`, `revit_duplicate_sheets`, etc.
+> - `EmptyDetailOnly` duplicate option: `revit_duplicate`/`revit_preview_duplicate` (`entity="views"`) return a clear error if `duplicateOption="EmptyDetailOnly"` is requested. Only `Duplicate`, `DuplicateWithDetailing`, and `AsDependent` are supported.
+> - `revit_create_sheets_from_preset`: Creating sheets directly from a PlaceViews preset file is not yet implemented. Use `revit_run_view_sheet_workflow_preset` to plan the workflow, then execute steps manually with `revit_create_sheets_from_table`, `revit_duplicate` (`entity="sheets"`), etc.
 
 #### Destructive Delete Tools (always requires manual approval — Direct Edit does NOT bypass)
 
 | Tool | Description |
 |------|-------------|
-| `revit_preview_delete_views` | Shows which views would be deleted — never modifies the model |
-| `revit_delete_views` | **Permanently deletes views.** Always requires explicit manual approval regardless of Direct Edit mode. Optional `skipPlacedOnSheets=true` (default) protects placed views |
-| `revit_preview_delete_sheets` | Shows which sheets would be deleted — never modifies the model |
-| `revit_delete_sheets` | **Permanently deletes sheets.** Always requires explicit manual approval. Optional `skipSheetsWithViews=true` (default) protects occupied sheets |
+| `revit_preview_delete` | Shows which views/sheets would be deleted — never modifies the model. `target` = `views` \| `sheets` |
+| `revit_delete` | **Permanently deletes views or sheets.** Always requires explicit manual approval regardless of Direct Edit mode. `target` = `views` (optional `skipPlacedOnSheets=true` default, protects placed views) \| `sheets` (optional `skipSheetsWithViews=true` default, protects occupied sheets) |
 
-> **Safety:** `revit_delete_views` and `revit_delete_sheets` use `DestructiveRequiresManualApproval` permission — they always queue for manual approval in the Pending tab even when Direct Edit is enabled. This cannot be overridden.
+> **Safety:** `revit_delete` uses `DestructiveRequiresManualApproval` permission for both targets — it always queues for manual approval in the Pending tab even when Direct Edit is enabled. This cannot be overridden.
 
 ### Coordination / Clash Detection Tools
 
@@ -413,8 +405,7 @@ Run clash detection directly from your AI session without leaving the chat. Defi
 
 | Tool | Description |
 |------|-------------|
-| `revit_detect_hard_clashes` | Detects hard (physical intersection) clashes between two category sets using solid-geometry boolean intersection (`Confidence = High`). Bounding-box is used only as a fast candidate pre-filter. Set `allowBoundingBoxFallback = true` to also return unconfirmed bbox-only overlaps (`Confidence = Low`) when solids are unavailable. Pass `returnIssueReport=true` for a structured `IssueReportDto`. |
-| `revit_detect_clearance_clashes` | Detects clearance violations — expands source bounding boxes by a configurable tolerance (mm) before intersection test. **MVP approximation:** uses bounding-box expansion, not true surface-to-surface distance. Results may include false positives for non-rectangular geometry. `Confidence = Medium`. Use for early QA screening; results must be visually reviewed in the generated clash review view. `distanceMode` controls the measurement method: `ExpandedBoundingBox` (default, `Confidence = Medium`) or `SolidCentroidApproximation` (centre-to-centre distance, `Confidence = Low`). True geometry-based clearance distance is planned as a future enhancement. |
+| `revit_detect_clashes` | Detects clashes between two category sets. `mode` = `hard`: physical solid intersection (`Confidence = High`; bounding-box is only a fast candidate pre-filter; set `allowBoundingBoxFallback = true` to also return unconfirmed bbox-only overlaps at `Confidence = Low` when solids are unavailable; `toleranceMm` for minimum intersection volume). `mode` = `clearance`: expands source bounding boxes by `clearanceMm` before the intersection test. **MVP approximation:** bounding-box expansion, not true surface-to-surface distance — results may include false positives for non-rectangular geometry (`Confidence = Medium`); results must be visually reviewed in the generated clash review view. Pass `returnIssueReport=true` for a structured `IssueReportDto`. |
 | `revit_get_clash_summary` | Aggregates a clash run result — returns total counts grouped by rule name, severity, status, level, detection method, and confidence |
 
 #### Presets
@@ -437,8 +428,7 @@ Run clash detection directly from your AI session without leaving the chat. Defi
 
 | Tool | Description |
 |------|-------------|
-| `revit_get_next_clash` | Advances to the next clash in the cached run and returns its details |
-| `revit_get_previous_clash` | Steps back to the previous clash in the cached run |
+| `revit_get_adjacent_clash` | Navigates to the next/previous clash in the last run result. `direction` = `next` \| `previous`; wraps around |
 | `revit_create_clash_review_view` | Creates a temporary 3D section box view isolating a single clash *(requires approval)* |
 | `revit_focus_clash` | Zooms the active 3D view to a clash location and selects both clashing elements *(requires approval)* |
 | `revit_select_clash_elements` | Selects both elements of a specific clash in the Revit UI *(requires approval)* |
@@ -471,9 +461,7 @@ Skills are named multi-step QA workflows stored as `.skill.json` files. Built-in
 | `revit_preview_skill_run` | Read-only preview: shows task list, which tasks would modify the model, and whether approval is required. Always call this before `revit_run_skill` |
 | `revit_run_skill` | Runs all enabled tasks in a skill. Some tasks may require approval. Use `useProjectOverride=true` to apply job-specific settings |
 | `revit_run_skill_task` | Runs a single task within a skill — useful for re-running or debugging one check without running the full skill |
-| `revit_create_project_skill_override` | Creates a project-level settings override for a skill. `changesJson` uses the structure `{"tasks":{"<taskId>":{"enabled":true,"settings":{...}}}}` |
-| `revit_update_project_skill_override` | Merges additional changes into an existing project override |
-| `revit_reset_project_skill_override` | Deletes the project override, reverting the skill to company-master defaults |
+| `revit_manage_project_skill_override` | Manages a project-specific override for a skill. `action` = `create` (new override; supports `projectName`, `changesJson`, `note`) \| `update` (merge `changesJson` into an existing override; supports `note`) \| `reset` (delete the override, revert to company-master defaults). `changesJson` structure: `{"tasks":{"<taskId>":{"enabled":true,"settings":{...}}}}` |
 | `revit_configure_sheet_naming_skill` | Helper that creates or updates the project override for the built-in sheet naming skill (`company.lehed.nimetamise-kontroll`). Supports `enableExcelComparison` with optional `excelFilePath` and `worksheetName`, and per-task enable/disable flags. Returns the saved override JSON. |
 
 #### Skill Admin Tools
@@ -490,17 +478,14 @@ Shared structured issue model used as the output format for all QA tools. Issues
 
 | Tool | Description |
 |------|-------------|
-| `revit_export_issues_json` | Exports an `IssueReportDto` (passed as `reportJson`) to a `.json` file. Returns `filePath`, `totalIssues`, `runId`. *(requires approval)* |
-| `revit_export_issues_excel` | Exports an `IssueReportDto` to a formatted `.xlsx` file with Summary and Issues sheets, severity colour coding, and auto-filter. Returns `filePath`. *(requires approval)* |
-| `revit_export_issues_markdown` | Exports an `IssueReportDto` to a `.md` file with summary table, category breakdown, and issues table. Returns `filePath`. *(requires approval)* |
-| `revit_export_issues_html_dashboard` | Exports an `IssueReportDto` to a self-contained offline HTML file with interactive filtering by severity/category/status, sortable table, summary cards, and chart. Returns `filePath`. Args: `reportJson`, `title` (optional), `fileName` (optional). *(requires approval)* |
+| `revit_export_issues` | Exports an `IssueReportDto` (passed as `reportJson`) to a file. `format` = `json` \| `excel` \| `markdown` \| `html_dashboard`. json/excel/markdown return `filePath` (+ `totalIssues`, `runId`); html_dashboard is a self-contained offline HTML file with interactive filtering by severity/category/status, sortable table, summary cards, and chart — supports `fileName` and `includeEmbeddedJson` (default true). *(requires approval)* |
 | `revit_merge_issue_reports` | Merges multiple `IssueReportDto` JSON strings (`reportJsonArray`) into a single consolidated report. Returns the merged report JSON and summary counts. |
 
 ### Delivery Tools
 
 QA tools for pre-issue drawing deliveries. File names are expected to follow the EULE pattern: `{projectNumber}_{stage}_{discipline}-{group}-{sequence}[_{description}][_{revision}].{ext}`. Files that do not match the pattern are still listed but are flagged as unrecognised.
 
-All four tools accept a `returnIssueReport` flag (default `false`). When `true`, the response includes a structured `IssueReportDto` compatible with `revit_export_issues_excel` / `revit_export_issues_markdown`.
+All four tools accept a `returnIssueReport` flag (default `false`). When `true`, the response includes a structured `IssueReportDto` compatible with `revit_export_issues` (`format=excel` or `format=markdown`).
 
 | Tool | Description |
 |------|-------------|
