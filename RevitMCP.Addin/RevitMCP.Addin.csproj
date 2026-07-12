@@ -7,15 +7,16 @@
     <AssemblyName>RevitMCP.Addin</AssemblyName>
     <RootNamespace>RevitMCP.Addin</RootNamespace>
     <!-- Generate version attributes from Directory.Build.props. AssemblyInfo.cs holds only the
-         WPF ThemeInfo attribute (net8 only), so there is no duplicate-attribute conflict. -->
+         WPF ThemeInfo attribute, needed on both TFMs now that both build the WPF UI. -->
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <NoWarn>CA1416</NoWarn>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <!-- Both Revit 2024 and 2026 builds include the full WPF plugin UI. -->
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
 
   <!-- Revit 2026 (.NET 8) — full tool surface incl. write tools and WPF UI -->
   <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
-    <UseWPF>true</UseWPF>
     <LangVersion>12.0</LangVersion>
     <DefineConstants>$(DefineConstants);REVIT2026</DefineConstants>
     <!-- Revit 2026 reference assemblies declare framework facade versions that
@@ -24,7 +25,8 @@
     <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3277</MSBuildWarningsAsMessages>
   </PropertyGroup>
 
-  <!-- Revit 2024 (.NET Framework 4.8) — read-only subset, no WPF window -->
+  <!-- Revit 2024 (.NET Framework 4.8) — same WPF UI and tool surface as Revit 2026,
+       except IFC Space-to-Room (held back separately, see the exclusion ItemGroup below). -->
   <PropertyGroup Condition="'$(TargetFramework)' == 'net48'">
     <!-- Transitional until shared add-in code is migrated to the C# 7.3 target. -->
     <LangVersion>12.0</LangVersion>
@@ -46,6 +48,9 @@
     <PackageReference Include="DocumentFormat.OpenXml" />
     <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="ricaun.Revit.UI" />
+    <!-- WPF theming for the plugin window — both TFMs build the UI now. -->
+    <PackageReference Include="MaterialDesignColors" />
+    <PackageReference Include="MaterialDesignThemes" />
   </ItemGroup>
 
   <!-- Revit SDK — TFM-conditional -->
@@ -53,8 +58,6 @@
     <PackageReference Include="Autodesk.Revit.SDK" VersionOverride="2026.0.0.9999" IncludeAssets="build" GeneratePathProperty="true" PrivateAssets="All" />
     <Reference Include="RevitAPI" HintPath="$(PkgAutodesk_Revit_SDK)\ref\net8.0\RevitAPI.dll" Private="false" />
     <Reference Include="RevitAPIUI" HintPath="$(PkgAutodesk_Revit_SDK)\ref\net8.0\RevitAPIUI.dll" Private="false" />
-    <PackageReference Include="MaterialDesignColors" />
-    <PackageReference Include="MaterialDesignThemes" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
@@ -71,8 +74,8 @@
     <ProjectReference Include="..\RevitMCP.Core\RevitMCP.Core.csproj" />
   </ItemGroup>
 
-  <!-- Assets (WPF Resource items) only needed for the .NET 8 build that includes the UI -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
+  <!-- Assets (WPF Resource items) — ribbon icons and window branding, needed by both TFMs. -->
+  <ItemGroup>
     <Resource Include="Assets\RevitMCP.tiff" />
     <Resource Include="Assets\Dark - RevitMCP.tiff" />
     <Resource Include="Assets\Light - RevitMCP.tiff" />
@@ -80,56 +83,11 @@
     <Resource Include="Assets\Light - AI1.tiff" />
   </ItemGroup>
 
-  <!-- net48 build: exclude WPF UI, approval system, ribbon command, and write-only tool families.
-       The connector + pipe server still run; AI clients get the read-only tool subset. -->
+  <!-- net48 build: IFC Space-to-Room is the only feature held back for Revit 2024 — it writes
+       Room geometry from linked IFC data and is being revisited separately. Every other tool
+       (writes included) and the full WPF UI now match Revit 2026. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
-    <!-- WPF-specific assembly attributes (ThemeInfo) -->
-    <Compile Remove="AssemblyInfo.cs" />
-    <!-- UI (WPF window, view models, themes, converters, dialog) -->
-    <Compile Remove="UI\**\*.cs" />
-    <Page Remove="UI\**\*.xaml" />
-    <None Remove="UI\**\*.xaml" />
-    <!-- Ribbon command (depends on UI window) -->
-    <Compile Remove="Commands\**\*.cs" />
-    <!-- IFC Space-to-Room writes rooms; preview tools also live here and pull in writer deps -->
     <Compile Remove="Tools\IfcSpaceToRoom\**\*.cs" />
-    <!-- Write tools: parameter writes, circuit creation/edits, sheet/view writes, deletes, family creation, skill runs -->
-    <Compile Remove="Tools\SetParameterTool.cs" />
-    <Compile Remove="Tools\SetCircuitParameterTool.cs" />
-    <Compile Remove="Tools\SetCircuitParametersBulkTool.cs" />
-    <Compile Remove="Tools\SetCircuitPathModeTool.cs" />
-    <Compile Remove="Tools\SetSheetParametersBulkTool.cs" />
-    <Compile Remove="Tools\SetViewParametersBulkTool.cs" />
-    <Compile Remove="Tools\CreateElectricalCircuitTool.cs" />
-    <Compile Remove="Tools\AddElementsToCircuitTool.cs" />
-    <Compile Remove="Tools\ReassignCircuitPanelTool.cs" />
-    <Compile Remove="Tools\ChangeCircuitCableOrWireTypeTool.cs" />
-    <Compile Remove="Tools\ApplyCircuitNumberingTool.cs" />
-    <Compile Remove="Tools\ApplyCircuitLoadNamesTool.cs" />
-    <Compile Remove="Tools\ApplyViewTemplateTool.cs" />
-    <Compile Remove="Tools\PlaceViewsOnSheetsTool.cs" />
-    <Compile Remove="Tools\DuplicateSheetsTool.cs" />
-    <Compile Remove="Tools\DuplicateViewsTool.cs" />
-    <Compile Remove="Tools\CreateSheetsFromTableTool.cs" />
-    <Compile Remove="Tools\RenameViewsTool.cs" />
-    <Compile Remove="Tools\RenameSheetsTool.cs" />
-    <Compile Remove="Tools\DeleteViewsTool.cs" />
-    <Compile Remove="Tools\DeleteSheetsTool.cs" />
-    <Compile Remove="Tools\RunFireAlarmCircuitPresetTool.cs" />
-    <Compile Remove="Tools\RunViewSheetWorkflowPresetTool.cs" />
-    <Compile Remove="Tools\RunClashPresetTool.cs" />
-    <Compile Remove="Tools\CreateClashReviewViewTool.cs" />
-    <Compile Remove="Tools\FocusClashTool.cs" />
-    <Compile Remove="Tools\CreatePanelSchematicSymbolFromDwgTool.cs" />
-    <Compile Remove="Tools\RunSkillTool.cs" />
-    <Compile Remove="Tools\RunSkillTaskTool.cs" />
-    <Compile Remove="Tools\CreateProjectSkillOverrideTool.cs" />
-    <Compile Remove="Tools\UpdateProjectSkillOverrideTool.cs" />
-    <Compile Remove="Tools\ResetProjectSkillOverrideTool.cs" />
-    <Compile Remove="Tools\ConfigureSheetNamingSkillTool.cs" />
-    <Compile Remove="Tools\ProposeSkillMasterUpdateTool.cs" />
-    <!-- Electrical circuit write helpers (only used by excluded write tools) -->
-    <Compile Remove="Electrical\CircuitMutationService.cs" />
   </ItemGroup>
 
 </Project>

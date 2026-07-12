@@ -14,9 +14,7 @@ using RevitMCP.Addin.Tools.IfcSpaceToRoom;
 using RevitMCP.Addin.Tools.ParameterQA;
 using RevitMCP.Addin.Tools.Reports;
 using RevitMCP.Addin.Tools.Standards;
-#if !REVIT2024
 using RevitMCP.Addin.UI.ViewModels;
-#endif
 using RevitMCP.Core.Configuration;
 using ricaun.Revit.UI;
 
@@ -25,10 +23,8 @@ namespace RevitMCP.Addin;
 [AppLoader]
 public class App : IExternalApplication
 {
-#if !REVIT2024
     private static McpWindowViewModel? _viewModel;
     public static McpWindowViewModel? GetViewModel() => _viewModel;
-#endif
     private static ConnectorService? _connector;
     public static ConnectorService? GetConnector() => _connector;
 
@@ -74,23 +70,19 @@ public class App : IExternalApplication
             handler.RegisterTool(new ExportScheduleListToExcelTool());
             handler.RegisterTool(new SelectElementsTool());
             handler.RegisterTool(new SelectElementsByQueryTool());
-#if !REVIT2024
             handler.RegisterTool(new SetParameterTool());
-#endif
             handler.RegisterTool(new GetElectricalCircuitsTool());
             handler.RegisterTool(new GetCircuitInfoTool());
             handler.RegisterTool(new GetAvailablePanelsTool());
             handler.RegisterTool(new GetAvailableCableTypesTool());
             handler.RegisterTool(new GetAvailableWireTypesTool());
             handler.RegisterTool(new GetCircuitCompatibleElementsTool());
-#if !REVIT2024
             handler.RegisterTool(new CreateElectricalCircuitTool());
             handler.RegisterTool(new AddElementsToCircuitTool());
             handler.RegisterTool(new ReassignCircuitPanelTool());
             handler.RegisterTool(new ChangeCircuitCableOrWireTypeTool());
             handler.RegisterTool(new SetCircuitPathModeTool());
             handler.RegisterTool(new SetCircuitParameterTool());
-#endif
             handler.RegisterTool(new FindUncircuitedElementsTool());
             handler.RegisterTool(new CheckCircuitHealthTool());
             handler.RegisterTool(new ExportPanelCircuitListToExcelTool());
@@ -107,14 +99,10 @@ public class App : IExternalApplication
             handler.RegisterTool(new GetCircuitLoadSummaryTool());
             handler.RegisterTool(new CheckPanelUtilizationTool());
             handler.RegisterTool(new PreviewCircuitNumberingTool());
-#if !REVIT2024
             handler.RegisterTool(new ApplyCircuitNumberingTool());
-#endif
             handler.RegisterTool(new PreviewCircuitLoadNamesTool());
-#if !REVIT2024
             handler.RegisterTool(new ApplyCircuitLoadNamesTool());
             handler.RegisterTool(new SetCircuitParametersBulkTool());
-#endif
 
             // Electrical Dashboard (Group A)
             handler.RegisterTool(new GetElectricalDashboardSummaryTool());
@@ -129,9 +117,7 @@ public class App : IExternalApplication
             handler.RegisterTool(new GetVoltageDropPrecheckTool());
 
             // Fire Alarm / ATS Preset (Group C)
-#if !REVIT2024
             handler.RegisterTool(new RunFireAlarmCircuitPresetTool());
-#endif
             handler.RegisterTool(new ExportFireAlarmCircuitPresetToExcelTool());
             handler.RegisterTool(new GetFireAlarmVisualizationDataTool());
             handler.RegisterTool(new GetFireAlarmVoltageDropSummaryTool());
@@ -150,9 +136,7 @@ public class App : IExternalApplication
             handler.RegisterTool(new ListViewSheetPresetsTool());
             handler.RegisterTool(new GetViewSheetPresetTool());
             handler.RegisterTool(new ValidateViewSheetPresetTool());
-#if !REVIT2024
             handler.RegisterTool(new RunViewSheetWorkflowPresetTool());
-#endif
 
             // View / Sheet / Documentation (Phase 2 — Preview)
             handler.RegisterTool(new PreviewPlaceViewsOnSheetsTool());
@@ -162,7 +146,6 @@ public class App : IExternalApplication
             handler.RegisterTool(new PreviewRenameViewsTool());
             handler.RegisterTool(new PreviewRenameSheetsTool());
 
-#if !REVIT2024
             // View / Sheet / Documentation (Phase 3 — Write)
             handler.RegisterTool(new PlaceViewsOnSheetsTool());
             handler.RegisterTool(new DuplicateSheetsTool());
@@ -180,7 +163,8 @@ public class App : IExternalApplication
             handler.RegisterTool(new PreviewDeleteSheetsTool());
             handler.RegisterTool(new DeleteSheetsTool());
 
-            // IFC Space to Room — full set (entire folder excluded under REVIT2024)
+#if !REVIT2024
+            // IFC Space to Room — held back for Revit 2024 for now (writes Rooms from linked IFC data)
             handler.RegisterTool(new ListIfcLinksTool());
             handler.RegisterTool(new PreviewIfcSpacesTool());
             handler.RegisterTool(new PreviewIfcSpaceGeometryTool());
@@ -201,19 +185,15 @@ public class App : IExternalApplication
             handler.RegisterTool(new ListClashPresetsTool());
             handler.RegisterTool(new GetClashPresetTool());
             handler.RegisterTool(new ValidateClashPresetTool());
-#if !REVIT2024
             handler.RegisterTool(new RunClashPresetTool());
-#endif
             // Coordination — Phase 4 — Reporting
             handler.RegisterTool(new ExportClashReportToExcelTool());
             handler.RegisterTool(new GetClashDashboardSummaryTool());
             // Coordination — Phase 5 — Navigation & Review View
             handler.RegisterTool(new GetNextClashTool());
             handler.RegisterTool(new GetPreviousClashTool());
-#if !REVIT2024
             handler.RegisterTool(new CreateClashReviewViewTool());
             handler.RegisterTool(new FocusClashTool());
-#endif
             handler.RegisterTool(new SelectClashElementsTool());
 
             // Issue Reports
@@ -223,27 +203,21 @@ public class App : IExternalApplication
             handler.RegisterTool(new ExportIssueReportHtmlDashboardTool());
             handler.RegisterTool(new MergeIssueReportsTool());
 
-#if !REVIT2024
             // Family Creation
             handler.RegisterTool(new CreatePanelSchematicSymbolFromDwgTool());
-#endif
 
             // Skills
             handler.RegisterTool(new ListSkillsTool());
             handler.RegisterTool(new GetSkillDetailsTool());
             handler.RegisterTool(new PreviewSkillRunTool());
-#if !REVIT2024
             handler.RegisterTool(new RunSkillTool());
             handler.RegisterTool(new RunSkillTaskTool());
             handler.RegisterTool(new CreateProjectSkillOverrideTool());
             handler.RegisterTool(new UpdateProjectSkillOverrideTool());
             handler.RegisterTool(new ResetProjectSkillOverrideTool());
             handler.RegisterTool(new ConfigureSheetNamingSkillTool());
-#endif
             handler.RegisterTool(new CompareSkillOverrideToMasterTool());
-#if !REVIT2024
             handler.RegisterTool(new ProposeSkillMasterUpdateTool());
-#endif
             handler.RegisterTool(new ExportSkillOverrideDiffMarkdownTool());
 
             // Standards
@@ -304,9 +278,7 @@ public class App : IExternalApplication
             var registration = new InstanceRegistrationService(revitVersion, processId, pipeName);
             var connector = new ConnectorService(pipeServer, eventService, approvalService, registration);
             _connector = connector;
-#if !REVIT2024
             _viewModel = new McpWindowViewModel(connector, logger, approvalService);
-#endif
 
             // Auto-start the pipe server so [AppLoader] hot-reloads are transparent to agents.
             // OnShutdown calls PanicStop (stops old pipe), then OnStartup creates + starts a fresh one —
@@ -319,12 +291,9 @@ public class App : IExternalApplication
             var registeredTools = handler.GetRegisteredToolNames();
             DiagLog($"Registered tools ({registeredTools.Count}): {string.Join(", ", registeredTools)}");
 
-#if !REVIT2024
-            // Ribbon (depends on UI window — Revit 2024 build is headless)
             DiagLog("Calling AddRibbonButton");
             AddRibbonButton(application);
             DiagLog("AddRibbonButton OK");
-#endif
 
             DiagLog("OnStartup SUCCEEDED");
             return Result.Succeeded;
@@ -353,7 +322,6 @@ public class App : IExternalApplication
         DocumentChangeTracker.MarkChanged(e.GetDocument());
     }
 
-#if !REVIT2024
     private static void AddRibbonButton(UIControlledApplication application)
     {
         const string tabName = "RK Tools";
@@ -390,5 +358,4 @@ public class App : IExternalApplication
         if (!panel.GetItems().Any(i => i.Name == "RevitMCPConnector"))
             panel.AddItem(buttonData);
     }
-#endif
 }
