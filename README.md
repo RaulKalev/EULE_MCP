@@ -35,13 +35,17 @@ Scan delivery folder C:\Projects\1626\Export for temp files and old revisions.
 ## Requirements
 
 - **Revit 2026** (.NET 8) — full feature set, all 147 tools
-- **Revit 2024** (.NET Framework 4.8) — *read-only subset* (~114 tools): write/edit tools, WPF approval window, IFC space-to-room, and skill-run tools are disabled
+- **Revit 2024** (.NET Framework 4.8) — same plugin UI and tool surface as Revit 2026, all 147 tools, **except IFC Space-to-Room** (held back for now — see below)
 - .NET 9 SDK (to build the `.slnx`; the Revit 2026 add-in targets .NET 8)
 - Claude Code CLI (`claude`), Codex CLI (`codex`), **or** Antigravity CLI (`agy`)
 
-### Revit 2024 read-only mode
+### Revit 2024
 
-The addin multi-targets `net8.0-windows` and `net48`. In Revit 2024 the AppLoader picks up `RevitMCP.Addin\bin\Release\net48\RevitMCP.Addin.dll`; in Revit 2026 it loads the `net8.0-windows` build. The bridge and pipe protocol are unchanged. Tools that mutate the model, write parameters, place/duplicate/rename/delete sheets or views, create circuits, run skills, or open the WPF UI are not registered for the net48 build — clients see a smaller tool list. Approvals are auto-bypassed (no UI) but **destructive tools are also unavailable**, so safety is preserved.
+The addin multi-targets `net8.0-windows` and `net48`. In Revit 2024 the AppLoader picks up `RevitMCP.Addin\bin\Release\net48\RevitMCP.Addin.dll`; in Revit 2026 it loads the `net8.0-windows` build. The bridge and pipe protocol are unchanged.
+
+Both builds share the same plugin window, ribbon button, and approval workflow — a write tool queues in the **Pending** tab and waits for Approve/Reject exactly like on 2026, and the destructive `revit_delete` tool (views or sheets) always requires manual approval regardless of Direct Edit mode, on both versions.
+
+The one feature not yet available on Revit 2024 is **IFC Space-to-Room** (converting IFC-linked spaces into Revit Rooms) — it's excluded from the net48 build and will be revisited separately.
 
 ---
 

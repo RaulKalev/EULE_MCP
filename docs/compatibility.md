@@ -4,7 +4,7 @@ This document is the source of truth for build and Revit compatibility.
 
 | Target | Runtime | Revit | Current C# | Intended surface |
 |---|---|---|---:|---|
-| `net48` | .NET Framework 4.8 | 2024 | 12.0 (transitional) | Headless, read-only subset |
+| `net48` | .NET Framework 4.8 | 2024 | 12.0 (transitional) | Full add-in and modeless WPF UI, matching `net8.0-windows` except IFC Space-to-Room (held back separately) |
 | `net8.0-windows` | .NET 8 | 2026 | 12.0 | Full add-in and modeless WPF UI |
 | `netstandard2.0` | Shared library | 2021+ compatible boundary | 10.0 (transitional) | Contracts and pure safety logic |
 

@@ -111,7 +111,18 @@ public static class CircuitMutationService
 
             if (wireTypeElem != null)
             {
-                try { circuit.CableType = wireTypeElem.Id; }
+                try
+                {
+#if !REVIT2024
+                    circuit.CableType = wireTypeElem.Id;
+#else
+                    // CableType is the Revit 2025+ API; net48/Revit 2024 only has the deprecated
+                    // WireType property. Callers already resolve via WireTypeResolver on this
+                    // build (CableTypeResolver always returns null — the class doesn't exist),
+                    // so wireTypeElem is guaranteed to be a WireType instance here.
+                    circuit.WireType = (WireType)wireTypeElem;
+#endif
+                }
                 catch (Exception ex) { errors.Add($"Wire type assignment failed: {ex.Message}"); }
             }
 
@@ -223,7 +234,15 @@ public static class CircuitMutationService
         trans.Start();
         try
         {
+#if !REVIT2024
             circuit.CableType = newTypeElement.Id;
+#else
+            // CableType is the Revit 2025+ API; net48/Revit 2024 only has the deprecated
+            // WireType property. Callers already resolve via WireTypeResolver on this build
+            // (CableTypeResolver always returns null — the class doesn't exist), so
+            // newTypeElement is guaranteed to be a WireType instance here.
+            circuit.WireType = (WireType)newTypeElement;
+#endif
             RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(trans);
             return new ChangeTypeResult(
                 true,
