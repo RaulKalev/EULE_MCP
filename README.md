@@ -1,10 +1,10 @@
 # EULE MCP — Revit MCP Connector
 
-Ask your AI assistant about a live **Autodesk Revit 2026** model in plain English — count elements, inspect circuits, run QA checks, generate Excel reports — without writing scripts or code. EULE MCP is a local [Model Context Protocol](https://modelcontextprotocol.io) connector that gives Claude Code, Codex, and Antigravity CLI direct read/write access to an open Revit model through 150 tools across twelve functional areas.
+Ask your AI assistant about a live **Autodesk Revit 2026** model in plain English — count elements, inspect circuits, run QA checks, generate Excel reports — without writing scripts or code. EULE MCP is a local [Model Context Protocol](https://modelcontextprotocol.io) connector that gives Claude Code, Codex, and Antigravity CLI direct read/write access to an open Revit model through 151 tools across twelve functional areas.
 
-**150 tools** across twelve functional areas:
+**151 tools** across twelve functional areas:
 - **General** (25 tools) — element discovery, parameter QA, grouping, Excel exports, selection, write operations, config-driven parameter QA rule sets, and detailed geometry inspection of selected elements
-- **Electrical** (44 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, path mode control, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
+- **Electrical** (45 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, path mode control, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
 - **Documentation** (22 tools) — view and sheet management: discovery, summary, preview/apply workflows for placing views, creating/duplicating/renaming sheets and views, bulk parameter updates, revision tracking, preset inspection, and safe destructive delete with mandatory manual approval
 - **Coordination** (15 tools) — Revit-native clash detection: category/link discovery, solid-intersection hard-clash and clearance checking, preset management, Excel reporting, and step-through review views
 - **Family Creation** (1 tool) — generate Detail Item families (.rfa) from DWG source files using company presets
@@ -279,6 +279,7 @@ These tools cover the full electrical circuit lifecycle in a live Revit model �
 | `revit_trace_circuit` | Traces an element or circuit back to its panel — returns circuit number, load name, wire type, apparent load, and panel details |
 | `revit_check_circuit_parameter_completeness` | Checks required parameters on circuit elements — returns per-parameter fill rates and IDs of circuits with empty values |
 | `revit_select_circuit_elements` | Selects all elements connected to a circuit in the Revit UI *(requires approval)* |
+| `revit_select_elements_by_panel` | Selects every element connected to any circuit assigned to a panel, in one operation — the fast path for "select all elements on panel X" instead of calling `revit_select_circuit_elements` once per circuit. Accepts `panelName` or `panelElementId`, optional `systemType` filter. |
 | `revit_select_uncircuited_elements` | Selects elements not assigned to any circuit across electrical categories *(requires approval)* |
 | `revit_export_circuit_health_to_excel` | Exports circuit QA issues (missing panel, duplicate numbers, missing cable type, missing load name) to `.xlsx` |
 | `revit_export_uncircuited_elements_to_excel` | Exports elements not assigned to any circuit to `.xlsx` with optional parameter columns |
@@ -623,6 +624,8 @@ Find all Fire Alarm Devices missing ELENEA_Tootja and select them in Revit.
 Set Comments to "Checked by AI" for the current selection.
 
 List all electrical circuits on panel "DB-L1".
+
+Select all elements connected to panel "DB-L1".
 
 What wire type is assigned to circuit 2520343?
 

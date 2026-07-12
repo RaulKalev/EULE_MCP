@@ -98,6 +98,7 @@ public class App : IExternalApplication
             handler.RegisterTool(new TraceCircuitTool());
             handler.RegisterTool(new CheckCircuitParameterCompletenessTool());
             handler.RegisterTool(new SelectCircuitElementsTool());
+            handler.RegisterTool(new SelectElementsByPanelTool());
             handler.RegisterTool(new SelectUncircuitedElementsTool());
             handler.RegisterTool(new ExportCircuitHealthToExcelTool());
             handler.RegisterTool(new ExportUncircuitedElementsToExcelTool());
