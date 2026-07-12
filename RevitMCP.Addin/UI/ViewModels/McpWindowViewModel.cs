@@ -19,6 +19,7 @@ public class McpWindowViewModel : BaseViewModel
     private bool _isRunning;
     private string _statusText = "Stopped";
     private string _pipeName = "RKTools.RevitMCP.2026";
+    private bool _isActiveInstance;
     private string _modelTitle = "No document open";
     private string _activeView = "—";
     private bool _isWorkshared;
@@ -37,6 +38,10 @@ public class McpWindowViewModel : BaseViewModel
 
         _connector.StatusChanged += OnConnectorStatusChanged;
         _logger.EntryLogged += OnEntryLogged;
+
+        if (_connector.PipeName != null)
+            _pipeName = _connector.PipeName;
+        _isActiveInstance = _connector.IsActiveInstance;
 
         ActivityLog.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoActivity));
         PendingApprovals.CollectionChanged += (_, _) =>
@@ -60,12 +65,14 @@ public class McpWindowViewModel : BaseViewModel
         RejectCommand = new RelayCommand(id => RejectItem(id as string));
         RejectAllCommand = new RelayCommand(_ => _approvalService?.RejectAll(), _ => PendingApprovals.Count > 0);
         ToggleDirectEditCommand = new RelayCommand(_ => ToggleDirectEdit());
+        MakeActiveCommand = new RelayCommand(_ => MakeActive(), _ => !_isActiveInstance);
     }
 
     // ── Status tab ────────────────────────────────────────────────────────────
     public bool IsRunning { get => _isRunning; private set => SetProperty(ref _isRunning, value); }
     public string StatusText { get => _statusText; private set => SetProperty(ref _statusText, value); }
     public string PipeName { get => _pipeName; set => SetProperty(ref _pipeName, value); }
+    public bool IsActiveInstance { get => _isActiveInstance; private set => SetProperty(ref _isActiveInstance, value); }
     public string ModelTitle { get => _modelTitle; set => SetProperty(ref _modelTitle, value); }
     public string ActiveView { get => _activeView; set => SetProperty(ref _activeView, value); }
     public bool IsWorkshared { get => _isWorkshared; set => SetProperty(ref _isWorkshared, value); }
@@ -96,6 +103,7 @@ public class McpWindowViewModel : BaseViewModel
     public ICommand RejectCommand { get; }
     public ICommand RejectAllCommand { get; }
     public ICommand ToggleDirectEditCommand { get; }
+    public ICommand MakeActiveCommand { get; }
 
     // ── Handlers ──────────────────────────────────────────────────────────────
     private void OnConnectorStatusChanged(bool running)
@@ -195,6 +203,13 @@ public class McpWindowViewModel : BaseViewModel
         }
     }
 
+    private void MakeActive()
+    {
+        _connector.MakeActive();
+        IsActiveInstance = _connector.IsActiveInstance;
+        CommandManager.InvalidateRequerySuggested();
+    }
+
     private void ToggleTheme()
     {
         IsDarkTheme = !IsDarkTheme;
@@ -223,6 +238,8 @@ public class McpWindowViewModel : BaseViewModel
             IsWorkshared = isWorkshared;
             RevitUsername = username;
             SelectedElementCount = selectedCount;
+            // Another Revit instance may have claimed the active marker in the meantime.
+            IsActiveInstance = _connector.IsActiveInstance;
         });
     }
 }

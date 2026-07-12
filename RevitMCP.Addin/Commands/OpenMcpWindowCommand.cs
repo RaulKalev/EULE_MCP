@@ -73,5 +73,8 @@ public class OpenMcpWindowCommand : IExternalCommand
             ctx.IsWorkshared,
             ctx.RevitUsername,
             ctx.SelectedElementCount);
+
+        // Keep the instance registry up to date so the bridge can show which project this is.
+        App.GetConnector()?.UpdateDocumentTitle(ctx.IsDocumentOpen ? ctx.DocumentTitle : null);
     }
 }

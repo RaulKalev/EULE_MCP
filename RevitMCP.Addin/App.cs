@@ -30,6 +30,7 @@ public class App : IExternalApplication
     public static McpWindowViewModel? GetViewModel() => _viewModel;
 #endif
     private static ConnectorService? _connector;
+    public static ConnectorService? GetConnector() => _connector;
 
     private static readonly string DiagLogPath = System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -290,8 +291,17 @@ public class App : IExternalApplication
             handler.SetApprovalService(approvalService);
             handler.SetActivityLogger(logger);
 
-            var pipeServer = new PipeServer(RevitMcpDefaults.PipeName, eventService, logger);
-            var connector = new ConnectorService(pipeServer, eventService, approvalService);
+            // Each Revit process hosts its own unique pipe so multiple running Revit
+            // instances (e.g. 2024 and 2026 side by side) never contend for the same pipe.
+            // The bridge discovers instances via the shared registry file written below.
+            var revitVersion = application.ControlledApplication.VersionNumber;
+            var processId = System.Diagnostics.Process.GetCurrentProcess().Id;
+            var pipeName = RevitMcpDefaults.BuildPipeName(revitVersion, processId);
+            DiagLog($"Pipe name: {pipeName}");
+
+            var pipeServer = new PipeServer(pipeName, eventService, logger);
+            var registration = new InstanceRegistrationService(revitVersion, processId, pipeName);
+            var connector = new ConnectorService(pipeServer, eventService, approvalService, registration);
             _connector = connector;
 #if !REVIT2024
             _viewModel = new McpWindowViewModel(connector, logger, approvalService);

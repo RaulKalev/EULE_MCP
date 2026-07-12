@@ -138,7 +138,7 @@ The **MCP Connector** window has three tabs:
 
 | Tab | Contents |
 |-----|----------|
-| **Status** | Running/Stopped chip, pipe name, active model, active view, worksharing flag, selected element count, Start/Stop/Panic controls |
+| **Status** | Running/Stopped chip, pipe name, active model, active view, worksharing flag, selected element count, active-instance indicator, Start/Stop/Panic and Make This Project Active controls |
 | **Pending** | Queue of tool calls awaiting approval — Approve / Reject per request. Auto-switches to this tab when a new approval arrives |
 | **Activity** | Live DataGrid of tool call history — Time, Tool, Duration (ms), Status (colour-coded); row tooltip shows the result message. "Open Log Folder" and "Clear" buttons at the bottom |
 
@@ -761,7 +761,7 @@ Claude Code / Codex / Antigravity CLI
     │  MCP JSON-RPC 2.0 over STDIO
     ▼
 RevitMCP.Bridge.exe          ← .NET 8 console app
-    │  Named Pipe (RKTools.RevitMCP.2026)
+    │  Named Pipe (RKTools.RevitMCP.{version}.{pid} — unique per Revit process)
     ▼
 RevitMCP.Addin.dll           ← Revit 2026 add-in
     │  ExternalEvent (Revit API thread)
@@ -770,6 +770,16 @@ Revit 2026 model             ← live read-only access
 ```
 
 All Revit API calls are routed through Revit's `ExternalEvent` mechanism — no threading violations, no crashes.
+
+### Multiple Revit instances
+
+Each Revit process hosts its own unique named pipe (`RKTools.RevitMCP.{version}.{pid}`) and registers itself in `%LOCALAPPDATA%\RevitMCP\Instances`. When several Revit instances are running at the same time (e.g. a 2024 and a 2026 project side by side), the bridge discovers all live instances and routes each request by preference:
+
+1. The instance the user explicitly selected — via the **Make This Project Active** button in the plugin window, or the `revit_select_instance` MCP tool.
+2. The highest Revit version (2026 before 2024).
+3. The most recently started instance.
+
+Use the `revit_list_instances` MCP tool to see all running instances and which one is currently targeted. Registrations of crashed Revit processes are pruned automatically, and the legacy shared pipe name (`RKTools.RevitMCP.2026`) is kept as a final connection fallback for older add-in builds. Passing `--pipe <name>` to the bridge still pins it to one specific pipe and disables discovery.
 
 ### Projects
 
