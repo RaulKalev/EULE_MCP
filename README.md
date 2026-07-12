@@ -56,6 +56,8 @@ The addin multi-targets `net8.0-windows` and `net48`. In Revit 2024 the AppLoade
 
 All clients connect through the same `RevitMCP.Bridge.exe`. The bridge is started by the AI client over STDIO; client identity is passed via `--client` argument so logs correctly identify who made each request.
 
+> On a team machine? Skip the individual `.bat` scripts above and use the [Setup app](#team-deployment--setup-app--shared-dropbox-folder) instead — one UI to pick agents, install missing clients, and register the bridge with all of them at once.
+
 ---
 
 ## Getting Started
@@ -98,10 +100,10 @@ This creates a manifest in `%ProgramData%\Autodesk\Revit\Addins\2026\` that poin
 For team machines, skip the per-client scripts below and use the setup app instead:
 
 1. **Maintainer** publishes the package to the shared Dropbox folder:
-   `RevitMCP.Config\Install\Publish-To-Dropbox.bat C:\Users\you\Dropbox\EULE-MCP`
-   This lays out `Addin\2026`, `Addin\2024`, `Bridge`, `Setup`, and a `version.txt`.
-2. **Team members** run `Setup\EULE-MCP-Setup.exe` from that folder, point it at the package folder, tick the AI agents they use (Claude Code, Codex, Antigravity), and press **Apply**. The app writes the Revit 2024/2026 manifests and registers the bridge with each ticked agent. Missing agent CLIs (and Claude Desktop / Antigravity IDE) can be installed from the same window.
-3. Re-run the app anytime to add another agent or repair a registration — it detects current state and is safe to re-apply.
+   `RevitMCP.Config\Install\Publish-To-Dropbox.bat`
+   Run with no arguments, it auto-detects the local Dropbox client's sync root (from `%LOCALAPPDATA%\Dropbox\info.json` — works for both personal Dropbox and Dropbox Business/Team accounts) and appends the team's package subpath, which is baked into the script. This means it works unmodified on any teammate's machine regardless of Windows username or Dropbox folder naming — no path to edit or pass in. Pass an explicit folder as the first argument to override (e.g. to publish to a local test folder instead). The script builds Release, then lays out `Addin\2026`, `Addin\2024`, `Bridge`, `Setup`, and a `version.txt` in the target folder.
+2. **Team members** run `Setup\EULE-MCP-Setup.exe` from that folder, point it at the package folder (remembered between runs), tick the AI agents they use (Claude Code, Codex, Antigravity), and press **Apply**. The app writes the Revit 2024/2026 manifests and registers the bridge with each ticked agent — detecting and warning if a manifest already points at a different/stale path. Missing agent CLIs (and Claude Desktop / Antigravity IDE) can be installed from the same window via the official installers (npm, winget, or the vendor's install script).
+3. Re-run the setup app anytime to add another agent, switch agents, or repair a registration — it detects current state and is safe to re-apply.
 
 > **Update caveat:** manifests point straight at the Dropbox folder, so Revit locks the synced DLLs while it runs. Publish updates when nobody has Revit open, and have the team restart Revit to pick up a new version.
 
@@ -831,7 +833,12 @@ EULE_MCP/
 │   ├── RevitMcpTools.cs [McpServerToolType] — exposes tools to Claude
 │   └── RevitPipeClient  Named pipe client
 ├── RevitMCP.Config/
-│   └── Install/         .bat install scripts
+│   └── Install/         .bat install scripts (per-client + Publish-To-Dropbox.bat for team deployment)
+├── RevitMCP.Setup/
+│   ├── App.xaml(.cs)    WPF application entry point, dark theme resources
+│   ├── MainWindow.xaml(.cs)  Package folder picker, addin/agent status, Apply, log
+│   ├── Services/        PackageLayout, RevitAddinInstaller, Agents (Claude/Codex/Antigravity), McpConfigMerger, ProcessRunner, SetupSettings
+│   └── ViewModels/      MainViewModel, AgentRowViewModel, Mvvm (RelayCommand/AsyncRelayCommand)
 └── RevitMCP.Tests/
     └── *.Tests.cs             xUnit unit tests for pure-logic helpers (no Revit runtime required)
 ```
