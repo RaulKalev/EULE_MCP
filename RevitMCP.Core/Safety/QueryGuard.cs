@@ -52,6 +52,59 @@ public static class QueryGuard
     }
 
     /// <summary>
+    /// Decides whether an element-scanning loop should stop early to avoid freezing or
+    /// crashing Revit on large models. Narrowed queries (category, elementIds, or
+    /// useSelection) get the more generous <see cref="QueryLimits.MaxScanElements"/>;
+    /// fully unscoped queries get the tighter <see cref="QueryLimits.MaxUnscopedScanElements"/>.
+    /// Equivalent to <c>ShouldStopScan(totalScanned, isNarrowed, needsParamRead: true, limits)</c>.
+    /// </summary>
+    public static bool ShouldStopScan(int totalScanned, bool isNarrowed, QueryLimits? limits = null) =>
+        ShouldStopScan(totalScanned, isNarrowed, needsParamRead: true, limits);
+
+    /// <summary>
+    /// Decides whether an element-scanning loop should stop early. When the scan doesn't
+    /// actually read per-element parameters (e.g. grouping only by Category/Family/Type/Level
+    /// with no filters), it is cheap regardless of scope and only needs the generous
+    /// <see cref="QueryLimits.MaxScanElements"/> backstop — the tight unscoped cap exists
+    /// specifically to bound expensive per-element parameter reads.
+    /// </summary>
+    public static bool ShouldStopScan(int totalScanned, bool isNarrowed, bool needsParamRead, QueryLimits? limits = null)
+    {
+        limits ??= QueryLimits.Default;
+        if (!needsParamRead)
+            return totalScanned >= limits.MaxScanElements;
+        var cap = isNarrowed ? limits.MaxScanElements : limits.MaxUnscopedScanElements;
+        return totalScanned >= cap;
+    }
+
+    /// <summary>
+    /// Builds a human-readable message that gives an agent concrete options for narrowing
+    /// a query that was rejected (or truncated) for being too broad — the category
+    /// breakdown lets it offer the user a specific follow-up question instead of guessing.
+    /// </summary>
+    public static string BuildNarrowingGuidance(
+        int totalElements,
+        IReadOnlyDictionary<string, int> categoryCounts,
+        int maxCategoriesToShow = 15)
+    {
+        if (totalElements == 0 || categoryCounts.Count == 0)
+            return "This model appears to have no elements matching a broad, unfiltered scan.";
+
+        var top = categoryCounts
+            .OrderByDescending(kv => kv.Value)
+            .Take(maxCategoriesToShow)
+            .Select(kv => $"{kv.Key} ({kv.Value})")
+            .ToList();
+
+        var suffix = categoryCounts.Count > maxCategoriesToShow
+            ? $", and {categoryCounts.Count - maxCategoriesToShow} more categories"
+            : string.Empty;
+
+        return $"This model has {totalElements} elements across {categoryCounts.Count} categories: " +
+               $"{string.Join(", ", top)}{suffix}. Specify a category and/or a parameter filter to narrow the search.";
+    }
+
+    /// <summary>
     /// Truncates a string to <paramref name="maxLength"/> characters and appends a marker.
     /// Returns the original string when it is within the limit or <paramref name="maxLength"/> is 0.
     /// </summary>

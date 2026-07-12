@@ -12,8 +12,20 @@ public sealed class QueryLimits
     /// <summary>Hard upper bound on requested page size. Requests above this are clamped.</summary>
     public int MaxPageSize { get; set; } = 500;
 
-    /// <summary>Maximum total matched elements allowed before a broad-query warning is added.</summary>
-    public int MaxElements { get; set; } = 1000;
+    /// <summary>
+    /// Hard cap on elements scanned (and parameter-read) by a single narrowed query — one
+    /// that has a category, explicit elementIds, or useSelection. Guards against a single
+    /// huge category still freezing/crashing Revit on very large models.
+    /// </summary>
+    public int MaxScanElements { get; set; } = 20_000;
+
+    /// <summary>
+    /// Tighter scan cap applied when a query has no narrowing at all (no category,
+    /// elementIds, or useSelection). This is the scenario that most often freezes or
+    /// crashes Revit on large projects: an unbounded per-element parameter read across
+    /// the entire model.
+    /// </summary>
+    public int MaxUnscopedScanElements { get; set; } = 2_000;
 
     /// <summary>Maximum number of parameters included per element. 0 = no limit.</summary>
     public int MaxParametersPerElement { get; set; } = 40;
