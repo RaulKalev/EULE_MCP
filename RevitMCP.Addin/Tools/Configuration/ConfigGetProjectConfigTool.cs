@@ -10,7 +10,7 @@ namespace RevitMCP.Addin.Tools.Configuration;
 /// <summary>
 /// Reads the project-scoped config file (.rktools/mcp.project.config.json) relative to a given project root.
 /// </summary>
-public class ConfigGetProjectConfigTool : IRevitMcpTool
+public class ConfigGetProjectConfigTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "config_get_project_config";
     public string Description => "Reads the project-scoped MCP config file (.rktools/mcp.project.config.json) located inside the specified project root folder. Read-only.";

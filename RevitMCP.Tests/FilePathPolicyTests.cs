@@ -29,7 +29,7 @@ public class FilePathPolicyTests
         var (path, error) = FilePathPolicy.NormalizePath(@"C:\Windows\Temp\test.txt");
         Assert.Null(error);
         Assert.NotNull(path);
-        Assert.True(path!.StartsWith("C:\\", StringComparison.OrdinalIgnoreCase));
+        Assert.StartsWith("C:\\", path!, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

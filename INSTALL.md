@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Revit 2026
-- .NET 8 SDK
+- .NET 9 SDK (the built Revit 2026 add-in still targets .NET 8)
 - **Claude Code** CLI (`claude` in PATH) **or** **Codex** CLI (`codex` in PATH)
 
 ---

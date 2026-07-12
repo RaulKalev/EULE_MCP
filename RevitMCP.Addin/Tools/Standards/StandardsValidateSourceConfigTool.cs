@@ -11,7 +11,7 @@ namespace RevitMCP.Addin.Tools.Standards;
 /// Validates the StandardsSources.json config — checks paths exist and IDs are unique.
 /// Tool name: standards_validate_source_config
 /// </summary>
-public class StandardsValidateSourceConfigTool : IRevitMcpTool
+public class StandardsValidateSourceConfigTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name        => "standards_validate_source_config";
     public string Description => "Validates the StandardsSources.json config file: checks source IDs are unique, paths exist, and reports any issues. Creates an example config if no config file exists.";

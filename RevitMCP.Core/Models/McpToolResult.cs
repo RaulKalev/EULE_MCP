@@ -6,7 +6,9 @@ public class McpToolResult
     public bool Success { get; set; }
     /// <summary>
     /// Machine-readable status for structured error handling.
-    /// Values: approval_required | approval_rejected | revit_busy | transaction_failed | validation_failed | unknown_tool
+    /// Values: approval_required | approval_rejected | approval_expired | approval_context_changed |
+    /// queue_full | request_cancelled | request_timeout | revit_busy |
+    /// tool_execution_failed | transaction_failed | validation_failed | unknown_tool
     /// Null means a normal success or generic failure — inspect Success + Message.
     /// </summary>
     public string? Status { get; set; }

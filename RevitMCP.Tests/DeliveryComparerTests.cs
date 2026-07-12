@@ -80,7 +80,7 @@ public class DeliveryComparerTests : IDisposable
 
         var issues = DeliveryRevitSheetComparer.Compare(scan, sheets, new[] { "pdf" }, Array.Empty<string>(), Array.Empty<string>(), "TESTRUN");
         // EL-5-01 missing pdf AND EL-5-99 orphan
-        Assert.True(issues.Any(i => i.Category.Contains("Orphan", StringComparison.OrdinalIgnoreCase)));
+        Assert.Contains(issues, i => i.Category.Contains("Orphan", StringComparison.OrdinalIgnoreCase));
     }
 
     // ── ExcelRegisterComparer ────────────────────────────────────────────────
@@ -137,7 +137,7 @@ public class DeliveryComparerTests : IDisposable
 
         var (issues, error) = DeliveryExcelRegisterComparer.Compare(scan, xlPath, string.Empty, new[] { "pdf" }, "TESTRUN");
         Assert.Null(error);
-        Assert.True(issues.Any(i => i.Category.Contains("MissingFromRegister", StringComparison.OrdinalIgnoreCase)));
+        Assert.Contains(issues, i => i.Category.Contains("MissingFromRegister", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -148,7 +148,7 @@ public class DeliveryComparerTests : IDisposable
 
         var (issues, error) = DeliveryExcelRegisterComparer.Compare(scan, xlPath, string.Empty, new[] { "pdf" }, "TESTRUN");
         Assert.Null(error);
-        Assert.True(issues.Any(i => i.Category.Contains("Duplicate", StringComparison.OrdinalIgnoreCase)));
+        Assert.Contains(issues, i => i.Category.Contains("Duplicate", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

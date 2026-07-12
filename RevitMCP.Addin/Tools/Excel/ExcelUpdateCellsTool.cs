@@ -9,7 +9,7 @@ using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Tools.Excel;
 
-public class ExcelUpdateCellsTool : IRevitMcpTool
+public class ExcelUpdateCellsTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "excel_update_cells";
     public string Description => "Updates specific cells in an existing Excel file without changing formatting. Requires approval. Creates a timestamped backup by default. Set dryRun=true to preview changes without saving.";

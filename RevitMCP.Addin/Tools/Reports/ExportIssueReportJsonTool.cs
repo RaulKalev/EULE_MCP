@@ -14,7 +14,7 @@ namespace RevitMCP.Addin.Tools.Reports;
 /// Exports a previously-built IssueReportDto as a JSON file.
 /// The report JSON is passed in via the "reportJson" argument.
 /// </summary>
-public class ExportIssueReportJsonTool : IRevitMcpTool
+public class ExportIssueReportJsonTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "revit_export_issues_json";
     public string Description => "Exports an issue report (passed as JSON) to a .json file on disk. Returns the output file path. Requires approval — writes a file to disk.";

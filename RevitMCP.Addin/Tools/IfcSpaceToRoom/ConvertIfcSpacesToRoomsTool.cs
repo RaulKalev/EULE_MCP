@@ -106,7 +106,11 @@ public class ConvertIfcSpacesToRoomsTool : IRevitMcpTool
         IfcSpaceToRoomResult conversionResult;
         try
         {
-            conversionResult = _service.Run(doc, options);
+            conversionResult = _service.Run(doc, options, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

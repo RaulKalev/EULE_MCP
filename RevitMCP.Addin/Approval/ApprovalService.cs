@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using RevitMCP.Core.Models;
+using RevitMCP.Core.Safety;
 
 namespace RevitMCP.Addin.Approval;
 
@@ -11,7 +12,24 @@ namespace RevitMCP.Addin.Approval;
 public class ApprovalService
 {
     private readonly ConcurrentDictionary<string, PendingApprovalRequest> _pending = new();
-    private Action<McpToolRequest, TaskCompletionSource<McpToolResult>>? _redispatch;
+    private readonly object _gate = new();
+    private readonly int _capacity;
+    private readonly TimeSpan _approvalLifetime;
+    private int _count;
+    private Action<PendingApprovalRequest>? _redispatch;
+
+    public ApprovalService()
+        : this(QueryLimits.Default.MaxPendingApprovals, TimeSpan.FromMinutes(QueryLimits.Default.ApprovalTimeoutMinutes))
+    {
+    }
+
+    internal ApprovalService(int capacity, TimeSpan approvalLifetime)
+    {
+        if (capacity <= 0) throw new ArgumentOutOfRangeException(nameof(capacity));
+        if (approvalLifetime <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(approvalLifetime));
+        _capacity = capacity;
+        _approvalLifetime = approvalLifetime;
+    }
 
     /// <summary>
     /// Raised when the pending queue changes (add, approve, reject).
@@ -23,7 +41,7 @@ public class ApprovalService
     /// Sets the callback used to re-dispatch approved requests to the Revit API thread.
     /// Called once during startup with ExternalEventService.Redispatch.
     /// </summary>
-    public void SetRedispatch(Action<McpToolRequest, TaskCompletionSource<McpToolResult>> redispatch)
+    public void SetRedispatch(Action<PendingApprovalRequest> redispatch)
     {
         _redispatch = redispatch;
     }
@@ -32,16 +50,25 @@ public class ApprovalService
     /// Adds a new pending approval request. Called from ExternalEventHandler
     /// when a RequiresApproval tool is intercepted.
     /// </summary>
-    public void Add(PendingApprovalRequest request)
+    public bool Add(PendingApprovalRequest request)
     {
-        _pending[request.ApprovalId] = request;
+        lock (_gate)
+        {
+            if (_count >= _capacity)
+                return false;
+            if (!_pending.TryAdd(request.ApprovalId, request))
+                return false;
+            _count++;
+        }
+
         PendingChanged?.Invoke();
+        return true;
     }
 
     public IReadOnlyList<PendingApprovalRequest> GetPending()
         => _pending.Values.OrderBy(p => p.CreatedAt).ToList();
 
-    public int Count => _pending.Count;
+    public int Count => Volatile.Read(ref _count);
 
     /// <summary>
     /// Approves a pending request. Marks it as approved and re-dispatches
@@ -49,10 +76,23 @@ public class ApprovalService
     /// </summary>
     public void Approve(string approvalId)
     {
-        if (!_pending.TryRemove(approvalId, out var request)) return;
+        if (!TryRemove(approvalId, out var request)) return;
+
+        if (DateTimeOffset.Now - request.CreatedAt > _approvalLifetime)
+        {
+            request.Completion.TrySetResult(new McpToolResult
+            {
+                RequestId = request.OriginalRequest.RequestId,
+                Success = false,
+                Status = "approval_expired",
+                Message = "Approval expired. Run the preview again and request a new approval."
+            });
+            PendingChanged?.Invoke();
+            return;
+        }
 
         request.OriginalRequest.IsApproved = true;
-        _redispatch?.Invoke(request.OriginalRequest, request.Completion);
+        _redispatch?.Invoke(request);
         PendingChanged?.Invoke();
     }
 
@@ -61,7 +101,7 @@ public class ApprovalService
     /// </summary>
     public void Reject(string approvalId)
     {
-        if (!_pending.TryRemove(approvalId, out var request)) return;
+        if (!TryRemove(approvalId, out var request)) return;
 
         var rejResult = new McpToolResult
         {
@@ -79,7 +119,40 @@ public class ApprovalService
     /// </summary>
     public void RejectAll()
     {
-        foreach (var key in _pending.Keys.ToList())
-            Reject(key);
+        List<PendingApprovalRequest> rejected;
+        lock (_gate)
+        {
+            rejected = _pending.Values.ToList();
+            _pending.Clear();
+            _count = 0;
+        }
+
+        foreach (var request in rejected)
+            CompleteRejected(request);
+        PendingChanged?.Invoke();
+    }
+
+    private bool TryRemove(string approvalId, out PendingApprovalRequest request)
+    {
+        lock (_gate)
+        {
+            if (!_pending.TryRemove(approvalId, out request!))
+                return false;
+
+            _count--;
+            return true;
+        }
+    }
+
+    private static void CompleteRejected(PendingApprovalRequest request)
+    {
+        var result = new McpToolResult
+        {
+            RequestId = request.OriginalRequest.RequestId,
+            Success = false,
+            Message = "Action rejected by user."
+        };
+        try { result.Status = "approval_rejected"; } catch (MissingMethodException) { }
+        request.Completion.TrySetResult(result);
     }
 }

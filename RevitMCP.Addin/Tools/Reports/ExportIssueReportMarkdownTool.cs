@@ -12,7 +12,7 @@ namespace RevitMCP.Addin.Tools.Reports;
 /// Exports a previously-built IssueReportDto as a Markdown (.md) file.
 /// The report JSON is passed in via the "reportJson" argument.
 /// </summary>
-public class ExportIssueReportMarkdownTool : IRevitMcpTool
+public class ExportIssueReportMarkdownTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "revit_export_issues_markdown";
     public string Description => "Exports an issue report (passed as JSON) to a Markdown (.md) file. Returns the output file path.";

@@ -116,7 +116,7 @@ public static class CircuitMutationService
             }
 
             var usedIds = validIds.Select(id => id.Value).ToList();
-            trans.Commit();
+            RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(trans);
             return new CreateResult(true,
                 $"Created circuit ID:{circuit.Id.Value} with {usedIds.Count} element(s).",
                 circuit.Id.Value, usedIds, errors);
@@ -167,7 +167,7 @@ public static class CircuitMutationService
                 }
             }
 
-            trans.Commit();
+            RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(trans);
             return new AddElementsResult(
                 true,
                 $"Added {added.Count} element(s). {rejected.Count} rejected.",
@@ -197,7 +197,7 @@ public static class CircuitMutationService
         try
         {
             circuit.SelectPanel(newPanel);
-            trans.Commit();
+            RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(trans);
             return new ReassignPanelResult(
                 true, $"Reassigned from '{oldName}' to '{newName}'.", oldName, newName);
         }
@@ -224,7 +224,7 @@ public static class CircuitMutationService
         try
         {
             circuit.CableType = newTypeElement.Id;
-            trans.Commit();
+            RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(trans);
             return new ChangeTypeResult(
                 true,
                 $"Changed wire type from '{oldWireType}' to '{newTypeElement.Name}'.",
@@ -281,7 +281,7 @@ public static class CircuitMutationService
                     skippedUnsupportedCount++;
                 }
             }
-            trans.Commit();
+            RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(trans);
             return new SetPathModeResult(
                 true,
                 $"Updated {updatedCount} circuit(s) to All Devices. {skippedCustomCount} skipped (custom path). {alreadyCorrectCount} already correct. {skippedUnsupportedCount} skipped (unsupported mode).",

@@ -8,6 +8,7 @@ namespace RevitMCP.Addin.UI;
 
 public partial class McpWindow : Window
 {
+    private DirectEditWarningDialog? _directEditWarning;
     private static readonly string SuppressFilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "RevitMCP", "direct_edit_suppress.flag");
@@ -107,23 +108,38 @@ public partial class McpWindow : Window
         return IntPtr.Zero;
     }
 
-    private bool ShowDirectEditWarning()
+    private void ShowDirectEditWarning(Action<bool> completed)
     {
-        if (File.Exists(SuppressFilePath)) return true;
-
-        var dialog = new DirectEditWarningDialog { Owner = this };
-        var result = dialog.ShowDialog();
-
-        if (result == true && dialog.DontShowAgain)
+        if (File.Exists(SuppressFilePath))
         {
-            try
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(SuppressFilePath)!);
-                File.WriteAllText(SuppressFilePath, string.Empty);
-            }
-            catch { }
+            completed(true);
+            return;
         }
 
-        return result == true;
+        if (_directEditWarning != null)
+        {
+            _directEditWarning.Activate();
+            return;
+        }
+
+        var dialog = new DirectEditWarningDialog { Owner = this };
+        _directEditWarning = dialog;
+        dialog.Closed += (_, _) =>
+        {
+            var confirmed = dialog.IsConfirmed;
+            if (confirmed && dialog.DontShowAgain)
+            {
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(SuppressFilePath)!);
+                    File.WriteAllText(SuppressFilePath, string.Empty);
+                }
+                catch { }
+            }
+
+            _directEditWarning = null;
+            completed(confirmed);
+        };
+        dialog.Show();
     }
 }

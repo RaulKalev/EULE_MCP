@@ -10,7 +10,7 @@ namespace RevitMCP.Addin.Tools.Configuration;
 /// <summary>
 /// Reads a JSON config file by scope (company | user | project | tool-state).
 /// </summary>
-public class ConfigReadTool : IRevitMcpTool
+public class ConfigReadTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "config_read";
     public string Description => "Reads a JSON configuration file for a given scope (company, user, project, tool-state). Read-only. Returns the config as a JSON object.";

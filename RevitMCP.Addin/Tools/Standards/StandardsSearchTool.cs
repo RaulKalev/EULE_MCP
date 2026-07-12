@@ -10,7 +10,7 @@ namespace RevitMCP.Addin.Tools.Standards;
 /// Searches indexed company standards sources with a keyword query.
 /// Tool name: standards_search
 /// </summary>
-public class StandardsSearchTool : IRevitMcpTool
+public class StandardsSearchTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name        => "standards_search";
     public string Description => "Searches indexed company standards documents with a keyword query. Returns ranked snippets from matching documents. Run standards_index_sources first if no results appear.";

@@ -30,7 +30,7 @@ public class ClashFocusService
             t.Start();
             reviewView = _viewService.CreateOrReuseView(doc);
             _viewService.SetSectionBox(doc, reviewView, clash, paddingMm);
-            t.Commit();
+            RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(t);
         }
 
         // Activate the view only after the transaction is committed.

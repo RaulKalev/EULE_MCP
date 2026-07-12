@@ -7,7 +7,7 @@ using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Tools.FileSystem;
 
-public class FileListDirectoryTool : IRevitMcpTool
+public class FileListDirectoryTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "file_list_directory";
     public string Description => "Lists files and folders in a directory. Supports searchPattern (e.g. *.xlsx), recursive flag, and maxResults cap. Read-only.";

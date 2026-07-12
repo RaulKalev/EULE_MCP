@@ -7,7 +7,7 @@ using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Tools.FileSystem;
 
-public class FileInspectTool : IRevitMcpTool
+public class FileInspectTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "file_inspect";
     public string Description => "Inspects a file or folder: returns existence, type, size, timestamps, attributes and optional SHA-256 hash. Read-only.";

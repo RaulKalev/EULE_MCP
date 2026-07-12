@@ -8,7 +8,7 @@ using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Tools.Excel;
 
-public class ExcelInspectWorkbookTool : IRevitMcpTool
+public class ExcelInspectWorkbookTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "excel_inspect_workbook";
     public string Description => "Reads Excel workbook metadata (sheet names, used ranges, headers) without modifying the file. Optionally returns preview rows.";

@@ -12,7 +12,7 @@ namespace RevitMCP.Addin.Tools.Reports;
 /// Exports an issue report as a self-contained offline HTML dashboard.
 /// The report JSON is passed via the "reportJson" argument.
 /// </summary>
-public class ExportIssueReportHtmlDashboardTool : IRevitMcpTool
+public class ExportIssueReportHtmlDashboardTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name        => "revit_export_issues_html_dashboard";
     public string Description => "Exports an issue report (passed as JSON) as a standalone offline HTML dashboard with filtering, sorting and severity cards. Returns the output file path. Requires approval — writes a file to disk.";

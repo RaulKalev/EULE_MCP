@@ -60,10 +60,12 @@ public class SetViewParametersBulkTool : IRevitMcpTool
         var warnings = new List<string>();
         var results  = new List<object>();
 
+        cancellationToken.ThrowIfCancellationRequested();
         using var t = new Transaction(doc, "Revit MCP - Set View Parameters Bulk");
         t.Start();
         foreach (var v in views)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var setCount = 0;
             foreach (var (pName, pVal) in paramValues)
             {
@@ -79,7 +81,7 @@ public class SetViewParametersBulkTool : IRevitMcpTool
             }
             if (setCount > 0) { updated++; results.Add(new { viewId = v.Id.Value, viewName = v.Name }); }
         }
-        t.Commit();
+        RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(t);
 
         sw.Stop();
         return Task.FromResult(new McpToolResult

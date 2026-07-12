@@ -62,10 +62,12 @@ public class ApplyViewTemplateTool : IRevitMcpTool
         var warnings = new List<string>();
         var results  = new List<object>();
 
+        cancellationToken.ThrowIfCancellationRequested();
         using var tx = new Transaction(doc, "Revit MCP - Apply View Template");
         tx.Start();
         foreach (var v in targets)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 v.ViewTemplateId = templateEid;
@@ -77,7 +79,7 @@ public class ApplyViewTemplateTool : IRevitMcpTool
                 warnings.Add($"Failed on '{v.Name}': {ex.Message}");
             }
         }
-        tx.Commit();
+        RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(tx);
 
         sw.Stop();
         return Task.FromResult(new McpToolResult

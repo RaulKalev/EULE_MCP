@@ -242,11 +242,16 @@
                                                 <!-- Client -->
                                                 <TextBlock Foreground="{DynamicResource IconForegroundBrush}"
                                                            FontSize="10"
-                                                           Margin="0,0,0,6">
+                                                           Margin="0,0,0,2">
                                                     <TextBlock.Text>
                                                         <Binding Path="Client" StringFormat="From: {0}" />
                                                     </TextBlock.Text>
                                                 </TextBlock>
+
+                                                <TextBlock Text="{Binding Model, StringFormat='Model: {0}'}"
+                                                           Foreground="{DynamicResource IconForegroundBrush}"
+                                                           FontSize="10"
+                                                           Margin="0,0,0,6" />
 
                                                 <!-- Approve / Reject buttons -->
                                                 <UniformGrid Columns="2">

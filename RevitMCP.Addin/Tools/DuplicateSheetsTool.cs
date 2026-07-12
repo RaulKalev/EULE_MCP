@@ -64,10 +64,12 @@ public class DuplicateSheetsTool : IRevitMcpTool
         var warnings = new List<string>();
         var results  = new List<object>();
 
+        cancellationToken.ThrowIfCancellationRequested();
         using var t = new Transaction(doc, "Revit MCP - Duplicate Sheets");
         t.Start();
         foreach (var src in sourceList)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 var newNum  = ResolveUnique(src.SheetNumber + numSuffix, takenNumbers);

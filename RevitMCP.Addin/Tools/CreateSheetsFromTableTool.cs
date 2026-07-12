@@ -49,10 +49,12 @@ public class CreateSheetsFromTableTool : IRevitMcpTool
         var warnings = new List<string>();
         var results  = new List<object>();
 
+        cancellationToken.ThrowIfCancellationRequested();
         using var t = new Transaction(doc, "Revit MCP - Create Sheets from Table");
         t.Start();
         foreach (var row in rows)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var num  = row.TryGetValue("sheetNumber", out var sn) ? sn?.ToString() ?? "" : "";
             var name = row.TryGetValue("sheetName",   out var sname) ? sname?.ToString() ?? "" : "";
 
@@ -103,7 +105,7 @@ public class CreateSheetsFromTableTool : IRevitMcpTool
                 skipped++;
             }
         }
-        t.Commit();
+        RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(t);
 
         sw.Stop();
         return Task.FromResult(new McpToolResult

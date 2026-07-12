@@ -10,7 +10,7 @@ namespace RevitMCP.Addin.Tools.Standards;
 /// Returns a specific indexed standards chunk by ID plus optional surrounding context chunks.
 /// Tool name: standards_get_document_chunk
 /// </summary>
-public class StandardsGetDocumentChunkTool : IRevitMcpTool
+public class StandardsGetDocumentChunkTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name        => "standards_get_document_chunk";
     public string Description => "Returns a specific indexed standards document chunk by its chunk ID, with optional surrounding context. Use chunk IDs returned by standards_search.";

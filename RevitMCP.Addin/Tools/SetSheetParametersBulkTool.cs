@@ -47,10 +47,12 @@ public class SetSheetParametersBulkTool : IRevitMcpTool
         var warnings = new List<string>();
         var results  = new List<object>();
 
+        cancellationToken.ThrowIfCancellationRequested();
         using var t = new Transaction(doc, "Revit MCP - Set Sheet Parameters Bulk");
         t.Start();
         foreach (var sheet in sheets)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var setCount = 0;
             foreach (var (pName, pVal) in paramValues)
             {
@@ -66,7 +68,7 @@ public class SetSheetParametersBulkTool : IRevitMcpTool
             }
             if (setCount > 0) { updated++; results.Add(new { sheetId = sheet.Id.Value, sheetNumber = sheet.SheetNumber }); }
         }
-        t.Commit();
+        RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(t);
 
         sw.Stop();
         return Task.FromResult(new McpToolResult

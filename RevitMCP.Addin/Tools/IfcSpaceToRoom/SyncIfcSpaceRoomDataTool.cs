@@ -86,7 +86,11 @@ public class SyncIfcSpaceRoomDataTool : IRevitMcpTool
         RoomSyncResult syncResult;
         try
         {
-            syncResult = _service.Run(doc, options);
+            syncResult = _service.Run(doc, options, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

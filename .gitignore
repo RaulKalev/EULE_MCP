@@ -21,7 +21,6 @@ bin-v2/
 # NuGet
 *.nupkg
 packages/
-*.lock.json
 
 # Logs
 *.log

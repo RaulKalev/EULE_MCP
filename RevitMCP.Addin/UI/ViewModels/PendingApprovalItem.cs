@@ -20,4 +20,7 @@ public class PendingApprovalItem
 
     /// <summary>Client that sent the request (e.g. "Claude Code").</summary>
     public string Client { get; init; } = string.Empty;
+
+    /// <summary>Document instance the approval is bound to.</summary>
+    public string Model { get; init; } = string.Empty;
 }

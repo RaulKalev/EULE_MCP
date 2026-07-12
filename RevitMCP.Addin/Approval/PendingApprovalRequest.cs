@@ -16,4 +16,16 @@ public class PendingApprovalRequest
     public string Summary { get; set; } = string.Empty;
     public string ClientName { get; set; } = string.Empty;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
+
+    /// <summary>
+    /// In-process identity token for the document active when approval was requested.
+    /// This is deliberately typed as object so the approval model stays testable
+    /// without referencing Autodesk assemblies.
+    /// </summary>
+    public bool IsDocumentBound { get; set; }
+    public object? OriginDocumentToken { get; set; }
+    public string OriginDocumentTitle { get; set; } = string.Empty;
+    public long OriginDocumentVersion { get; set; }
+    public bool IsSelectionBound { get; set; }
+    public IReadOnlyList<long> OriginSelectionIds { get; set; } = Array.Empty<long>();
 }

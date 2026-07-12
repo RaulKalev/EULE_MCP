@@ -4,6 +4,8 @@
     <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <AssemblyName>RevitMCP.Core</AssemblyName>
     <RootNamespace>RevitMCP.Core</RootNamespace>
+    <!-- Transitional shared-code baseline. See docs/compatibility.md. -->
+    <LangVersion>10.0</LangVersion>
   </PropertyGroup>
 
   <!-- Polyfills needed for netstandard2.0 to use C# 9/10+ features (init, records) -->

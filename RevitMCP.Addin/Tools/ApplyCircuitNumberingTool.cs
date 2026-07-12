@@ -45,12 +45,13 @@ public class ApplyCircuitNumberingTool : IRevitMcpTool
         var modified = new List<object>();
         var failures = new List<object>();
 
+        cancellationToken.ThrowIfCancellationRequested();
         using (var tx = new Transaction(doc, "Revit MCP - Apply Circuit Numbering"))
         {
             tx.Start();
             foreach (var (circuitId, newNum) in changes)
             {
-                if (cancellationToken.IsCancellationRequested) break;
+                cancellationToken.ThrowIfCancellationRequested();
                 var circuit = doc.GetElement(new ElementId(circuitId)) as ElectricalSystem;
                 if (circuit == null) { failures.Add(new { circuitId, reason = "Circuit not found." }); continue; }
                 try
@@ -68,7 +69,7 @@ public class ApplyCircuitNumberingTool : IRevitMcpTool
                 }
                 catch (Exception ex) { failures.Add(new { circuitId, reason = ex.Message }); }
             }
-            tx.Commit();
+            RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(tx);
         }
 
         sw.Stop();

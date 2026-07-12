@@ -140,7 +140,7 @@ public class PipeServer
                     DiagLog($"Dispatching tool: {request.ToolName}");
                     // QueryLimits controls the maximum time a tool may run before the dispatch layer returns a timeout.
                     var timeoutMs = Math.Max(1, QueryLimits.Default.TimeoutSeconds) * 1000;
-                    result = await _eventService.DispatchAsync(request, timeoutMs: timeoutMs);
+                    result = await _eventService.DispatchAsync(request, timeoutMs: timeoutMs, cancellationToken: ct);
                     DiagLog($"DispatchAsync returned: success={result.Success} in {sw.ElapsedMilliseconds}ms");
                 }
                 catch (Exception ex)

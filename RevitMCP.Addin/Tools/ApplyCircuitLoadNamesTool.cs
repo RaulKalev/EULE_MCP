@@ -45,12 +45,13 @@ public class ApplyCircuitLoadNamesTool : IRevitMcpTool
         var modified = new List<object>();
         var failures = new List<object>();
 
+        cancellationToken.ThrowIfCancellationRequested();
         using (var tx = new Transaction(doc, "Revit MCP - Apply Circuit Load Names"))
         {
             tx.Start();
             foreach (var (circuitId, newName) in changes)
             {
-                if (cancellationToken.IsCancellationRequested) break;
+                cancellationToken.ThrowIfCancellationRequested();
                 var circuit = doc.GetElement(new ElementId(circuitId)) as ElectricalSystem;
                 if (circuit == null) { failures.Add(new { circuitId, reason = "Circuit not found." }); continue; }
                 try
@@ -67,7 +68,7 @@ public class ApplyCircuitLoadNamesTool : IRevitMcpTool
                 }
                 catch (Exception ex) { failures.Add(new { circuitId, reason = ex.Message }); }
             }
-            tx.Commit();
+            RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(tx);
         }
 
         sw.Stop();

@@ -7,7 +7,7 @@ using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Tools.FileSystem;
 
-public class FileWriteTextTool : IRevitMcpTool
+public class FileWriteTextTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "file_write_text";
     public string Description => "Writes a UTF-8 text file to disk. Requires approval. Will not overwrite unless overwrite=true. Creates parent directories if createDirectories=true.";

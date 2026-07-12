@@ -2,6 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <IsPackable>false</IsPackable>
+    <LangVersion>12.0</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -69,5 +70,12 @@
     <Compile Include="..\RevitMCP.Addin\Skills\Tasks\DrawingNaming\NamingMappingEngine.cs" Link="DrawingNaming\NamingMappingEngine.cs" />
     <!-- Security / Valve-Läbipääs pure-logic files (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Skills\Tasks\Security\ValveLabipaasRowDefinitions.cs" Link="Security\ValveLabipaasRowDefinitions.cs" />
+    <!-- Approval and dispatch safety primitives (no Autodesk dependency) -->
+    <Compile Include="..\RevitMCP.Addin\Approval\ApprovalContextGuard.cs" Link="Approval\ApprovalContextGuard.cs" />
+    <Compile Include="..\RevitMCP.Addin\Approval\DocumentChangeTracker.cs" Link="Approval\DocumentChangeTracker.cs" />
+    <Compile Include="..\RevitMCP.Addin\Approval\PendingApprovalRequest.cs" Link="Approval\PendingApprovalRequest.cs" />
+    <Compile Include="..\RevitMCP.Addin\Approval\ApprovalService.cs" Link="Approval\ApprovalService.cs" />
+    <Compile Include="..\RevitMCP.Addin\Services\ExternalEventWorkItem.cs" Link="Services\ExternalEventWorkItem.cs" />
+    <Compile Include="..\RevitMCP.Addin\Services\ExternalEventWorkQueue.cs" Link="Services\ExternalEventWorkQueue.cs" />
   </ItemGroup>
 </Project>
