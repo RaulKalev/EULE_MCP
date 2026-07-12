@@ -74,6 +74,10 @@ public class ElementQueryEngine
         bool scanTruncated = false;
 
         bool isNarrowed = options.UseSelection || options.ElementIds.Count > 0 || !string.IsNullOrWhiteSpace(options.Category);
+        // ReadParameters below is a cheap no-op when both flags are false (e.g. a caller
+        // grouping only by Category/Family/Type/Level) — such calls only need the generous
+        // backstop cap, not the tight unscoped one meant for genuinely expensive scans.
+        bool needsParamRead = options.IncludeInstanceParameters || options.IncludeTypeParameters;
 
         // Warn when caller-supplied values were actually clamped
         var limits = QueryLimits.Default;
@@ -87,16 +91,18 @@ public class ElementQueryEngine
         foreach (var elementId in elementIds)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            totalScanned++;
 
             // Hard scan cap — prevents an unbounded per-element parameter read from
-            // freezing/crashing Revit on large models. Unscoped queries (no category,
-            // elementIds, or useSelection) get a much tighter cap than narrowed ones.
-            if (QueryGuard.ShouldStopScan(totalScanned, isNarrowed, limits))
+            // freezing/crashing Revit on large models. Checked before incrementing so
+            // totalScanned always equals the number of elements actually processed.
+            // Unscoped queries that do read parameters get a much tighter cap; queries
+            // that skip parameter reads entirely only need the generous backstop.
+            if (QueryGuard.ShouldStopScan(totalScanned, isNarrowed, needsParamRead, limits))
             {
                 scanTruncated = true;
                 break;
             }
+            totalScanned++;
 
             var element = doc.GetElement(elementId);
             if (element?.Category == null) continue;
@@ -300,19 +306,18 @@ public class ElementQueryEngine
         foreach (var elementId in elementIds)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            totalScanned++;
 
             // Category/family counting alone is cheap even unscoped (no parameter reads),
             // so it only needs the generous backstop cap. Filters require a per-element
             // parameter read to evaluate, so they get the same tight cap as the main query.
-            bool stopScan = needsParamRead
-                ? QueryGuard.ShouldStopScan(totalScanned, isNarrowed, limits)
-                : totalScanned > limits.MaxScanElements;
-            if (stopScan)
+            // Checked before incrementing so totalScanned always equals the number of
+            // elements actually processed.
+            if (QueryGuard.ShouldStopScan(totalScanned, isNarrowed, needsParamRead, limits))
             {
                 scanTruncated = true;
                 break;
             }
+            totalScanned++;
 
             var element = doc.GetElement(elementId);
             if (element?.Category == null) continue;

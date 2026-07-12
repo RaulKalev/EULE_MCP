@@ -61,6 +61,50 @@ public class QuerySafetyTests
         Assert.True(QueryGuard.ShouldStopScan(QueryLimits.Default.MaxUnscopedScanElements, isNarrowed: false, null));
     }
 
+    // ── QueryGuard.ShouldStopScan (needsParamRead overload) ───────────────────
+
+    [Fact]
+    public void ShouldStopScan_NoParamRead_Unnarrowed_IgnoresTightUnscopedCap()
+    {
+        // e.g. revit_group_elements grouping only by Category with no filters, no scope —
+        // this is cheap (no per-element parameter read) and must not hit the tight cap
+        // meant for expensive unscoped scans.
+        var limits = new QueryLimits { MaxScanElements = 100, MaxUnscopedScanElements = 10 };
+        Assert.False(QueryGuard.ShouldStopScan(50, isNarrowed: false, needsParamRead: false, limits));
+    }
+
+    [Fact]
+    public void ShouldStopScan_NoParamRead_Unnarrowed_StillStopsAtGenerousCap()
+    {
+        var limits = new QueryLimits { MaxScanElements = 100, MaxUnscopedScanElements = 10 };
+        Assert.True(QueryGuard.ShouldStopScan(100, isNarrowed: false, needsParamRead: false, limits));
+        Assert.False(QueryGuard.ShouldStopScan(99, isNarrowed: false, needsParamRead: false, limits));
+    }
+
+    [Fact]
+    public void ShouldStopScan_NoParamRead_Narrowed_UsesGenerousCap()
+    {
+        var limits = new QueryLimits { MaxScanElements = 100, MaxUnscopedScanElements = 10 };
+        Assert.True(QueryGuard.ShouldStopScan(100, isNarrowed: true, needsParamRead: false, limits));
+        Assert.False(QueryGuard.ShouldStopScan(99, isNarrowed: true, needsParamRead: false, limits));
+    }
+
+    [Fact]
+    public void ShouldStopScan_ParamRead_Unnarrowed_UsesTightCap()
+    {
+        var limits = new QueryLimits { MaxScanElements = 100, MaxUnscopedScanElements = 10 };
+        Assert.True(QueryGuard.ShouldStopScan(10, isNarrowed: false, needsParamRead: true, limits));
+    }
+
+    [Fact]
+    public void ShouldStopScan_ThreeArgOverload_MatchesNeedsParamReadTrue()
+    {
+        var limits = new QueryLimits { MaxScanElements = 100, MaxUnscopedScanElements = 10 };
+        Assert.Equal(
+            QueryGuard.ShouldStopScan(10, isNarrowed: false, needsParamRead: true, limits),
+            QueryGuard.ShouldStopScan(10, isNarrowed: false, limits));
+    }
+
     // ── QueryGuard.BuildNarrowingGuidance ─────────────────────────────────────
 
     [Fact]

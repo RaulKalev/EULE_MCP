@@ -56,10 +56,23 @@ public static class QueryGuard
     /// crashing Revit on large models. Narrowed queries (category, elementIds, or
     /// useSelection) get the more generous <see cref="QueryLimits.MaxScanElements"/>;
     /// fully unscoped queries get the tighter <see cref="QueryLimits.MaxUnscopedScanElements"/>.
+    /// Equivalent to <c>ShouldStopScan(totalScanned, isNarrowed, needsParamRead: true, limits)</c>.
     /// </summary>
-    public static bool ShouldStopScan(int totalScanned, bool isNarrowed, QueryLimits? limits = null)
+    public static bool ShouldStopScan(int totalScanned, bool isNarrowed, QueryLimits? limits = null) =>
+        ShouldStopScan(totalScanned, isNarrowed, needsParamRead: true, limits);
+
+    /// <summary>
+    /// Decides whether an element-scanning loop should stop early. When the scan doesn't
+    /// actually read per-element parameters (e.g. grouping only by Category/Family/Type/Level
+    /// with no filters), it is cheap regardless of scope and only needs the generous
+    /// <see cref="QueryLimits.MaxScanElements"/> backstop — the tight unscoped cap exists
+    /// specifically to bound expensive per-element parameter reads.
+    /// </summary>
+    public static bool ShouldStopScan(int totalScanned, bool isNarrowed, bool needsParamRead, QueryLimits? limits = null)
     {
         limits ??= QueryLimits.Default;
+        if (!needsParamRead)
+            return totalScanned >= limits.MaxScanElements;
         var cap = isNarrowed ? limits.MaxScanElements : limits.MaxUnscopedScanElements;
         return totalScanned >= cap;
     }
