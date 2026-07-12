@@ -18,6 +18,109 @@ public class QuerySafetyTests
         Assert.Equal(500, limits.MaxStringLength);
         Assert.Equal(1_000_000, limits.MaxResponseBytes);
         Assert.False(limits.EnableStrictMode);
+        Assert.Equal(20_000, limits.MaxScanElements);
+        Assert.Equal(2_000, limits.MaxUnscopedScanElements);
+    }
+
+    // ── QueryGuard.ShouldStopScan ─────────────────────────────────────────────
+
+    [Fact]
+    public void ShouldStopScan_Narrowed_BelowCap_ReturnsFalse()
+    {
+        var limits = new QueryLimits { MaxScanElements = 100, MaxUnscopedScanElements = 10 };
+        Assert.False(QueryGuard.ShouldStopScan(50, isNarrowed: true, limits));
+    }
+
+    [Fact]
+    public void ShouldStopScan_Narrowed_AtCap_ReturnsTrue()
+    {
+        var limits = new QueryLimits { MaxScanElements = 100, MaxUnscopedScanElements = 10 };
+        Assert.True(QueryGuard.ShouldStopScan(100, isNarrowed: true, limits));
+    }
+
+    [Fact]
+    public void ShouldStopScan_Narrowed_JustBelowCap_ReturnsFalse()
+    {
+        var limits = new QueryLimits { MaxScanElements = 100, MaxUnscopedScanElements = 10 };
+        Assert.False(QueryGuard.ShouldStopScan(99, isNarrowed: true, limits));
+    }
+
+    [Fact]
+    public void ShouldStopScan_Unnarrowed_UsesTighterCap()
+    {
+        var limits = new QueryLimits { MaxScanElements = 100, MaxUnscopedScanElements = 10 };
+        // Below the narrowed cap but at/above the unscoped cap — must still stop.
+        Assert.True(QueryGuard.ShouldStopScan(10, isNarrowed: false, limits));
+        Assert.False(QueryGuard.ShouldStopScan(9, isNarrowed: false, limits));
+    }
+
+    [Fact]
+    public void ShouldStopScan_NullLimits_UsesDefaultInstance()
+    {
+        Assert.False(QueryGuard.ShouldStopScan(1, isNarrowed: false, null));
+        Assert.True(QueryGuard.ShouldStopScan(QueryLimits.Default.MaxUnscopedScanElements, isNarrowed: false, null));
+    }
+
+    // ── QueryGuard.BuildNarrowingGuidance ─────────────────────────────────────
+
+    [Fact]
+    public void BuildNarrowingGuidance_NoElements_ReturnsEmptyModelMessage()
+    {
+        var msg = QueryGuard.BuildNarrowingGuidance(0, new Dictionary<string, int>());
+        Assert.Contains("no elements", msg, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BuildNarrowingGuidance_EmptyDictionary_ReturnsEmptyModelMessage()
+    {
+        // TotalElements > 0 but no category breakdown available — still treat as empty.
+        var msg = QueryGuard.BuildNarrowingGuidance(5, new Dictionary<string, int>());
+        Assert.Contains("no elements", msg, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BuildNarrowingGuidance_IncludesTotalAndCategoryCount()
+    {
+        var counts = new Dictionary<string, int> { ["Walls"] = 100, ["Doors"] = 20 };
+        var msg = QueryGuard.BuildNarrowingGuidance(120, counts);
+
+        Assert.Contains("120 elements", msg);
+        Assert.Contains("2 categories", msg);
+        Assert.Contains("Walls (100)", msg);
+        Assert.Contains("Doors (20)", msg);
+    }
+
+    [Fact]
+    public void BuildNarrowingGuidance_OrdersCategoriesByCountDescending()
+    {
+        var counts = new Dictionary<string, int> { ["Doors"] = 20, ["Walls"] = 100, ["Windows"] = 50 };
+        var msg = QueryGuard.BuildNarrowingGuidance(170, counts);
+
+        var wallsIdx = msg.IndexOf("Walls", StringComparison.Ordinal);
+        var windowsIdx = msg.IndexOf("Windows", StringComparison.Ordinal);
+        var doorsIdx = msg.IndexOf("Doors", StringComparison.Ordinal);
+        Assert.True(wallsIdx < windowsIdx);
+        Assert.True(windowsIdx < doorsIdx);
+    }
+
+    [Fact]
+    public void BuildNarrowingGuidance_MoreCategoriesThanShowLimit_TruncatesWithCount()
+    {
+        var counts = Enumerable.Range(1, 20)
+            .ToDictionary(i => $"Category{i}", i => i);
+
+        var msg = QueryGuard.BuildNarrowingGuidance(210, counts, maxCategoriesToShow: 5);
+
+        Assert.Contains("5 more categories", msg);
+    }
+
+    [Fact]
+    public void BuildNarrowingGuidance_FewerCategoriesThanShowLimit_NoTruncationNote()
+    {
+        var counts = new Dictionary<string, int> { ["Walls"] = 100, ["Doors"] = 20 };
+        var msg = QueryGuard.BuildNarrowingGuidance(120, counts, maxCategoriesToShow: 15);
+
+        Assert.DoesNotContain("more categories", msg);
     }
 
     // ── QueryGuard.NormalizePageSize ─────────────────────────────────────────

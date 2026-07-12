@@ -180,7 +180,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_count_elements", ReadOnly = true),
-     Description("Counts model elements grouped by Category or FamilyAndType. Optionally filter to a specific category name.")]
+     Description("Counts model elements grouped by Category or FamilyAndType. Optionally filter to a specific category name. Cheap even for the whole model (no parameter reads) — good first call to discover what categories exist before running a narrower, detailed query like revit_find_elements_by_parameter.")]
     public async Task<string> CountElements(
         [Description("Optional category name to filter by (e.g. 'Fire Alarm Devices'). Leave empty for all categories.")] string? category = null,
         [Description("Group results by: 'Category' (default) or 'FamilyAndType'")] string groupBy = "Category",
@@ -404,7 +404,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_find_elements_by_parameter", ReadOnly = true),
-     Description("Finds model elements matching one or more parameter filters. Each filter: parameterName (partial match), operator (equals/contains/startsWith/isEmpty/greaterThan/lessThan/notEquals/notContains/endsWith/isNotEmpty), value, matchMode, scope. Accepts category, useSelection, elementIds, returnParameters, paging (pageSize/page), and safety caps (maxParametersPerElement, truncateStringLength). Set summaryOnly=true to get category/family counts without element data.")]
+     Description("Finds model elements matching one or more parameter filters. Each filter: parameterName (partial match), operator (equals/contains/startsWith/isEmpty/greaterThan/lessThan/notEquals/notContains/endsWith/isNotEmpty), value, matchMode, scope. Accepts category, useSelection, elementIds, returnParameters, paging (pageSize/page), and safety caps (maxParametersPerElement, truncateStringLength). Set summaryOnly=true to get category/family counts without element data. REQUIRES a category, filters, elementIds, useSelection, or summaryOnly=true — calling with none of these is rejected with a category breakdown so you can ask the user which one to use, instead of scanning the whole model (which can freeze/crash Revit on large projects). If you don't know the model's categories yet, call revit_count_elements first.")]
     public async Task<string> FindElementsByParameter(
         [Description("JSON array of filter objects: [{parameterName, operator, value, matchMode, scope}]")] string? filters = null,
         [Description("Optional category name to restrict search (e.g. 'Fire Alarm Devices')")] string? category = null,

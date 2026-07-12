@@ -184,7 +184,7 @@ Activity is logged to `%AppData%\RKTools\RevitMCP\Logs\{date}.jsonl` — one JSO
 | `revit_get_element_parameters` | Reads instance/type parameters for element IDs or selection, including shared parameter metadata |
 | `revit_count_elements` | Element counts grouped by Category or FamilyAndType, with optional category filter |
 | `revit_group_by_parameter` | Convenience tool for grouping elements by one parameter |
-| `revit_find_elements_by_parameter` | Finds elements using one or more parameter filters. Supports `useSelection`, `elementIds`, `includeInstanceParameters/TypeParameters`. Pagination: `page`, `pageSize`. Safety caps: `maxParametersPerElement`, `truncateStringLength`. Set `summaryOnly=true` for category/family counts. Response includes `hasMore`, `nextPageToken`. |
+| `revit_find_elements_by_parameter` | Finds elements using one or more parameter filters. Requires `category`, `filters`, `elementIds`, `useSelection`, or `summaryOnly=true` — an unscoped call is rejected with a live category breakdown instead of scanning the whole model. Supports `useSelection`, `elementIds`, `includeInstanceParameters/TypeParameters`. Pagination: `page`, `pageSize`. Safety caps: `maxParametersPerElement`, `truncateStringLength`. Set `summaryOnly=true` for category/family counts. Response includes `hasMore`, `nextPageToken`. |
 | `revit_get_elements_info` | Returns structured element info with selected parameter values. Requires `useSelection`, `elementIds`, `category`, or `summaryOnly=true`. Pagination: `page`, `pageSize`. Safety caps: `maxParametersPerElement`, `truncateStringLength`. Response includes `hasMore`, `nextPageToken`, and `summary` when `summaryOnly=true`. |
 | `revit_group_elements` | Groups elements by category, family, type, level, or multiple parameters |
 | `revit_export_query_to_excel` | Exports query/grouping results to a formatted `.xlsx` file |
@@ -210,6 +210,8 @@ All element query tools have built-in response guards and safety defaults enforc
 | `MaxParametersPerElement` | 40 | Parameters per element; 0 (omit) uses this default |
 | `MaxStringLength` | 500 chars | Parameter value truncation; 0 (omit) uses this default |
 | `MaxResponseBytes` | 1 MB | Serialized response hard limit; exceeded responses return `ResponseTooLarge` |
+| `MaxScanElements` | 20,000 | Hard cap on elements scanned (parameter-read) by one narrowed query (`category`, `elementIds`, or `useSelection` given) |
+| `MaxUnscopedScanElements` | 2,000 | Tighter scan cap when a query has **no** narrowing at all — the scenario most likely to freeze/crash Revit on large models |
 | `TimeoutSeconds` | 30 s | Pipe dispatch timeout per tool call |
 
 **Key behaviors:**
@@ -217,7 +219,9 @@ All element query tools have built-in response guards and safety defaults enforc
 - **ResponseGuard** — applied at the pipe boundary. If a serialized response exceeds **1 MB**, the tool returns a `ResponseTooLarge` error with remediation suggestions. Cannot be disabled.
 - **Pagination** — `pageSize` defaults to 100 when omitted. Pass `page` (0-based) to walk through pages. Responses include `hasMore` and `nextPageToken`.
 - **Per-element limits** — `maxParametersPerElement` caps the number of parameters per element; `truncateStringLength` truncates long parameter values (appends `... [truncated]`). Both default to the safety defaults above when omitted.
-- **Summary mode** — `summaryOnly=true` on `revit_get_elements_info` or `revit_find_elements_by_parameter` returns category/family counts without building element DTOs. This is the recommended first step for broad model scans. Broad detailed queries without `category`, `elementIds`, or `useSelection` are blocked unless `summaryOnly=true`.
+- **Summary mode** — `summaryOnly=true` on `revit_get_elements_info` or `revit_find_elements_by_parameter` returns category/family counts without building element DTOs. This is the recommended first step for broad model scans.
+- **Required narrowing** — `revit_get_elements_info` and `revit_find_elements_by_parameter` reject a call with no `category`, `filters`, `elementIds`, or `useSelection` unless `summaryOnly=true`. The rejection includes a live category/element-count breakdown of the model so the calling agent has concrete options to offer the user as a follow-up question, instead of scanning (and parameter-reading) the entire model.
+- **Scan cap** — even a narrowed query stops scanning past `MaxScanElements`; a fully unscoped query (only possible via `summaryOnly=true`, or tools like `revit_group_elements`/`revit_group_by_parameter` that don't require narrowing) stops past the much tighter `MaxUnscopedScanElements`. A truncated scan is called out in the response `Warnings` — results are a partial sample, not silently incomplete. `revit_group_elements` additionally skips parameter reads entirely (cheap, no cap needed) when grouping only by Category/Family/Type/Level with no filters.
 - **Clamping warnings** — when caller-supplied `pageSize`, `maxParametersPerElement`, or `truncateStringLength` exceed the limits, the engine clamps the value and adds an explanatory warning to the response.
 
 **Example prompts:**

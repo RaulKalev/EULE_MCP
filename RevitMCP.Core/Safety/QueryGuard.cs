@@ -52,6 +52,46 @@ public static class QueryGuard
     }
 
     /// <summary>
+    /// Decides whether an element-scanning loop should stop early to avoid freezing or
+    /// crashing Revit on large models. Narrowed queries (category, elementIds, or
+    /// useSelection) get the more generous <see cref="QueryLimits.MaxScanElements"/>;
+    /// fully unscoped queries get the tighter <see cref="QueryLimits.MaxUnscopedScanElements"/>.
+    /// </summary>
+    public static bool ShouldStopScan(int totalScanned, bool isNarrowed, QueryLimits? limits = null)
+    {
+        limits ??= QueryLimits.Default;
+        var cap = isNarrowed ? limits.MaxScanElements : limits.MaxUnscopedScanElements;
+        return totalScanned >= cap;
+    }
+
+    /// <summary>
+    /// Builds a human-readable message that gives an agent concrete options for narrowing
+    /// a query that was rejected (or truncated) for being too broad — the category
+    /// breakdown lets it offer the user a specific follow-up question instead of guessing.
+    /// </summary>
+    public static string BuildNarrowingGuidance(
+        int totalElements,
+        IReadOnlyDictionary<string, int> categoryCounts,
+        int maxCategoriesToShow = 15)
+    {
+        if (totalElements == 0 || categoryCounts.Count == 0)
+            return "This model appears to have no elements matching a broad, unfiltered scan.";
+
+        var top = categoryCounts
+            .OrderByDescending(kv => kv.Value)
+            .Take(maxCategoriesToShow)
+            .Select(kv => $"{kv.Key} ({kv.Value})")
+            .ToList();
+
+        var suffix = categoryCounts.Count > maxCategoriesToShow
+            ? $", and {categoryCounts.Count - maxCategoriesToShow} more categories"
+            : string.Empty;
+
+        return $"This model has {totalElements} elements across {categoryCounts.Count} categories: " +
+               $"{string.Join(", ", top)}{suffix}. Specify a category and/or a parameter filter to narrow the search.";
+    }
+
+    /// <summary>
     /// Truncates a string to <paramref name="maxLength"/> characters and appends a marker.
     /// Returns the original string when it is within the limit or <paramref name="maxLength"/> is 0.
     /// </summary>

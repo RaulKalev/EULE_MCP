@@ -31,14 +31,22 @@ public class GroupElementsTool : IRevitMcpTool
         if (groupByParsed.Items.Count == 0)
             return Task.FromResult(Fail(request, "At least one groupBy key is required."));
 
+        // Category/Family/Type/Level grouping reads those fields straight off the element,
+        // not from the parameter map — only request parameter reads (the expensive part of
+        // a query) when a filter or a Parameter-type groupBy key actually needs them. This
+        // keeps a plain "group everything by category" query cheap even across the whole
+        // model, unscoped.
+        bool needsParameters = filtersParsed.Items.Count > 0 ||
+                                groupByParsed.Items.Any(g => g.Type == "Parameter");
+
         var queryOpts = new ElementQueryOptions
         {
             Category = ToolArguments.GetString(request.Arguments, "category"),
             UseSelection = ToolArguments.GetBool(request.Arguments, "useSelection"),
             ElementIds = ToolArguments.GetLongArray(request.Arguments, "elementIds").ToList(),
             Filters = filtersParsed.Items,
-            IncludeInstanceParameters = true,
-            IncludeTypeParameters = true,
+            IncludeInstanceParameters = needsParameters,
+            IncludeTypeParameters = needsParameters,
             Limit = ToolArguments.GetInt(request.Arguments, "limit", 5000)
         };
 

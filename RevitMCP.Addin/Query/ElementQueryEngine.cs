@@ -71,6 +71,9 @@ public class ElementQueryEngine
         var warnings = new List<string>();
         int totalMatched = 0;
         int totalScanned = 0;
+        bool scanTruncated = false;
+
+        bool isNarrowed = options.UseSelection || options.ElementIds.Count > 0 || !string.IsNullOrWhiteSpace(options.Category);
 
         // Warn when caller-supplied values were actually clamped
         var limits = QueryLimits.Default;
@@ -85,6 +88,15 @@ public class ElementQueryEngine
         {
             cancellationToken.ThrowIfCancellationRequested();
             totalScanned++;
+
+            // Hard scan cap — prevents an unbounded per-element parameter read from
+            // freezing/crashing Revit on large models. Unscoped queries (no category,
+            // elementIds, or useSelection) get a much tighter cap than narrowed ones.
+            if (QueryGuard.ShouldStopScan(totalScanned, isNarrowed, limits))
+            {
+                scanTruncated = true;
+                break;
+            }
 
             var element = doc.GetElement(elementId);
             if (element?.Category == null) continue;
@@ -129,8 +141,13 @@ public class ElementQueryEngine
             results.Add(info);
         }
 
-        if (totalScanned > 5000 && string.IsNullOrWhiteSpace(options.Category))
-            warnings.Add($"Scanned {totalScanned} elements. Provide a 'category' to narrow the search.");
+        if (scanTruncated)
+        {
+            var suggestion = isNarrowed
+                ? "This is a very large result set even within the given scope — narrow further with parameter filters or a smaller category."
+                : "Add a category, elementIds, or useSelection to narrow the search, or call revit_count_elements first to see category sizes.";
+            warnings.Add($"Stopped scanning after {totalScanned} elements (safety limit reached, not the whole model). {suggestion} Results below are partial.");
+        }
 
         int pageEnd = pageStart + effectivePageSize;
         bool hasMore = totalMatched > pageEnd;
@@ -271,16 +288,31 @@ public class ElementQueryEngine
         CancellationToken cancellationToken)
     {
         bool needsParamRead = options.Filters.Count > 0;
+        bool isNarrowed = options.UseSelection || options.ElementIds.Count > 0 || !string.IsNullOrWhiteSpace(options.Category);
+        var limits = QueryLimits.Default;
 
         var catCounts = new Dictionary<string, int>(StringComparer.Ordinal);
         var famCounts = new Dictionary<string, int>(StringComparer.Ordinal);
         int totalMatched = 0;
         int totalScanned = 0;
+        bool scanTruncated = false;
 
         foreach (var elementId in elementIds)
         {
             cancellationToken.ThrowIfCancellationRequested();
             totalScanned++;
+
+            // Category/family counting alone is cheap even unscoped (no parameter reads),
+            // so it only needs the generous backstop cap. Filters require a per-element
+            // parameter read to evaluate, so they get the same tight cap as the main query.
+            bool stopScan = needsParamRead
+                ? QueryGuard.ShouldStopScan(totalScanned, isNarrowed, limits)
+                : totalScanned > limits.MaxScanElements;
+            if (stopScan)
+            {
+                scanTruncated = true;
+                break;
+            }
 
             var element = doc.GetElement(elementId);
             if (element?.Category == null) continue;
@@ -305,8 +337,15 @@ public class ElementQueryEngine
         }
 
         var warnings = new List<string>();
-        if (totalScanned > 5000 && string.IsNullOrWhiteSpace(options.Category))
-            warnings.Add($"Scanned {totalScanned} elements. Provide a 'category' to narrow the search.");
+        if (scanTruncated)
+        {
+            var suggestion = needsParamRead
+                ? (isNarrowed
+                    ? "This is a very large scope for a filtered summary — narrow further with a smaller category or elementIds."
+                    : "Filters require reading every element's parameters; add a category, elementIds, or useSelection to narrow the search.")
+                : "The model is larger than the safety scan limit — counts below are a partial sample, not the full model.";
+            warnings.Add($"Stopped scanning after {totalScanned} elements (safety limit reached). {suggestion}");
+        }
 
         var summary = new ElementQuerySummary
         {
