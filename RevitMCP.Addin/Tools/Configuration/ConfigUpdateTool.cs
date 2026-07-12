@@ -13,7 +13,7 @@ namespace RevitMCP.Addin.Tools.Configuration;
 /// Updates specific properties inside a JSON config file using dot-path keys
 /// (e.g. "excel.defaultBackupBeforeSave" or "$.excel.defaultBackupBeforeSave").
 /// </summary>
-public class ConfigUpdateTool : IRevitMcpTool
+public class ConfigUpdateTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "config_update";
     public string Description => "Updates specific properties in a JSON config file using dot-path keys (e.g. '$.excel.defaultBackupBeforeSave'). Requires approval. Creates the file if it does not exist when createIfMissing=true.";

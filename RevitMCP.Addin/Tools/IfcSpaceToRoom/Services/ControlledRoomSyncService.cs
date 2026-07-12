@@ -33,8 +33,12 @@ public class ControlledRoomSyncService
     // ─────────────────────────────────────────────────────────────────────────
 
     /// <summary>Runs the sync operation for all submitted items.</summary>
-    public RoomSyncResult Run(Document hostDoc, RoomSyncOptions options)
+    public RoomSyncResult Run(
+        Document hostDoc,
+        RoomSyncOptions options,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (options.Items.Count == 0)
         {
             return new RoomSyncResult
@@ -90,6 +94,7 @@ public class ControlledRoomSyncService
 
         foreach (var request in options.Items)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var itemResult = ProcessItem(
                 hostDoc, linkedDoc, linkTransform, request, options);
             itemResults.Add(itemResult);
@@ -285,7 +290,7 @@ public class ControlledRoomSyncService
                     return result;
                 }
 
-                tx.Commit();
+                RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(tx);
 
                 result.Status = (nameChangeNeeded, numberChangeNeeded) switch
                 {

@@ -30,6 +30,21 @@ public sealed class QueryLimits
     /// <summary>Per-request execution timeout in seconds.</summary>
     public int TimeoutSeconds { get; set; } = 30;
 
+    /// <summary>Maximum requests waiting for the Revit API thread.</summary>
+    public int MaxQueuedRequests { get; set; } = 64;
+
+    /// <summary>Maximum queued requests processed by one ExternalEvent callback.</summary>
+    public int MaxRequestsPerExternalEvent { get; set; } = 8;
+
+    /// <summary>Maximum audited non-Revit I/O tools executing concurrently.</summary>
+    public int MaxConcurrentBackgroundRequests { get; set; } = 1;
+
+    /// <summary>Maximum requests waiting for a user approval decision.</summary>
+    public int MaxPendingApprovals { get; set; } = 64;
+
+    /// <summary>Minutes before an approval becomes stale and must be previewed again.</summary>
+    public int ApprovalTimeoutMinutes { get; set; } = 10;
+
     /// <summary>When true, broad queries without filters are rejected rather than warned.</summary>
     public bool EnableStrictMode { get; set; } = false;
 

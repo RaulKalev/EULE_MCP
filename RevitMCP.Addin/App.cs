@@ -1,4 +1,5 @@
 using Autodesk.Revit.UI;
+using Autodesk.Revit.DB.Events;
 using RevitMCP.Addin.Approval;
 using RevitMCP.Addin.Logging;
 using RevitMCP.Addin.Services;
@@ -45,6 +46,7 @@ public class App : IExternalApplication
         DiagLog($"Assembly: {typeof(App).Assembly.Location}");
         try
         {
+            application.ControlledApplication.DocumentChanged += OnDocumentChanged;
             DiagLog("Creating ActivityLogger");
             // Build services
             var logger = new ActivityLogger();
@@ -318,6 +320,7 @@ public class App : IExternalApplication
         }
         catch (Exception ex)
         {
+            application.ControlledApplication.DocumentChanged -= OnDocumentChanged;
             DiagLog($"EXCEPTION: {ex.GetType().FullName}: {ex.Message}");
             DiagLog($"StackTrace: {ex.StackTrace}");
             if (ex.InnerException != null)
@@ -329,8 +332,14 @@ public class App : IExternalApplication
 
     public Result OnShutdown(UIControlledApplication application)
     {
+        application.ControlledApplication.DocumentChanged -= OnDocumentChanged;
         _connector?.PanicStop();
         return Result.Succeeded;
+    }
+
+    private static void OnDocumentChanged(object? sender, DocumentChangedEventArgs e)
+    {
+        DocumentChangeTracker.MarkChanged(e.GetDocument());
     }
 
 #if !REVIT2024

@@ -31,6 +31,7 @@ public class CreateClashReviewViewTool : IRevitMcpTool
         var clashId = ToolArguments.GetString(args, "clashId", "");
         var sectionBoxPaddingMm = GetDouble(args, "sectionBoxPaddingMm", 1000.0);
 
+        cancellationToken.ThrowIfCancellationRequested();
         using var t = new Transaction(doc, "Revit MCP - Create Clash Review View");
         t.Start();
         var view = _viewService.CreateOrReuseView(doc);
@@ -49,7 +50,7 @@ public class CreateClashReviewViewTool : IRevitMcpTool
                 _viewService.SetSectionBox(doc, view, clash, sectionBoxPaddingMm);
         }
 
-        t.Commit();
+        RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(t);
 
         uidoc.ActiveView = view;
 

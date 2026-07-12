@@ -9,7 +9,7 @@ using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Tools.Excel;
 
-public class ExcelAppendTableRowsTool : IRevitMcpTool
+public class ExcelAppendTableRowsTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "excel_append_table_rows";
     public string Description => "Appends rows after the last data row in a worksheet, matching values to columns by header name. Optionally targets a named Excel table. Requires approval. Set dryRun=true to preview without modifying.";

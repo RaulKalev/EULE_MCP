@@ -145,7 +145,7 @@ public static class DwgDetailFamilyGenerator
                         finalPath, familyDoc, sw);
                 }
 
-                tx.Commit();
+                RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(tx);
             }
 
             // 10. Center import at reference plane origin
@@ -173,7 +173,7 @@ public static class DwgDetailFamilyGenerator
                             warnings.Add("Bounding box unavailable — DWG not centered.");
                         }
                     }
-                    txCenter.Commit();
+                    RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(txCenter);
                 }
                 catch (Exception ex)
                 {

@@ -170,7 +170,7 @@ public static class PlaceViewsPresetService
     }
 
     private static string Coalesce(string? overrideValue, string defaultValue) =>
-        string.IsNullOrWhiteSpace(overrideValue) ? defaultValue : overrideValue;
+        string.IsNullOrWhiteSpace(overrideValue) ? defaultValue : overrideValue!;
 }
 
 public class PresetFileInfo

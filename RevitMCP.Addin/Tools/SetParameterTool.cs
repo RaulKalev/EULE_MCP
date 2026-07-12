@@ -104,12 +104,14 @@ public class SetParameterTool : IRevitMcpTool
         var modifiedIds = new List<long>();
         var failures = new List<object>();
 
+        cancellationToken.ThrowIfCancellationRequested();
         using (var tx = new Transaction(doc, "Revit MCP - Set Parameter"))
         {
             tx.Start();
 
             foreach (var eid in targetIds)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var element = doc.GetElement(eid);
                 if (element == null)
                 {
@@ -187,7 +189,7 @@ public class SetParameterTool : IRevitMcpTool
                 }
             }
 
-            tx.Commit();
+            RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(tx);
         }
 
         var warnings = filtersParsed.Warnings;

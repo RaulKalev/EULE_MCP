@@ -83,7 +83,7 @@ public class StandardsSearchService
         // Discipline boost
         if (!string.IsNullOrWhiteSpace(disciplineHint) &&
             !string.IsNullOrWhiteSpace(source?.Discipline) &&
-            source.Discipline.Equals(disciplineHint, StringComparison.OrdinalIgnoreCase))
+            source!.Discipline!.Equals(disciplineHint, StringComparison.OrdinalIgnoreCase))
         {
             score *= 1.5;
         }

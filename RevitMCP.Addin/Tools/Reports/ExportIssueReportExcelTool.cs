@@ -12,7 +12,7 @@ namespace RevitMCP.Addin.Tools.Reports;
 /// Exports a previously-built IssueReportDto as a formatted Excel (.xlsx) file.
 /// The report JSON is passed in via the "reportJson" argument.
 /// </summary>
-public class ExportIssueReportExcelTool : IRevitMcpTool
+public class ExportIssueReportExcelTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "revit_export_issues_excel";
     public string Description => "Exports an issue report (passed as JSON) to a formatted Excel (.xlsx) file. Returns the output file path. Requires approval — writes a file to disk.";

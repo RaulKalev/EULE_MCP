@@ -43,12 +43,13 @@ public class SetCircuitParameterTool : IRevitMcpTool
         var failures = new List<object>();
         var warnings = new List<string>();
 
+        cancellationToken.ThrowIfCancellationRequested();
         using var tx = new Transaction(doc, "Revit MCP - Set Circuit Parameter");
         tx.Start();
 
         foreach (var cid in circuitIds)
         {
-            if (cancellationToken.IsCancellationRequested) break;
+            cancellationToken.ThrowIfCancellationRequested();
 
             var elem = doc.GetElement(new ElementId(cid));
             if (elem == null)
@@ -89,7 +90,7 @@ public class SetCircuitParameterTool : IRevitMcpTool
         }
 
         if (successes.Count > 0)
-            tx.Commit();
+            RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(tx);
         else
             tx.RollBack();
 

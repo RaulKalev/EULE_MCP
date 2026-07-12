@@ -68,12 +68,13 @@ public class SetCircuitParametersBulkTool : IRevitMcpTool
             return Task.FromResult(Fail(request, "No target circuits found."));
 
         var results = new List<object>();
+        cancellationToken.ThrowIfCancellationRequested();
         using (var tx = new Transaction(doc, "Revit MCP - Set Circuit Parameters Bulk"))
         {
             tx.Start();
             foreach (var circuit in circuits)
             {
-                if (cancellationToken.IsCancellationRequested) break;
+                cancellationToken.ThrowIfCancellationRequested();
                 var paramResults = new List<object>();
                 foreach (var (paramName, value) in paramChanges)
                 {
@@ -100,7 +101,7 @@ public class SetCircuitParametersBulkTool : IRevitMcpTool
                 }
                 results.Add(new { circuitId = circuit.Id.Value, circuitNumber = circuit.CircuitNumber ?? "", parameters = paramResults });
             }
-            tx.Commit();
+            RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(tx);
         }
 
         sw.Stop();

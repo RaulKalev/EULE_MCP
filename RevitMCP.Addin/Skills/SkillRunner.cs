@@ -66,7 +66,7 @@ public class SkillRunner
         bool usedOverride = false;
         if (useProjectOverride && !string.IsNullOrWhiteSpace(projectId))
         {
-            projectOverride = _overrideService.Load(skillId, projectId);
+            projectOverride = _overrideService.Load(skillId, projectId!);
             usedOverride = projectOverride is not null;
         }
 

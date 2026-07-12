@@ -9,7 +9,7 @@ using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Tools.Excel;
 
-public class ExcelInsertRowsTool : IRevitMcpTool
+public class ExcelInsertRowsTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "excel_insert_rows";
     public string Description => "Inserts rows into a worksheet at a given row number, copying styles from a template row. Row values keyed by column letter (A, B, C…). Requires approval. Set dryRun=true to preview without modifying.";

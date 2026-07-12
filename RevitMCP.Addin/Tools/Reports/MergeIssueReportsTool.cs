@@ -12,7 +12,7 @@ namespace RevitMCP.Addin.Tools.Reports;
 /// Merges multiple IssueReportDtos into a single consolidated report.
 /// Pass an array of report JSON strings via "reportJsonArray".
 /// </summary>
-public class MergeIssueReportsTool : IRevitMcpTool
+public class MergeIssueReportsTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "revit_merge_issue_reports";
     public string Description => "Merges multiple issue reports (array of JSON strings) into one consolidated report. Returns the merged report as JSON.";

@@ -6,6 +6,7 @@ namespace RevitMCP.Addin.UI;
 public partial class DirectEditWarningDialog : Window
 {
     public bool DontShowAgain => DontShowAgainCheckBox.IsChecked == true;
+    public bool IsConfirmed { get; private set; }
 
     public DirectEditWarningDialog()
     {
@@ -20,11 +21,12 @@ public partial class DirectEditWarningDialog : Window
 
     private void EnableButton_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = true;
+        IsConfirmed = true;
+        Close();
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
-        DialogResult = false;
+        Close();
     }
 }

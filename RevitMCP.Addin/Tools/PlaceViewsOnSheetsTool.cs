@@ -66,10 +66,12 @@ public class PlaceViewsOnSheetsTool : IRevitMcpTool
             var warnings = new List<string>();
             var placed_  = new List<object>();
 
+            cancellationToken.ThrowIfCancellationRequested();
             using var t = new Transaction(doc, "Revit MCP - Place Views on Sheets");
             t.Start();
             foreach (var vid in toPlace)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
                     var view = doc.GetElement(new ElementId(vid)) as View;
@@ -81,7 +83,7 @@ public class PlaceViewsOnSheetsTool : IRevitMcpTool
                 }
                 catch (Exception ex) { warnings.Add($"Failed to place view {vid}: {ex.Message}"); }
             }
-            t.Commit();
+            RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(t);
 
             sw.Stop();
             return Task.FromResult(new McpToolResult
@@ -111,10 +113,12 @@ public class PlaceViewsOnSheetsTool : IRevitMcpTool
         var warnings2 = new List<string>();
         var placed2_  = new List<object>();
 
+        cancellationToken.ThrowIfCancellationRequested();
         using var t2 = new Transaction(doc, "Revit MCP - Place Views on Sheets");
         t2.Start();
         foreach (var p in toPlaceB)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 var sheet  = doc.GetElement(new ElementId(p.SheetId!.Value)) as ViewSheet;
@@ -131,7 +135,7 @@ public class PlaceViewsOnSheetsTool : IRevitMcpTool
                 warnings2.Add($"Failed to place '{p.ViewName}': {ex.Message}");
             }
         }
-        t2.Commit();
+        RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(t2);
 
         sw.Stop();
         return Task.FromResult(new McpToolResult

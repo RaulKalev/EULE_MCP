@@ -55,6 +55,7 @@ public class DeleteViewsTool : IRevitMcpTool
         int deleted  = 0;
         var warnings = new List<string>();
 
+        cancellationToken.ThrowIfCancellationRequested();
         using var t = new Transaction(doc, "Revit MCP - Delete Views");
         t.Start();
         foreach (var eid in toDelete)
@@ -69,7 +70,7 @@ public class DeleteViewsTool : IRevitMcpTool
                 warnings.Add($"Could not delete view {eid.Value}: {ex.Message}");
             }
         }
-        t.Commit();
+        RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(t);
 
         sw.Stop();
         return Task.FromResult(new McpToolResult

@@ -10,7 +10,7 @@ namespace RevitMCP.Addin.Tools.Standards;
 /// (Re-)indexes one or all company standards sources into the local cache.
 /// Tool name: standards_index_sources
 /// </summary>
-public class StandardsIndexSourcesTool : IRevitMcpTool
+public class StandardsIndexSourcesTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name        => "standards_index_sources";
     public string Description => "Indexes (or re-indexes) company standards sources into the local search cache. Pass sourceId to re-index a specific source, or omit to index all enabled sources. Set force=true to reprocess unchanged files.";

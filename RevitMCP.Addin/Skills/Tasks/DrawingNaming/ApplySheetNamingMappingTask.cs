@@ -83,7 +83,7 @@ internal sealed class ApplySheetNamingMappingTask : ISkillTask
                         warnings.Add($"[{sheet.SheetNumber}] Nimetamine ebaõnnestus: {ex.Message}");
                     }
                 }
-                tx.Commit();
+                RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(tx);
             }
 
             var result = new SkillTaskResult

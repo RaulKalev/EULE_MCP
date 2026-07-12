@@ -63,10 +63,12 @@ public class RenameSheetsTool : IRevitMcpTool
         var warnings = new List<string>();
         var results  = new List<object>();
 
+        cancellationToken.ThrowIfCancellationRequested();
         using var t = new Transaction(doc, "Revit MCP - Rename Sheets");
         t.Start();
         foreach (var s in sheets)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var tokens    = new Dictionary<string, string> { ["Number"] = s.SheetNumber };
             var newName   = applyToName   ? RenameEngine.Apply(s.Name, mode, find, replace, prefix, suffix, template, tokens) : null;
             var newNumber = applyToNumber ? RenameEngine.Apply(s.SheetNumber, mode, find, replace, prefix, suffix, template, tokens) : null;
@@ -91,7 +93,7 @@ public class RenameSheetsTool : IRevitMcpTool
                 try { if (newNumber != null) s.SheetNumber = oldNumber; } catch { }
             }
         }
-        t.Commit();
+        RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(t);
 
         sw.Stop();
         return Task.FromResult(new McpToolResult

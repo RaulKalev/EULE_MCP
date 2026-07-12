@@ -83,7 +83,7 @@ public class McpWindowViewModel : BaseViewModel
     public string PendingTabHeader { get => _pendingTabHeader; private set => SetProperty(ref _pendingTabHeader, value); }
     public bool IsDirectEditEnabled { get => _isDirectEditEnabled; private set => SetProperty(ref _isDirectEditEnabled, value); }
     public int SelectedTabIndex { get => _selectedTabIndex; set => SetProperty(ref _selectedTabIndex, value); }
-    public Func<bool>? RequestDirectEditConfirmation { get; set; }
+    public Action<Action<bool>>? RequestDirectEditConfirmation { get; set; }
 
     // ── Commands ──────────────────────────────────────────────────────────────
     public ICommand StartCommand { get; }
@@ -146,7 +146,10 @@ public class McpWindowViewModel : BaseViewModel
                     Time = p.CreatedAt.ToString("HH:mm:ss"),
                     Tool = p.ToolName,
                     Summary = p.Summary,
-                    Client = p.ClientName
+                    Client = p.ClientName,
+                    Model = p.IsDocumentBound
+                        ? p.OriginDocumentTitle + (p.IsSelectionBound ? $" ({p.OriginSelectionIds.Count} selected)" : string.Empty)
+                        : "Not document-bound"
                 });
             }
 
@@ -174,9 +177,17 @@ public class McpWindowViewModel : BaseViewModel
     {
         if (!_isDirectEditEnabled)
         {
-            var confirmed = RequestDirectEditConfirmation == null || RequestDirectEditConfirmation();
-            if (!confirmed) return;
-            IsDirectEditEnabled = true;
+            if (RequestDirectEditConfirmation == null)
+            {
+                IsDirectEditEnabled = true;
+                return;
+            }
+
+            RequestDirectEditConfirmation(confirmed =>
+            {
+                if (confirmed)
+                    IsDirectEditEnabled = true;
+            });
         }
         else
         {

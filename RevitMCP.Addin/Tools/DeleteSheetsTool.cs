@@ -53,6 +53,7 @@ public class DeleteSheetsTool : IRevitMcpTool
         int deleted  = 0;
         var warnings = new List<string>();
 
+        cancellationToken.ThrowIfCancellationRequested();
         using var t = new Transaction(doc, "Revit MCP - Delete Sheets");
         t.Start();
         foreach (var s in toDelete)
@@ -67,7 +68,7 @@ public class DeleteSheetsTool : IRevitMcpTool
                 warnings.Add($"Could not delete sheet '{s.SheetNumber}': {ex.Message}");
             }
         }
-        t.Commit();
+        RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(t);
 
         sw.Stop();
         return Task.FromResult(new McpToolResult

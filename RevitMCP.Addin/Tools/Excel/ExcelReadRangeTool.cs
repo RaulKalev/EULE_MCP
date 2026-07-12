@@ -8,7 +8,7 @@ using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Tools.Excel;
 
-public class ExcelReadRangeTool : IRevitMcpTool
+public class ExcelReadRangeTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "excel_read_range";
     public string Description => "Reads a specific cell range from an Excel worksheet. Returns values, formulas, and data types. Read-only.";

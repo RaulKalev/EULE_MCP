@@ -7,7 +7,7 @@ using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Tools.FileSystem;
 
-public class FileReadTextTool : IRevitMcpTool
+public class FileReadTextTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "file_read_text";
     public string Description => "Reads a UTF-8 text file from a local path. Returns content and metadata. Default max 1 MB. Read-only.";

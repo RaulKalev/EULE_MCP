@@ -48,10 +48,12 @@ public class DuplicateViewsTool : IRevitMcpTool
         var warnings   = new List<string>();
         var results    = new List<object>();
 
+        cancellationToken.ThrowIfCancellationRequested();
         using var t = new Transaction(doc, "Revit MCP - Duplicate Views");
         t.Start();
         foreach (var vid in viewIds)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (doc.GetElement(new ElementId(vid)) is not View v)
             {
                 warnings.Add($"View {vid} not found."); continue;
@@ -78,7 +80,7 @@ public class DuplicateViewsTool : IRevitMcpTool
                 warnings.Add($"Failed to duplicate '{v.Name}': {ex.Message}");
             }
         }
-        t.Commit();
+        RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(t);
 
         sw.Stop();
         return Task.FromResult(new McpToolResult

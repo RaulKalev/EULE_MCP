@@ -27,7 +27,7 @@ internal sealed class MergeIssueReportsTask : ISkillTask
             var mergedIssueDtos   = new List<RevitMCP.Core.Models.Issues.IssueDto>();
 
             var candidates = string.IsNullOrWhiteSpace(sourceKeysRaw)
-                ? ctx.SharedData.ToList()
+                ? ctx.SharedData.Select(kv => new KeyValuePair<string, object?>(kv.Key, kv.Value)).ToList()
                 : sourceKeysRaw.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
                                .Select(k => k.Trim()).Where(k => k.Length > 0)
                                .Where(k => ctx.SharedData.ContainsKey(k))

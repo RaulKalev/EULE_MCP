@@ -58,7 +58,7 @@ public static class QueryGuard
     public static string TruncateString(string? value, int maxLength)
     {
         if (string.IsNullOrEmpty(value)) return string.Empty;
-        if (maxLength <= 0 || value.Length <= maxLength) return value;
+        if (maxLength <= 0 || value!.Length <= maxLength) return value!;
         return value.Substring(0, maxLength) + "... [truncated]";
     }
 

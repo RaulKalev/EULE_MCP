@@ -7,7 +7,7 @@ using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Tools.FileSystem;
 
-public class FileBackupTool : IRevitMcpTool
+public class FileBackupTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "file_backup";
     public string Description => "Creates a timestamped backup copy of a file. Requires user approval. Backup name format: <stem>_<suffix>_<timestamp><ext>. Default suffix is 'backup'.";

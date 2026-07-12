@@ -11,7 +11,7 @@ namespace RevitMCP.Addin.Tools.Standards;
 /// Lists all configured standards sources and their index status.
 /// Tool name: standards_list_sources
 /// </summary>
-public class StandardsListSourcesTool : IRevitMcpTool
+public class StandardsListSourcesTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name        => "standards_list_sources";
     public string Description => "Lists all configured company standards sources and shows which are indexed and up to date. Sources are configured in %ProgramData%\\RKTools\\MCP\\Config\\StandardsSources.json.";

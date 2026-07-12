@@ -49,7 +49,7 @@ public class IssueExcelExporter
         AddRow("Run ID", report.RunId);
         AddRow("Created At", report.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss UTC"));
         if (!string.IsNullOrWhiteSpace(report.ModelTitle))
-            AddRow("Model", report.ModelTitle);
+            AddRow("Model", report.ModelTitle!);
         if (report.SourceTools.Count > 0)
             AddRow("Source Tools", string.Join(", ", report.SourceTools));
 

@@ -62,10 +62,12 @@ public class RenameViewsTool : IRevitMcpTool
         var warnings = new List<string>();
         var results  = new List<object>();
 
+        cancellationToken.ThrowIfCancellationRequested();
         using var t = new Transaction(doc, "Revit MCP - Rename Views");
         t.Start();
         foreach (var v in views)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var proposed = RenameEngine.Apply(v.Name, mode, find, replace, prefix, suffix, template);
             if (proposed == null) continue;
             try
@@ -80,7 +82,7 @@ public class RenameViewsTool : IRevitMcpTool
                 warnings.Add($"Failed to rename '{v.Name}' → '{proposed}': {ex.Message}");
             }
         }
-        t.Commit();
+        RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(t);
 
         sw.Stop();
         return Task.FromResult(new McpToolResult

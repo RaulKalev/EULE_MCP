@@ -10,7 +10,7 @@ namespace RevitMCP.Addin.Tools.Configuration;
 /// <summary>
 /// Writes a complete JSON object to a config file, replacing all existing content.
 /// </summary>
-public class ConfigWriteTool : IRevitMcpTool
+public class ConfigWriteTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "config_write";
     public string Description => "Replaces the entire content of a JSON config file for a given scope (company, user, project, tool-state). Requires approval. Creates a timestamped backup by default.";

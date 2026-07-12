@@ -7,7 +7,7 @@ using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Tools.FileSystem;
 
-public class FileCopyTool : IRevitMcpTool
+public class FileCopyTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "file_copy";
     public string Description => "Copies a file to a destination path. Requires user approval. Will not overwrite an existing destination unless overwrite=true.";

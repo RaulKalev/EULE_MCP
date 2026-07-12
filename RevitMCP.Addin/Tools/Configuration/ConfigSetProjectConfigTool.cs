@@ -10,7 +10,7 @@ namespace RevitMCP.Addin.Tools.Configuration;
 /// <summary>
 /// Writes or replaces the project-scoped config file (.rktools/mcp.project.config.json).
 /// </summary>
-public class ConfigSetProjectConfigTool : IRevitMcpTool
+public class ConfigSetProjectConfigTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "config_set_project_config";
     public string Description => "Writes or replaces the project-scoped MCP config file (.rktools/mcp.project.config.json) inside the specified project root. Requires approval. Creates a timestamped backup by default.";

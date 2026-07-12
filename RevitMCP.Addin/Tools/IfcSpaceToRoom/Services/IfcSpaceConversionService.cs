@@ -58,8 +58,10 @@ public class IfcSpaceConversionService
     /// </summary>
     public IfcSpaceToRoomResult Run(
         Document hostDoc,
-        IfcSpaceToRoomOptions options)
+        IfcSpaceToRoomOptions options,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         // ── 1. Resolve link ────────────────────────────────────────────────────
         var linkElement = hostDoc.GetElement(new ElementId(options.LinkInstanceId));
         if (linkElement is not RevitLinkInstance linkInstance)
@@ -98,6 +100,7 @@ public class IfcSpaceConversionService
         {
             foreach (var eid in options.LinkedElementIds)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var el = linkedDoc.GetElement(new ElementId(eid));
                 if (el != null) candidateElements.Add(el);
             }
@@ -109,6 +112,7 @@ public class IfcSpaceConversionService
             var detections = _collector.Collect(linkedDoc, options.AllowProbableConversion);
             foreach (var detection in detections)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 candidateElements.Add(detection.Element);
                 if (detection.Confidence == IfcDetectionConfidence.Probable)
                     probableElementIds.Add(detection.Element.Id.Value);
@@ -140,6 +144,7 @@ public class IfcSpaceConversionService
 
         foreach (var element in candidateElements)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             bool isProbable = probableElementIds.Contains(element.Id.Value);
             var item = ProcessElement(hostDoc, element, linkTransform, options, isProbable);
             items.Add(item);
@@ -396,12 +401,12 @@ public class IfcSpaceConversionService
                     // Parameter write failure is non-fatal: Room exists, just flag it
                     item.Status = ConversionStatus.FailedParameterWrite;
                     item.Errors.Add("Room was created but Number/Name could not be written.");
-                    tx.Commit();
+                    RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(tx);
                     return;
                 }
             }
 
-            tx.Commit();
+            RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(tx);
             item.Status = ConversionStatus.Created;
         }
         catch (Exception ex)
@@ -485,7 +490,7 @@ public class IfcSpaceConversionService
                 // as they'll be picked up in per-space processing if the view is null
             }
 
-            tx.Commit();
+            RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(tx);
         }
         catch
         {

@@ -44,6 +44,12 @@ internal static class StringPolyfill
     public static bool StartsWith(this string s, char c) => s.Length > 0 && s[0] == c;
     public static bool EndsWith(this string s, char c) => s.Length > 0 && s[s.Length - 1] == c;
 
+    public static bool Contains(this string s, string? value, StringComparison comparison)
+    {
+        if (value == null) throw new ArgumentNullException(nameof(value));
+        return s.IndexOf(value, comparison) >= 0;
+    }
+
     public static string[] Split(this string s, char separator, StringSplitOptions options)
         => s.Split(new[] { separator }, options);
 
