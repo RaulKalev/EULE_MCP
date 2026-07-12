@@ -1,0 +1,131 @@
+<Window x:Class="RevitMCP.Setup.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="EULE MCP Setup"
+        Width="780" Height="720"
+        MinWidth="640" MinHeight="560"
+        Background="{StaticResource WindowBrush}"
+        WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,14">
+            <TextBlock Text="EULE MCP Setup" FontSize="20" FontWeight="Bold" />
+            <TextBlock Text="Connect your AI agents to Revit — pick the package folder, choose your agents, apply."
+                       Style="{StaticResource MutedTextStyle}" Margin="0,4,0,0" />
+        </StackPanel>
+
+        <!-- Package folder -->
+        <Border Grid.Row="1" Style="{StaticResource SectionBorderStyle}">
+            <StackPanel>
+                <TextBlock Text="PACKAGE FOLDER (DROPBOX)" Style="{StaticResource SectionHeaderStyle}" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0" Text="{Binding PackageRoot}" VerticalContentAlignment="Center" />
+                    <Button Grid.Column="1" Content="Browse…" Margin="8,0,0,0" Click="OnBrowseClicked" />
+                </Grid>
+                <TextBlock Text="{Binding PackageStatus}" Style="{StaticResource MutedTextStyle}" Margin="0,8,0,0" />
+            </StackPanel>
+        </Border>
+
+        <!-- Revit add-in -->
+        <Border Grid.Row="2" Style="{StaticResource SectionBorderStyle}">
+            <StackPanel>
+                <TextBlock Text="REVIT ADD-IN" Style="{StaticResource SectionHeaderStyle}" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="90" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Revit 2026:" Style="{StaticResource MutedTextStyle}" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Revit2026Status}" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Revit 2024:" Style="{StaticResource MutedTextStyle}" Margin="0,4,0,0" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Revit2024Status}" Margin="0,4,0,0" />
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- Agents -->
+        <Border Grid.Row="3" Style="{StaticResource SectionBorderStyle}">
+            <StackPanel>
+                <TextBlock Text="AI AGENTS" Style="{StaticResource SectionHeaderStyle}" />
+                <ItemsControl ItemsSource="{Binding Agents}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="0,10">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="200" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                        <CheckBox IsChecked="{Binding RegisterChecked}" />
+                                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" Margin="8,0,0,0" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding CliStatus}" Style="{StaticResource MutedTextStyle}" />
+                                        <TextBlock Text="{Binding RegistrationStatus}" Style="{StaticResource MutedTextStyle}" />
+                                        <TextBlock Text="{Binding DesktopStatus}" Style="{StaticResource MutedTextStyle}"
+                                                   Visibility="{Binding HasDesktop, Converter={StaticResource BoolToVis}}" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2" Orientation="Vertical" VerticalAlignment="Center">
+                                        <Button Content="Install CLI" Command="{Binding InstallCliCommand}" Margin="0,0,0,4" />
+                                        <Button Content="{Binding DesktopButtonText}" Command="{Binding InstallDesktopCommand}"
+                                                Visibility="{Binding HasDesktop, Converter={StaticResource BoolToVis}}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="Ticked agents get the Revit bridge registered when you press Apply. Re-run this app anytime to add or update agents."
+                           Style="{StaticResource MutedTextStyle}" Margin="0,8,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <!-- Actions -->
+        <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,0,0,12">
+            <Button Content="Apply" Style="{StaticResource PrimaryButtonStyle}" Command="{Binding ApplyCommand}"
+                    Width="140" />
+            <Button Content="Refresh status" Command="{Binding RefreshCommand}" Margin="8,0,0,0" />
+        </StackPanel>
+
+        <!-- Log -->
+        <Border Grid.Row="5" Style="{StaticResource SectionBorderStyle}" Margin="0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Text="LOG" Style="{StaticResource SectionHeaderStyle}" />
+                <TextBox Grid.Row="1" x:Name="LogBox" Text="{Binding LogText, Mode=OneWay}" IsReadOnly="True"
+                         FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto" BorderThickness="0"
+                         Background="Transparent" TextChanged="OnLogChanged" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

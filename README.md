@@ -93,7 +93,19 @@ This creates a manifest in `%ProgramData%\Autodesk\Revit\Addins\2026\` that poin
 
 > **Note:** Don't use both options at the same time — Revit will load the plugin twice.
 
-### Step 3 — Register with your AI client
+### Team deployment — Setup app + shared Dropbox folder
+
+For team machines, skip the per-client scripts below and use the setup app instead:
+
+1. **Maintainer** publishes the package to the shared Dropbox folder:
+   `RevitMCP.Config\Install\Publish-To-Dropbox.bat C:\Users\you\Dropbox\EULE-MCP`
+   This lays out `Addin\2026`, `Addin\2024`, `Bridge`, `Setup`, and a `version.txt`.
+2. **Team members** run `Setup\EULE-MCP-Setup.exe` from that folder, point it at the package folder, tick the AI agents they use (Claude Code, Codex, Antigravity), and press **Apply**. The app writes the Revit 2024/2026 manifests and registers the bridge with each ticked agent. Missing agent CLIs (and Claude Desktop / Antigravity IDE) can be installed from the same window.
+3. Re-run the app anytime to add another agent or repair a registration — it detects current state and is safe to re-apply.
+
+> **Update caveat:** manifests point straight at the Dropbox folder, so Revit locks the synced DLLs while it runs. Publish updates when nobody has Revit open, and have the team restart Revit to pick up a new version.
+
+### Step 3 — Register with your AI client (manual scripts)
 
 **Claude Code**
 
@@ -789,6 +801,7 @@ Use the `revit_list_instances` MCP tool to see all running instances and which o
 | `RevitMCP.Addin` | net8.0-windows | Revit add-in DLL — pipe server, tool registry, WPF UI |
 | `RevitMCP.Bridge` | net8.0 | STDIO MCP server — forwards tool calls over named pipe |
 | `RevitMCP.Config` | — | Install scripts and default configs |
+| `RevitMCP.Setup` | net8.0-windows | WPF setup & manager app — team installs from the shared package folder |
 | `RevitMCP.Tests` | net8.0 | xUnit unit tests for pure-logic helpers (no Revit runtime required) |
 
 ### Project Structure
