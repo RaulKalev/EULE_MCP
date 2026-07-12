@@ -1,6 +1,6 @@
 # EULE MCP — Revit MCP Connector
 
-Ask your AI assistant about a live **Autodesk Revit 2026** model in plain English — count elements, inspect circuits, run QA checks, generate Excel reports — without writing scripts or code. EULE MCP is a local [Model Context Protocol](https://modelcontextprotocol.io) connector that gives Claude Code, Codex, and Gemini CLI direct read/write access to an open Revit model through 150 tools across twelve functional areas.
+Ask your AI assistant about a live **Autodesk Revit 2026** model in plain English — count elements, inspect circuits, run QA checks, generate Excel reports — without writing scripts or code. EULE MCP is a local [Model Context Protocol](https://modelcontextprotocol.io) connector that gives Claude Code, Codex, and Antigravity CLI direct read/write access to an open Revit model through 150 tools across twelve functional areas.
 
 **150 tools** across twelve functional areas:
 - **General** (25 tools) — element discovery, parameter QA, grouping, Excel exports, selection, write operations, config-driven parameter QA rule sets, and detailed geometry inspection of selected elements
@@ -37,7 +37,7 @@ Scan delivery folder C:\Projects\1626\Export for temp files and old revisions.
 - **Revit 2026** (.NET 8) — full feature set, all 150 tools
 - **Revit 2024** (.NET Framework 4.8) — *read-only subset* (~114 tools): write/edit tools, WPF approval window, IFC space-to-room, and skill-run tools are disabled
 - .NET 8 SDK (to build)
-- Claude Code CLI (`claude`), Codex CLI (`codex`), **or** Gemini CLI (`gemini`)
+- Claude Code CLI (`claude`), Codex CLI (`codex`), **or** Antigravity CLI (`agy`)
 
 ### Revit 2024 read-only mode
 
@@ -51,7 +51,7 @@ The addin multi-targets `net8.0-windows` and `net48`. In Revit 2024 the AppLoade
 |--------|--------|-------|
 | [Claude Code](https://claude.ai/code) | Supported | `Install-Claude-MCP.bat` |
 | [Codex CLI](https://github.com/openai/codex) | Supported | `Install-Codex-MCP.bat` |
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | Supported | `Install-GeminiCLI-MCP.bat` |
+| [Antigravity CLI](https://antigravity.google) | Supported | `Install-AntigravityCLI-MCP.bat` |
 | ChatGPT / other | Not targeted | — |
 
 All clients connect through the same `RevitMCP.Bridge.exe`. The bridge is started by the AI client over STDIO; client identity is passed via `--client` argument so logs correctly identify who made each request.
@@ -107,11 +107,13 @@ Run `RevitMCP.Config\Install\Install-Codex-MCP.bat`
 
 This generates `RevitMCP.Config\Install\codex-mcp-snippet.toml` with the absolute bridge path already filled in. Paste its contents into `%USERPROFILE%\.codex\config.toml` and restart Codex.
 
-**Gemini CLI**
+**Antigravity CLI**
 
-Run `RevitMCP.Config\Install\Install-GeminiCLI-MCP.bat`
+Run `RevitMCP.Config\Install\Install-AntigravityCLI-MCP.bat`
 
-This registers `RevitMCP.Bridge.exe` in `%USERPROFILE%\.gemini\settings.json` with `--client GeminiCLI`. Gemini CLI reads this file automatically on startup — no manual config editing required.
+This registers `RevitMCP.Bridge.exe` in `%USERPROFILE%\.gemini\config\mcp_config.json` with `--client AntigravityCLI`. This is Antigravity's global MCP config, shared by the CLI (`agy`), the Antigravity IDE, and Antigravity 2.0 — all three pick up the server automatically on startup. In the CLI, type `/mcp` to verify the connection.
+
+> **Note:** Google retired Gemini CLI on June 18, 2026 in favor of Antigravity CLI. The old registration in `%USERPROFILE%\.gemini\settings.json` (`mcpServers` block) is no longer read — Antigravity uses the standalone `mcp_config.json` instead.
 
 ### Step 4 — Connect and start asking
 
@@ -119,7 +121,7 @@ This registers `RevitMCP.Bridge.exe` in `%USERPROFILE%\.gemini\settings.json` wi
 2. Load the addin (via AppLoader or the `.addin` manifest)
 3. On the **RK Tools** ribbon tab, click **MCP Connector**
 4. Click **Start Connector** in the window
-5. Ask anything about your model from Claude Code, Codex, or Gemini CLI:
+5. Ask anything about your model from Claude Code, Codex, or Antigravity CLI:
 
 ```
 How many walls are in this model?
@@ -755,7 +757,7 @@ revit_create_electrical_circuit(
 ### Architecture
 
 ```
-Claude Code / Codex / Gemini CLI
+Claude Code / Codex / Antigravity CLI
     │  MCP JSON-RPC 2.0 over STDIO
     ▼
 RevitMCP.Bridge.exe          ← .NET 8 console app

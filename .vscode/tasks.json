@@ -3,7 +3,7 @@
   "tasks": [
     {
       "label": "Build Addin (Release)",
-      "detail": "Builds only RevitMCP.Addin — safe while Gemini/Bridge is running. AppLoader auto-reloads the new DLL in Revit.",
+      "detail": "Builds only RevitMCP.Addin — safe while an AI client/Bridge is running. AppLoader auto-reloads the new DLL in Revit.",
       "type": "shell",
       "command": "dotnet build RevitMCP.Addin/RevitMCP.Addin.csproj -c Release",
       "group": {
@@ -19,7 +19,7 @@
     },
     {
       "label": "Build Full Solution (Release)",
-      "detail": "Builds all projects including Bridge. Stop Gemini first — this will kill the Bridge process.",
+      "detail": "Builds all projects including Bridge. Stop your AI client (Claude/Codex/Antigravity) first — this will kill the Bridge process.",
       "type": "shell",
       "command": "Stop-Process -Name 'RevitMCP.Bridge' -ErrorAction SilentlyContinue; dotnet build RevitMCP.slnx -c Release",
       "group": "build",

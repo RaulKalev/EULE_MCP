@@ -2,9 +2,10 @@
 setlocal
 
 :: ============================================================
-:: Install-GeminiCLI-MCP.bat
-:: Registers RevitMCP.Bridge.exe as an MCP server in Gemini CLI.
-:: Merges the entry into %USERPROFILE%\.gemini\settings.json,
+:: Install-AntigravityCLI-MCP.bat
+:: Registers RevitMCP.Bridge.exe as an MCP server for Antigravity
+:: (CLI, IDE, and Antigravity 2.0 share the same config).
+:: Merges the entry into %USERPROFILE%\.gemini\config\mcp_config.json,
 :: preserving any existing configuration in that file.
 :: Run from the Install\ folder or from the repo root.
 :: ============================================================
@@ -22,51 +23,52 @@ if not exist "%BRIDGE_ABS%" (
     exit /b 1
 )
 
-set "GEMINI_DIR=%USERPROFILE%\.gemini"
-set "SETTINGS_FILE=%GEMINI_DIR%\settings.json"
+set "CONFIG_DIR=%USERPROFILE%\.gemini\config"
+set "CONFIG_FILE=%CONFIG_DIR%\mcp_config.json"
 
 echo Bridge path:     %BRIDGE_ABS%
-echo Settings file:   %SETTINGS_FILE%
+echo Config file:     %CONFIG_FILE%
 echo.
 
-:: Use PowerShell to safely merge the entry into settings.json.
+:: Use PowerShell to safely merge the entry into mcp_config.json.
 :: ConvertFrom-Json / ConvertTo-Json handles any pre-existing content.
+:: An empty file (Antigravity creates one on first run) is treated as {}.
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$bridgePath = '%BRIDGE_ABS%'.Replace('\', '\\');" ^
-  "$dir = '%GEMINI_DIR%';" ^
-  "$file = '%SETTINGS_FILE%';" ^
+  "$dir = '%CONFIG_DIR%';" ^
+  "$file = '%CONFIG_FILE%';" ^
   "if (!(Test-Path $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }" ^
-  "if (Test-Path $file) {" ^
-  "  $raw = Get-Content $file -Raw;" ^
-  "  try { $settings = $raw | ConvertFrom-Json } catch { Write-Error 'settings.json is not valid JSON'; exit 1 }" ^
-  "} else { $settings = [PSCustomObject]@{} }" ^
+  "$raw = if (Test-Path $file) { Get-Content $file -Raw } else { $null };" ^
+  "if ([string]::IsNullOrWhiteSpace($raw)) { $settings = [PSCustomObject]@{} }" ^
+  "else { try { $settings = $raw | ConvertFrom-Json } catch { Write-Error 'mcp_config.json is not valid JSON'; exit 1 } }" ^
   "if (-not $settings.PSObject.Properties['mcpServers']) {" ^
   "  $settings | Add-Member -MemberType NoteProperty -Name 'mcpServers' -Value ([PSCustomObject]@{})" ^
   "}" ^
-  "$entry = [PSCustomObject]@{ command = '%BRIDGE_ABS%'; args = @('--client', 'GeminiCLI') };" ^
+  "$entry = [PSCustomObject]@{ command = '%BRIDGE_ABS%'; args = @('--client', 'AntigravityCLI') };" ^
   "$settings.mcpServers | Add-Member -MemberType NoteProperty -Name 'revit-mcp' -Value $entry -Force;" ^
   "$json = $settings | ConvertTo-Json -Depth 10;" ^
   "[System.IO.File]::WriteAllText($file, $json, (New-Object System.Text.UTF8Encoding $false));" ^
-  "Write-Host 'settings.json updated.'"
+  "Write-Host 'mcp_config.json updated.'"
 
 if %ERRORLEVEL% neq 0 (
     echo.
-    echo ERROR: Failed to update settings.json.
+    echo ERROR: Failed to update mcp_config.json.
     pause
     exit /b 1
 )
 
 echo.
-echo SUCCESS: revit-mcp registered in Gemini CLI.
+echo SUCCESS: revit-mcp registered for Antigravity.
 echo.
 echo Usage:
 echo   1. Open Revit 2026 and open a model.
 echo   2. Click "MCP Connector" on the RK Tools ribbon tab.
 echo   3. Click "Start Connector" in the MCP window.
-echo   4. Start Gemini CLI:  gemini
-echo   5. Ask: call revit_get_connection_status
+echo   4. Start Antigravity CLI:  agy
+echo      ^(or use the Antigravity IDE - same config file^)
+echo   5. Type /mcp to verify revit-mcp is connected, then ask:
+echo      call revit_get_connection_status
 echo.
-echo To verify the registration, check: %SETTINGS_FILE%
+echo To verify the registration, check: %CONFIG_FILE%
 echo.
 
 pause
