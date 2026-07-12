@@ -1422,6 +1422,28 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    [McpServerTool(Name = "revit_select_elements_by_panel"),
+     Description("Selects every element connected to any circuit assigned to a panel, in one operation — the fast path for \"select all elements on panel X\" instead of calling revit_select_circuit_elements once per circuit. Requires panelName or panelElementId.")]
+    public async Task<string> SelectElementsByPanel(
+        [Description("Panel name (partial match; errors if ambiguous). Provide this or panelElementId.")] string? panelName = null,
+        [Description("Panel element ID. Provide this or panelName.")] long panelElementId = 0,
+        [Description("Optional system type filter, e.g. 'PowerCircuit'")] string? systemType = null,
+        [Description("Replace current selection (default true)")] bool replaceSelection = true,
+        [Description("Zoom to selection after selecting (default false)")] bool zoomToSelection = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panelName"] = panelName ?? string.Empty,
+            ["panelElementId"] = panelElementId,
+            ["systemType"] = systemType ?? string.Empty,
+            ["replaceSelection"] = replaceSelection,
+            ["zoomToSelection"] = zoomToSelection
+        };
+        var result = await pipeClient.SendAsync("revit_select_elements_by_panel", args, cancellationToken);
+        return FormatResult(result);
+    }
+
     [McpServerTool(Name = "revit_select_uncircuited_elements"),
      Description("Selects elements not assigned to any electrical circuit in the Revit UI. Requires approval.")]
     public async Task<string> SelectUncircuitedElements(
