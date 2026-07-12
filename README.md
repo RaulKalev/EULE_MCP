@@ -34,7 +34,7 @@ Scan delivery folder C:\Projects\1626\Export for temp files and old revisions.
 
 ## Requirements
 
-- **Revit 2026** (.NET 8) — full feature set, all 150 tools
+- **Revit 2026** (.NET 8) — full feature set, all 151 tools
 - **Revit 2024** (.NET Framework 4.8) — *read-only subset* (~114 tools): write/edit tools, WPF approval window, IFC space-to-room, and skill-run tools are disabled
 - .NET 9 SDK (to build the `.slnx`; the Revit 2026 add-in targets .NET 8)
 - Claude Code CLI (`claude`), Codex CLI (`codex`), **or** Antigravity CLI (`agy`)
