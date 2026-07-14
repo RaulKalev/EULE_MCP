@@ -1,10 +1,10 @@
 # EULE MCP — Revit MCP Connector
 
-Ask your AI assistant about a live **Autodesk Revit 2026** model in plain English — count elements, inspect circuits, run QA checks, generate Excel reports — without writing scripts or code. EULE MCP is a local [Model Context Protocol](https://modelcontextprotocol.io) connector that gives Claude Code, Codex, and Antigravity CLI direct read/write access to an open Revit model through 147 tools across twelve functional areas.
+Ask your AI assistant about a live **Autodesk Revit 2026** model in plain English — count elements, inspect circuits, run QA checks, generate Excel reports — without writing scripts or code. EULE MCP is a local [Model Context Protocol](https://modelcontextprotocol.io) connector that gives Claude Code, Codex, and Antigravity CLI direct read/write access to an open Revit model through 149 tools across twelve functional areas.
 
-**147 tools** across twelve functional areas:
+**149 tools** across twelve functional areas:
 - **General** (25 tools) — element discovery, parameter QA, grouping, Excel exports, selection, write operations, config-driven parameter QA rule sets, and detailed geometry inspection of selected elements
-- **Electrical** (45 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, path mode control, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
+- **Electrical** (47 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, path mode control, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
 - **Documentation** (24 tools) — view and sheet management: discovery, summary, preview/apply workflows for placing views, creating/duplicating/renaming sheets and views, bulk parameter updates, revision tracking, preset inspection, and safe destructive delete with mandatory manual approval
 - **Coordination** (15 tools) — Revit-native clash detection: category/link discovery, solid-intersection hard-clash and clearance checking, preset management, Excel reporting, and step-through review views
 - **Family Creation** (1 tool) — generate Detail Item families (.rfa) from DWG source files using company presets
@@ -34,8 +34,8 @@ Scan delivery folder C:\Projects\1626\Export for temp files and old revisions.
 
 ## Requirements
 
-- **Revit 2026** (.NET 8) — full feature set, all 147 tools
-- **Revit 2024** (.NET Framework 4.8) — same plugin UI and tool surface as Revit 2026, all 147 tools, **except IFC Space-to-Room** (held back for now — see below)
+- **Revit 2026** (.NET 8) — full feature set, all 149 tools
+- **Revit 2024** (.NET Framework 4.8) — same plugin UI and tool surface as Revit 2026, all 149 tools, **except IFC Space-to-Room** (held back for now — see below)
 - .NET 9 SDK (to build the `.slnx`; the Revit 2026 add-in targets .NET 8)
 - Claude Code CLI (`claude`), Codex CLI (`codex`), **or** Antigravity CLI (`agy`)
 
@@ -270,7 +270,9 @@ These tools cover the full electrical circuit lifecycle in a live Revit model �
 | `revit_get_available_cable_types` | Lists cable types defined in the project (warns if not separately defined — wire types used as fallback) |
 | `revit_get_available_wire_types` | Lists all wire types available in the active document |
 | `revit_get_circuit_compatible_elements` | Checks whether elements can be added to a circuit; optionally validates against a target circuit ID |
-| `revit_create_electrical_circuit` | Creates a new electrical circuit from a selection or query *(requires approval)* |
+| `revit_create_electrical_circuit` | Creates a new electrical circuit from a selection or query; `connectorId` targets a specific connector on multi-connector families *(requires approval)* |
+| `revit_preview_assign_data_devices_to_patch_panels` | Read-only preview of bulk data-device → patch-panel assignment: clockwise floor route, per-type connector rules (default `1 x RJ45`=1, `2 x RJ45`=2), panel capacity from *Maximum Amount of Circuits*, full plan + validation report |
+| `revit_assign_data_devices_to_patch_panels` | Executes the previewed assignment — one Data circuit per planned connector, idempotent reruns, `dryRun` (default true) and `atomic` full rollback (default true) *(requires approval)* |
 | `revit_add_elements_to_circuit` | Adds elements to an existing circuit *(requires approval)* |
 | `revit_reassign_circuit_panel` | Reassigns a circuit to a different panel *(requires approval)* |
 | `revit_change_circuit_cable_or_wire_type` | Changes the cable/wire type on a circuit; prefers cable type, falls back to wire type *(requires approval)* |

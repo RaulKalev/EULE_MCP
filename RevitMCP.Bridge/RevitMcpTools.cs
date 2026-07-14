@@ -1123,7 +1123,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_create_electrical_circuit"),
-     Description("Creates a new electrical circuit. Requires approval. Source: useSelection, elementIds, or category+filters. Optional: systemType (PowerCircuit/Data/FireAlarm/etc), panelElementId, panelName, wireTypeName.")]
+     Description("Creates a new electrical circuit. Requires approval. Source: useSelection, elementIds, or category+filters. Optional: systemType (PowerCircuit/Data/FireAlarm/etc), panelElementId, panelName, wireTypeName. For a family with several electrical connectors (e.g. 2xRJ45), pass ONE element id plus connectorId to circuit a specific connector.")]
     public async Task<string> CreateElectricalCircuit(
         [Description("If true, use current Revit selection")] bool useSelection = false,
         [Description("Explicit element IDs to add")] long[]? elementIds = null,
@@ -1133,6 +1133,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Panel element ID (preferred over panelName)")] long panelElementId = 0,
         [Description("Panel name (fallback if panelElementId not provided)")] string? panelName = null,
         [Description("Wire type name to assign to the new circuit")] string? wireTypeName = null,
+        [Description("Specific electrical connector id on a single element (for multi-connector families); 0 = let Revit choose")] int connectorId = 0,
         [Description("Max elements (default 500)")] int limit = 500,
         CancellationToken cancellationToken = default)
     {
@@ -1149,9 +1150,88 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["panelElementId"] = panelElementId,
             ["panelName"] = panelName ?? string.Empty,
             ["wireTypeName"] = wireTypeName ?? string.Empty,
+            ["connectorId"] = connectorId,
             ["limit"] = limit
         };
         var result = await pipeClient.SendAsync("revit_create_electrical_circuit", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_preview_assign_data_devices_to_patch_panels", ReadOnly = true),
+     Description("Read-only preview of bulk data-device → patch-panel circuit assignment: sorts data devices clockwise around the floor, applies per-type connector rules (default '1 x RJ45'=1, '2 x RJ45'=2), and plans one Data circuit per connector onto the given panels without exceeding each panel's 'Maximum Amount of Circuits'. Returns the full plan, per-panel utilization and validation report. Run before revit_assign_data_devices_to_patch_panels.")]
+    public async Task<string> PreviewAssignDataDevicesToPatchPanels(
+        [Description("Level name to collect Data Devices from (e.g. '10.korrus'); ignored when elementIds given")] string? levelName = null,
+        [Description("Explicit data device element IDs (overrides levelName)")] long[]? elementIds = null,
+        [Description("Target panel element IDs, in allocation order")] long[]? panelElementIds = null,
+        [Description("Target panel names, in allocation order (e.g. ['FD10.1-01','FD10.1-02'])")] string[]? panelNames = null,
+        [Description("Electrical system type (default Data)")] string systemType = "Data",
+        [Description("Device route order (default ClockwisePerimeter)")] string routeMode = "ClockwisePerimeter",
+        [Description("Route start corner: TopLeft|TopRight|BottomRight|BottomLeft (default TopLeft)")] string startCorner = "TopLeft",
+        [Description("Override every panel's capacity; 0 = read each panel's 'Maximum Amount of Circuits' parameter")] int maxCircuitsPerPanel = 0,
+        [Description("Keep all circuits of one device on the same panel (default true)")] bool keepDeviceConnectorsTogether = true,
+        [Description("JSON array of {typeNameRegex, connectorsToUse}; default RJ45 rules")] string? connectorRules = null,
+        [Description("Treat already-circuited connectors as satisfying the rule quota (default true; makes reruns idempotent)")] bool skipAlreadyCircuitedConnectors = true,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryParseJsonArray(connectorRules, "connectorRules", out var parsedRules, out var rulesError))
+            return FormatBridgeError(rulesError!);
+
+        var args = new Dictionary<string, object?>
+        {
+            ["levelName"] = levelName ?? string.Empty,
+            ["elementIds"] = elementIds ?? [],
+            ["panelElementIds"] = panelElementIds ?? [],
+            ["panelNames"] = panelNames ?? [],
+            ["systemType"] = systemType,
+            ["routeMode"] = routeMode,
+            ["startCorner"] = startCorner,
+            ["maxCircuitsPerPanel"] = maxCircuitsPerPanel,
+            ["keepDeviceConnectorsTogether"] = keepDeviceConnectorsTogether,
+            ["connectorRules"] = parsedRules,
+            ["skipAlreadyCircuitedConnectors"] = skipAlreadyCircuitedConnectors
+        };
+        var result = await pipeClient.SendAsync("revit_preview_assign_data_devices_to_patch_panels", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_assign_data_devices_to_patch_panels"),
+     Description("Executes the data-device → patch-panel assignment previewed by revit_preview_assign_data_devices_to_patch_panels (pass the same arguments — the plan is rebuilt and re-validated; reruns never duplicate existing circuits). dryRun=true (default) only reports; atomic=true (default) rolls back everything on any failure. Requires approval in Revit.")]
+    public async Task<string> AssignDataDevicesToPatchPanels(
+        [Description("Level name to collect Data Devices from (e.g. '10.korrus'); ignored when elementIds given")] string? levelName = null,
+        [Description("Explicit data device element IDs (overrides levelName)")] long[]? elementIds = null,
+        [Description("Target panel element IDs, in allocation order")] long[]? panelElementIds = null,
+        [Description("Target panel names, in allocation order (e.g. ['FD10.1-01','FD10.1-02'])")] string[]? panelNames = null,
+        [Description("Electrical system type (default Data)")] string systemType = "Data",
+        [Description("Device route order (default ClockwisePerimeter)")] string routeMode = "ClockwisePerimeter",
+        [Description("Route start corner: TopLeft|TopRight|BottomRight|BottomLeft (default TopLeft)")] string startCorner = "TopLeft",
+        [Description("Override every panel's capacity; 0 = read each panel's 'Maximum Amount of Circuits' parameter")] int maxCircuitsPerPanel = 0,
+        [Description("Keep all circuits of one device on the same panel (default true)")] bool keepDeviceConnectorsTogether = true,
+        [Description("JSON array of {typeNameRegex, connectorsToUse}; default RJ45 rules")] string? connectorRules = null,
+        [Description("Treat already-circuited connectors as satisfying the rule quota (default true; makes reruns idempotent)")] bool skipAlreadyCircuitedConnectors = true,
+        [Description("If true, roll back the entire operation when any device fails (default true)")] bool atomic = true,
+        [Description("If true (default), make no model changes — report what would happen")] bool dryRun = true,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryParseJsonArray(connectorRules, "connectorRules", out var parsedRules, out var rulesError))
+            return FormatBridgeError(rulesError!);
+
+        var args = new Dictionary<string, object?>
+        {
+            ["levelName"] = levelName ?? string.Empty,
+            ["elementIds"] = elementIds ?? [],
+            ["panelElementIds"] = panelElementIds ?? [],
+            ["panelNames"] = panelNames ?? [],
+            ["systemType"] = systemType,
+            ["routeMode"] = routeMode,
+            ["startCorner"] = startCorner,
+            ["maxCircuitsPerPanel"] = maxCircuitsPerPanel,
+            ["keepDeviceConnectorsTogether"] = keepDeviceConnectorsTogether,
+            ["connectorRules"] = parsedRules,
+            ["skipAlreadyCircuitedConnectors"] = skipAlreadyCircuitedConnectors,
+            ["atomic"] = atomic,
+            ["dryRun"] = dryRun
+        };
+        var result = await pipeClient.SendAsync("revit_assign_data_devices_to_patch_panels", args, cancellationToken);
         return FormatResult(result);
     }
 

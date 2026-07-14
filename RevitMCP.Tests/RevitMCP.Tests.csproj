@@ -72,6 +72,10 @@
     <Compile Include="..\RevitMCP.Addin\Skills\Tasks\Security\ValveLabipaasRowDefinitions.cs" Link="Security\ValveLabipaasRowDefinitions.cs" />
     <!-- Setup app pure-logic files (no WPF dependency) -->
     <Compile Include="..\RevitMCP.Setup\Services\McpConfigMerger.cs" Link="Setup\McpConfigMerger.cs" />
+    <!-- Transaction safety core and patch-panel assignment planner (no Autodesk dependency) -->
+    <Compile Include="..\RevitMCP.Addin\Transactions\TransactionSafetyCore.cs" Link="Transactions\TransactionSafetyCore.cs" />
+    <Compile Include="..\RevitMCP.Addin\Electrical\PatchPanelAssignment\PatchPanelAssignmentModels.cs" Link="Electrical\PatchPanelAssignment\PatchPanelAssignmentModels.cs" />
+    <Compile Include="..\RevitMCP.Addin\Electrical\PatchPanelAssignment\PatchPanelAssignmentPlanner.cs" Link="Electrical\PatchPanelAssignment\PatchPanelAssignmentPlanner.cs" />
     <!-- Approval and dispatch safety primitives (no Autodesk dependency) -->
     <Compile Include="..\RevitMCP.Addin\Approval\ApprovalContextGuard.cs" Link="Approval\ApprovalContextGuard.cs" />
     <Compile Include="..\RevitMCP.Addin\Approval\DocumentChangeTracker.cs" Link="Approval\DocumentChangeTracker.cs" />
