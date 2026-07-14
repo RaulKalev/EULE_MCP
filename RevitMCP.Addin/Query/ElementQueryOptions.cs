@@ -22,5 +22,8 @@ public class ElementQueryOptions
 
     // When true, return category/family counts only — no element DTOs built
     public bool SummaryOnly { get; set; } = false;
+
+    // When true, attach the annotation tags referencing each returned element
+    public bool IncludeTags { get; set; } = false;
 }
 

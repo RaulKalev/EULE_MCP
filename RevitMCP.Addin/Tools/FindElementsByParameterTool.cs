@@ -40,7 +40,8 @@ public class FindElementsByParameterTool : IRevitMcpTool
             Page = ToolArguments.GetInt(request.Arguments, "page", 0),
             MaxParametersPerElement = ToolArguments.GetInt(request.Arguments, "maxParametersPerElement", 0),
             TruncateStringLength = ToolArguments.GetInt(request.Arguments, "truncateStringLength", 0),
-            SummaryOnly = ToolArguments.GetBool(request.Arguments, "summaryOnly", false)
+            SummaryOnly = ToolArguments.GetBool(request.Arguments, "summaryOnly", false),
+            IncludeTags = ToolArguments.GetBool(request.Arguments, "includeTags", false)
         };
 
         // Nothing narrows the search at all — rather than scanning (and parameter-reading)

@@ -404,7 +404,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_find_elements_by_parameter", ReadOnly = true),
-     Description("Finds model elements matching one or more parameter filters. Each filter: parameterName (partial match), operator (equals/contains/startsWith/isEmpty/greaterThan/lessThan/notEquals/notContains/endsWith/isNotEmpty), value, matchMode, scope. Accepts category, useSelection, elementIds, returnParameters, paging (pageSize/page), and safety caps (maxParametersPerElement, truncateStringLength). Set summaryOnly=true to get category/family counts without element data. REQUIRES a category, filters, elementIds, useSelection, or summaryOnly=true — calling with none of these is rejected with a category breakdown so you can ask the user which one to use, instead of scanning the whole model (which can freeze/crash Revit on large projects). If you don't know the model's categories yet, call revit_count_elements first.")]
+     Description("Finds model elements matching one or more parameter filters. Each filter: parameterName (partial match), operator (equals/contains/startsWith/isEmpty/greaterThan/lessThan/notEquals/notContains/endsWith/isNotEmpty), value, matchMode, scope. Accepts category, useSelection, elementIds, returnParameters, paging (pageSize/page), and safety caps (maxParametersPerElement, truncateStringLength). Set summaryOnly=true to get category/family counts without element data. Set includeTags=true to see which annotation tags reference each element. REQUIRES a category, filters, elementIds, useSelection, or summaryOnly=true — calling with none of these is rejected with a category breakdown so you can ask the user which one to use, instead of scanning the whole model (which can freeze/crash Revit on large projects). If you don't know the model's categories yet, call revit_count_elements first.")]
     public async Task<string> FindElementsByParameter(
         [Description("JSON array of filter objects: [{parameterName, operator, value, matchMode, scope}]")] string? filters = null,
         [Description("Optional category name to restrict search (e.g. 'Fire Alarm Devices')")] string? category = null,
@@ -419,6 +419,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Maximum parameters returned per element. 0 uses the safety default (40).")] int maxParametersPerElement = 0,
         [Description("Maximum string length for parameter values. 0 uses the safety default (500 chars).")] int truncateStringLength = 0,
         [Description("If true, return category/family summary counts only without building element DTOs. Allows broad model scans.")] bool summaryOnly = false,
+        [Description("If true, list the annotation tags attached to each returned element (tag text, tag family/type, owner view). An element can carry multiple tags; an empty list means it has none.")] bool includeTags = false,
         CancellationToken cancellationToken = default)
     {
         if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
@@ -438,14 +439,15 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["page"] = page,
             ["maxParametersPerElement"] = maxParametersPerElement,
             ["truncateStringLength"] = truncateStringLength,
-            ["summaryOnly"] = summaryOnly
+            ["summaryOnly"] = summaryOnly,
+            ["includeTags"] = includeTags
         };
         var result = await pipeClient.SendAsync("revit_find_elements_by_parameter", args, cancellationToken);
         return FormatResult(result);
     }
 
     [McpServerTool(Name = "revit_get_elements_info", ReadOnly = true),
-     Description("Returns structured element info and selected parameter values. Requires useSelection, elementIds, category, or summaryOnly=true. Supports paging (pageSize/page) and safety caps (maxParametersPerElement, truncateStringLength). Set summaryOnly=true to get category/family counts across the whole model without building element DTOs. Filters: JSON array of {parameterName, operator, value, matchMode, scope}.")]
+     Description("Returns structured element info and selected parameter values. Requires useSelection, elementIds, category, or summaryOnly=true. Supports paging (pageSize/page) and safety caps (maxParametersPerElement, truncateStringLength). Set summaryOnly=true to get category/family counts across the whole model without building element DTOs. Set includeTags=true to see which annotation tags reference each element. Filters: JSON array of {parameterName, operator, value, matchMode, scope}.")]
     public async Task<string> GetElementsInfo(
         [Description("If true, use current selection.")] bool useSelection = false,
         [Description("List of element IDs to retrieve.")] long[]? elementIds = null,
@@ -460,6 +462,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Maximum parameters returned per element. 0 uses the safety default (40).")] int maxParametersPerElement = 0,
         [Description("Maximum string length for parameter values. 0 uses the safety default (500 chars).")] int truncateStringLength = 0,
         [Description("If true, return category/family summary counts only without element DTOs. Allows broad model scans without category/selection scope.")] bool summaryOnly = false,
+        [Description("If true, list the annotation tags attached to each returned element (tag text, tag family/type, owner view). An element can carry multiple tags; an empty list means it has none.")] bool includeTags = false,
         CancellationToken cancellationToken = default)
     {
         if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
@@ -479,7 +482,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["page"] = page,
             ["maxParametersPerElement"] = maxParametersPerElement,
             ["truncateStringLength"] = truncateStringLength,
-            ["summaryOnly"] = summaryOnly
+            ["summaryOnly"] = summaryOnly,
+            ["includeTags"] = includeTags
         };
         var result = await pipeClient.SendAsync("revit_get_elements_info", args, cancellationToken);
         return FormatResult(result);

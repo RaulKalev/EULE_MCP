@@ -72,6 +72,7 @@ public class ElementQueryEngine
         int totalMatched = 0;
         int totalScanned = 0;
         bool scanTruncated = false;
+        ElementTagIndex? tagIndex = null;
 
         bool isNarrowed = options.UseSelection || options.ElementIds.Count > 0 || !string.IsNullOrWhiteSpace(options.Category);
         // ReadParameters below is a cheap no-op when both flags are false (e.g. a caller
@@ -143,6 +144,13 @@ public class ElementQueryEngine
 
             if (element is FamilyInstance fi)
                 info.Family = fi.Symbol?.Family?.Name ?? string.Empty;
+
+            if (options.IncludeTags)
+            {
+                // Built once for the whole document, only when a returned element needs it.
+                tagIndex ??= ElementTagIndex.Build(doc);
+                info.Tags = tagIndex.GetTags(info.ElementId) ?? new List<TagInfoDto>();
+            }
 
             results.Add(info);
         }
