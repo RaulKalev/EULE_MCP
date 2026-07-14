@@ -64,7 +64,12 @@ public class ValidateIfcSpaceRoomConversionTool : IRevitMcpTool
             IncludeGeometryComparison = ToolArguments.GetBool(request.Arguments,   "includeGeometryComparison", true),
             EndpointSnapToleranceMm   = ToolArguments.GetDouble(request.Arguments, "endpointSnapToleranceMm",   3.0),
             TinySegmentToleranceMm    = ToolArguments.GetDouble(request.Arguments, "tinySegmentToleranceMm",    1.0),
-            MaxResults                = ToolArguments.GetInt(request.Arguments,    "maxResults",                1000)
+            MaxResults                = ToolArguments.GetInt(request.Arguments,    "maxResults",                1000),
+            RoomNameParameter         = ToolArguments.GetString(request.Arguments, "roomNameParameter", ""),
+            RoomNumberParameter       = ToolArguments.GetString(request.Arguments, "roomNumberParameter", ""),
+            StoreyParameter           = ToolArguments.GetString(request.Arguments, "storeyParameter", ""),
+            AreaParameter             = ToolArguments.GetString(request.Arguments, "areaParameter", ""),
+            EnableArRuumDefaults      = ToolArguments.GetBool(request.Arguments, "enableArRuumDefaults", true)
         };
 
         // ── Run validation ─────────────────────────────────────────────────────

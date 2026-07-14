@@ -4,7 +4,7 @@ namespace RevitMCP.Addin.Tools.IfcSpaceToRoom.Models;
 /// Options for the <c>validate_ifc_space_room_conversion</c> endpoint.
 /// All dimension tolerances are in millimetres for human readability.
 /// </summary>
-public class IfcRoomValidationOptions
+public class IfcRoomValidationOptions : IfcMetadataMappingOptions
 {
     // ── Scope ──────────────────────────────────────────────────────────────────
 

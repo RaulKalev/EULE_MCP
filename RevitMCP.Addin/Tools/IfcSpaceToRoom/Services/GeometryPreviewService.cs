@@ -126,10 +126,19 @@ public class GeometryPreviewService
         try
         {
             // — Read IFC metadata ——————————————————————————————————————————————
-            var meta = _reader.ReadMetadata(element);
+            var detection = _collector.Detect(element);
+            item.DetectionConfidence = detection.Confidence;
+            item.DetectionReason = detection.Reason;
+
+            var meta = _reader.ReadMetadata(element, options);
             item.Number     = meta.Number;
             item.Name       = meta.Name;
             item.StoreyName = meta.StoreyName;
+            item.NumberSource = meta.NumberSource;
+            item.NameSource = meta.NameSource;
+            item.StoreySource = meta.StoreySource;
+            item.DeclaredAreaM2 = meta.AreaM2;
+            item.AreaSource = meta.AreaSource;
 
             // — Level match (using bbox fallback for elevation) ────────────────
             double? bboxZ = TryGetBboxBottomZ(element, linkTransform);

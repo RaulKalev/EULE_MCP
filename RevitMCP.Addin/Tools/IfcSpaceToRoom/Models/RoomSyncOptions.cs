@@ -3,7 +3,7 @@ namespace RevitMCP.Addin.Tools.IfcSpaceToRoom.Models;
 /// <summary>
 /// Caller-supplied options for the <c>sync_ifc_space_room_data</c> endpoint.
 /// </summary>
-public class RoomSyncOptions
+public class RoomSyncOptions : IfcMetadataMappingOptions
 {
     // ── Scope ──────────────────────────────────────────────────────────────────
 

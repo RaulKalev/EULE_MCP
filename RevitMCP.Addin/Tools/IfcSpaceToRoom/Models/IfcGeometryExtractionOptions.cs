@@ -5,7 +5,7 @@ namespace RevitMCP.Addin.Tools.IfcSpaceToRoom.Models;
 /// All dimension tolerances are in millimetres for human readability; services convert
 /// to Revit internal feet as needed.
 /// </summary>
-public class IfcGeometryExtractionOptions
+public class IfcGeometryExtractionOptions : IfcMetadataMappingOptions
 {
     /// <summary>
     /// Maximum gap allowed between consecutive curve endpoints for them to be considered

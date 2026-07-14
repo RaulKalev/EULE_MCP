@@ -55,20 +55,41 @@ public class IfcParameterReader
     /// Reads all IFC room metadata from <paramref name="element"/> using flexible parameter lookup.
     /// The returned metadata includes source-tracking so callers can explain where each value came from.
     /// </summary>
-    public IfcSpaceMetadata ReadMetadata(Element element)
+    public IfcSpaceMetadata ReadMetadata(
+        Element element,
+        IfcMetadataMappingOptions? options = null)
     {
-        var (number, numberSource) = GetFirstStringWithSource(element, NumberParamNames);
-        var (name,   nameSource)   = GetFirstStringWithSource(element, NameParamNames);
+        var resolved = IfcSpaceConventionResolver.ResolveMetadata(ReadParameters(element), options);
 
         return new IfcSpaceMetadata
         {
-            IfcGuid      = GetFirstString(element, GuidParamNames),
-            Number       = number,
-            NumberSource = numberSource,
-            Name         = name,
-            NameSource   = nameSource,
-            StoreyName   = GetFirstString(element, StoreyParamNames)
+            IfcGuid      = resolved.IfcGuid,
+            Number       = resolved.Number,
+            NumberSource = resolved.NumberSource,
+            Name         = resolved.Name,
+            NameSource   = resolved.NameSource,
+            StoreyName   = resolved.StoreyName,
+            StoreySource = resolved.StoreySource,
+            AreaM2       = resolved.AreaM2,
+            AreaSource   = resolved.AreaSource
         };
+    }
+
+    /// <summary>Snapshots all named element parameters without changing their text or Unicode data.</summary>
+    public static IReadOnlyList<KeyValuePair<string, string?>> ReadParameters(Element element)
+    {
+        var result = new List<KeyValuePair<string, string?>>();
+        try
+        {
+            foreach (Parameter parameter in element.Parameters)
+            {
+                var name = parameter.Definition?.Name;
+                if (string.IsNullOrEmpty(name)) continue;
+                result.Add(new KeyValuePair<string, string?>(name, ReadValue(parameter)));
+            }
+        }
+        catch { /* malformed imported parameters are ignored */ }
+        return result;
     }
 
     /// <summary>
@@ -122,5 +143,21 @@ public class IfcParameterReader
         {
             return null;
         }
+    }
+
+    private static string? ReadValue(Parameter parameter)
+    {
+        try
+        {
+            if (parameter.StorageType == StorageType.None) return null;
+            return parameter.StorageType switch
+            {
+                StorageType.String => parameter.AsString(),
+                StorageType.Integer => parameter.AsValueString() ?? parameter.AsInteger().ToString(),
+                StorageType.Double => parameter.AsValueString() ?? parameter.AsDouble().ToString("G", System.Globalization.CultureInfo.InvariantCulture),
+                _ => parameter.AsValueString()
+            };
+        }
+        catch { return null; }
     }
 }

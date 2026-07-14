@@ -54,7 +54,12 @@ public class PreviewIfcSpacesTool : IRevitMcpTool
             IncludeExistingRoomCheck = ToolArguments.GetBool(request.Arguments,   "includeExistingRoomCheck", true),
             LevelMatchToleranceMm    = ToolArguments.GetDouble(request.Arguments, "levelMatchToleranceMm",    300.0),
             MaxResults               = ToolArguments.GetInt(request.Arguments,    "maxResults",                1000),
-            IncludeProbable          = ToolArguments.GetBool(request.Arguments,   "includeProbable",           false)
+            IncludeProbable          = ToolArguments.GetBool(request.Arguments,   "includeProbable",           false),
+            RoomNameParameter        = ToolArguments.GetString(request.Arguments, "roomNameParameter", ""),
+            RoomNumberParameter      = ToolArguments.GetString(request.Arguments, "roomNumberParameter", ""),
+            StoreyParameter          = ToolArguments.GetString(request.Arguments, "storeyParameter", ""),
+            AreaParameter            = ToolArguments.GetString(request.Arguments, "areaParameter", ""),
+            EnableArRuumDefaults     = ToolArguments.GetBool(request.Arguments, "enableArRuumDefaults", true)
         };
 
         // — Run preview ———————————————————————————————————————————————————————

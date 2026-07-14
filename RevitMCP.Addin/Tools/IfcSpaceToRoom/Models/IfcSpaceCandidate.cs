@@ -29,6 +29,12 @@ public class IfcSpaceCandidate
     /// <summary>Building storey name from the IFC model, e.g. "Level 1".</summary>
     public string? StoreyName { get; set; }
 
+    public string? StoreySource { get; set; }
+
+    public double? DeclaredAreaM2 { get; set; }
+
+    public string? AreaSource { get; set; }
+
     // ── Level Match ───────────────────────────────────────────────────────────
 
     /// <summary>Revit element id of the matched host Level, or null if unmatched.</summary>
@@ -68,6 +74,8 @@ public class IfcSpaceCandidate
     /// "Probable"  — only generic IFC-origin markers found; may be any IFC entity.
     /// </summary>
     public string DetectionConfidence { get; set; } = "Confirmed";
+
+    public string DetectionReason { get; set; } = "ExplicitIfcSpace";
 
     // ── Metadata Sources ──────────────────────────────────────────────────────
 

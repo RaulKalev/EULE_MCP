@@ -68,11 +68,11 @@ public class ExistingRoomPreviewMatcher
         {
             if (room.LevelId != levelId) continue;
 
-            bool numberMatch = !string.IsNullOrEmpty(num)
-                && string.Equals(room.Number, num, StringComparison.OrdinalIgnoreCase);
+            bool numberMatch = IfcConversionPolicy.IsNumberLevelConflict(
+                levelId, num, room.LevelId, room.Number);
 
-            bool nameMatch = !string.IsNullOrEmpty(nm)
-                && string.Equals(room.Name, nm, StringComparison.OrdinalIgnoreCase);
+            bool nameMatch = IfcConversionPolicy.IsExactRoomIdentity(
+                levelId, num, nm, room.LevelId, room.Number, room.Name);
 
             if (numberMatch && nameMatch)
                 return ExactNumberNameLevelMatch;

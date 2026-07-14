@@ -134,7 +134,7 @@ public class IfcSpaceConversionService
         //    This writes to the document (creates views) only when
         //    AllowCreateMissingBoundaryViews = true. Otherwise only existing views are used.
         //    Skip entirely if dry-run.
-        if (!options.DryRun)
+        if (IfcConversionPolicy.ShouldWrite(options.DryRun))
         {
             EnsureViewsForCandidates(hostDoc, candidateElements, linkTransform, options);
         }
@@ -173,9 +173,11 @@ public class IfcSpaceConversionService
         try
         {
             // ── a. Read IFC metadata ─────────────────────────────────────────
-            var meta = _reader.ReadMetadata(element);
+            var meta = _reader.ReadMetadata(element, options);
             item.Number = meta.Number;
             item.Name   = meta.Name;
+            item.NumberSource = meta.NumberSource;
+            item.NameSource = meta.NameSource;
 
             // ── b. Probable-element advisory warning ─────────────────────────
             //    Explicit IDs always have isProbable=false (caller's intent).
@@ -194,7 +196,10 @@ public class IfcSpaceConversionService
                 string.IsNullOrWhiteSpace(item.Number))
             {
                 item.Status = ConversionStatus.SkippedMissingNumber;
-                item.Errors.Add("IFC Space has no Room Number and allowCreateWithoutNumber is false.");
+                item.Errors.Add(
+                    $"IFC Space Room Number is missing or blank. Expected source parameter " +
+                    $"'{options.RoomNumberPrecedence.FirstOrDefault() ?? "(none configured)"}'; " +
+                    "allowCreateWithoutNumber is false.");
                 return item;
             }
 
@@ -202,7 +207,10 @@ public class IfcSpaceConversionService
                 string.IsNullOrWhiteSpace(item.Name))
             {
                 item.Status = ConversionStatus.SkippedMissingName;
-                item.Errors.Add("IFC Space has no Room Name and allowCreateWithoutName is false.");
+                item.Errors.Add(
+                    $"IFC Space Room Name is missing or blank. Expected source parameter " +
+                    $"'{options.RoomNamePrecedence.FirstOrDefault() ?? "(none configured)"}'; " +
+                    "allowCreateWithoutName is false.");
                 return item;
             }
 
@@ -292,7 +300,7 @@ public class IfcSpaceConversionService
             }
 
             // ── h. Dry-run short-circuit ──────────────────────────────
-            if (options.DryRun)
+            if (!IfcConversionPolicy.ShouldWrite(options.DryRun))
             {
                 item.Status = ConversionStatus.DryRunReady;
                 return item;

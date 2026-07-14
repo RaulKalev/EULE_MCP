@@ -19,6 +19,9 @@ public class IfcSpaceDetectionResult
     /// </summary>
     public string Confidence { get; init; } = IfcDetectionConfidence.Confirmed;
 
+    /// <summary>Stable, machine-readable explanation for the detection decision.</summary>
+    public string Reason { get; init; } = "ExplicitIfcSpace";
+
     /// <summary>Per-element advisory messages explaining the detection.</summary>
     public List<string> Warnings { get; init; } = new();
 }

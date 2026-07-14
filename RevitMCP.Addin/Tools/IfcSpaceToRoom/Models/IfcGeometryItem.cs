@@ -23,6 +23,14 @@ public class IfcGeometryItem
     /// <summary>Building storey name from the IFC model.</summary>
     public string? StoreyName { get; set; }
 
+    public string? NumberSource { get; set; }
+    public string? NameSource { get; set; }
+    public string? StoreySource { get; set; }
+    public double? DeclaredAreaM2 { get; set; }
+    public string? AreaSource { get; set; }
+    public string DetectionConfidence { get; set; } = "Confirmed";
+    public string DetectionReason { get; set; } = "ExplicitIfcSpace";
+
     /// <summary>Name of the matched host Level.</summary>
     public string? TargetLevelName { get; set; }
 

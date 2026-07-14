@@ -120,6 +120,7 @@ public class IfcSpacePreviewService
             LinkInstanceId      = linkInstance.Id.Value,
             LinkedElementId     = element.Id.Value,
             DetectionConfidence = detection.Confidence,
+            DetectionReason     = detection.Reason,
             Warnings            = [..detection.Warnings]   // seed with per-detection warnings
         };
 
@@ -129,13 +130,16 @@ public class IfcSpacePreviewService
         try
         {
             // — Read IFC metadata ————————————————————————————————————————————
-            var meta = _reader.ReadMetadata(element);
+            var meta = _reader.ReadMetadata(element, options);
             candidate.IfcGuid      = meta.IfcGuid;
             candidate.Number       = meta.Number;
             candidate.NumberSource = meta.NumberSource;
             candidate.Name         = meta.Name;
             candidate.NameSource   = meta.NameSource;
             candidate.StoreyName   = meta.StoreyName;
+            candidate.StoreySource = meta.StoreySource;
+            candidate.DeclaredAreaM2 = meta.AreaM2;
+            candidate.AreaSource   = meta.AreaSource;
 
             // Probable elements: mark immediately — short-circuit the rest
             if (isProbable)

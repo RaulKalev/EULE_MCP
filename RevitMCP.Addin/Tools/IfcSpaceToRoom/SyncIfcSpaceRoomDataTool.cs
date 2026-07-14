@@ -79,7 +79,12 @@ public class SyncIfcSpaceRoomDataTool : IRevitMcpTool
             Items                        = syncItems,
             AllowMediumConfidenceUpdates = ToolArguments.GetBool(request.Arguments, "allowMediumConfidenceUpdates", false),
             AllowLowConfidenceUpdates    = ToolArguments.GetBool(request.Arguments, "allowLowConfidenceUpdates",    false),
-            DryRun                       = ToolArguments.GetBool(request.Arguments, "dryRun",                       true)
+            DryRun                       = ToolArguments.GetBool(request.Arguments, "dryRun",                       true),
+            RoomNameParameter            = ToolArguments.GetString(request.Arguments, "roomNameParameter", ""),
+            RoomNumberParameter          = ToolArguments.GetString(request.Arguments, "roomNumberParameter", ""),
+            StoreyParameter              = ToolArguments.GetString(request.Arguments, "storeyParameter", ""),
+            AreaParameter                = ToolArguments.GetString(request.Arguments, "areaParameter", ""),
+            EnableArRuumDefaults         = ToolArguments.GetBool(request.Arguments, "enableArRuumDefaults", true)
         };
 
         // ── Run sync ───────────────────────────────────────────────────────────

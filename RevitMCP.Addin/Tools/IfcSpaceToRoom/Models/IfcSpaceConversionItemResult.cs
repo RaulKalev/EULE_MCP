@@ -20,6 +20,9 @@ public class IfcSpaceConversionItemResult
     /// <summary>Room name read from IFC parameters. Null if not found.</summary>
     public string? Name { get; set; }
 
+    public string? NumberSource { get; set; }
+    public string? NameSource { get; set; }
+
     /// <summary>Name of the matched host Level. Null if level matching failed.</summary>
     public string? TargetLevelName { get; set; }
 

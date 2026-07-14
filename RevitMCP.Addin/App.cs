@@ -59,6 +59,7 @@ public class App : IExternalApplication
             handler.RegisterTool(new GroupByParameterTool());
             handler.RegisterTool(new FindElementsByParameterTool());
             handler.RegisterTool(new GetElementsInfoTool());
+            handler.RegisterTool(new GetTextNotesTool());
             handler.RegisterTool(new GroupElementsTool());
             handler.RegisterTool(new ExportQueryToExcelTool());
             handler.RegisterTool(new GetAvailableParametersTool());

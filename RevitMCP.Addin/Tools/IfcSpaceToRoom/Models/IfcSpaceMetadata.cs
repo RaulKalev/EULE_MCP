@@ -30,4 +30,13 @@ public class IfcSpaceMetadata
 
     /// <summary>Name of the building storey the space belongs to.</summary>
     public string? StoreyName { get; set; }
+
+    /// <summary>Name of the parameter that produced <see cref="StoreyName"/>.</summary>
+    public string? StoreySource { get; set; }
+
+    /// <summary>Declared IFC area in square metres, when a configured area parameter is present.</summary>
+    public double? AreaM2 { get; set; }
+
+    /// <summary>Name of the parameter that produced <see cref="AreaM2"/>.</summary>
+    public string? AreaSource { get; set; }
 }

@@ -174,7 +174,7 @@ public class ControlledRoomSyncService
                 if (ifcEl != null)
                 {
                     ifcSpaceFound = true;
-                    var meta = _reader.ReadMetadata(ifcEl);
+                    var meta = _reader.ReadMetadata(ifcEl, options);
                     ifcName   = meta.Name?.Trim();
                     ifcNumber = meta.Number?.Trim();
 

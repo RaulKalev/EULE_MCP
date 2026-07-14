@@ -88,7 +88,12 @@ public class ConvertIfcSpacesToRoomsTool : IRevitMcpTool
             AllowCreateWithoutNumber       = ToolArguments.GetBool(request.Arguments,   "allowCreateWithoutNumber",       false),
             AllowCreateMissingBoundaryViews = ToolArguments.GetBool(request.Arguments,  "allowCreateMissingBoundaryViews", false),
             AllowProbableConversion        = ToolArguments.GetBool(request.Arguments,   "allowProbableConversion",        false),
-            DryRun                         = ToolArguments.GetBool(request.Arguments,   "dryRun",                         false)
+            DryRun                         = ToolArguments.GetBool(request.Arguments,   "dryRun",                         false),
+            RoomNameParameter              = ToolArguments.GetString(request.Arguments, "roomNameParameter", ""),
+            RoomNumberParameter            = ToolArguments.GetString(request.Arguments, "roomNumberParameter", ""),
+            StoreyParameter                = ToolArguments.GetString(request.Arguments, "storeyParameter", ""),
+            AreaParameter                  = ToolArguments.GetString(request.Arguments, "areaParameter", ""),
+            EnableArRuumDefaults           = ToolArguments.GetBool(request.Arguments, "enableArRuumDefaults", true)
         };
 
         // Validate duplicateMode value

@@ -120,9 +120,14 @@ public class IfcRoomValidationService
         try
         {
             // ── a. Read IFC metadata ─────────────────────────────────────────
-            var meta = _reader.ReadMetadata(element);
+            var meta = _reader.ReadMetadata(element, options);
             item.IfcNumber   = meta.Number;
             item.IfcName     = meta.Name;
+            item.NumberSource = meta.NumberSource;
+            item.NameSource = meta.NameSource;
+            item.StoreyName = meta.StoreyName;
+            item.StoreySource = meta.StoreySource;
+            item.AreaSource = meta.AreaSource;
 
             // ── b. Level match ────────────────────────────────────────────
             double? bboxZ = TryGetBboxBottomZ(element, linkTransform);
@@ -145,7 +150,8 @@ public class IfcRoomValidationService
             // ── c. Optional geometry extraction ──────────────────────────
             double? placementXFeet = null;
             double? placementYFeet = null;
-            double? ifcAreaSqFt    = null;
+            double? ifcAreaSqFt    = meta.AreaM2 / 0.092903;
+            item.IfcAreaM2         = meta.AreaM2;
 
             if (options.IncludeGeometryComparison)
             {
@@ -162,9 +168,12 @@ public class IfcRoomValidationService
                 {
                     placementXFeet = footprint.PlacementPoint.X;
                     placementYFeet = footprint.PlacementPoint.Y;
-                    ifcAreaSqFt    = footprint.ApproxAreaSquareFeet;
-
-                    item.IfcAreaM2  = Math.Round(footprint.ApproxAreaSquareFeet * 0.092903, 2);
+                    if (!ifcAreaSqFt.HasValue)
+                    {
+                        ifcAreaSqFt = footprint.ApproxAreaSquareFeet;
+                        item.IfcAreaM2 = Math.Round(footprint.ApproxAreaSquareFeet * 0.092903, 2);
+                        item.AreaSource = "CalculatedGeometryArea";
+                    }
                 }
                 else
                 {

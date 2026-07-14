@@ -52,22 +52,24 @@ public class IfcSpaceCollector
 
         foreach (var element in candidates)
         {
-            var classification = Classify(element);
+            var detection = Detect(element);
 
-            if (classification == Classification.Confirmed)
+            if (detection.Confidence == IfcDetectionConfidence.Confirmed)
             {
                 result.Add(new IfcSpaceDetectionResult
                 {
                     Element    = element,
-                    Confidence = IfcDetectionConfidence.Confirmed
+                    Confidence = IfcDetectionConfidence.Confirmed,
+                    Reason     = detection.Reason
                 });
             }
-            else if (classification == Classification.Probable && includeProbable)
+            else if (detection.Confidence == IfcDetectionConfidence.Probable && includeProbable)
             {
                 result.Add(new IfcSpaceDetectionResult
                 {
                     Element    = element,
                     Confidence = IfcDetectionConfidence.Probable,
+                    Reason     = detection.Reason,
                     Warnings   =
                     [
                         $"Element {element.Id.Value} ({element.Name}) is a probable IFC Space: " +
@@ -81,6 +83,11 @@ public class IfcSpaceCollector
 
         return result;
     }
+
+    /// <summary>Classifies one element using both legacy and project IFC conventions.</summary>
+    public IfcConventionDetection Detect(Element element) =>
+        IfcSpaceConventionResolver.Detect(
+            IfcParameterReader.ReadParameters(element), element.Name);
 
     // ── Legacy compatibility ───────────────────────────────────────────────────
 

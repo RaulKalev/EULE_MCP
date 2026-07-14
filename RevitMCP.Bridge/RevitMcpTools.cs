@@ -998,6 +998,26 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    [McpServerTool(Name = "revit_get_text_notes", ReadOnly = true),
+     Description("Returns text note elements (text boxes placed via the Revit Text command) from the active document. Default scope is the active view. Pass viewId=0 for all views, or a specific view element ID. Supports text content filtering and selection-based reading.")]
+    public async Task<string> GetTextNotes(
+        [Description("Scope: -1 or omit = active view, 0 = all views, >0 = specific view element ID.")] long viewId = -1,
+        [Description("Case-insensitive substring filter on text content. Leave empty to return all.")] string? textFilter = null,
+        [Description("If true, read text notes from the current Revit selection only.")] bool useSelection = false,
+        [Description("Maximum number of text notes to return. Default 200.")] int limit = 200,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["viewId"]      = viewId,
+            ["textFilter"]  = textFilter ?? string.Empty,
+            ["useSelection"] = useSelection,
+            ["limit"]       = limit
+        };
+        var result = await pipeClient.SendAsync("revit_get_text_notes", args, cancellationToken);
+        return FormatResult(result);
+    }
+
     private static readonly JsonSerializerSettings ResultSerializerSettings = new()
     {
         Formatting = Formatting.None,
@@ -3402,6 +3422,11 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         int maxResults = 1000,
         [Description("If true, also include elements with only generic IFC-origin markers as probable IFC Space candidates. They are flagged detectionConfidence='Probable' and canConvertLater=false. Default false.")]
         bool includeProbable = false,
+        [Description("Highest-priority Room Name parameter. Effective project default: AR_Ruum.100_Nimi.")] string? roomNameParameter = null,
+        [Description("Highest-priority Room Number parameter. Effective project default: AR_Ruum.105_Number.")] string? roomNumberParameter = null,
+        [Description("Highest-priority storey parameter. Effective project default: IfcDecomposes.")] string? storeyParameter = null,
+        [Description("Highest-priority validation area parameter. Effective project default: AR_Ruum.120_Pindala.")] string? areaParameter = null,
+        [Description("Enable AR_Ruum project defaults before legacy fallbacks. Default true.")] bool enableArRuumDefaults = true,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -3410,7 +3435,12 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["includeExistingRoomCheck"] = includeExistingRoomCheck,
             ["levelMatchToleranceMm"]    = levelMatchToleranceMm,
             ["maxResults"]               = maxResults,
-            ["includeProbable"]          = includeProbable
+            ["includeProbable"]          = includeProbable,
+            ["roomNameParameter"]        = roomNameParameter,
+            ["roomNumberParameter"]      = roomNumberParameter,
+            ["storeyParameter"]          = storeyParameter,
+            ["areaParameter"]            = areaParameter,
+            ["enableArRuumDefaults"]     = enableArRuumDefaults
         };
         var result = await pipeClient.SendAsync("ifc_preview_spaces", args, cancellationToken);
         return FormatResult(result);
@@ -3447,6 +3477,11 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         double levelMatchToleranceMm = 300.0,
         [Description("Maximum number of space candidates to return. Default 1000.")]
         int maxResults = 1000,
+        [Description("Highest-priority Room Name parameter.")] string? roomNameParameter = null,
+        [Description("Highest-priority Room Number parameter.")] string? roomNumberParameter = null,
+        [Description("Highest-priority storey parameter.")] string? storeyParameter = null,
+        [Description("Highest-priority validation area parameter.")] string? areaParameter = null,
+        [Description("Enable AR_Ruum project defaults. Default true.")] bool enableArRuumDefaults = true,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -3459,7 +3494,12 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["tinySegmentToleranceMm"]        = tinySegmentToleranceMm,
             ["horizontalFaceToleranceDegrees"] = horizontalFaceToleranceDegrees,
             ["levelMatchToleranceMm"]         = levelMatchToleranceMm,
-            ["maxResults"]                    = maxResults
+            ["maxResults"]                    = maxResults,
+            ["roomNameParameter"]             = roomNameParameter,
+            ["roomNumberParameter"]           = roomNumberParameter,
+            ["storeyParameter"]               = storeyParameter,
+            ["areaParameter"]                 = areaParameter,
+            ["enableArRuumDefaults"]          = enableArRuumDefaults
         };
         var result = await pipeClient.SendAsync("ifc_preview_space_geometry", args, cancellationToken);
         return FormatResult(result);
@@ -3513,6 +3553,11 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         bool allowProbableConversion = false,
         [Description("If true, perform full validation but make no model modifications. Items that pass all checks are returned with status DryRunReady. Default false.")]
         bool dryRun = false,
+        [Description("Highest-priority Room Name parameter.")] string? roomNameParameter = null,
+        [Description("Highest-priority Room Number parameter.")] string? roomNumberParameter = null,
+        [Description("Highest-priority storey parameter.")] string? storeyParameter = null,
+        [Description("Highest-priority validation area parameter.")] string? areaParameter = null,
+        [Description("Enable AR_Ruum project defaults. Default true.")] bool enableArRuumDefaults = true,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -3529,7 +3574,12 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["allowCreateWithoutNumber"]        = allowCreateWithoutNumber,
             ["allowCreateMissingBoundaryViews"] = allowCreateMissingBoundaryViews,
             ["allowProbableConversion"]         = allowProbableConversion,
-            ["dryRun"]                          = dryRun
+            ["dryRun"]                          = dryRun,
+            ["roomNameParameter"]               = roomNameParameter,
+            ["roomNumberParameter"]             = roomNumberParameter,
+            ["storeyParameter"]                 = storeyParameter,
+            ["areaParameter"]                   = areaParameter,
+            ["enableArRuumDefaults"]            = enableArRuumDefaults
         };
         var result = await pipeClient.SendAsync("convert_ifc_spaces_to_rooms", args, cancellationToken);
         return FormatResult(result);
@@ -3569,6 +3619,11 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         double tinySegmentToleranceMm = 1.0,
         [Description("Maximum number of validation items to return. Default 1000.")]
         int maxResults = 1000,
+        [Description("Highest-priority Room Name parameter.")] string? roomNameParameter = null,
+        [Description("Highest-priority Room Number parameter.")] string? roomNumberParameter = null,
+        [Description("Highest-priority storey parameter.")] string? storeyParameter = null,
+        [Description("Highest-priority validation area parameter.")] string? areaParameter = null,
+        [Description("Enable AR_Ruum project defaults. Default true.")] bool enableArRuumDefaults = true,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -3581,7 +3636,12 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["includeGeometryComparison"] = includeGeometryComparison,
             ["endpointSnapToleranceMm"]   = endpointSnapToleranceMm,
             ["tinySegmentToleranceMm"]    = tinySegmentToleranceMm,
-            ["maxResults"]                = maxResults
+            ["maxResults"]                = maxResults,
+            ["roomNameParameter"]         = roomNameParameter,
+            ["roomNumberParameter"]       = roomNumberParameter,
+            ["storeyParameter"]           = storeyParameter,
+            ["areaParameter"]             = areaParameter,
+            ["enableArRuumDefaults"]      = enableArRuumDefaults
         };
         var result = await pipeClient.SendAsync("validate_ifc_space_room_conversion", args, cancellationToken);
         return FormatResult(result);
@@ -3612,6 +3672,11 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         bool allowMediumConfidenceUpdates = false,
         [Description("If true, allow updates for Low-confidence matches. Default false. Strongly discouraged.")]
         bool allowLowConfidenceUpdates = false,
+        [Description("Highest-priority Room Name parameter.")] string? roomNameParameter = null,
+        [Description("Highest-priority Room Number parameter.")] string? roomNumberParameter = null,
+        [Description("Highest-priority storey parameter.")] string? storeyParameter = null,
+        [Description("Highest-priority validation area parameter.")] string? areaParameter = null,
+        [Description("Enable AR_Ruum project defaults. Default true.")] bool enableArRuumDefaults = true,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -3620,7 +3685,12 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["items"]                        = items,
             ["dryRun"]                       = dryRun,
             ["allowMediumConfidenceUpdates"] = allowMediumConfidenceUpdates,
-            ["allowLowConfidenceUpdates"]    = allowLowConfidenceUpdates
+            ["allowLowConfidenceUpdates"]    = allowLowConfidenceUpdates,
+            ["roomNameParameter"]            = roomNameParameter,
+            ["roomNumberParameter"]          = roomNumberParameter,
+            ["storeyParameter"]              = storeyParameter,
+            ["areaParameter"]                = areaParameter,
+            ["enableArRuumDefaults"]         = enableArRuumDefaults
         };
         var result = await pipeClient.SendAsync("sync_ifc_space_room_data", args, cancellationToken);
         return FormatResult(result);

@@ -61,7 +61,12 @@ public class PreviewIfcSpaceGeometryTool : IRevitMcpTool
             MinimumAreaM2                   = ToolArguments.GetDouble(request.Arguments, "minimumAreaM2",                    0.1),
             IncludeLoopCoordinates          = ToolArguments.GetBool(request.Arguments,   "includeLoopCoordinates",          false),
             MaxCoordinatePoints             = ToolArguments.GetInt(request.Arguments,    "maxCoordinatePoints",              250),
-            LevelMatchToleranceMm           = ToolArguments.GetDouble(request.Arguments, "levelMatchToleranceMm",           300.0)
+            LevelMatchToleranceMm           = ToolArguments.GetDouble(request.Arguments, "levelMatchToleranceMm",           300.0),
+            RoomNameParameter               = ToolArguments.GetString(request.Arguments, "roomNameParameter", ""),
+            RoomNumberParameter             = ToolArguments.GetString(request.Arguments, "roomNumberParameter", ""),
+            StoreyParameter                 = ToolArguments.GetString(request.Arguments, "storeyParameter", ""),
+            AreaParameter                   = ToolArguments.GetString(request.Arguments, "areaParameter", ""),
+            EnableArRuumDefaults            = ToolArguments.GetBool(request.Arguments, "enableArRuumDefaults", true)
         };
 
         int maxResults = ToolArguments.GetInt(request.Arguments, "maxResults", 1000);

@@ -17,6 +17,12 @@ public class IfcRoomValidationItem
     /// <summary>Room name read from IFC parameters. Null if not found.</summary>
     public string? IfcName { get; set; }
 
+    public string? NumberSource { get; set; }
+    public string? NameSource { get; set; }
+    public string? StoreyName { get; set; }
+    public string? StoreySource { get; set; }
+    public string? AreaSource { get; set; }
+
     /// <summary>Name of the matched host Level. Null if Level matching failed.</summary>
     public string? TargetLevelName { get; set; }
 

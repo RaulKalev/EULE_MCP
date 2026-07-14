@@ -4,7 +4,7 @@ namespace RevitMCP.Addin.Tools.IfcSpaceToRoom.Models;
 /// Options for the preview_ifc_spaces operation.
 /// All fields have safe defaults so callers only need to supply LinkInstanceId.
 /// </summary>
-public class IfcSpacePreviewOptions
+public class IfcSpacePreviewOptions : IfcMetadataMappingOptions
 {
     /// <summary>Revit element id of the RevitLinkInstance to inspect.</summary>
     public long LinkInstanceId { get; set; }
