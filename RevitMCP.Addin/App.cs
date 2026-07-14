@@ -209,6 +209,12 @@ public class App : IExternalApplication
             // Family Creation
             handler.RegisterTool(new CreatePanelSchematicSymbolFromDwgTool());
 
+            // Element Placement (issue #17)
+            handler.RegisterTool(new PlaceFamilyInstancesTool());
+            handler.RegisterTool(new PlaceTagsTool());
+            handler.RegisterTool(new CreateTextNotesTool());
+            handler.RegisterTool(new CreateLinesTool());
+
             // Skills
             handler.RegisterTool(new ListSkillsTool());
             handler.RegisterTool(new GetSkillDetailsTool());

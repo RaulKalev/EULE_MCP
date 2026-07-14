@@ -204,6 +204,10 @@ Activity is logged to `%AppData%\RKTools\RevitMCP\Logs\{date}.jsonl` — one JSO
 | `revit_select_elements` | Selects elements by IDs in Revit UI *(requires approval)* |
 | `revit_select_elements_by_query` | Selects elements by query in Revit UI *(requires approval)* |
 | `revit_set_parameter` | Sets a parameter value on elements — supports String, Integer, Double, and **ElementId** storage types *(requires approval, runs in transaction)* |
+| `revit_place_family_instances` | Places instances of a loaded family type at points (mm) — model components (level-based) and detail items (view-based) resolved automatically; optional `rotationDegrees`, `levelName`, `viewId`, `hostElementId` *(requires approval, runs in transaction)* |
+| `revit_place_tags` | Tags elements in a view (`elementIds` or selection). Tag family auto-resolved per element category unless `tagTypeId`/`tagFamilyName` given; optional leader and head offset in mm *(requires approval, runs in transaction)* |
+| `revit_create_text_notes` | Creates text notes in a view at mm positions; `widthMm`, `rotationDegrees`, and text note type optional *(requires approval, runs in transaction)* |
+| `revit_create_lines` | Creates straight lines from mm segments — `kind=detail` (view-specific) or `kind=model` (3D, sketch planes handled automatically); optional `lineStyle` *(requires approval, runs in transaction)* |
 
 ### Query Safety & Pagination
 
