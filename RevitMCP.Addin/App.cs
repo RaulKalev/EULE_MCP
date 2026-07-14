@@ -103,6 +103,8 @@ public class App : IExternalApplication
             handler.RegisterTool(new PreviewCircuitLoadNamesTool());
             handler.RegisterTool(new ApplyCircuitLoadNamesTool());
             handler.RegisterTool(new SetCircuitParametersBulkTool());
+            handler.RegisterTool(new PreviewAssignDataDevicesToPatchPanelsTool());
+            handler.RegisterTool(new AssignDataDevicesToPatchPanelsTool());
 
             // Electrical Dashboard (Group A)
             handler.RegisterTool(new GetElectricalDashboardSummaryTool());

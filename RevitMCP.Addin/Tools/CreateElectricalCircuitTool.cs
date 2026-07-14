@@ -12,7 +12,7 @@ namespace RevitMCP.Addin.Tools;
 public class CreateElectricalCircuitTool : IRevitMcpTool
 {
     public string Name => "revit_create_electrical_circuit";
-    public string Description => "Creates a new electrical circuit from current selection, explicit element IDs, or a category+filter query. Requires approval. Transaction-wrapped and reversible via Revit Undo.";
+    public string Description => "Creates a new electrical circuit from current selection, explicit element IDs, or a category+filter query. For families with multiple electrical connectors (e.g. 2xRJ45), pass one element id plus connectorId to circuit a specific connector. Requires approval. Transaction-wrapped and reversible via Revit Undo.";
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Electrical;
 
@@ -34,6 +34,7 @@ public class CreateElectricalCircuitTool : IRevitMcpTool
         var panelElementId = ToolArguments.GetLong(request.Arguments, "panelElementId");
         var panelName = ToolArguments.GetString(request.Arguments, "panelName");
         var wireTypeName = ToolArguments.GetString(request.Arguments, "wireTypeName");
+        var connectorId = ToolArguments.GetInt(request.Arguments, "connectorId", 0);
         var limit = ToolArguments.GetInt(request.Arguments, "limit", 500);
 
         if (!useSelection && elementIds.Length == 0 && string.IsNullOrWhiteSpace(category))
@@ -95,7 +96,7 @@ public class CreateElectricalCircuitTool : IRevitMcpTool
             }
         }
 
-        var result = CircuitMutationService.CreateCircuit(doc, ids, systemType, panel, resolvedTypeElem);
+        var result = CircuitMutationService.CreateCircuit(doc, ids, systemType, panel, resolvedTypeElem, connectorId);
         var warnings = filtersParsed.Warnings.Concat(result.Errors).ToList();
 
         sw.Stop();
@@ -108,6 +109,7 @@ public class CreateElectricalCircuitTool : IRevitMcpTool
                 Message = result.Message,
                 Errors = result.Errors,
                 Warnings = warnings,
+                Data = result.Diagnostics == null ? null : new { transactionDiagnostics = result.Diagnostics },
                 DurationMs = sw.ElapsedMilliseconds
             });
         }
