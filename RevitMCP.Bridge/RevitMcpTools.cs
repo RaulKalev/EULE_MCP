@@ -404,7 +404,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_find_elements_by_parameter", ReadOnly = true),
-     Description("Finds model elements matching one or more parameter filters. Each filter: parameterName (partial match), operator (equals/contains/startsWith/isEmpty/greaterThan/lessThan/notEquals/notContains/endsWith/isNotEmpty), value, matchMode, scope. Accepts category, useSelection, elementIds, returnParameters, paging (pageSize/page), and safety caps (maxParametersPerElement, truncateStringLength). Set summaryOnly=true to get category/family counts without element data. REQUIRES a category, filters, elementIds, useSelection, or summaryOnly=true — calling with none of these is rejected with a category breakdown so you can ask the user which one to use, instead of scanning the whole model (which can freeze/crash Revit on large projects). If you don't know the model's categories yet, call revit_count_elements first.")]
+     Description("Finds model elements matching one or more parameter filters. Each filter: parameterName (partial match), operator (equals/contains/startsWith/isEmpty/greaterThan/lessThan/notEquals/notContains/endsWith/isNotEmpty), value, matchMode, scope. Accepts category, useSelection, elementIds, returnParameters, paging (pageSize/page), and safety caps (maxParametersPerElement, truncateStringLength). Set summaryOnly=true to get category/family counts without element data. Set includeTags=true to see which annotation tags reference each element. REQUIRES a category, filters, elementIds, useSelection, or summaryOnly=true — calling with none of these is rejected with a category breakdown so you can ask the user which one to use, instead of scanning the whole model (which can freeze/crash Revit on large projects). If you don't know the model's categories yet, call revit_count_elements first.")]
     public async Task<string> FindElementsByParameter(
         [Description("JSON array of filter objects: [{parameterName, operator, value, matchMode, scope}]")] string? filters = null,
         [Description("Optional category name to restrict search (e.g. 'Fire Alarm Devices')")] string? category = null,
@@ -419,6 +419,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Maximum parameters returned per element. 0 uses the safety default (40).")] int maxParametersPerElement = 0,
         [Description("Maximum string length for parameter values. 0 uses the safety default (500 chars).")] int truncateStringLength = 0,
         [Description("If true, return category/family summary counts only without building element DTOs. Allows broad model scans.")] bool summaryOnly = false,
+        [Description("If true, list the annotation tags attached to each returned element (tag text, tag family/type, owner view). An element can carry multiple tags; an empty list means it has none.")] bool includeTags = false,
         CancellationToken cancellationToken = default)
     {
         if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
@@ -438,14 +439,15 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["page"] = page,
             ["maxParametersPerElement"] = maxParametersPerElement,
             ["truncateStringLength"] = truncateStringLength,
-            ["summaryOnly"] = summaryOnly
+            ["summaryOnly"] = summaryOnly,
+            ["includeTags"] = includeTags
         };
         var result = await pipeClient.SendAsync("revit_find_elements_by_parameter", args, cancellationToken);
         return FormatResult(result);
     }
 
     [McpServerTool(Name = "revit_get_elements_info", ReadOnly = true),
-     Description("Returns structured element info and selected parameter values. Requires useSelection, elementIds, category, or summaryOnly=true. Supports paging (pageSize/page) and safety caps (maxParametersPerElement, truncateStringLength). Set summaryOnly=true to get category/family counts across the whole model without building element DTOs. Filters: JSON array of {parameterName, operator, value, matchMode, scope}.")]
+     Description("Returns structured element info and selected parameter values. Requires useSelection, elementIds, category, or summaryOnly=true. Supports paging (pageSize/page) and safety caps (maxParametersPerElement, truncateStringLength). Set summaryOnly=true to get category/family counts across the whole model without building element DTOs. Set includeTags=true to see which annotation tags reference each element. Filters: JSON array of {parameterName, operator, value, matchMode, scope}.")]
     public async Task<string> GetElementsInfo(
         [Description("If true, use current selection.")] bool useSelection = false,
         [Description("List of element IDs to retrieve.")] long[]? elementIds = null,
@@ -460,6 +462,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Maximum parameters returned per element. 0 uses the safety default (40).")] int maxParametersPerElement = 0,
         [Description("Maximum string length for parameter values. 0 uses the safety default (500 chars).")] int truncateStringLength = 0,
         [Description("If true, return category/family summary counts only without element DTOs. Allows broad model scans without category/selection scope.")] bool summaryOnly = false,
+        [Description("If true, list the annotation tags attached to each returned element (tag text, tag family/type, owner view). An element can carry multiple tags; an empty list means it has none.")] bool includeTags = false,
         CancellationToken cancellationToken = default)
     {
         if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
@@ -479,7 +482,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["page"] = page,
             ["maxParametersPerElement"] = maxParametersPerElement,
             ["truncateStringLength"] = truncateStringLength,
-            ["summaryOnly"] = summaryOnly
+            ["summaryOnly"] = summaryOnly,
+            ["includeTags"] = includeTags
         };
         var result = await pipeClient.SendAsync("revit_get_elements_info", args, cancellationToken);
         return FormatResult(result);
@@ -1015,6 +1019,113 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["limit"]       = limit
         };
         var result = await pipeClient.SendAsync("revit_get_text_notes", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_place_family_instances"),
+     Description("Places instances of a loaded family type at given points (millimetres). Handles model components (level-based) and detail items (view-based) automatically from the family's placement type. Pick the type via typeId, or familyName and/or typeName (partial match; ambiguity returns candidates). Optional per-point rotationDegrees, levelName, viewId (detail items), hostElementId (hosted families). Requires approval; reversible via Revit Undo.")]
+    public async Task<string> PlaceFamilyInstances(
+        [Description("JSON array of placement points in mm: [{x, y, z, rotationDegrees}]")] string placements,
+        [Description("Family name to place (partial match).")] string? familyName = null,
+        [Description("Type name within the family (partial match).")] string? typeName = null,
+        [Description("Exact family type element ID — skips name matching.")] long typeId = 0,
+        [Description("Level name for level-based placement. Defaults to the active plan view's level, else the level nearest each point's z.")] string? levelName = null,
+        [Description("View element ID for view-based (detail item) placement. Defaults to the active view.")] long viewId = 0,
+        [Description("Host element ID for hosted or work-plane-based families (e.g. a wall).")] long hostElementId = 0,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryParseJsonArray(placements, "placements", out var parsedPlacements, out var placementsError))
+            return FormatBridgeError(placementsError!);
+
+        var args = new Dictionary<string, object?>
+        {
+            ["placements"] = parsedPlacements,
+            ["familyName"] = familyName ?? string.Empty,
+            ["typeName"] = typeName ?? string.Empty,
+            ["typeId"] = typeId,
+            ["levelName"] = levelName ?? string.Empty,
+            ["viewId"] = viewId,
+            ["hostElementId"] = hostElementId
+        };
+        var result = await pipeClient.SendAsync("revit_place_family_instances", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_place_tags"),
+     Description("Tags model elements in a view. Elements come from elementIds or the current selection. The tag family is resolved automatically from each element's category (first loaded tag family, multi-category tag as fallback) unless tagTypeId or tagFamilyName/tagTypeName is given. Optional leader and tag-head offset in mm (view plane). Requires approval; reversible via Revit Undo.")]
+    public async Task<string> PlaceTags(
+        [Description("Element IDs to tag.")] long[]? elementIds = null,
+        [Description("If true, tag the current Revit selection instead.")] bool useSelection = false,
+        [Description("View element ID to place tags in. Defaults to the active view.")] long viewId = 0,
+        [Description("Exact tag family type element ID.")] long tagTypeId = 0,
+        [Description("Tag family name (partial match), used with tagTypeName.")] string? tagFamilyName = null,
+        [Description("Tag type name (partial match).")] string? tagTypeName = null,
+        [Description("If true, tags get a leader line to the element.")] bool addLeader = false,
+        [Description("Tag orientation: Horizontal or Vertical.")] string orientation = "Horizontal",
+        [Description("Tag head offset right (+) / left (-) from the element, in mm along the view plane.")] double offsetXMm = 0,
+        [Description("Tag head offset up (+) / down (-) from the element, in mm along the view plane.")] double offsetYMm = 0,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["elementIds"] = elementIds ?? [],
+            ["useSelection"] = useSelection,
+            ["viewId"] = viewId,
+            ["tagTypeId"] = tagTypeId,
+            ["tagFamilyName"] = tagFamilyName ?? string.Empty,
+            ["tagTypeName"] = tagTypeName ?? string.Empty,
+            ["addLeader"] = addLeader,
+            ["orientation"] = orientation,
+            ["offsetXMm"] = offsetXMm,
+            ["offsetYMm"] = offsetYMm
+        };
+        var result = await pipeClient.SendAsync("revit_place_tags", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_create_text_notes"),
+     Description("Creates text notes in a view at given positions (millimetres, model coordinates). Uses the view's default text note type unless typeId or typeName is given. Requires approval; reversible via Revit Undo.")]
+    public async Task<string> CreateTextNotes(
+        [Description("JSON array of notes: [{text, x, y, z, widthMm, rotationDegrees}] — widthMm/rotationDegrees optional.")] string notes,
+        [Description("View element ID. Defaults to the active view.")] long viewId = 0,
+        [Description("Text note type element ID.")] long typeId = 0,
+        [Description("Text note type name (partial match), e.g. '2.5mm Arial'.")] string? typeName = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryParseJsonArray(notes, "notes", out var parsedNotes, out var notesError))
+            return FormatBridgeError(notesError!);
+
+        var args = new Dictionary<string, object?>
+        {
+            ["notes"] = parsedNotes,
+            ["viewId"] = viewId,
+            ["typeId"] = typeId,
+            ["typeName"] = typeName ?? string.Empty
+        };
+        var result = await pipeClient.SendAsync("revit_create_text_notes", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_create_lines"),
+     Description("Creates straight lines from segments given in millimetres. kind='detail' draws view-specific detail lines in a view (viewId, default active); kind='model' draws model lines in 3D space — each segment automatically gets a sketch plane that contains it. Optional lineStyle name applied to all created lines. Requires approval; reversible via Revit Undo.")]
+    public async Task<string> CreateLines(
+        [Description("JSON array of segments in mm: [{x1, y1, z1, x2, y2, z2}]")] string lines,
+        [Description("'detail' (view-specific) or 'model' (3D). Default 'detail'.")] string kind = "detail",
+        [Description("View element ID for detail lines. Defaults to the active view.")] long viewId = 0,
+        [Description("Line style name to apply (e.g. 'Hidden Lines'). Default style when omitted or not found.")] string? lineStyle = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryParseJsonArray(lines, "lines", out var parsedLines, out var linesError))
+            return FormatBridgeError(linesError!);
+
+        var args = new Dictionary<string, object?>
+        {
+            ["lines"] = parsedLines,
+            ["kind"] = kind,
+            ["viewId"] = viewId,
+            ["lineStyle"] = lineStyle ?? string.Empty
+        };
+        var result = await pipeClient.SendAsync("revit_create_lines", args, cancellationToken);
         return FormatResult(result);
     }
 

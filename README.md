@@ -192,8 +192,8 @@ Activity is logged to `%AppData%\RKTools\RevitMCP\Logs\{date}.jsonl` — one JSO
 | `revit_get_element_parameters` | Reads instance/type parameters for element IDs or selection, including shared parameter metadata |
 | `revit_count_elements` | Element counts grouped by Category or FamilyAndType, with optional category filter |
 | `revit_group_by_parameter` | Convenience tool for grouping elements by one parameter |
-| `revit_find_elements_by_parameter` | Finds elements using one or more parameter filters. Requires `category`, `filters`, `elementIds`, `useSelection`, or `summaryOnly=true` — an unscoped call is rejected with a live category breakdown instead of scanning the whole model. Supports `useSelection`, `elementIds`, `includeInstanceParameters/TypeParameters`. Pagination: `page`, `pageSize`. Safety caps: `maxParametersPerElement`, `truncateStringLength`. Set `summaryOnly=true` for category/family counts. Response includes `hasMore`, `nextPageToken`. |
-| `revit_get_elements_info` | Returns structured element info with selected parameter values. Requires `useSelection`, `elementIds`, `category`, or `summaryOnly=true`. Pagination: `page`, `pageSize`. Safety caps: `maxParametersPerElement`, `truncateStringLength`. Response includes `hasMore`, `nextPageToken`, and `summary` when `summaryOnly=true`. |
+| `revit_find_elements_by_parameter` | Finds elements using one or more parameter filters. Requires `category`, `filters`, `elementIds`, `useSelection`, or `summaryOnly=true` — an unscoped call is rejected with a live category breakdown instead of scanning the whole model. Supports `useSelection`, `elementIds`, `includeInstanceParameters/TypeParameters`. Pagination: `page`, `pageSize`. Safety caps: `maxParametersPerElement`, `truncateStringLength`. Set `summaryOnly=true` for category/family counts. Set `includeTags=true` to list the annotation tags attached to each element. Response includes `hasMore`, `nextPageToken`. |
+| `revit_get_elements_info` | Returns structured element info with selected parameter values. Requires `useSelection`, `elementIds`, `category`, or `summaryOnly=true`. Pagination: `page`, `pageSize`. Safety caps: `maxParametersPerElement`, `truncateStringLength`. Set `includeTags=true` to list the annotation tags attached to each element (tag text, tag family/type, owner view). Response includes `hasMore`, `nextPageToken`, and `summary` when `summaryOnly=true`. |
 | `revit_group_elements` | Groups elements by category, family, type, level, or multiple parameters |
 | `revit_export_query_to_excel` | Exports query/grouping results to a formatted `.xlsx` file |
 | `revit_get_available_parameters` | Discovers available parameters with fill stats and example values |
@@ -204,6 +204,10 @@ Activity is logged to `%AppData%\RKTools\RevitMCP\Logs\{date}.jsonl` — one JSO
 | `revit_select_elements` | Selects elements by IDs in Revit UI *(requires approval)* |
 | `revit_select_elements_by_query` | Selects elements by query in Revit UI *(requires approval)* |
 | `revit_set_parameter` | Sets a parameter value on elements — supports String, Integer, Double, and **ElementId** storage types *(requires approval, runs in transaction)* |
+| `revit_place_family_instances` | Places instances of a loaded family type at points (mm) — model components (level-based) and detail items (view-based) resolved automatically; optional `rotationDegrees`, `levelName`, `viewId`, `hostElementId` *(requires approval, runs in transaction)* |
+| `revit_place_tags` | Tags elements in a view (`elementIds` or selection). Tag family auto-resolved per element category unless `tagTypeId`/`tagFamilyName` given; optional leader and head offset in mm *(requires approval, runs in transaction)* |
+| `revit_create_text_notes` | Creates text notes in a view at mm positions; `widthMm`, `rotationDegrees`, and text note type optional *(requires approval, runs in transaction)* |
+| `revit_create_lines` | Creates straight lines from mm segments — `kind=detail` (view-specific) or `kind=model` (3D, sketch planes handled automatically); optional `lineStyle` *(requires approval, runs in transaction)* |
 
 ### Query Safety & Pagination
 
