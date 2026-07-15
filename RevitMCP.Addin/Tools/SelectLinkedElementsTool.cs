@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Compat;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Core.Models;
 
@@ -40,6 +41,8 @@ public class SelectLinkedElementsTool : IRevitMcpTool
             return Task.FromResult(Fail(request, "linkInstanceId is required — use revit_list_clashable_links or ifc_list_links to find it."));
         if (elementIds.Length == 0)
             return Task.FromResult(Fail(request, "elementIds is required (element ids inside the linked document)."));
+        if (!SelectionReferenceCompat.IsSupported)
+            return Task.FromResult(Fail(request, "Selecting elements inside linked models requires Revit 2023 or newer."));
 
         if (doc.GetElement(new ElementId(linkInstanceId)) is not RevitLinkInstance link)
             return Task.FromResult(Fail(request, $"Element {linkInstanceId} is not a Revit link instance."));
@@ -77,7 +80,9 @@ public class SelectLinkedElementsTool : IRevitMcpTool
             // Preserve what is already selected: linked picks come back via GetReferences,
             // host elements are re-wrapped as references so one SetReferences call keeps both.
             var existing = new Dictionary<string, Reference>();
-            foreach (var r in uidoc.Selection.GetReferences())
+            if (!SelectionReferenceCompat.TryGetReferences(uidoc.Selection, out var selectedReferences, out var getReferencesError))
+                return Task.FromResult(Fail(request, getReferencesError));
+            foreach (var r in selectedReferences)
                 TryAddStable(existing, doc, r);
             foreach (var hostId in uidoc.Selection.GetElementIds())
             {
@@ -90,7 +95,8 @@ public class SelectLinkedElementsTool : IRevitMcpTool
             references = existing.Values.ToList();
         }
 
-        uidoc.Selection.SetReferences(references);
+        if (!SelectionReferenceCompat.TrySetReferences(uidoc.Selection, references, out var setReferencesError))
+            return Task.FromResult(Fail(request, setReferencesError));
 
         if (zoomToSelection)
             TryZoomTo(uidoc, link, selectedElements);

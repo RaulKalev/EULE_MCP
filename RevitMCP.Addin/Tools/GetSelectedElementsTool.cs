@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Compat;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Core.Models;
 
@@ -28,7 +29,8 @@ public class GetSelectedElementsTool : IRevitMcpTool
 
         var doc = uidoc.Document;
         var ids = uidoc.Selection.GetElementIds();
-        var linkedElements = BuildLinkedSelectionSummaries(uidoc, doc);
+        var warnings = new List<string>();
+        var linkedElements = BuildLinkedSelectionSummaries(uidoc, doc, warnings);
 
         if (ids.Count == 0 && linkedElements.Count == 0)
             return Task.FromResult(new McpToolResult
@@ -37,11 +39,11 @@ public class GetSelectedElementsTool : IRevitMcpTool
                 Success = true,
                 Message = "No elements selected.",
                 Data = new { selectedCount = 0, elements = Array.Empty<object>(), linkedSelectedCount = 0, linkedElements = Array.Empty<object>() },
+                Warnings = warnings,
                 DurationMs = sw.ElapsedMilliseconds
             });
 
         var elements = new List<object>();
-        var warnings = new List<string>();
         int detailed = 0;
 
         foreach (var id in ids)
@@ -76,12 +78,18 @@ public class GetSelectedElementsTool : IRevitMcpTool
     }
 
     /// <summary>Elements picked inside linked models only surface through selection references.</summary>
-    private static List<object> BuildLinkedSelectionSummaries(UIDocument uidoc, Document doc)
+    private static List<object> BuildLinkedSelectionSummaries(UIDocument uidoc, Document doc, List<string> warnings)
     {
         var linked = new List<object>();
+        if (!SelectionReferenceCompat.TryGetReferences(uidoc.Selection, out var selectedReferences, out var error))
+        {
+            warnings.Add(error);
+            return linked;
+        }
+
         try
         {
-            foreach (var reference in uidoc.Selection.GetReferences())
+            foreach (var reference in selectedReferences)
             {
                 if (linked.Count >= DetailedLimit) break;
                 if (reference.LinkedElementId == ElementId.InvalidElementId) continue;

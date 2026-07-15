@@ -38,19 +38,25 @@ public class DeleteViewsTool : IRevitMcpTool
 
         var warnings = new List<string>();
         var views    = new List<View>();
+        int skippedMissing  = 0;
+        int skippedSheets   = 0;
+        int skippedNonViews = 0;
         foreach (var id in viewIds.Distinct())
         {
             var el = doc.GetElement(new ElementId(id));
             if (el == null)
             {
+                skippedMissing++;
                 warnings.Add($"Element {id} not found — skipped.");
             }
             else if (el is ViewSheet)
             {
+                skippedSheets++;
                 warnings.Add($"Element {id} is a sheet — use revit_delete_sheets instead — skipped.");
             }
             else if (el is not View)
             {
+                skippedNonViews++;
                 warnings.Add($"Element {id} ('{el.Name}') is not a view — use revit_delete_elements instead — skipped.");
             }
             else
@@ -68,9 +74,9 @@ public class DeleteViewsTool : IRevitMcpTool
             : [];
 
         var toDelete = views.Where(v => !placedIds.Contains(v.Id)).ToList();
-        int skipped  = views.Count - toDelete.Count;
-        if (skipped > 0)
-            warnings.Add($"{skipped} view(s) skipped: placed on sheets (skipPlacedOnSheets=true).");
+        int skippedPlaced = views.Count - toDelete.Count;
+        if (skippedPlaced > 0)
+            warnings.Add($"{skippedPlaced} view(s) skipped: placed on sheets (skipPlacedOnSheets=true).");
 
         if (toDelete.Count == 0)
             return Task.FromResult(Fail(request, "No deletable views in the selection — see warnings for the reason each view was skipped.", warnings));
@@ -116,12 +122,25 @@ public class DeleteViewsTool : IRevitMcpTool
 
         sw.Stop();
         int failed = targets.Count - deleted;
+        int skippedUndeletable = undeletable.Count;
+        int skipped = skippedMissing + skippedSheets + skippedNonViews + skippedPlaced + skippedUndeletable;
         return Task.FromResult(new McpToolResult
         {
             RequestId  = request.RequestId,
             Success    = deleted > 0,
-            Message    = $"Deleted {deleted} view(s), skipped {skipped + undeletable.Count}, failed {failed}.",
-            Data       = new { deleted, skipped = skipped + undeletable.Count, failed, failures },
+            Message    = $"Deleted {deleted} view(s), skipped {skipped}, failed {failed}.",
+            Data       = new
+            {
+                deleted,
+                skipped,
+                skippedMissing,
+                skippedSheets,
+                skippedNonViews,
+                skippedPlaced,
+                skippedUndeletable,
+                failed,
+                failures
+            },
             Warnings   = warnings,
             DurationMs = sw.ElapsedMilliseconds
         });

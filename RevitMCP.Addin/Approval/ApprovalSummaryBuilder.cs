@@ -341,8 +341,8 @@ public static class ApprovalSummaryBuilder
 
     private static string BuildDeleteElements(McpToolRequest request)
     {
-        var elementIds = ToolArguments.GetLongArray(request.Arguments, "elementIds");
-        return $"DESTRUCTIVE: Delete {elementIds.Length} element{(elementIds.Length == 1 ? "" : "s")} plus dependent elements. Manual approval required.";
+        var elementCount = ToolArguments.GetLongArray(request.Arguments, "elementIds").Distinct().Count();
+        return $"DESTRUCTIVE: Delete {elementCount} element{(elementCount == 1 ? "" : "s")} plus dependent elements. Manual approval required.";
     }
 
     private static string BuildCreateSkill(McpToolRequest request)

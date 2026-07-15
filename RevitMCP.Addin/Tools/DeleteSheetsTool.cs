@@ -37,21 +37,64 @@ public class DeleteSheetsTool : IRevitMcpTool
         if (sheetIds.Length == 0 && sheetNumbers.Length == 0)
             return Task.FromResult(Fail(request, "Provide sheetIds or sheetNumbers."));
 
-        IEnumerable<ViewSheet> sheets = new FilteredElementCollector(doc)
+        var allSheets = new FilteredElementCollector(doc)
             .OfClass(typeof(ViewSheet))
-            .Cast<ViewSheet>();
+            .Cast<ViewSheet>()
+            .ToList();
+
+        var warnings        = new List<string>();
+        var matched         = new List<ViewSheet>();
+        int skippedMissing  = 0;
+        int skippedNonSheet = 0;
 
         if (sheetIds.Length > 0)
-            sheets = sheets.Where(s => sheetIds.ToHashSet().Contains(s.Id.Value));
+        {
+            foreach (var id in sheetIds.Distinct())
+            {
+                var element = doc.GetElement(new ElementId(id));
+                if (element == null)
+                {
+                    skippedMissing++;
+                    warnings.Add($"Element {id} not found — skipped.");
+                }
+                else if (element is not ViewSheet sheet)
+                {
+                    skippedNonSheet++;
+                    warnings.Add($"Element {id} ('{element.Name}') is not a sheet — skipped.");
+                }
+                else
+                {
+                    matched.Add(sheet);
+                }
+            }
+        }
         else
-            sheets = sheets.Where(s => sheetNumbers.Select(n => n.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase).Contains(s.SheetNumber));
+        {
+            var sheetsByNumber = allSheets
+                .GroupBy(s => s.SheetNumber, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
-        var warnings = new List<string>();
-        var matched  = sheets.ToList();
+            foreach (var rawNumber in sheetNumbers.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                var number = rawNumber.Trim();
+                if (number.Length == 0 || !sheetsByNumber.TryGetValue(number, out var sheet))
+                {
+                    skippedMissing++;
+                    warnings.Add(number.Length == 0
+                        ? "An empty sheet number was provided — skipped."
+                        : $"Sheet number '{number}' not found — skipped.");
+                }
+                else
+                {
+                    matched.Add(sheet);
+                }
+            }
+        }
+
         var toDelete = matched.Where(s => !(skipSheetsWithVps && s.GetAllPlacedViews().Count > 0)).ToList();
-        int skipped  = (sheetIds.Length > 0 ? sheetIds.Length : sheetNumbers.Length) - toDelete.Count;
-        if (matched.Count > toDelete.Count)
-            warnings.Add($"{matched.Count - toDelete.Count} sheet(s) skipped: have placed views (skipSheetsWithViews=true).");
+        int skippedPlaced = matched.Count - toDelete.Count;
+        if (skippedPlaced > 0)
+            warnings.Add($"{skippedPlaced} sheet(s) skipped: have placed views (skipSheetsWithViews=true).");
 
         if (toDelete.Count == 0)
             return Task.FromResult(Fail(request, "No deletable sheets in the selection — sheets with placed views are skipped when skipSheetsWithViews=true.", warnings));
@@ -96,12 +139,24 @@ public class DeleteSheetsTool : IRevitMcpTool
 
         sw.Stop();
         int failed = targets.Count - deleted;
+        int skippedUndeletable = undeletable.Count;
+        int skipped = skippedMissing + skippedNonSheet + skippedPlaced + skippedUndeletable;
         return Task.FromResult(new McpToolResult
         {
             RequestId  = request.RequestId,
             Success    = deleted > 0,
-            Message    = $"Deleted {deleted} sheet(s), skipped {skipped + undeletable.Count}, failed {failed}.",
-            Data       = new { deleted, skipped = skipped + undeletable.Count, failed, failures },
+            Message    = $"Deleted {deleted} sheet(s), skipped {skipped}, failed {failed}.",
+            Data       = new
+            {
+                deleted,
+                skipped,
+                skippedMissing,
+                skippedNonSheet,
+                skippedPlaced,
+                skippedUndeletable,
+                failed,
+                failures
+            },
             Warnings   = warnings,
             DurationMs = sw.ElapsedMilliseconds
         });

@@ -71,6 +71,10 @@ public class PlaceDimensionsTool : IRevitMcpTool
             dimensionType = doc.GetElement(new ElementId(dimensionTypeId)) as DimensionType;
             if (dimensionType == null)
                 return Task.FromResult(Fail(request, $"Element {dimensionTypeId} is not a dimension type. Use revit_list_dimension_types."));
+            if (!IsCompatibleDimensionType(kind, dimensionType.StyleType))
+                return Task.FromResult(Fail(request,
+                    $"Dimension type '{dimensionType.Name}' has style {dimensionType.StyleType}, which is incompatible with kind '{kind}'. " +
+                    $"Choose a {ExpectedDimensionStyle(kind)} type from revit_list_dimension_types."));
         }
 
         double offsetFt = PlacementHelpers.MmToFt(offsetMm);
@@ -99,7 +103,7 @@ public class PlaceDimensionsTool : IRevitMcpTool
                     break;
                 case "spotelevation":
                 case "spotcoordinate":
-                    CreateSpotDimensions(doc, view, kind, elements, offsetFt, leaderFt, created, warnings);
+                    CreateSpotDimensions(doc, view, kind, elements, dimensionType, offsetFt, leaderFt, created, warnings);
                     break;
             }
         });
@@ -310,15 +314,31 @@ public class PlaceDimensionsTool : IRevitMcpTool
 
             try
             {
-                var dim = RadialDimension.Create(doc, view, reference, kind == "diameter");
-                if (dimensionType != null) dim.ChangeTypeId(dimensionType.Id);
+                using (var subTransaction = new SubTransaction(doc))
+                {
+                    subTransaction.Start();
+                    try
+                    {
+                        var dim = RadialDimension.Create(doc, view, reference, kind == "diameter");
+                        var createdId = ApplyDimensionType(dim, dimensionType);
+                        var createdDimension = doc.GetElement(createdId) as RadialDimension ?? dim;
 
-                // "Distance from element": pull the dimension text outward from the arc.
-                var mid = arc.Evaluate(0.5, true);
-                var outward = (mid - arc.Center).Normalize();
-                try { dim.TextPosition = arc.Center + outward * (arc.Radius + offsetFt); } catch { }
+                        // "Distance from element": pull the dimension text outward from the arc.
+                        var mid = arc.Evaluate(0.5, true);
+                        var outward = (mid - arc.Center).Normalize();
+                        try { createdDimension.TextPosition = arc.Center + outward * (arc.Radius + offsetFt); } catch { }
 
-                created.Add(new { dimensionId = dim.Id.Value, elementId = el.Id.Value });
+                        if (subTransaction.Commit() != TransactionStatus.Committed)
+                            throw new InvalidOperationException("The radial dimension subtransaction did not commit.");
+                        created.Add(new { dimensionId = createdId.Value, elementId = el.Id.Value });
+                    }
+                    catch
+                    {
+                        if (subTransaction.GetStatus() == TransactionStatus.Started)
+                            subTransaction.RollBack();
+                        throw;
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -353,26 +373,38 @@ public class PlaceDimensionsTool : IRevitMcpTool
 
             try
             {
-                var endRefs = new List<Reference>();
-                var start = arc.GetEndPointReference(0);
-                var end = arc.GetEndPointReference(1);
-                if (start == null || end == null)
+                using (var subTransaction = new SubTransaction(doc))
                 {
-                    warnings.Add($"Element {el.Id.Value}: the arc exposes no end-point references — arc length cannot be dimensioned.");
-                    continue;
+                    subTransaction.Start();
+                    try
+                    {
+                        var endRefs = new List<Reference>();
+                        var start = arc.GetEndPointReference(0);
+                        var end = arc.GetEndPointReference(1);
+                        if (start == null || end == null)
+                            throw new InvalidOperationException("The arc exposes no end-point references — arc length cannot be dimensioned.");
+                        endRefs.Add(start);
+                        endRefs.Add(end);
+
+                        // Dimension line: a concentric arc offset outward from the measured arc.
+                        var placementArc = Arc.Create(
+                            arc.Center, arc.Radius + Math.Abs(offsetFt),
+                            arc.GetEndParameter(0), arc.GetEndParameter(1),
+                            arc.XDirection, arc.YDirection);
+
+                        var dim = ArcLengthDimension.Create(doc, view, placementArc, reference, endRefs);
+                        var createdId = ApplyDimensionType(dim, dimensionType);
+                        if (subTransaction.Commit() != TransactionStatus.Committed)
+                            throw new InvalidOperationException("The arc-length dimension subtransaction did not commit.");
+                        created.Add(new { dimensionId = createdId.Value, elementId = el.Id.Value });
+                    }
+                    catch
+                    {
+                        if (subTransaction.GetStatus() == TransactionStatus.Started)
+                            subTransaction.RollBack();
+                        throw;
+                    }
                 }
-                endRefs.Add(start);
-                endRefs.Add(end);
-
-                // Dimension line: a concentric arc offset outward from the measured arc.
-                var placementArc = Arc.Create(
-                    arc.Center, arc.Radius + Math.Abs(offsetFt),
-                    arc.GetEndParameter(0), arc.GetEndParameter(1),
-                    arc.XDirection, arc.YDirection);
-
-                var dim = ArcLengthDimension.Create(doc, view, placementArc, reference, endRefs);
-                if (dimensionType != null) dim.ChangeTypeId(dimensionType.Id);
-                created.Add(new { dimensionId = dim.Id.Value, elementId = el.Id.Value });
             }
             catch (Exception ex)
             {
@@ -386,7 +418,8 @@ public class PlaceDimensionsTool : IRevitMcpTool
 
     private static void CreateSpotDimensions(
         Document doc, View view, string kind, List<Element> elements,
-        double offsetFt, double leaderFt, List<object> created, List<string> warnings)
+        DimensionType? dimensionType, double offsetFt, double leaderFt,
+        List<object> created, List<string> warnings)
     {
         var up = view.UpDirection;
         var right = view.RightDirection;
@@ -406,16 +439,91 @@ public class PlaceDimensionsTool : IRevitMcpTool
 
             try
             {
-                var reference = new Reference(el);
-                var dim = kind == "spotelevation"
-                    ? doc.Create.NewSpotElevation(view, reference, point, bend, end, point, hasLeader)
-                    : doc.Create.NewSpotCoordinate(view, reference, point, bend, end, point, hasLeader);
-                created.Add(new { dimensionId = dim.Id.Value, elementId = el.Id.Value });
+                using (var subTransaction = new SubTransaction(doc))
+                {
+                    subTransaction.Start();
+                    try
+                    {
+                        var reference = new Reference(el);
+                        var dim = kind == "spotelevation"
+                            ? doc.Create.NewSpotElevation(view, reference, point, bend, end, point, hasLeader)
+                            : doc.Create.NewSpotCoordinate(view, reference, point, bend, end, point, hasLeader);
+                        var createdId = ApplyDimensionType(dim, dimensionType);
+                        if (subTransaction.Commit() != TransactionStatus.Committed)
+                            throw new InvalidOperationException("The spot dimension subtransaction did not commit.");
+                        created.Add(new { dimensionId = createdId.Value, elementId = el.Id.Value });
+                    }
+                    catch
+                    {
+                        if (subTransaction.GetStatus() == TransactionStatus.Started)
+                            subTransaction.RollBack();
+                        throw;
+                    }
+                }
             }
             catch (Exception ex)
             {
                 warnings.Add($"Element {el.Id.Value}: {kind} failed: {ex.Message}");
             }
+        }
+    }
+
+    private static ElementId ApplyDimensionType(Element dimension, DimensionType? dimensionType)
+    {
+        if (dimensionType == null)
+            return dimension.Id;
+
+        var replacementId = dimension.ChangeTypeId(dimensionType.Id);
+        return replacementId != ElementId.InvalidElementId ? replacementId : dimension.Id;
+    }
+
+    private static bool IsCompatibleDimensionType(string kind, DimensionStyleType style)
+    {
+        switch (kind)
+        {
+            case "aligned":
+            case "horizontal":
+            case "vertical":
+                return style == DimensionStyleType.Linear || style == DimensionStyleType.LinearFixed;
+            case "angular":
+                return style == DimensionStyleType.Angular;
+            case "radial":
+                return style == DimensionStyleType.Radial;
+            case "diameter":
+                return style == DimensionStyleType.Diameter;
+            case "arclength":
+                return style == DimensionStyleType.ArcLength;
+            case "spotelevation":
+                return style == DimensionStyleType.SpotElevation;
+            case "spotcoordinate":
+                return style == DimensionStyleType.SpotCoordinate;
+            default:
+                return false;
+        }
+    }
+
+    private static string ExpectedDimensionStyle(string kind)
+    {
+        switch (kind)
+        {
+            case "aligned":
+            case "horizontal":
+            case "vertical":
+                return "Linear";
+            case "angular":
+                return "Angular";
+            case "radial":
+                return "Radial";
+            case "diameter":
+                return "Diameter";
+            case "arclength":
+                return "ArcLength";
+            case "spotelevation":
+                return "SpotElevation";
+            case "spotcoordinate":
+                return "SpotCoordinate";
+            default:
+                return "matching";
         }
     }
 
