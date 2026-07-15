@@ -2035,6 +2035,10 @@ These tests cover tools added in the Phase 1 finalization pass. Run them against
 | Skills | `revit_update_project_skill_override` | RO | "Update the project override: disable task 'check.facp.clearance'." | `{updated: true, mergedKeys}` | N/A | N/A | Merges `changesJson` into existing override |
 | Skills | `revit_reset_project_skill_override` | RO | "Reset project override for skill 'company.electrical.qa' on project 'P-2026-001'." | `{deleted: true}` or not-found message | N/A | N/A | Reverts to company master skill |
 | Skills | `revit_configure_sheet_naming_skill` | RO | "Configure sheet naming skill for project 'P-2026-001' with Excel register at `C:\Temp\register.xlsx`." | `{overridePath, configuredTasks}` | N/A | N/A | Convenience wrapper for `company.lehed.nimetamise-kontroll`; set `enableExcelComparison=true` |
+| Skills | `revit_skill_builder_guide` | RO | "I want to create a new skill." | Static guided-interview workflow text | N/A | N/A | Bridge-side static tool; no pipe/Revit connection needed |
+| Skills | `revit_list_skill_tasks` | RO | "What task building blocks are available for skills?" | Array of `{id, name, changesModel, exampleSettings, usedBySkills}` | N/A | N/A | Example settings harvested from loaded skills |
+| Skills | `revit_create_skill` | RA | "Create a skill 'user.test.demo' that scans a delivery folder and exports an Excel report." | `approval_required` → skill file written, registry reloaded, activation instructions returned | Required (DE bypasses) | Delete the `.skill.json` file to revert | Validates task ids; refuses company-master ids; skill content must be English |
+| Skills | `revit_update_skill` | RA | "Rename skill 'user.test.demo' to 'Demo Delivery Check'." | `approval_required` → file rewritten, `updatedFields` listed | Required (DE bypasses) | Re-run with previous values to revert | Company masters refused with pointer to override tools; `tasks` is a FULL replacement |
 
 ### 30.27 Skills Admin
 
@@ -2906,3 +2910,22 @@ Add these rows to the Section 30 matrix:
 | Coord | `validate_ifc_space_room_conversion` | RO | "Validate IFC space to room conversion for link `<id>`." | `{items:[{confidence, status, matchedRoomId}], summary}` | N/A | N/A | No model changes. Ambiguous matches flagged with both candidate IDs |
 | Coord | `sync_ifc_space_room_data` | RA | "Sync room name for space `<spaceId>` to room `<roomId>`, dryRun=true." | DryRun: `{status:DryRunWouldUpdateName}`. Live after approval: `{status:UpdatedName}` | Required (DE bypasses) | Per-item sync transaction Undo entry | Default dryRun=true. Ambiguous always blocked. Low/Medium blocked unless opted in |
 
+
+## 40. Skill Builder — Guided Skill Creation (issue #20)
+
+End-to-end walkthrough of the guided skill-creation workflow. Works in any conversation language (e.g. Estonian) — the created skill file itself must be authored in English.
+
+**Prompt (or Estonian equivalent):**
+```
+I want to create a skill that scans our delivery folder and reports which sheets are missing PDFs.
+```
+
+**Verify:**
+1. The AI calls `revit_skill_builder_guide` first and follows its steps.
+2. It calls `revit_list_skill_tasks` (and `revit_list_skills`) to learn the available building blocks; if an existing skill already covers the goal it suggests that instead.
+3. It asks follow-up questions (folder path, file extensions, report format, titles) — repeating until every required setting is confirmed, without guessing.
+4. It presents a draft summary (name, description, ordered tasks + settings) in the user's language and waits for confirmation.
+5. `revit_create_skill` is called with English-only content and a `user.`-prefixed id → `approval_required` → after approval the `.skill.json` file exists in the skill library and `revit_list_skills` shows the new skill.
+6. The AI tells the user how to activate it: "Ask: run skill '<name>'" (`revit_run_skill`), with `revit_preview_skill_run` as the dry run.
+7. Editing later: "Rename my skill / change the folder" → AI fetches `revit_get_skill_details`, then `revit_update_skill` → `updatedFields` returned and the file is rewritten.
+8. Guard rails: creating with an existing company-master id fails with a clear message; `revit_update_skill` on a company master points to `revit_manage_project_skill_override`; unknown task ids are rejected listing the available catalog.

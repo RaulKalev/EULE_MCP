@@ -220,6 +220,9 @@ public class App : IExternalApplication
             // Skills
             handler.RegisterTool(new ListSkillsTool());
             handler.RegisterTool(new GetSkillDetailsTool());
+            handler.RegisterTool(new ListSkillTasksTool());
+            handler.RegisterTool(new CreateSkillTool());
+            handler.RegisterTool(new UpdateSkillTool());
             handler.RegisterTool(new PreviewSkillRunTool());
             handler.RegisterTool(new RunSkillTool());
             handler.RegisterTool(new RunSkillTaskTool());

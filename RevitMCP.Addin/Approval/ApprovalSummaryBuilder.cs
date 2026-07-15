@@ -41,6 +41,9 @@ public static class ApprovalSummaryBuilder
             "revit_delete_views"                => BuildDeleteViews(request),
             "revit_delete_sheets"               => BuildDeleteSheets(request),
             "revit_delete_elements"             => BuildDeleteElements(request),
+            // Skill builder
+            "revit_create_skill"                => BuildCreateSkill(request),
+            "revit_update_skill"                => BuildUpdateSkill(request),
             // Coordination tools
             "revit_create_clash_review_view"    => BuildCreateClashReviewView(request),
             "revit_focus_clash"                 => BuildFocusClash(request),
@@ -338,6 +341,24 @@ public static class ApprovalSummaryBuilder
     {
         var elementIds = ToolArguments.GetLongArray(request.Arguments, "elementIds");
         return $"DESTRUCTIVE: Delete {elementIds.Length} element{(elementIds.Length == 1 ? "" : "s")} plus dependent elements. Manual approval required.";
+    }
+
+    private static string BuildCreateSkill(McpToolRequest request)
+    {
+        var skillId = ToolArguments.GetString(request.Arguments, "skillId");
+        var name    = ToolArguments.GetString(request.Arguments, "name");
+        var count   = CountArray(request.Arguments, "tasks");
+        return $"Create skill '{name}' ({skillId}) with {count} task{(count == 1 ? "" : "s")} in the skill library. Writes a .skill.json file.";
+    }
+
+    private static string BuildUpdateSkill(McpToolRequest request)
+    {
+        var skillId = ToolArguments.GetString(request.Arguments, "skillId");
+        var fields  = new List<string>();
+        foreach (var key in new[] { "name", "description", "version", "author", "tasks", "stopOnCriticalFailure", "requiresUserConfirmationBeforeModelChanges" })
+            if (request.Arguments.ContainsKey(key)) fields.Add(key);
+        var fieldPart = fields.Count > 0 ? string.Join(", ", fields) : "no fields";
+        return $"Update skill '{skillId}' ({fieldPart}). Rewrites its .skill.json file.";
     }
 
     private static string BuildCreateClashReviewView(McpToolRequest request)

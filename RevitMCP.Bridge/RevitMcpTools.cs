@@ -3091,6 +3091,128 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    // ── Skill Builder — guided skill creation (issue #20) ────────────────────
+
+    [McpServerTool(Name = "revit_skill_builder_guide", ReadOnly = true),
+     Description("START HERE when the user wants to create (or design) a new Revit skill. " +
+                 "Returns the guided interview workflow: how to question the user, compose the skill from task building blocks, create it, and explain activation. " +
+                 "No Revit connection needed — this is static guidance.")]
+    public string SkillBuilderGuide() => """
+        # Skill Builder — guided workflow for creating a new skill
+
+        A skill is a JSON recipe (.skill.json) that chains prebuilt task blocks — validations,
+        scans, comparisons, report exports — into a repeatable workflow that runs inside Revit
+        via revit_run_skill. Skills are composed ONLY from the existing task catalog; new task
+        types require C# code and cannot be created here.
+
+        Follow these steps with the user:
+
+        1. UNDERSTAND THE GOAL. Ask the user to describe, at a high level, what they want the
+           skill to do and what result they expect (a report? a validation? applied changes?).
+           Restate the goal back in your own words.
+
+        2. LEARN THE BUILDING BLOCKS. Call revit_list_skill_tasks (task catalog with example
+           settings) and revit_list_skills (existing skills). If an existing skill already
+           covers the goal, suggest running it — or a project override via
+           revit_manage_project_skill_override — instead of creating a duplicate.
+
+        3. INTERVIEW THE USER. Ask focused follow-up questions, a few at a time, and repeat
+           until every required setting has a confirmed value. Typical topics: which checks or
+           tasks to include and their order; file paths (delivery folder, Excel register);
+           parameter names and allowed values; report outputs (Excel report, HTML dashboard)
+           and their titles; whether the skill may modify the model
+           (requiresUserConfirmationBeforeModelChanges). Do NOT guess values the user can
+           answer — keep asking until nothing important is ambiguous.
+
+        4. DRAFT AND CONFIRM. Present a readable summary of the proposed skill (name,
+           description, ordered tasks with their settings) in the USER'S language and ask for
+           confirmation before creating anything.
+
+        5. CREATE. Call revit_create_skill. IMPORTANT: author ALL skill content — id, name,
+           description, setting values — in ENGLISH, even when the conversation is in Estonian
+           or any other language. Recommended id pattern: 'user.<area>.<short-name>'
+           (e.g. 'user.delivery.pdf-check'). The call requires approval in the Revit MCP window.
+
+        6. ANNOUNCE ACTIVATION. Tell the user (in their language) that the skill was created
+           and how to activate it: ask "Run skill '<name>'" — which maps to revit_run_skill
+           with skillId='<id>' — and recommend a dry run first via revit_preview_skill_run.
+
+        7. EDITING LATER. The user can change the skill at any time: fetch the current
+           definition with revit_get_skill_details, interview for the changes, then call
+           revit_update_skill (tasks are a FULL replacement). Company master skills cannot be
+           edited this way — use revit_manage_project_skill_override instead.
+        """;
+
+    [McpServerTool(Name = "revit_list_skill_tasks", ReadOnly = true),
+     Description("Lists all available skill task building blocks for composing skills: id, name, changesModel, " +
+                 "exampleSettings (from an existing skill that uses the task), usedBySkills. " +
+                 "Use with revit_create_skill / revit_update_skill.")]
+    public async Task<string> ListSkillTasks(CancellationToken cancellationToken = default)
+    {
+        var result = await pipeClient.SendAsync("revit_list_skill_tasks", new Dictionary<string, object?>(), cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_create_skill"),
+     Description("Creates a new skill (.skill.json) in the skill library from task building blocks. Requires approval. " +
+                 "Follow revit_skill_builder_guide first and author ALL content in ENGLISH regardless of conversation language. " +
+                 "Required: skillId (lowercase, e.g. 'user.delivery.pdf-check'), name, description, tasks (array of {id, enabled, settings}). " +
+                 "Task ids come from revit_list_skill_tasks.")]
+    public async Task<string> CreateSkill(
+        [Description("Unique skill id — lowercase letters/digits separated by '.', '-' or '_'; recommended prefix 'user.'")] string skillId,
+        [Description("Human-readable skill name (English)")] string name,
+        [Description("What the skill does and when to use it (English)")] string description,
+        [Description("Ordered task array: objects with id (required), enabled (default true), settings (object)")] object[] tasks,
+        [Description("Semantic version (default 1.0.0)")] string? version = null,
+        [Description("Author name (default 'RevitMCP Skill Builder')")] string? author = null,
+        [Description("Stop the run when a task fails critically (default false)")] bool stopOnCriticalFailure = false,
+        [Description("Ask for user confirmation before model-changing tasks (default true)")] bool requiresUserConfirmationBeforeModelChanges = true,
+        [Description("Replace an existing non-master skill with the same id (default false)")] bool overwrite = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["skillId"] = skillId,
+            ["name"] = name,
+            ["description"] = description,
+            ["tasks"] = ToJToken(tasks),
+            ["version"] = version ?? string.Empty,
+            ["author"] = author ?? string.Empty,
+            ["stopOnCriticalFailure"] = stopOnCriticalFailure,
+            ["requiresUserConfirmationBeforeModelChanges"] = requiresUserConfirmationBeforeModelChanges,
+            ["overwrite"] = overwrite
+        };
+        var result = await pipeClient.SendAsync("revit_create_skill", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_update_skill"),
+     Description("Updates an existing user-created skill. Requires approval. Only provided fields change; tasks is a FULL replacement. " +
+                 "Author ALL content in ENGLISH. Company master skills are protected — use revit_manage_project_skill_override instead. " +
+                 "Fetch the current definition with revit_get_skill_details first.")]
+    public async Task<string> UpdateSkill(
+        [Description("ID of the skill to update")] string skillId,
+        [Description("New name (omit to keep)")] string? name = null,
+        [Description("New description (omit to keep)")] string? description = null,
+        [Description("New version (omit to keep)")] string? version = null,
+        [Description("New author (omit to keep)")] string? author = null,
+        [Description("FULL replacement task array: objects with id, enabled, settings (omit to keep)")] object[]? tasks = null,
+        [Description("Stop the run when a task fails critically (omit to keep)")] bool? stopOnCriticalFailure = null,
+        [Description("Ask for user confirmation before model-changing tasks (omit to keep)")] bool? requiresUserConfirmationBeforeModelChanges = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["skillId"] = skillId };
+        if (!string.IsNullOrWhiteSpace(name)) args["name"] = name;
+        if (!string.IsNullOrWhiteSpace(description)) args["description"] = description;
+        if (!string.IsNullOrWhiteSpace(version)) args["version"] = version;
+        if (!string.IsNullOrWhiteSpace(author)) args["author"] = author;
+        if (tasks is not null) args["tasks"] = ToJToken(tasks);
+        if (stopOnCriticalFailure is not null) args["stopOnCriticalFailure"] = stopOnCriticalFailure.Value;
+        if (requiresUserConfirmationBeforeModelChanges is not null) args["requiresUserConfirmationBeforeModelChanges"] = requiresUserConfirmationBeforeModelChanges.Value;
+        var result = await pipeClient.SendAsync("revit_update_skill", args, cancellationToken);
+        return FormatResult(result);
+    }
+
     [McpServerTool(Name = "revit_preview_skill_run", ReadOnly = true),
      Description("Previews what a skill run will do: task list, which tasks change the model, and whether user confirmation is required. " +
                  "Call this before revit_run_skill to understand the impact. " +

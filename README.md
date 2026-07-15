@@ -476,6 +476,17 @@ Skills are named multi-step QA workflows stored as `.skill.json` files. Built-in
 | `revit_manage_project_skill_override` | Manages a project-specific override for a skill. `action` = `create` (new override; supports `projectName`, `changesJson`, `note`) \| `update` (merge `changesJson` into an existing override; supports `note`) \| `reset` (delete the override, revert to company-master defaults). `changesJson` structure: `{"tasks":{"<taskId>":{"enabled":true,"settings":{...}}}}` |
 | `revit_configure_sheet_naming_skill` | Helper that creates or updates the project override for the built-in sheet naming skill (`company.lehed.nimetamise-kontroll`). Supports `enableExcelComparison` with optional `excelFilePath` and `worksheetName`, and per-task enable/disable flags. Returns the saved override JSON. |
 
+#### Skill Builder (create your own skills)
+
+Describe what you want a skill to do ("I want a skill that checks X and exports Y") and the AI walks you through a guided interview — it asks follow-up questions until it has every setting, drafts the skill for confirmation, creates it, and tells you how to run it. Conversations can be in any language (e.g. Estonian), but the created skill file is always authored in English.
+
+| Tool | Description |
+|------|-------------|
+| `revit_skill_builder_guide` | **Start here.** Returns the guided interview workflow the AI follows to design a new skill with you. Static guidance — no Revit connection needed |
+| `revit_list_skill_tasks` | Lists the task building blocks skills are composed from: id, name, whether it changes the model, example settings harvested from existing skills, and which skills use each task |
+| `revit_create_skill` | Creates a new `.skill.json` in the skill library *(requires approval)*. Validates task ids against the catalog; the new skill is immediately runnable via `revit_run_skill`. Company master ids are protected |
+| `revit_update_skill` | Edits a user-created skill later *(requires approval)*: name, description, version, tasks (full replacement), run settings. Company master skills are protected — use project overrides instead |
+
 #### Skill Admin Tools
 
 | Tool | Description |
