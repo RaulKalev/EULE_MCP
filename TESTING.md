@@ -2929,3 +2929,93 @@ I want to create a skill that scans our delivery folder and reports which sheets
 6. The AI tells the user how to activate it: "Ask: run skill '<name>'" (`revit_run_skill`), with `revit_preview_skill_run` as the dry run.
 7. Editing later: "Rename my skill / change the folder" → AI fetches `revit_get_skill_details`, then `revit_update_skill` → `updatedFields` returned and the file is rewritten.
 8. Guard rails: creating with an existing company-master id fails with a clear message; `revit_update_skill` on a company master points to `revit_manage_project_skill_override`; unknown task ids are rejected listing the available catalog.
+
+## 41. Dimension Placement Tools (issue #21)
+
+> `revit_place_dimensions` is RequiresApproval — Direct Edit bypasses the approval gate like other RA writers. Every run is a single named transaction (`"Revit MCP - Place Dimensions"`) reversible with Revit Undo.
+
+### 41.1 Aligned / Horizontal / Vertical
+
+**Prompts:**
+```
+Dimension between these two walls.
+Place a horizontal dimension across grids 1, 2 and 3, 1500mm below them.
+```
+
+**Verify:**
+1. `revit_list_dimension_types` returns types grouped by style; `dimensionTypeId` is honored when passed.
+2. One dimension is created referencing all given elements; `offsetMm` moves the dimension line away from the elements (negative flips the side).
+3. Wall references resolve to centerlines, grids/levels to their datum line, family instances to their center reference planes, model/detail lines to their curve.
+4. Elements without a resolvable reference are skipped with a per-element warning naming the element.
+
+### 41.2 Angular / Radial / Diameter / Arc Length
+
+**Prompts:**
+```
+Place an angular dimension between these two walls.
+Add a radius dimension to this arc wall.
+```
+
+**Verify:**
+1. Angular needs exactly 2 non-parallel linear elements; the dimension arc radius follows `offsetMm`.
+2. Radial/diameter/arcLength need arc geometry — straight elements produce a clear warning.
+3. On the Revit 2024 (net48) build, radial/diameter/arcLength report "requires Revit 2025 or newer" instead of failing silently.
+
+### 41.3 Spot Elevation / Spot Coordinate
+
+**Prompt:**
+```
+Place spot elevations on these floors with a 800mm leader.
+```
+
+**Verify:**
+1. One spot dimension per element at its measure point; `offsetMm` sets the leader bend distance, `leaderLengthMm` the horizontal leader segment.
+2. Spot slope requests are rejected with a clear "not supported by the Revit API" message.
+
+---
+
+## 42. Linked Model Selection Tools (issue #22)
+
+### 42.1 Query Linked Elements
+
+**Prompt:**
+```
+Find all walls in the linked IFC model.
+```
+
+**Verify:**
+1. `revit_list_clashable_links` / `ifc_list_links` provide the `linkInstanceId`.
+2. `revit_query_linked_elements` requires category and/or nameFilter; unloaded links produce a clear "load it in Manage Links" error.
+3. Returned `elementIds` are ids inside the linked document; `totalMatched` vs `returned` reflects the `limit` cap.
+
+### 42.2 Select Linked Elements
+
+**Prompt:**
+```
+Select those linked walls in Revit.
+```
+
+**Verify:**
+1. `revit_select_linked_elements` highlights the linked elements in the host UI exactly like a manual pick (`Selection.SetReferences`).
+2. `replaceSelection=false` keeps both existing host-element and linked-element selections.
+3. `zoomToSelection=true` frames the linked elements in the active view (link transform applied).
+4. Invalid ids are reported with a count and sample list.
+
+### 42.3 Read Linked Selection
+
+**Prompt:**
+```
+What do I have selected? (after manually picking elements inside a link)
+```
+
+**Verify:**
+- `revit_get_selected_elements` returns host picks in `elements` and linked picks in `linkedElements` (linkInstanceId, linkName, elementId, category, family, type, name).
+
+### Matrix rows (Section 30)
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Docs | `revit_list_dimension_types` | RO | "List dimension types." | Array of `{typeId, name, style}` | N/A | N/A | `styleFilter` narrows |
+| Docs | `revit_place_dimensions` | RA | "Dimension between walls A and B." | `approval_required` → dimension created, `createdCount` ≥ 1 | Required (DE bypasses) | Single Undo | Per-element warnings for unresolvable references; radial/diameter/arcLength need Revit 2025+ |
+| Selection | `revit_query_linked_elements` | RO | "Find walls in link `<id>`." | `{linkName, totalMatched, elements[]}` with linked-doc ids | N/A | N/A | Requires category and/or nameFilter |
+| Selection | `revit_select_linked_elements` | RO | "Select linked elements [ids] in link `<id>`." | Elements highlighted in host UI, `selectedCount` | N/A | N/A | Uses link references (SetReferences); zoom transforms link coordinates |

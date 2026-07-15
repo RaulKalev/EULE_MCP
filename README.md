@@ -184,7 +184,7 @@ Activity is logged to `%AppData%\RKTools\RevitMCP\Logs\{date}.jsonl` — one JSO
 | `revit_get_connection_status` | Revit version, document title, active view, worksharing info, selection count |
 | `revit_list_instances` | Lists all running Revit instances with a live MCP connector — process id, Revit version, document title, and which one requests are currently routed to |
 | `revit_select_instance` | Selects which running Revit instance MCP requests should be routed to, by process id (see `revit_list_instances`) |
-| `revit_get_selected_elements` | Category, family, type, level, location, bounding box for selected elements |
+| `revit_get_selected_elements` | Category, family, type, level, location, bounding box for selected elements. Elements picked inside linked models are reported separately in `linkedElements` |
 | `revit_inspect_selected_elements` | Detailed inspection of selected elements: category, family/type, level, mm location (point or curve), mm bounding box (min/max/size/center), optional parameters preview, geometry summary (solid/mesh/curve counts, volume mm³). Args: `includeParameters` (true), `parameterNames[]`, `includeGeometrySummary` (true), `limit` (50). |
 | `revit_list_views` | All non-template printable views with type, scale, discipline, sheet placement |
 | `revit_list_sheets` | All sheets with number, name, and placed view names |
@@ -208,6 +208,10 @@ Activity is logged to `%AppData%\RKTools\RevitMCP\Logs\{date}.jsonl` — one JSO
 | `revit_place_tags` | Tags elements in a view (`elementIds` or selection). Tag family auto-resolved per element category unless `tagTypeId`/`tagFamilyName` given; optional leader and head offset in mm *(requires approval, runs in transaction)* |
 | `revit_create_text_notes` | Creates text notes in a view at mm positions; `widthMm`, `rotationDegrees`, and text note type optional *(requires approval, runs in transaction)* |
 | `revit_create_lines` | Creates straight lines from mm segments — `kind=detail` (view-specific) or `kind=model` (3D, sketch planes handled automatically); optional `lineStyle` *(requires approval, runs in transaction)* |
+| `revit_list_dimension_types` | Lists dimension types with their style (Linear, Angular, Radial, Diameter, ArcLength, SpotElevation, SpotCoordinate, SpotSlope); optional `styleFilter` |
+| `revit_place_dimensions` | Places dimensions in a view. `kind` = `aligned` \| `horizontal` \| `vertical` (2+ elements, one dimension) \| `angular` (2 linear elements) \| `radial` \| `diameter` \| `arcLength` (arc elements; Revit 2025+) \| `spotElevation` \| `spotCoordinate`. References auto-extracted from walls, grids, levels, reference planes, lines, and family instances. `offsetMm` = distance of the dimension line/leader bend from the elements; `leaderLengthMm` = spot leader segment length *(requires approval, runs in transaction)* |
+| `revit_query_linked_elements` | Queries elements **inside a linked model** (Revit link or converted IFC) by category/name — returns linked-document element ids for `revit_select_linked_elements` |
+| `revit_select_linked_elements` | Selects elements **inside a linked model** in the host Revit UI, like picking linked elements interactively; optional zoom to the selection |
 
 ### Query Safety & Pagination
 

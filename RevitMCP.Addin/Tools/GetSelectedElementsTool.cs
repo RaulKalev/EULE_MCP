@@ -9,7 +9,10 @@ namespace RevitMCP.Addin.Tools;
 public class GetSelectedElementsTool : IRevitMcpTool
 {
     public string Name => "revit_get_selected_elements";
-    public string Description => "Returns the currently selected elements from the active Revit document.";
+    public string Description =>
+        "Returns the currently selected elements from the active Revit document. " +
+        "Elements picked inside linked models are reported separately in linkedElements " +
+        "with their linkInstanceId and the element id inside the linked document.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Selection;
 
@@ -25,14 +28,15 @@ public class GetSelectedElementsTool : IRevitMcpTool
 
         var doc = uidoc.Document;
         var ids = uidoc.Selection.GetElementIds();
+        var linkedElements = BuildLinkedSelectionSummaries(uidoc, doc);
 
-        if (ids.Count == 0)
+        if (ids.Count == 0 && linkedElements.Count == 0)
             return Task.FromResult(new McpToolResult
             {
                 RequestId = request.RequestId,
                 Success = true,
                 Message = "No elements selected.",
-                Data = new { selectedCount = 0, elements = Array.Empty<object>() },
+                Data = new { selectedCount = 0, elements = Array.Empty<object>(), linkedSelectedCount = 0, linkedElements = Array.Empty<object>() },
                 DurationMs = sw.ElapsedMilliseconds
             });
 
@@ -57,16 +61,62 @@ public class GetSelectedElementsTool : IRevitMcpTool
             detailed++;
         }
 
+        var linkedPart = linkedElements.Count > 0 ? $" Plus {linkedElements.Count} element(s) selected inside linked models." : string.Empty;
+
         sw.Stop();
         return Task.FromResult(new McpToolResult
         {
             RequestId = request.RequestId,
             Success = true,
-            Message = $"{ids.Count} element(s) selected. Returning {detailed} detailed.",
-            Data = new { selectedCount = ids.Count, elements },
+            Message = $"{ids.Count} element(s) selected. Returning {detailed} detailed.{linkedPart}",
+            Data = new { selectedCount = ids.Count, elements, linkedSelectedCount = linkedElements.Count, linkedElements },
             Warnings = warnings,
             DurationMs = sw.ElapsedMilliseconds
         });
+    }
+
+    /// <summary>Elements picked inside linked models only surface through selection references.</summary>
+    private static List<object> BuildLinkedSelectionSummaries(UIDocument uidoc, Document doc)
+    {
+        var linked = new List<object>();
+        try
+        {
+            foreach (var reference in uidoc.Selection.GetReferences())
+            {
+                if (linked.Count >= DetailedLimit) break;
+                if (reference.LinkedElementId == ElementId.InvalidElementId) continue;
+                if (doc.GetElement(reference.ElementId) is not RevitLinkInstance link) continue;
+
+                var linkDoc = link.GetLinkDocument();
+                var element = linkDoc?.GetElement(reference.LinkedElementId);
+                if (linkDoc == null || element == null) continue;
+
+                string family = string.Empty, type = string.Empty;
+                if (element is FamilyInstance fi)
+                {
+                    family = fi.Symbol?.Family?.Name ?? string.Empty;
+                    type = fi.Symbol?.Name ?? string.Empty;
+                }
+                else
+                {
+                    type = linkDoc.GetElement(element.GetTypeId())?.Name ?? string.Empty;
+                }
+
+                linked.Add(new
+                {
+                    linkInstanceId = link.Id.Value,
+                    linkName = link.Name,
+                    elementId = element.Id.Value,
+                    uniqueId = element.UniqueId,
+                    category = element.Category?.Name ?? string.Empty,
+                    family,
+                    type,
+                    name = element.Name
+                });
+            }
+        }
+        catch { /* selection references unavailable — report host elements only */ }
+        return linked;
     }
 
     private static object BuildElementSummary(Document doc, Element elem)

@@ -216,6 +216,12 @@ public class App : IExternalApplication
             handler.RegisterTool(new PlaceTagsTool());
             handler.RegisterTool(new CreateTextNotesTool());
             handler.RegisterTool(new CreateLinesTool());
+            handler.RegisterTool(new PlaceDimensionsTool());
+            handler.RegisterTool(new ListDimensionTypesTool());
+
+            // Linked model query + selection
+            handler.RegisterTool(new QueryLinkedElementsTool());
+            handler.RegisterTool(new SelectLinkedElementsTool());
 
             // Skills
             handler.RegisterTool(new ListSkillsTool());

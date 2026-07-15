@@ -71,7 +71,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_get_selected_elements", ReadOnly = true),
-     Description("Returns the currently selected elements from the active Revit document with category, family, type, level, location, and bounding box.")]
+     Description("Returns the currently selected elements from the active Revit document with category, family, type, level, location, and bounding box. " +
+                 "Elements the user picked inside linked models are reported separately in linkedElements with their linkInstanceId and linked-document element id.")]
     public async Task<string> GetSelectedElements(CancellationToken cancellationToken)
     {
         var result = await pipeClient.SendAsync("revit_get_selected_elements", [], cancellationToken);
@@ -344,6 +345,50 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["zoomToSelection"] = zoomToSelection
         };
         var result = await pipeClient.SendAsync("revit_select_elements", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_query_linked_elements", ReadOnly = true),
+     Description("Queries elements INSIDE a linked model (Revit link or IFC converted to a Revit link). " +
+                 "Required: linkInstanceId (from revit_list_clashable_links or ifc_list_links) plus category and/or nameFilter. " +
+                 "Returned elementIds belong to the LINKED document — select them with revit_select_linked_elements.")]
+    public async Task<string> QueryLinkedElements(
+        [Description("Revit link instance element ID in the host model")] long linkInstanceId,
+        [Description("Category name inside the link, e.g. 'Walls'")] string? category = null,
+        [Description("Substring matched against element and type names")] string? nameFilter = null,
+        [Description("Max elements to return (default 500)")] int limit = 500,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["linkInstanceId"] = linkInstanceId,
+            ["category"] = category ?? string.Empty,
+            ["nameFilter"] = nameFilter ?? string.Empty,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_query_linked_elements", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_select_linked_elements", ReadOnly = true),
+     Description("Selects elements INSIDE a linked model in the host Revit UI — like a user picking linked elements interactively. " +
+                 "Required: linkInstanceId, elementIds (ids in the LINKED document, e.g. from revit_query_linked_elements). " +
+                 "Does not modify model data.")]
+    public async Task<string> SelectLinkedElements(
+        [Description("Revit link instance element ID in the host model")] long linkInstanceId,
+        [Description("Element IDs inside the linked document")] long[] elementIds,
+        [Description("Replace current selection (true) or add to it (false)")] bool replaceSelection = true,
+        [Description("Zoom the active view to the selected linked elements")] bool zoomToSelection = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["linkInstanceId"] = linkInstanceId,
+            ["elementIds"] = elementIds ?? [],
+            ["replaceSelection"] = replaceSelection,
+            ["zoomToSelection"] = zoomToSelection
+        };
+        var result = await pipeClient.SendAsync("revit_select_linked_elements", args, cancellationToken);
         return FormatResult(result);
     }
 
@@ -1126,6 +1171,45 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["lineStyle"] = lineStyle ?? string.Empty
         };
         var result = await pipeClient.SendAsync("revit_create_lines", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_list_dimension_types", ReadOnly = true),
+     Description("Lists all dimension types in the model with their style (Linear, Angular, Radial, Diameter, ArcLength, SpotElevation, SpotCoordinate, SpotSlope). Use typeId as dimensionTypeId in revit_place_dimensions. Optional styleFilter narrows by style name.")]
+    public async Task<string> ListDimensionTypes(
+        [Description("Optional style filter, e.g. 'Linear' or 'Spot'")] string? styleFilter = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["styleFilter"] = styleFilter ?? string.Empty };
+        var result = await pipeClient.SendAsync("revit_list_dimension_types", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_place_dimensions"),
+     Description("Places dimensions in a view. Requires approval; reversible via Revit Undo. " +
+                 "kind: aligned | horizontal | vertical (2+ elementIds → one dimension across all) | angular (exactly 2 linear elements) | " +
+                 "radial | diameter | arcLength (arc elements, one dimension each; Revit 2025+) | spotElevation | spotCoordinate (one spot per element, with leader). " +
+                 "References are auto-extracted from walls, grids, levels, reference planes, model/detail lines, and family instances with reference planes. " +
+                 "offsetMm sets the distance of the dimension line / leader bend from the elements; leaderLengthMm sets the spot-dimension leader segment length.")]
+    public async Task<string> PlaceDimensions(
+        [Description("Dimension kind: aligned | horizontal | vertical | angular | radial | diameter | arcLength | spotElevation | spotCoordinate")] string kind,
+        [Description("Element IDs to dimension")] long[] elementIds,
+        [Description("View element ID. Defaults to the active view.")] long viewId = 0,
+        [Description("Dimension type ID (from revit_list_dimension_types). Default type when omitted.")] long dimensionTypeId = 0,
+        [Description("Distance of the dimension line / leader bend from the elements in mm (default 1000; sign flips the side)")] double offsetMm = 1000,
+        [Description("Spot dimensions: horizontal leader segment length in mm (default 600)")] double leaderLengthMm = 600,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["kind"] = kind,
+            ["elementIds"] = elementIds ?? [],
+            ["viewId"] = viewId,
+            ["dimensionTypeId"] = dimensionTypeId,
+            ["offsetMm"] = offsetMm,
+            ["leaderLengthMm"] = leaderLengthMm
+        };
+        var result = await pipeClient.SendAsync("revit_place_dimensions", args, cancellationToken);
         return FormatResult(result);
     }
 

@@ -44,6 +44,8 @@ public static class ApprovalSummaryBuilder
             // Skill builder
             "revit_create_skill"                => BuildCreateSkill(request),
             "revit_update_skill"                => BuildUpdateSkill(request),
+            // Dimensions
+            "revit_place_dimensions"            => BuildPlaceDimensions(request),
             // Coordination tools
             "revit_create_clash_review_view"    => BuildCreateClashReviewView(request),
             "revit_focus_clash"                 => BuildFocusClash(request),
@@ -349,6 +351,15 @@ public static class ApprovalSummaryBuilder
         var name    = ToolArguments.GetString(request.Arguments, "name");
         var count   = CountArray(request.Arguments, "tasks");
         return $"Create skill '{name}' ({skillId}) with {count} task{(count == 1 ? "" : "s")} in the skill library. Writes a .skill.json file.";
+    }
+
+    private static string BuildPlaceDimensions(McpToolRequest request)
+    {
+        var kind = ToolArguments.GetString(request.Arguments, "kind", "aligned");
+        var ids = ToolArguments.GetLongArray(request.Arguments, "elementIds");
+        var viewId = ToolArguments.GetLong(request.Arguments, "viewId");
+        var viewPart = viewId > 0 ? $" in view ID:{viewId}" : " in the active view";
+        return $"Place {kind} dimension(s) referencing {ids.Length} element{(ids.Length == 1 ? "" : "s")}{viewPart}. Runs in transaction, supports Undo.";
     }
 
     private static string BuildUpdateSkill(McpToolRequest request)
