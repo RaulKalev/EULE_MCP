@@ -152,7 +152,7 @@ public class SkillLoader
         }
     }
 
-    private string ResolveCompanyPath()
+    internal static string ResolveCompanyPath()
     {
         try
         {
@@ -166,6 +166,25 @@ public class SkillLoader
         catch { /* use fallback */ }
 
         return CompanySkillsFallback;
+    }
+
+    /// <summary>
+    /// Directory new skill files are written to: the company skills folder when it is
+    /// creatable/writable, otherwise the local user cache (mirrors EnsureDefaultSkill).
+    /// </summary>
+    internal static string GetWritableSkillsDirectory()
+    {
+        var companyPath = ResolveCompanyPath();
+        try
+        {
+            Directory.CreateDirectory(companyPath);
+            return companyPath;
+        }
+        catch
+        {
+            Directory.CreateDirectory(LocalCachePath);
+            return LocalCachePath;
+        }
     }
 
     private static SkillDefinition? TryLoad(string filePath)

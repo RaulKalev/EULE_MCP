@@ -23,8 +23,8 @@ together, so the `ReadOnly` hint and approval boundary are preserved.
 | `revit_create_project_skill_override`, `revit_update_project_skill_override`, `revit_reset_project_skill_override` | `revit_manage_project_skill_override` | `action` = `create` \| `update` \| `reset` |
 | `revit_preview_rename_views`, `revit_preview_rename_sheets` | `revit_preview_rename` | `entity` = `views` \| `sheets` |
 | `revit_rename_views`, `revit_rename_sheets` | `revit_rename` | `entity` = `views` \| `sheets` |
-| `revit_preview_delete_views`, `revit_preview_delete_sheets` | `revit_preview_delete` | `target` = `views` \| `sheets` |
-| `revit_delete_views`, `revit_delete_sheets` | `revit_delete` | `target` = `views` \| `sheets` |
+| `revit_preview_delete_views`, `revit_preview_delete_sheets`, `revit_preview_delete_elements` | `revit_preview_delete` | `target` = `views` \| `sheets` \| `elements` |
+| `revit_delete_views`, `revit_delete_sheets`, `revit_delete_elements` | `revit_delete` | `target` = `views` \| `sheets` \| `elements` |
 | `revit_preview_duplicate_views`, `revit_preview_duplicate_sheets` | `revit_preview_duplicate` | `entity` = `views` \| `sheets` |
 | `revit_duplicate_views`, `revit_duplicate_sheets` | `revit_duplicate` | `entity` = `views` \| `sheets` |
 | `revit_set_view_parameters_bulk`, `revit_set_sheet_parameters_bulk` | `revit_set_parameters_bulk` | `entity` = `views` \| `sheets` |

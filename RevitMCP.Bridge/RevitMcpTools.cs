@@ -71,7 +71,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_get_selected_elements", ReadOnly = true),
-     Description("Returns the currently selected elements from the active Revit document with category, family, type, level, location, and bounding box.")]
+     Description("Returns the currently selected elements from the active Revit document with category, family, type, level, location, and bounding box. " +
+                 "Elements the user picked inside linked models are reported separately in linkedElements with their linkInstanceId and linked-document element id.")]
     public async Task<string> GetSelectedElements(CancellationToken cancellationToken)
     {
         var result = await pipeClient.SendAsync("revit_get_selected_elements", [], cancellationToken);
@@ -344,6 +345,50 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["zoomToSelection"] = zoomToSelection
         };
         var result = await pipeClient.SendAsync("revit_select_elements", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_query_linked_elements", ReadOnly = true),
+     Description("Queries elements INSIDE a linked model (Revit link or IFC converted to a Revit link). " +
+                 "Required: linkInstanceId (from revit_list_clashable_links or ifc_list_links) plus category and/or nameFilter. " +
+                 "Returned elementIds belong to the LINKED document — select them with revit_select_linked_elements.")]
+    public async Task<string> QueryLinkedElements(
+        [Description("Revit link instance element ID in the host model")] long linkInstanceId,
+        [Description("Category name inside the link, e.g. 'Walls'")] string? category = null,
+        [Description("Substring matched against element and type names")] string? nameFilter = null,
+        [Description("Max elements to return (default 500)")] int limit = 500,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["linkInstanceId"] = linkInstanceId,
+            ["category"] = category ?? string.Empty,
+            ["nameFilter"] = nameFilter ?? string.Empty,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_query_linked_elements", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_select_linked_elements", ReadOnly = true),
+     Description("Selects elements INSIDE a linked model in the host Revit UI — like a user picking linked elements interactively. " +
+                 "Required: linkInstanceId, elementIds (ids in the LINKED document, e.g. from revit_query_linked_elements). " +
+                 "Does not modify model data.")]
+    public async Task<string> SelectLinkedElements(
+        [Description("Revit link instance element ID in the host model")] long linkInstanceId,
+        [Description("Element IDs inside the linked document")] long[] elementIds,
+        [Description("Replace current selection (true) or add to it (false)")] bool replaceSelection = true,
+        [Description("Zoom the active view to the selected linked elements")] bool zoomToSelection = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["linkInstanceId"] = linkInstanceId,
+            ["elementIds"] = elementIds ?? [],
+            ["replaceSelection"] = replaceSelection,
+            ["zoomToSelection"] = zoomToSelection
+        };
+        var result = await pipeClient.SendAsync("revit_select_linked_elements", args, cancellationToken);
         return FormatResult(result);
     }
 
@@ -1126,6 +1171,45 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["lineStyle"] = lineStyle ?? string.Empty
         };
         var result = await pipeClient.SendAsync("revit_create_lines", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_list_dimension_types", ReadOnly = true),
+     Description("Lists all dimension types in the model with their style (Linear, Angular, Radial, Diameter, ArcLength, SpotElevation, SpotCoordinate, SpotSlope). Use typeId as dimensionTypeId in revit_place_dimensions. Optional styleFilter narrows by style name.")]
+    public async Task<string> ListDimensionTypes(
+        [Description("Optional style filter, e.g. 'Linear' or 'Spot'")] string? styleFilter = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["styleFilter"] = styleFilter ?? string.Empty };
+        var result = await pipeClient.SendAsync("revit_list_dimension_types", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_place_dimensions"),
+     Description("Places dimensions in a view. Requires approval; reversible via Revit Undo. " +
+                 "kind: aligned | horizontal | vertical (2+ elementIds → one dimension across all) | angular (exactly 2 linear elements) | " +
+                 "radial | diameter | arcLength (arc elements, one dimension each; Revit 2025+) | spotElevation | spotCoordinate (one spot per element, with leader). " +
+                 "References are auto-extracted from walls, grids, levels, reference planes, model/detail lines, and family instances with reference planes. " +
+                 "offsetMm sets the distance of the dimension line / leader bend from the elements; leaderLengthMm sets the spot-dimension leader segment length.")]
+    public async Task<string> PlaceDimensions(
+        [Description("Dimension kind: aligned | horizontal | vertical | angular | radial | diameter | arcLength | spotElevation | spotCoordinate")] string kind,
+        [Description("Element IDs to dimension")] long[] elementIds,
+        [Description("View element ID. Defaults to the active view.")] long viewId = 0,
+        [Description("Dimension type ID (from revit_list_dimension_types). Default type when omitted.")] long dimensionTypeId = 0,
+        [Description("Distance of the dimension line / leader bend from the elements in mm (default 1000; sign flips the side)")] double offsetMm = 1000,
+        [Description("Spot dimensions: horizontal leader segment length in mm (default 600)")] double leaderLengthMm = 600,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["kind"] = kind,
+            ["elementIds"] = elementIds ?? [],
+            ["viewId"] = viewId,
+            ["dimensionTypeId"] = dimensionTypeId,
+            ["offsetMm"] = offsetMm,
+            ["leaderLengthMm"] = leaderLengthMm
+        };
+        var result = await pipeClient.SendAsync("revit_place_dimensions", args, cancellationToken);
         return FormatResult(result);
     }
 
@@ -2560,9 +2644,9 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     // ── View / Sheet / Documentation — Phase 4 Destructive ───────────────────
 
     [McpServerTool(Name = "revit_preview_delete", ReadOnly = true),
-     Description("Previews which views/sheets would be deleted WITHOUT changes. target=views: viewIds or viewTypes+nameFilter, skipPlacedOnSheets (default true). target=sheets: sheetIds/sheetNumbers/nameFilter, skipSheetsWithViews (default true).")]
+     Description("Previews which views/sheets/elements would be deleted WITHOUT changes. target=views: viewIds or viewTypes+nameFilter, skipPlacedOnSheets (default true). target=sheets: sheetIds/sheetNumbers/nameFilter, skipSheetsWithViews (default true). target=elements: elementIds, skipPinned (default true) — dependent elements are deleted too.")]
     public async Task<string> PreviewDelete(
-        [Description("What to preview: views | sheets")] string target,
+        [Description("What to preview: views | sheets | elements")] string target,
         [Description("views only: view element IDs")] long[]? viewIds = null,
         [Description("views only: filter by view types")] string[]? viewTypes = null,
         [Description("sheets only: sheet element IDs")] long[]? sheetIds = null,
@@ -2570,6 +2654,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Filter by name substring")] string? nameFilter = null,
         [Description("views only: skip views placed on sheets (default true)")] bool skipPlacedOnSheets = true,
         [Description("sheets only: skip sheets with placed views (default true)")] bool skipSheetsWithViews = true,
+        [Description("elements only: model element IDs")] long[]? elementIds = null,
+        [Description("elements only: skip pinned elements (default true)")] bool skipPinned = true,
         CancellationToken cancellationToken = default)
     {
         var t = target?.Trim().ToLowerInvariant();
@@ -2591,18 +2677,28 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             };
             return FormatResult(await pipeClient.SendAsync("revit_preview_delete_sheets", sheetArgs, cancellationToken));
         }
-        return FormatBridgeError($"Invalid target '{target}'. Expected: views or sheets.");
+        if (t == "elements")
+        {
+            var elementArgs = new Dictionary<string, object?>
+            {
+                ["elementIds"] = elementIds ?? [], ["skipPinned"] = skipPinned
+            };
+            return FormatResult(await pipeClient.SendAsync("revit_preview_delete_elements", elementArgs, cancellationToken));
+        }
+        return FormatBridgeError($"Invalid target '{target}'. Expected: views, sheets, or elements.");
     }
 
     [McpServerTool(Name = "revit_delete"),
-     Description("DESTRUCTIVE: permanently deletes views/sheets. Always requires manual approval — cannot be bypassed by Direct Edit. Run revit_preview_delete first. target=views: viewIds required. target=sheets: sheetIds or sheetNumbers required.")]
+     Description("DESTRUCTIVE: permanently deletes views/sheets/elements. Always requires manual approval — cannot be bypassed by Direct Edit. Run revit_preview_delete first. target=views: viewIds required. target=sheets: sheetIds or sheetNumbers required. target=elements: elementIds required — dependent elements (tags, dimensions, hosted elements) are deleted too.")]
     public async Task<string> Delete(
-        [Description("What to delete: views | sheets")] string target,
+        [Description("What to delete: views | sheets | elements")] string target,
         [Description("views only: view element IDs to delete")] long[]? viewIds = null,
         [Description("sheets only: sheet element IDs to delete")] long[]? sheetIds = null,
         [Description("sheets only: sheet numbers to delete")] string[]? sheetNumbers = null,
         [Description("views only: skip views placed on sheets (default true)")] bool skipPlacedOnSheets = true,
         [Description("sheets only: skip sheets with placed views (default true)")] bool skipSheetsWithViews = true,
+        [Description("elements only: model element IDs to delete")] long[]? elementIds = null,
+        [Description("elements only: skip pinned elements (default true)")] bool skipPinned = true,
         CancellationToken cancellationToken = default)
     {
         var t = target?.Trim().ToLowerInvariant();
@@ -2625,7 +2721,17 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             };
             return FormatResult(await pipeClient.SendAsync("revit_delete_sheets", sheetArgs, cancellationToken));
         }
-        return FormatBridgeError($"Invalid target '{target}'. Expected: views or sheets.");
+        if (t == "elements")
+        {
+            if (elementIds == null || elementIds.Length == 0)
+                return FormatBridgeError("target=elements requires elementIds.");
+            var elementArgs = new Dictionary<string, object?>
+            {
+                ["elementIds"] = elementIds, ["skipPinned"] = skipPinned
+            };
+            return FormatResult(await pipeClient.SendAsync("revit_delete_elements", elementArgs, cancellationToken));
+        }
+        return FormatBridgeError($"Invalid target '{target}'. Expected: views, sheets, or elements.");
     }
 
     // -----------------------------------------------------------------------
@@ -3066,6 +3172,128 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["includeProjectOverride"] = includeProjectOverride
         };
         var result = await pipeClient.SendAsync("revit_get_skill_details", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    // ── Skill Builder — guided skill creation (issue #20) ────────────────────
+
+    [McpServerTool(Name = "revit_skill_builder_guide", ReadOnly = true),
+     Description("START HERE when the user wants to create (or design) a new Revit skill. " +
+                 "Returns the guided interview workflow: how to question the user, compose the skill from task building blocks, create it, and explain activation. " +
+                 "No Revit connection needed — this is static guidance.")]
+    public string SkillBuilderGuide() => """
+        # Skill Builder — guided workflow for creating a new skill
+
+        A skill is a JSON recipe (.skill.json) that chains prebuilt task blocks — validations,
+        scans, comparisons, report exports — into a repeatable workflow that runs inside Revit
+        via revit_run_skill. Skills are composed ONLY from the existing task catalog; new task
+        types require C# code and cannot be created here.
+
+        Follow these steps with the user:
+
+        1. UNDERSTAND THE GOAL. Ask the user to describe, at a high level, what they want the
+           skill to do and what result they expect (a report? a validation? applied changes?).
+           Restate the goal back in your own words.
+
+        2. LEARN THE BUILDING BLOCKS. Call revit_list_skill_tasks (task catalog with example
+           settings) and revit_list_skills (existing skills). If an existing skill already
+           covers the goal, suggest running it — or a project override via
+           revit_manage_project_skill_override — instead of creating a duplicate.
+
+        3. INTERVIEW THE USER. Ask focused follow-up questions, a few at a time, and repeat
+           until every required setting has a confirmed value. Typical topics: which checks or
+           tasks to include and their order; file paths (delivery folder, Excel register);
+           parameter names and allowed values; report outputs (Excel report, HTML dashboard)
+           and their titles; whether the skill may modify the model
+           (requiresUserConfirmationBeforeModelChanges). Do NOT guess values the user can
+           answer — keep asking until nothing important is ambiguous.
+
+        4. DRAFT AND CONFIRM. Present a readable summary of the proposed skill (name,
+           description, ordered tasks with their settings) in the USER'S language and ask for
+           confirmation before creating anything.
+
+        5. CREATE. Call revit_create_skill. IMPORTANT: author ALL skill content — id, name,
+           description, setting values — in ENGLISH, even when the conversation is in Estonian
+           or any other language. Recommended id pattern: 'user.<area>.<short-name>'
+           (e.g. 'user.delivery.pdf-check'). The call requires approval in the Revit MCP window.
+
+        6. ANNOUNCE ACTIVATION. Tell the user (in their language) that the skill was created
+           and how to activate it: ask "Run skill '<name>'" — which maps to revit_run_skill
+           with skillId='<id>' — and recommend a dry run first via revit_preview_skill_run.
+
+        7. EDITING LATER. The user can change the skill at any time: fetch the current
+           definition with revit_get_skill_details, interview for the changes, then call
+           revit_update_skill (tasks are a FULL replacement). Company master skills cannot be
+           edited this way — use revit_manage_project_skill_override instead.
+        """;
+
+    [McpServerTool(Name = "revit_list_skill_tasks", ReadOnly = true),
+     Description("Lists all available skill task building blocks for composing skills: id, name, changesModel, " +
+                 "exampleSettings (from an existing skill that uses the task), usedBySkills. " +
+                 "Use with revit_create_skill / revit_update_skill.")]
+    public async Task<string> ListSkillTasks(CancellationToken cancellationToken = default)
+    {
+        var result = await pipeClient.SendAsync("revit_list_skill_tasks", new Dictionary<string, object?>(), cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_create_skill"),
+     Description("Creates a new skill (.skill.json) in the skill library from task building blocks. Requires approval. " +
+                 "Follow revit_skill_builder_guide first and author ALL content in ENGLISH regardless of conversation language. " +
+                 "Required: skillId (lowercase, e.g. 'user.delivery.pdf-check'), name, description, tasks (array of {id, enabled, settings}). " +
+                 "Task ids come from revit_list_skill_tasks.")]
+    public async Task<string> CreateSkill(
+        [Description("Unique skill id — lowercase letters/digits separated by '.', '-' or '_'; recommended prefix 'user.'")] string skillId,
+        [Description("Human-readable skill name (English)")] string name,
+        [Description("What the skill does and when to use it (English)")] string description,
+        [Description("Ordered task array: objects with id (required), enabled (default true), settings (object)")] object[] tasks,
+        [Description("Semantic version (default 1.0.0)")] string? version = null,
+        [Description("Author name (default 'RevitMCP Skill Builder')")] string? author = null,
+        [Description("Stop the run when a task fails critically (default false)")] bool stopOnCriticalFailure = false,
+        [Description("Ask for user confirmation before model-changing tasks (default true)")] bool requiresUserConfirmationBeforeModelChanges = true,
+        [Description("Replace an existing non-master skill with the same id (default false)")] bool overwrite = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["skillId"] = skillId,
+            ["name"] = name,
+            ["description"] = description,
+            ["tasks"] = ToJToken(tasks),
+            ["version"] = version ?? string.Empty,
+            ["author"] = author ?? string.Empty,
+            ["stopOnCriticalFailure"] = stopOnCriticalFailure,
+            ["requiresUserConfirmationBeforeModelChanges"] = requiresUserConfirmationBeforeModelChanges,
+            ["overwrite"] = overwrite
+        };
+        var result = await pipeClient.SendAsync("revit_create_skill", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_update_skill"),
+     Description("Updates an existing user-created skill. Requires approval. Only provided fields change; tasks is a FULL replacement. " +
+                 "Author ALL content in ENGLISH. Company master skills are protected — use revit_manage_project_skill_override instead. " +
+                 "Fetch the current definition with revit_get_skill_details first.")]
+    public async Task<string> UpdateSkill(
+        [Description("ID of the skill to update")] string skillId,
+        [Description("New name (omit to keep)")] string? name = null,
+        [Description("New description (omit to keep)")] string? description = null,
+        [Description("New version (omit to keep)")] string? version = null,
+        [Description("New author (omit to keep)")] string? author = null,
+        [Description("FULL replacement task array: objects with id, enabled, settings (omit to keep)")] object[]? tasks = null,
+        [Description("Stop the run when a task fails critically (omit to keep)")] bool? stopOnCriticalFailure = null,
+        [Description("Ask for user confirmation before model-changing tasks (omit to keep)")] bool? requiresUserConfirmationBeforeModelChanges = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["skillId"] = skillId };
+        if (!string.IsNullOrWhiteSpace(name)) args["name"] = name;
+        if (!string.IsNullOrWhiteSpace(description)) args["description"] = description;
+        if (!string.IsNullOrWhiteSpace(version)) args["version"] = version;
+        if (!string.IsNullOrWhiteSpace(author)) args["author"] = author;
+        if (tasks is not null) args["tasks"] = ToJToken(tasks);
+        if (stopOnCriticalFailure is not null) args["stopOnCriticalFailure"] = stopOnCriticalFailure.Value;
+        if (requiresUserConfirmationBeforeModelChanges is not null) args["requiresUserConfirmationBeforeModelChanges"] = requiresUserConfirmationBeforeModelChanges.Value;
+        var result = await pipeClient.SendAsync("revit_update_skill", args, cancellationToken);
         return FormatResult(result);
     }
 

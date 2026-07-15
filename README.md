@@ -43,7 +43,7 @@ Scan delivery folder C:\Projects\1626\Export for temp files and old revisions.
 
 The addin multi-targets `net8.0-windows` and `net48`. In Revit 2024 the AppLoader picks up `RevitMCP.Addin\bin\Release\net48\RevitMCP.Addin.dll`; in Revit 2026 it loads the `net8.0-windows` build. The bridge and pipe protocol are unchanged.
 
-Both builds share the same plugin window, ribbon button, and approval workflow — a write tool queues in the **Pending** tab and waits for Approve/Reject exactly like on 2026, and the destructive `revit_delete` tool (views or sheets) always requires manual approval regardless of Direct Edit mode, on both versions.
+Both builds share the same plugin window, ribbon button, and approval workflow — a write tool queues in the **Pending** tab and waits for Approve/Reject exactly like on 2026, and the destructive `revit_delete` tool (views, sheets, or elements) always requires manual approval regardless of Direct Edit mode, on both versions.
 
 The one feature not yet available on Revit 2024 is **IFC Space-to-Room** (converting IFC-linked spaces into Revit Rooms) — it's excluded from the net48 build and will be revisited separately.
 
@@ -184,7 +184,7 @@ Activity is logged to `%AppData%\RKTools\RevitMCP\Logs\{date}.jsonl` — one JSO
 | `revit_get_connection_status` | Revit version, document title, active view, worksharing info, selection count |
 | `revit_list_instances` | Lists all running Revit instances with a live MCP connector — process id, Revit version, document title, and which one requests are currently routed to |
 | `revit_select_instance` | Selects which running Revit instance MCP requests should be routed to, by process id (see `revit_list_instances`) |
-| `revit_get_selected_elements` | Category, family, type, level, location, bounding box for selected elements |
+| `revit_get_selected_elements` | Category, family, type, level, location, bounding box for selected elements. Elements picked inside linked models are reported separately in `linkedElements` |
 | `revit_inspect_selected_elements` | Detailed inspection of selected elements: category, family/type, level, mm location (point or curve), mm bounding box (min/max/size/center), optional parameters preview, geometry summary (solid/mesh/curve counts, volume mm³). Args: `includeParameters` (true), `parameterNames[]`, `includeGeometrySummary` (true), `limit` (50). |
 | `revit_list_views` | All non-template printable views with type, scale, discipline, sheet placement |
 | `revit_list_sheets` | All sheets with number, name, and placed view names |
@@ -208,6 +208,10 @@ Activity is logged to `%AppData%\RKTools\RevitMCP\Logs\{date}.jsonl` — one JSO
 | `revit_place_tags` | Tags elements in a view (`elementIds` or selection). Tag family auto-resolved per element category unless `tagTypeId`/`tagFamilyName` given; optional leader and head offset in mm *(requires approval, runs in transaction)* |
 | `revit_create_text_notes` | Creates text notes in a view at mm positions; `widthMm`, `rotationDegrees`, and text note type optional *(requires approval, runs in transaction)* |
 | `revit_create_lines` | Creates straight lines from mm segments — `kind=detail` (view-specific) or `kind=model` (3D, sketch planes handled automatically); optional `lineStyle` *(requires approval, runs in transaction)* |
+| `revit_list_dimension_types` | Lists dimension types with their style (Linear, Angular, Radial, Diameter, ArcLength, SpotElevation, SpotCoordinate, SpotSlope); optional `styleFilter` |
+| `revit_place_dimensions` | Places dimensions in a view. `kind` = `aligned` \| `horizontal` \| `vertical` (2+ elements, one dimension) \| `angular` (2 linear elements) \| `radial` \| `diameter` \| `arcLength` (arc elements; Revit 2025+) \| `spotElevation` \| `spotCoordinate`. References auto-extracted from walls, grids, levels, reference planes, lines, and family instances. `offsetMm` = distance of the dimension line/leader bend from the elements; `leaderLengthMm` = spot leader segment length *(requires approval, runs in transaction)* |
+| `revit_query_linked_elements` | Queries elements **inside a linked model** (Revit link or converted IFC) by category/name — returns linked-document element ids for `revit_select_linked_elements` |
+| `revit_select_linked_elements` | Selects elements **inside a linked model** in the host Revit UI, like picking linked elements interactively; optional zoom to the selection |
 
 ### Query Safety & Pagination
 
@@ -392,10 +396,12 @@ Browse and manage views, sheets, viewports, and revisions in your open model. Al
 
 | Tool | Description |
 |------|-------------|
-| `revit_preview_delete` | Shows which views/sheets would be deleted — never modifies the model. `target` = `views` \| `sheets` |
-| `revit_delete` | **Permanently deletes views or sheets.** Always requires explicit manual approval regardless of Direct Edit mode. `target` = `views` (optional `skipPlacedOnSheets=true` default, protects placed views) \| `sheets` (optional `skipSheetsWithViews=true` default, protects occupied sheets) |
+| `revit_preview_delete` | Shows which views/sheets/elements would be deleted — never modifies the model. `target` = `views` \| `sheets` \| `elements` |
+| `revit_delete` | **Permanently deletes views, sheets, or model elements.** Always requires explicit manual approval regardless of Direct Edit mode. `target` = `views` (optional `skipPlacedOnSheets=true` default, protects placed views) \| `sheets` (optional `skipSheetsWithViews=true` default, protects occupied sheets) \| `elements` (optional `skipPinned=true` default, protects pinned elements; dependent elements such as tags, dimensions, and hosted elements are deleted too) |
 
-> **Safety:** `revit_delete` uses `DestructiveRequiresManualApproval` permission for both targets — it always queues for manual approval in the Pending tab even when Direct Edit is enabled. This cannot be overridden.
+> **Safety:** `revit_delete` uses `DestructiveRequiresManualApproval` permission for all targets — it always queues for manual approval in the Pending tab even when Direct Edit is enabled. This cannot be overridden.
+>
+> If a target view or sheet is currently open or active in the Revit UI, the tool automatically switches the active view to a safe view and closes the open tabs before deleting — Revit refuses to delete the active view, which previously made approved deletions fail.
 
 ### Coordination / Clash Detection Tools
 
@@ -473,6 +479,17 @@ Skills are named multi-step QA workflows stored as `.skill.json` files. Built-in
 | `revit_run_skill_task` | Runs a single task within a skill — useful for re-running or debugging one check without running the full skill |
 | `revit_manage_project_skill_override` | Manages a project-specific override for a skill. `action` = `create` (new override; supports `projectName`, `changesJson`, `note`) \| `update` (merge `changesJson` into an existing override; supports `note`) \| `reset` (delete the override, revert to company-master defaults). `changesJson` structure: `{"tasks":{"<taskId>":{"enabled":true,"settings":{...}}}}` |
 | `revit_configure_sheet_naming_skill` | Helper that creates or updates the project override for the built-in sheet naming skill (`company.lehed.nimetamise-kontroll`). Supports `enableExcelComparison` with optional `excelFilePath` and `worksheetName`, and per-task enable/disable flags. Returns the saved override JSON. |
+
+#### Skill Builder (create your own skills)
+
+Describe what you want a skill to do ("I want a skill that checks X and exports Y") and the AI walks you through a guided interview — it asks follow-up questions until it has every setting, drafts the skill for confirmation, creates it, and tells you how to run it. Conversations can be in any language (e.g. Estonian), but the created skill file is always authored in English.
+
+| Tool | Description |
+|------|-------------|
+| `revit_skill_builder_guide` | **Start here.** Returns the guided interview workflow the AI follows to design a new skill with you. Static guidance — no Revit connection needed |
+| `revit_list_skill_tasks` | Lists the task building blocks skills are composed from: id, name, whether it changes the model, example settings harvested from existing skills, and which skills use each task |
+| `revit_create_skill` | Creates a new `.skill.json` in the skill library *(requires approval)*. Validates task ids against the catalog; the new skill is immediately runnable via `revit_run_skill`. Company master ids are protected |
+| `revit_update_skill` | Edits a user-created skill later *(requires approval)*: name, description, version, tasks (full replacement), run settings. Company master skills are protected — use project overrides instead |
 
 #### Skill Admin Tools
 

@@ -165,6 +165,8 @@ public class App : IExternalApplication
             handler.RegisterTool(new DeleteViewsTool());
             handler.RegisterTool(new PreviewDeleteSheetsTool());
             handler.RegisterTool(new DeleteSheetsTool());
+            handler.RegisterTool(new PreviewDeleteElementsTool());
+            handler.RegisterTool(new DeleteElementsTool());
 
 #if !REVIT2024
             // IFC Space to Room — held back for Revit 2024 for now (writes Rooms from linked IFC data)
@@ -214,10 +216,19 @@ public class App : IExternalApplication
             handler.RegisterTool(new PlaceTagsTool());
             handler.RegisterTool(new CreateTextNotesTool());
             handler.RegisterTool(new CreateLinesTool());
+            handler.RegisterTool(new PlaceDimensionsTool());
+            handler.RegisterTool(new ListDimensionTypesTool());
+
+            // Linked model query + selection
+            handler.RegisterTool(new QueryLinkedElementsTool());
+            handler.RegisterTool(new SelectLinkedElementsTool());
 
             // Skills
             handler.RegisterTool(new ListSkillsTool());
             handler.RegisterTool(new GetSkillDetailsTool());
+            handler.RegisterTool(new ListSkillTasksTool());
+            handler.RegisterTool(new CreateSkillTool());
+            handler.RegisterTool(new UpdateSkillTool());
             handler.RegisterTool(new PreviewSkillRunTool());
             handler.RegisterTool(new RunSkillTool());
             handler.RegisterTool(new RunSkillTaskTool());
