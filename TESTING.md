@@ -1511,9 +1511,9 @@ Set "Comments" to "Reviewed" on all floor plan views.
 
 ---
 
-## 29. View/Sheet Destructive Delete Tools
+## 29. View/Sheet/Element Destructive Delete Tools
 
-> **Safety:** `revit_delete_views` and `revit_delete_sheets` use `DestructiveRequiresManualApproval` — they **always** require manual approval in the Pending tab even when Direct Edit mode is enabled. This cannot be overridden.
+> **Safety:** `revit_delete_views`, `revit_delete_sheets`, and `revit_delete_elements` use `DestructiveRequiresManualApproval` — they **always** require manual approval in the Pending tab even when Direct Edit mode is enabled. This cannot be overridden.
 
 ### 29.1 Preview Delete Views
 
@@ -1580,7 +1580,54 @@ Delete sheets with number suffix "_COPY".
 7. Transaction name: `"Revit MCP - Delete Sheets"`.
 8. Revit Undo restores deleted sheets.
 
+---
 
+### 29.5 Preview Delete Elements
+
+**Prompts:**
+```
+Preview deleting elements 12345 and 67890.
+```
+
+**Verify:**
+- `revit_preview_delete_elements` returns proposals with `elementId`, `name`, `category`, `typeName`, `level`, `isPinned`, `groupName`, `wouldDelete`, `reason`.
+- `skipPinned=true` (default) marks pinned elements as protected.
+- View/sheet ids are rejected with a hint to use the view/sheet delete tools.
+- Levels and Revit links produce a `HIGH RISK` cascade warning; grouped elements produce a group warning.
+- No Revit transaction is created.
+
+---
+
+### 29.6 Delete Elements
+
+**Prompts:**
+```
+Delete elements 12345 and 67890.
+```
+
+**Verify:**
+1. Run `revit_preview_delete_elements` first.
+2. Call `revit_delete_elements` with confirmed element IDs.
+3. **Direct Edit enabled** → approval still required (not bypassed).
+4. Rejection → model unchanged.
+5. Approval → elements are deleted; `totalRemoved` includes cascade-deleted dependents (tags, dimensions, hosted elements).
+6. `skipPinned=true` skips pinned elements with a per-element warning; missing ids and views/sheets are skipped with warnings.
+7. Transaction name: `"Revit MCP - Delete Elements"`.
+8. Revit Undo restores deleted elements.
+
+---
+
+### 29.7 Delete Open/Active Views (regression — issue #19)
+
+**Prompts:**
+```
+Delete the view I currently have open.
+```
+
+**Verify:**
+1. Open the target view as the active view, then approve the deletion.
+2. The tool switches the active view to another view, closes the target's tab, and the deletion succeeds (previously it failed with "Deleted 0 view(s)" because Revit refuses to delete the active view).
+3. If the target view is the only view in the project, it is skipped with a clear warning instead of a silent failure.
 
 ---
 
@@ -1896,6 +1943,8 @@ These tests cover tools added in the Phase 1 finalization pass. Run them against
 | Docs | `revit_delete_views` | **DRA** | "Delete views ['L1_DEMO_COPY']." | `approval_required` even with DE on → summary contains `DESTRUCTIVE` line | **Manual approval ALWAYS required** | Revit Undo restores | DE never bypasses |
 | Docs | `revit_preview_delete_sheets` | RO | "Preview deleting sheets with suffix '_COPY'." | Dry-run with `skipSheetsWithViews` honored | N/A | N/A | — |
 | Docs | `revit_delete_sheets` | **DRA** | "Delete sheets with suffix '_COPY'." | `approval_required` even with DE on → summary contains `DESTRUCTIVE` line | **Manual approval ALWAYS required** | Revit Undo restores | DE never bypasses |
+| Elements | `revit_preview_delete_elements` | RO | "Preview deleting elements [12345]." | Dry-run with per-element `wouldDelete`/`reason`; pinned protected; views/sheets rejected with tool hint | N/A | N/A | `skipPinned=true` default; HIGH RISK warning for Levels/links |
+| Elements | `revit_delete_elements` | **DRA** | "Delete elements [12345]." | `approval_required` even with DE on → summary contains `DESTRUCTIVE` line | **Manual approval ALWAYS required** | Revit Undo restores | DE never bypasses; `totalRemoved` counts cascade-deleted dependents |
 
 ### 30.20 Coordination / Clash Detection
 

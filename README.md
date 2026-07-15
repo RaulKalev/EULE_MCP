@@ -43,7 +43,7 @@ Scan delivery folder C:\Projects\1626\Export for temp files and old revisions.
 
 The addin multi-targets `net8.0-windows` and `net48`. In Revit 2024 the AppLoader picks up `RevitMCP.Addin\bin\Release\net48\RevitMCP.Addin.dll`; in Revit 2026 it loads the `net8.0-windows` build. The bridge and pipe protocol are unchanged.
 
-Both builds share the same plugin window, ribbon button, and approval workflow — a write tool queues in the **Pending** tab and waits for Approve/Reject exactly like on 2026, and the destructive `revit_delete` tool (views or sheets) always requires manual approval regardless of Direct Edit mode, on both versions.
+Both builds share the same plugin window, ribbon button, and approval workflow — a write tool queues in the **Pending** tab and waits for Approve/Reject exactly like on 2026, and the destructive `revit_delete` tool (views, sheets, or elements) always requires manual approval regardless of Direct Edit mode, on both versions.
 
 The one feature not yet available on Revit 2024 is **IFC Space-to-Room** (converting IFC-linked spaces into Revit Rooms) — it's excluded from the net48 build and will be revisited separately.
 
@@ -392,10 +392,12 @@ Browse and manage views, sheets, viewports, and revisions in your open model. Al
 
 | Tool | Description |
 |------|-------------|
-| `revit_preview_delete` | Shows which views/sheets would be deleted — never modifies the model. `target` = `views` \| `sheets` |
-| `revit_delete` | **Permanently deletes views or sheets.** Always requires explicit manual approval regardless of Direct Edit mode. `target` = `views` (optional `skipPlacedOnSheets=true` default, protects placed views) \| `sheets` (optional `skipSheetsWithViews=true` default, protects occupied sheets) |
+| `revit_preview_delete` | Shows which views/sheets/elements would be deleted — never modifies the model. `target` = `views` \| `sheets` \| `elements` |
+| `revit_delete` | **Permanently deletes views, sheets, or model elements.** Always requires explicit manual approval regardless of Direct Edit mode. `target` = `views` (optional `skipPlacedOnSheets=true` default, protects placed views) \| `sheets` (optional `skipSheetsWithViews=true` default, protects occupied sheets) \| `elements` (optional `skipPinned=true` default, protects pinned elements; dependent elements such as tags, dimensions, and hosted elements are deleted too) |
 
-> **Safety:** `revit_delete` uses `DestructiveRequiresManualApproval` permission for both targets — it always queues for manual approval in the Pending tab even when Direct Edit is enabled. This cannot be overridden.
+> **Safety:** `revit_delete` uses `DestructiveRequiresManualApproval` permission for all targets — it always queues for manual approval in the Pending tab even when Direct Edit is enabled. This cannot be overridden.
+>
+> If a target view or sheet is currently open or active in the Revit UI, the tool automatically switches the active view to a safe view and closes the open tabs before deleting — Revit refuses to delete the active view, which previously made approved deletions fail.
 
 ### Coordination / Clash Detection Tools
 

@@ -2560,9 +2560,9 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     // ── View / Sheet / Documentation — Phase 4 Destructive ───────────────────
 
     [McpServerTool(Name = "revit_preview_delete", ReadOnly = true),
-     Description("Previews which views/sheets would be deleted WITHOUT changes. target=views: viewIds or viewTypes+nameFilter, skipPlacedOnSheets (default true). target=sheets: sheetIds/sheetNumbers/nameFilter, skipSheetsWithViews (default true).")]
+     Description("Previews which views/sheets/elements would be deleted WITHOUT changes. target=views: viewIds or viewTypes+nameFilter, skipPlacedOnSheets (default true). target=sheets: sheetIds/sheetNumbers/nameFilter, skipSheetsWithViews (default true). target=elements: elementIds, skipPinned (default true) — dependent elements are deleted too.")]
     public async Task<string> PreviewDelete(
-        [Description("What to preview: views | sheets")] string target,
+        [Description("What to preview: views | sheets | elements")] string target,
         [Description("views only: view element IDs")] long[]? viewIds = null,
         [Description("views only: filter by view types")] string[]? viewTypes = null,
         [Description("sheets only: sheet element IDs")] long[]? sheetIds = null,
@@ -2570,6 +2570,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Filter by name substring")] string? nameFilter = null,
         [Description("views only: skip views placed on sheets (default true)")] bool skipPlacedOnSheets = true,
         [Description("sheets only: skip sheets with placed views (default true)")] bool skipSheetsWithViews = true,
+        [Description("elements only: model element IDs")] long[]? elementIds = null,
+        [Description("elements only: skip pinned elements (default true)")] bool skipPinned = true,
         CancellationToken cancellationToken = default)
     {
         var t = target?.Trim().ToLowerInvariant();
@@ -2591,18 +2593,28 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             };
             return FormatResult(await pipeClient.SendAsync("revit_preview_delete_sheets", sheetArgs, cancellationToken));
         }
-        return FormatBridgeError($"Invalid target '{target}'. Expected: views or sheets.");
+        if (t == "elements")
+        {
+            var elementArgs = new Dictionary<string, object?>
+            {
+                ["elementIds"] = elementIds ?? [], ["skipPinned"] = skipPinned
+            };
+            return FormatResult(await pipeClient.SendAsync("revit_preview_delete_elements", elementArgs, cancellationToken));
+        }
+        return FormatBridgeError($"Invalid target '{target}'. Expected: views, sheets, or elements.");
     }
 
     [McpServerTool(Name = "revit_delete"),
-     Description("DESTRUCTIVE: permanently deletes views/sheets. Always requires manual approval — cannot be bypassed by Direct Edit. Run revit_preview_delete first. target=views: viewIds required. target=sheets: sheetIds or sheetNumbers required.")]
+     Description("DESTRUCTIVE: permanently deletes views/sheets/elements. Always requires manual approval — cannot be bypassed by Direct Edit. Run revit_preview_delete first. target=views: viewIds required. target=sheets: sheetIds or sheetNumbers required. target=elements: elementIds required — dependent elements (tags, dimensions, hosted elements) are deleted too.")]
     public async Task<string> Delete(
-        [Description("What to delete: views | sheets")] string target,
+        [Description("What to delete: views | sheets | elements")] string target,
         [Description("views only: view element IDs to delete")] long[]? viewIds = null,
         [Description("sheets only: sheet element IDs to delete")] long[]? sheetIds = null,
         [Description("sheets only: sheet numbers to delete")] string[]? sheetNumbers = null,
         [Description("views only: skip views placed on sheets (default true)")] bool skipPlacedOnSheets = true,
         [Description("sheets only: skip sheets with placed views (default true)")] bool skipSheetsWithViews = true,
+        [Description("elements only: model element IDs to delete")] long[]? elementIds = null,
+        [Description("elements only: skip pinned elements (default true)")] bool skipPinned = true,
         CancellationToken cancellationToken = default)
     {
         var t = target?.Trim().ToLowerInvariant();
@@ -2625,7 +2637,17 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             };
             return FormatResult(await pipeClient.SendAsync("revit_delete_sheets", sheetArgs, cancellationToken));
         }
-        return FormatBridgeError($"Invalid target '{target}'. Expected: views or sheets.");
+        if (t == "elements")
+        {
+            if (elementIds == null || elementIds.Length == 0)
+                return FormatBridgeError("target=elements requires elementIds.");
+            var elementArgs = new Dictionary<string, object?>
+            {
+                ["elementIds"] = elementIds, ["skipPinned"] = skipPinned
+            };
+            return FormatResult(await pipeClient.SendAsync("revit_delete_elements", elementArgs, cancellationToken));
+        }
+        return FormatBridgeError($"Invalid target '{target}'. Expected: views, sheets, or elements.");
     }
 
     // -----------------------------------------------------------------------

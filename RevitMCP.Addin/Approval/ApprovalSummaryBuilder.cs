@@ -40,6 +40,7 @@ public static class ApprovalSummaryBuilder
             "revit_create_sheets_from_table"    => BuildCreateSheetsFromTable(request),
             "revit_delete_views"                => BuildDeleteViews(request),
             "revit_delete_sheets"               => BuildDeleteSheets(request),
+            "revit_delete_elements"             => BuildDeleteElements(request),
             // Coordination tools
             "revit_create_clash_review_view"    => BuildCreateClashReviewView(request),
             "revit_focus_clash"                 => BuildFocusClash(request),
@@ -331,6 +332,12 @@ public static class ApprovalSummaryBuilder
     {
         var sheetIds = ToolArguments.GetLongArray(request.Arguments, "sheetIds");
         return $"DESTRUCTIVE: Delete {sheetIds.Length} sheet{(sheetIds.Length == 1 ? "" : "s")}. Manual approval required.";
+    }
+
+    private static string BuildDeleteElements(McpToolRequest request)
+    {
+        var elementIds = ToolArguments.GetLongArray(request.Arguments, "elementIds");
+        return $"DESTRUCTIVE: Delete {elementIds.Length} element{(elementIds.Length == 1 ? "" : "s")} plus dependent elements. Manual approval required.";
     }
 
     private static string BuildCreateClashReviewView(McpToolRequest request)
