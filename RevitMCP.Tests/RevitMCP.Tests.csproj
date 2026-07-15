@@ -83,6 +83,7 @@
     <!-- Approval and dispatch safety primitives (no Autodesk dependency) -->
     <Compile Include="..\RevitMCP.Addin\Approval\ApprovalContextGuard.cs" Link="Approval\ApprovalContextGuard.cs" />
     <Compile Include="..\RevitMCP.Addin\Approval\DocumentChangeTracker.cs" Link="Approval\DocumentChangeTracker.cs" />
+    <Compile Include="..\RevitMCP.Addin\Approval\PermissionModeStatus.cs" Link="Approval\PermissionModeStatus.cs" />
     <Compile Include="..\RevitMCP.Addin\Approval\PendingApprovalRequest.cs" Link="Approval\PendingApprovalRequest.cs" />
     <Compile Include="..\RevitMCP.Addin\Approval\ApprovalService.cs" Link="Approval\ApprovalService.cs" />
     <Compile Include="..\RevitMCP.Addin\Services\ExternalEventWorkItem.cs" Link="Services\ExternalEventWorkItem.cs" />

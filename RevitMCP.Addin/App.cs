@@ -286,12 +286,17 @@ public class App : IExternalApplication
             handler.SetApprovalService(approvalService);
             handler.SetActivityLogger(logger);
 
-            // Each Revit process hosts its own unique pipe so multiple running Revit
-            // instances (e.g. 2024 and 2026 side by side) never contend for the same pipe.
-            // The bridge discovers instances via the shared registry file written below.
+            // Each add-in load hosts its own unique pipe. The load id is essential for
+            // AppLoader hot reloads: an orphan listener from the previous assembly can
+            // otherwise retain the per-process pipe name and accept clients without
+            // servicing them. The bridge discovers the current pipe via the registry.
             var revitVersion = application.ControlledApplication.VersionNumber;
             var processId = System.Diagnostics.Process.GetCurrentProcess().Id;
-            var pipeName = RevitMcpDefaults.BuildPipeName(revitVersion, processId);
+            var loadId = Guid.NewGuid().ToString("N");
+            // Keep the generation suffix in the reloadable add-in assembly. AppLoader can
+            // retain the prior embedded RevitMCP.Core assembly during a hot reload, so the
+            // add-in must not require a newly-added Core API merely to start the new load.
+            var pipeName = $"{RevitMcpDefaults.BuildPipeName(revitVersion, processId)}.{loadId}";
             DiagLog($"Pipe name: {pipeName}");
 
             var pipeServer = new PipeServer(pipeName, eventService, logger);

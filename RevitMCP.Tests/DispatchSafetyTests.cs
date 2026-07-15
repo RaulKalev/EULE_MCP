@@ -8,14 +8,21 @@ namespace RevitMCP.Tests;
 public class DispatchSafetyTests
 {
     [Fact]
-    public void ApprovalContextGuard_RequiresSameDocumentInstance()
+    public void ApprovalContextGuard_RequiresSameNativeDocumentInstance()
     {
-        var expected = new object();
+        var expected = new DocumentProxy(1);
 
         Assert.True(ApprovalContextGuard.IsValid(true, expected, expected));
-        Assert.False(ApprovalContextGuard.IsValid(true, expected, new object()));
+        Assert.True(ApprovalContextGuard.IsValid(true, expected, new DocumentProxy(1)));
+        Assert.False(ApprovalContextGuard.IsValid(true, expected, new DocumentProxy(2)));
         Assert.False(ApprovalContextGuard.IsValid(true, expected, null));
         Assert.True(ApprovalContextGuard.IsValid(false, expected, new object()));
+    }
+
+    [Fact]
+    public void ApprovalContextGuard_RejectsDisposedDocumentComparison()
+    {
+        Assert.False(ApprovalContextGuard.IsValid(true, new DisposedDocumentProxy(), new object()));
     }
 
     [Fact]
@@ -24,6 +31,14 @@ public class DispatchSafetyTests
         Assert.True(ApprovalContextGuard.IsSelectionValid(true, new long[] { 3, 1 }, new long[] { 1, 3 }));
         Assert.False(ApprovalContextGuard.IsSelectionValid(true, new long[] { 1, 3 }, new long[] { 1, 4 }));
         Assert.True(ApprovalContextGuard.IsSelectionValid(false, new long[] { 1 }, Array.Empty<long>()));
+    }
+
+    [Fact]
+    public void PermissionModeStatus_ReportsDirectEditWithoutWeakeningDestructiveApproval()
+    {
+        Assert.Equal("ApprovalRequired", PermissionModeStatus.GetName(false));
+        Assert.Equal("DirectEdit", PermissionModeStatus.GetName(true));
+        Assert.True(PermissionModeStatus.DestructiveActionsRequireManualApproval);
     }
 
     [Fact]
@@ -38,6 +53,19 @@ public class DispatchSafetyTests
 
         Assert.Equal(originalFirst + 1, DocumentChangeTracker.Capture(first));
         Assert.Equal(originalSecond, DocumentChangeTracker.Capture(second));
+    }
+
+    [Fact]
+    public void DocumentChangeTracker_SharesStampAcrossEquivalentDocumentWrappers()
+    {
+        var firstWrapper = new DocumentProxy(101);
+        var secondWrapper = new DocumentProxy(101);
+        var original = DocumentChangeTracker.Capture(firstWrapper);
+
+        DocumentChangeTracker.MarkChanged(secondWrapper);
+
+        Assert.Equal(original + 1, DocumentChangeTracker.Capture(firstWrapper));
+        Assert.Equal(original + 1, DocumentChangeTracker.Capture(secondWrapper));
     }
 
     [Fact]
@@ -168,5 +196,38 @@ public class DispatchSafetyTests
         return new ExternalEventWorkItem(
             new McpToolRequest { RequestId = requestId, ToolName = "test_tool" },
             new TaskCompletionSource<McpToolResult>(TaskCreationOptions.RunContinuationsAsynchronously));
+    }
+
+    private sealed class DocumentProxy
+    {
+        private readonly int _nativeId;
+
+        public DocumentProxy(int nativeId)
+        {
+            _nativeId = nativeId;
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is DocumentProxy other && other._nativeId == _nativeId;
+        }
+
+        public override int GetHashCode()
+        {
+            return _nativeId;
+        }
+    }
+
+    private sealed class DisposedDocumentProxy
+    {
+        public override bool Equals(object? obj)
+        {
+            throw new ObjectDisposedException(nameof(DisposedDocumentProxy));
+        }
+
+        public override int GetHashCode()
+        {
+            return 0;
+        }
     }
 }

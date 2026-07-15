@@ -4,8 +4,8 @@ public static class RevitMcpDefaults
 {
     /// <summary>
     /// Legacy shared pipe name kept as a connection fallback for older add-in builds.
-    /// Current add-in builds host a unique per-process pipe (see <see cref="BuildPipeName"/>)
-    /// so multiple Revit instances (e.g. 2024 and 2026 side by side) never contend
+    /// Current add-in builds extend the unique per-process pipe name with a per-load
+    /// suffix so multiple Revit instances and AppLoader reload generations never contend
     /// for the same pipe.
     /// </summary>
     public const string PipeName = "RKTools.RevitMCP.2026";

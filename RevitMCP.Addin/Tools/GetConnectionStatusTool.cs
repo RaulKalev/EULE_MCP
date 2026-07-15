@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Autodesk.Revit.UI;
 using Newtonsoft.Json;
+using RevitMCP.Addin.Approval;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Services;
 using RevitMCP.Core.Models;
@@ -18,6 +19,7 @@ public class GetConnectionStatusTool : IRevitMcpTool
     {
         var sw = Stopwatch.StartNew();
         var ctx = RevitContextService.Read(uiapp);
+        var isDirectEditEnabled = RevitMCP.Addin.App.GetViewModel()?.IsDirectEditEnabled ?? false;
 
         var data = new
         {
@@ -31,7 +33,8 @@ public class GetConnectionStatusTool : IRevitMcpTool
             localModelPath = ctx.LocalModelPath,
             revitUsername = ctx.RevitUsername,
             selectedElementCount = ctx.SelectedElementCount,
-            permissionMode = "ApprovalRequired"
+            permissionMode = PermissionModeStatus.GetName(isDirectEditEnabled),
+            destructiveActionsRequireManualApproval = PermissionModeStatus.DestructiveActionsRequireManualApproval
         };
 
         sw.Stop();
