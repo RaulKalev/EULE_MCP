@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Documentation.Sheets;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Core.Models;
 
@@ -10,168 +11,207 @@ public class DuplicateSheetsTool : IRevitMcpTool
 {
     public string Name => "revit_duplicate_sheets";
     public string Description =>
-        "Duplicates sheets (creates new empty sheets with same titleblock and copied parameters). Requires approval. " +
+        "Duplicates sheets with SheetManager-compatible content options. Requires approval. " +
         "Required: sourceSheetIds (long array) OR sourceSheetNumbers (string array). " +
-        "Optional: newNumberSuffix (string, default \"_COPY\"), newNameSuffix (string, default \" - Copy\"), " +
-        "keepTitleBlock (bool, default true), copyParameters (bool, default true). " +
-        "Note: Viewports, legends, schedules are NOT duplicated (empty shell only). " +
-        "Use revit_preview_duplicate_sheets to verify first.";
+        "Optional: numberOfCopies (1-50, default 1), duplicateMode " +
+        "(EmptySheet|WithSheetDetailing|WithViews, default EmptySheet), " +
+        "newNumberSuffix (default '_COPY'), newNameSuffix (default ' - Copy'; both support {index}), " +
+        "keepTitleBlock (default true), copyParameters (default true), " +
+        "copyTitleBlockParameters (defaults to copyParameters), keepLegends (default false), " +
+        "keepSchedules (default false), copyRevisions (default false), " +
+        "viewDuplicateOption (Duplicate|DuplicateWithDetailing|AsDependent, default DuplicateWithDetailing). " +
+        "Viewports, legends, and schedules retain their source sheet positions. " +
+        "Use revit_preview_duplicate_sheets first.";
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Documentation;
 
-    public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
+    public Task<McpToolResult> ExecuteAsync(
+        UIApplication uiapp,
+        McpToolRequest request,
+        CancellationToken cancellationToken)
     {
-        var sw  = Stopwatch.StartNew();
+        var sw = Stopwatch.StartNew();
         var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null)
-            return Task.FromResult(Fail(request, "No active document."));
+        if (doc == null) return Task.FromResult(Fail(request, "No active document."));
 
-        var sourceIds  = ToolArguments.GetLongArray(request.Arguments, "sourceSheetIds");
-        var sourceNums = ToolArguments.GetStringArray(request.Arguments, "sourceSheetNumbers");
-        var numSuffix  = ToolArguments.GetString(request.Arguments, "newNumberSuffix", "_COPY");
+        var sourceIds = ToolArguments.GetLongArray(request.Arguments, "sourceSheetIds");
+        var sourceNumbers = ToolArguments.GetStringArray(request.Arguments, "sourceSheetNumbers");
+        var copies = ToolArguments.GetInt(request.Arguments, "numberOfCopies", 1);
+        var modeText = ToolArguments.GetString(request.Arguments, "duplicateMode", "EmptySheet");
+        var numberSuffix = ToolArguments.GetString(request.Arguments, "newNumberSuffix", "_COPY");
         var nameSuffix = ToolArguments.GetString(request.Arguments, "newNameSuffix", " - Copy");
-        var keepTb     = ToolArguments.GetBool(request.Arguments, "keepTitleBlock", true);
-        var copyParams = ToolArguments.GetBool(request.Arguments, "copyParameters", true);
+        var copyParameters = ToolArguments.GetBool(request.Arguments, "copyParameters", true);
+        var copyTitleBlockParameters = request.Arguments.ContainsKey("copyTitleBlockParameters")
+            ? ToolArguments.GetBool(request.Arguments, "copyTitleBlockParameters", copyParameters)
+            : copyParameters;
+        var viewOptionText = ToolArguments.GetString(
+            request.Arguments,
+            "viewDuplicateOption",
+            "DuplicateWithDetailing");
 
-        if (sourceIds.Length == 0 && sourceNums.Length == 0)
+        if (sourceIds.Length == 0 && sourceNumbers.Length == 0)
             return Task.FromResult(Fail(request, "Provide sourceSheetIds or sourceSheetNumbers."));
+        if (copies < 1 || copies > 50)
+            return Task.FromResult(Fail(request, "numberOfCopies must be between 1 and 50."));
+        if (!SheetDuplicationService.TryParseMode(modeText, out var duplicateMode))
+            return Task.FromResult(Fail(request,
+                $"Unknown duplicateMode '{modeText}'. Valid: EmptySheet, WithSheetDetailing, WithViews."));
+        if (!SheetDuplicationService.TryParseViewDuplicateOption(viewOptionText, out var viewOption))
+            return Task.FromResult(Fail(request,
+                $"Unknown viewDuplicateOption '{viewOptionText}'. Valid: Duplicate, DuplicateWithDetailing, AsDependent."));
 
         var allSheets = new FilteredElementCollector(doc)
             .OfClass(typeof(ViewSheet))
             .Cast<ViewSheet>()
+            .Where(s => !s.IsPlaceholder)
             .ToList();
-
-        IEnumerable<ViewSheet> sources = sourceIds.Length > 0
-            ? allSheets.Where(s => sourceIds.ToHashSet().Contains(s.Id.Value))
-            : allSheets.Where(s => sourceNums.Select(n => n.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase).Contains(s.SheetNumber));
-
-        var sourceList = sources.ToList();
-        if (sourceList.Count == 0)
-        {
-            var searchedDesc = sourceIds.Length > 0
-                ? $"IDs [{string.Join(", ", sourceIds)}]"
-                : $"numbers [{string.Join(", ", sourceNums)}]";
+        var sources = ResolveSources(allSheets, sourceIds, sourceNumbers);
+        if (sources.Count == 0)
             return Task.FromResult(Fail(request,
-                $"No sheets found matching {searchedDesc}. " +
-                $"Use revit_list_sheets to retrieve valid element IDs and sheet numbers."));
-        }
+                "No matching sheets were found. Use revit_list_sheets to retrieve valid IDs or numbers."));
 
-        // Build collision-detection sets; updated per-iteration to handle multi-sheet batches
-        var takenNumbers = allSheets.Select(s => s.SheetNumber).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var takenNames   = allSheets.Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var options = new SheetDuplicationOptions
+        {
+            Mode = duplicateMode,
+            KeepTitleBlock = ToolArguments.GetBool(request.Arguments, "keepTitleBlock", true),
+            CopySheetParameters = copyParameters,
+            CopyTitleBlockParameters = copyTitleBlockParameters,
+            KeepLegends = ToolArguments.GetBool(request.Arguments, "keepLegends", false),
+            KeepSchedules = ToolArguments.GetBool(request.Arguments, "keepSchedules", false),
+            CopyRevisions = ToolArguments.GetBool(request.Arguments, "copyRevisions", false),
+            ViewDuplicateOption = viewOption
+        };
 
-        int created  = 0;
+        var takenNumbers = allSheets.Select(s => s.SheetNumber)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var takenNames = allSheets.Select(s => s.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var warnings = new List<string>();
-        var results  = new List<object>();
+        var results = new List<object>();
+        var created = 0;
+        var copiedDetailing = 0;
+        var duplicatedViews = 0;
+        var placedLegends = 0;
+        var placedSchedules = 0;
+        var copiedRevisions = 0;
 
         cancellationToken.ThrowIfCancellationRequested();
-        using var t = new Transaction(doc, "Revit MCP - Duplicate Sheets");
-        t.Start();
-        foreach (var src in sourceList)
+        using var transaction = new Transaction(doc, "Revit MCP - Duplicate Sheets");
+        transaction.Start();
+
+        foreach (var source in sources)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
+            for (var copyIndex = 1; copyIndex <= copies; copyIndex++)
             {
-                var newNum  = ResolveUnique(src.SheetNumber + numSuffix, takenNumbers);
-                var newName = ResolveUnique(src.Name + nameSuffix, takenNames);
-                // Reserve so subsequent sheets in the same batch don't pick the same values
-                takenNumbers.Add(newNum);
-                takenNames.Add(newName);
+                cancellationToken.ThrowIfCancellationRequested();
 
-                // Get titleblock type
-                ElementId tbTypeId = ElementId.InvalidElementId;
-                if (keepTb)
+                var requestedNumber = source.SheetNumber + ApplyIndex(numberSuffix, copyIndex, copies);
+                var requestedName = source.Name + ApplyIndex(nameSuffix, copyIndex, copies);
+                var newNumber = ResolveUnique(requestedNumber, takenNumbers);
+                var newName = ResolveUnique(requestedName, takenNames);
+
+                using var subTransaction = new SubTransaction(doc);
+                subTransaction.Start();
+                try
                 {
-                    var tb = new FilteredElementCollector(doc)
-                        .OwnedByView(src.Id)
-                        .OfCategory(BuiltInCategory.OST_TitleBlocks)
-                        .Cast<FamilyInstance>()
-                        .FirstOrDefault();
-                    if (tb != null) tbTypeId = tb.GetTypeId();
-                }
+                    var duplicate = SheetDuplicationService.Duplicate(
+                        doc,
+                        source,
+                        newNumber,
+                        newName,
+                        options);
+                    subTransaction.Commit();
 
-                var newSheet = ViewSheet.Create(doc, tbTypeId);
-                newSheet.SheetNumber = newNum;
-                newSheet.Name        = newName;
+                    takenNumbers.Add(newNumber);
+                    takenNames.Add(newName);
+                    created++;
+                    copiedDetailing += duplicate.CopiedDetailingElements;
+                    duplicatedViews += duplicate.DuplicatedViews;
+                    placedLegends += duplicate.PlacedLegends;
+                    placedSchedules += duplicate.PlacedSchedules;
+                    copiedRevisions += duplicate.CopiedRevisions;
+                    warnings.AddRange(duplicate.Warnings.Select(w => $"Sheet '{source.SheetNumber}': {w}"));
 
-                // Copy instance parameters (skip sheet number / name — set explicitly above)
-                if (copyParams)
-                {
-                    foreach (Parameter srcParam in src.Parameters)
+                    results.Add(new
                     {
-                        if (srcParam.IsReadOnly) continue;
-                        // Sheet Number and Sheet Name must not be overwritten from source;
-                        // Revit defers uniqueness validation and the whole transaction would
-                        // fail at Commit() if we write the source's sheet number to the copy.
-                        if (srcParam.Definition is InternalDefinition intDef)
-                        {
-                            var bip = intDef.BuiltInParameter;
-                            if (bip == BuiltInParameter.SHEET_NUMBER ||
-                                bip == BuiltInParameter.VIEW_NAME)
-                                continue;
-                        }
-                        try
-                        {
-                            var dstParam = newSheet.get_Parameter(srcParam.Definition);
-                            if (dstParam == null || dstParam.IsReadOnly) continue;
-                            switch (srcParam.StorageType)
-                            {
-                                case StorageType.String:  dstParam.Set(srcParam.AsString() ?? ""); break;
-                                case StorageType.Integer: dstParam.Set(srcParam.AsInteger()); break;
-                                case StorageType.Double:  dstParam.Set(srcParam.AsDouble()); break;
-                                case StorageType.ElementId: dstParam.Set(srcParam.AsElementId()); break;
-                            }
-                        }
-                        catch { /* skip unwritable params */ }
-                    }
+                        sourceSheetId = source.Id.Value,
+                        sourceSheetNumber = source.SheetNumber,
+                        newSheetId = duplicate.Sheet.Id.Value,
+                        newSheetNumber = duplicate.Sheet.SheetNumber,
+                        newSheetName = duplicate.Sheet.Name,
+                        copiedDetailingElements = duplicate.CopiedDetailingElements,
+                        duplicatedViews = duplicate.DuplicatedViews,
+                        placedLegends = duplicate.PlacedLegends,
+                        placedSchedules = duplicate.PlacedSchedules,
+                        copiedRevisions = duplicate.CopiedRevisions
+                    });
                 }
-
-                // Re-assert number and name after parameter copy.
-                // A title-block or other shared parameter on the source may have been written
-                // back through get_Parameter(srcParam.Definition) and overwritten the name we
-                // set above.  Setting these last guarantees the requested suffix is preserved.
-                newSheet.SheetNumber = newNum;
-                newSheet.Name        = newName;
-
-                created++;
-                results.Add(new { sourceSheetId = src.Id.Value, sourceSheetNumber = src.SheetNumber, newSheetId = newSheet.Id.Value, newSheetNumber = newNum, newSheetName = newName });
-            }
-            catch (Exception ex)
-            {
-                warnings.Add($"Failed to duplicate sheet '{src.SheetNumber}': {ex.Message}");
+                catch (Exception ex)
+                {
+                    if (subTransaction.GetStatus() == TransactionStatus.Started)
+                        subTransaction.RollBack();
+                    warnings.Add($"Failed to duplicate sheet '{source.SheetNumber}' copy {copyIndex}: {ex.Message}");
+                }
             }
         }
-        var commitStatus = t.Commit();
-        if (commitStatus != TransactionStatus.Committed)
-        {
-            return Task.FromResult(Fail(request,
-                $"Transaction did not commit (status: {commitStatus}). " +
-                $"No sheets were created. This can happen if a generated sheet number " +
-                $"conflicts with an existing one — run revit_preview_duplicate_sheets first."));
-        }
 
+        RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(transaction);
         sw.Stop();
         return Task.FromResult(new McpToolResult
         {
-            RequestId  = request.RequestId,
-            Success    = created > 0,
-            Message    = $"Duplicated {created} sheet(s).",
-            Data       = new { created, results },
-            Warnings   = warnings,
+            RequestId = request.RequestId,
+            Success = created > 0,
+            Message = $"Duplicated {created}/{sources.Count * copies} sheet(s) using mode {duplicateMode}.",
+            Data = new
+            {
+                created,
+                failed = sources.Count * copies - created,
+                duplicateMode = duplicateMode.ToString(),
+                copiedDetailingElements = copiedDetailing,
+                duplicatedViews,
+                placedLegends,
+                placedSchedules,
+                copiedRevisions,
+                results
+            },
+            Warnings = warnings,
             DurationMs = sw.ElapsedMilliseconds
         });
     }
 
-    private static McpToolResult Fail(McpToolRequest r, string msg) =>
-        new() { RequestId = r.RequestId, Success = false, Message = msg };
+    private static List<ViewSheet> ResolveSources(
+        List<ViewSheet> allSheets,
+        long[] sourceIds,
+        string[] sourceNumbers)
+    {
+        if (sourceIds.Length > 0)
+        {
+            var idSet = sourceIds.ToHashSet();
+            return allSheets.Where(s => idSet.Contains(s.Id.Value)).ToList();
+        }
+
+        var numberSet = sourceNumbers.Select(n => n.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return allSheets.Where(s => numberSet.Contains(s.SheetNumber)).ToList();
+    }
+
+    private static string ApplyIndex(string value, int index, int copies)
+    {
+        if (value.Contains("{index}", StringComparison.OrdinalIgnoreCase))
+            return value.Replace("{index}", index.ToString(), StringComparison.OrdinalIgnoreCase);
+        return copies > 1 ? $"{value} {index}" : value;
+    }
 
     private static string ResolveUnique(string candidate, HashSet<string> taken)
     {
         if (!taken.Contains(candidate)) return candidate;
-        for (int i = 1; ; i++)
+        for (var index = 1; ; index++)
         {
-            var s = $"{candidate} {i}";
-            if (!taken.Contains(s)) return s;
+            var resolved = $"{candidate} {index}";
+            if (!taken.Contains(resolved)) return resolved;
         }
     }
+
+    private static McpToolResult Fail(McpToolRequest request, string message) =>
+        new() { RequestId = request.RequestId, Success = false, Message = message };
 }

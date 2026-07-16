@@ -34,4 +34,17 @@ public static class PlacementPointResolver
 
         return DefaultCenter;
     }
+
+    /// <summary>
+    /// Returns the center of the sheet outline, matching the original
+    /// PlaceViews placement behavior.
+    /// </summary>
+    public static XYZ GetSheetOutlineCenter(ViewSheet sheet)
+    {
+        var outline = sheet.Outline;
+        return new XYZ(
+            (outline.Min.U + outline.Max.U) / 2.0,
+            (outline.Min.V + outline.Max.V) / 2.0,
+            0);
+    }
 }

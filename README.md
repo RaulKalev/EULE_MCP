@@ -349,6 +349,7 @@ Browse and manage views, sheets, viewports, and revisions in your open model. Al
 | `revit_list_revisions` | Lists all revisions — returns sequence number, date, description, issued-by, issued-to, visibility |
 | `revit_list_revision_numbering_sequences` | Lists revision numbering sequences — returns sequenceId, name, numberingType, prefix, suffix, minimumDigits. Returns empty list on projects with no custom sequences |
 | `revit_get_sheet_revisions` | Returns revisions visible on one or more sheets (by `sheetIds` or `sheetNumbers`) — revisionId, sequenceNumber, revisionNumber, date, description, issuedBy, issuedTo per sheet. *Cloud-specific revision visibility (workshared model cloud tracking) may not be accessible via the Revit 2026 API.* |
+| `revit_create_revision` | Creates a revision with date, description, issued-to/by, numbering sequence, issued state, and optional assignment to selected sheets |
 | `revit_get_sheet_viewports` | Returns viewport detail for one or more sheets (by `sheetIds` or `sheetNumbers`) — view name, type, sheet position, detail number |
 | `revit_find_unplaced_views` | Finds views not placed on any sheet — filterable by `viewTypes`, `nameFilter`, `includeTemplates`, `limit` |
 | `revit_list_view_sheet_presets` | Lists available PlaceViews / Sheet Manager preset JSON files from the RK Tools preset folder. Returns fileName, detectedType, sizeBytes, modifiedUtc |
@@ -372,17 +373,26 @@ Browse and manage views, sheets, viewports, and revisions in your open model. Al
 
 | Tool | Description |
 |------|-------------|
-| `revit_preview_place_views_on_sheets` | Shows which views would be placed on which sheets using configurable match modes (ExactName, Contains, Fuzzy, SheetNumberPrefix, SheetNumberSuffix, CustomParameter) |
+| `revit_preview_place_views_on_sheets` | Shows proposed placements using configurable match modes. `PlaceViews` reproduces the plugin's sheet-first exact/number/word matching and maps Estonian floor ordinals from 1–99 to digits; other modes include ExactName, Contains, Fuzzy, SheetNumberPrefix/Suffix, and CustomParameter |
 | `revit_preview_duplicate` | Previews view/sheet duplication without changes. `entity` = `views` \| `sheets`. sheets: `sourceSheetIds`/`sourceSheetNumbers`, `newNumberSuffix`, `newNameSuffix`, `keepTitleBlock`, `copyParameters`. views: `viewIds`, `duplicateOption`, `nameSuffix`, `namePrefix` |
+| `revit_preview_duplicate_sheets` | Advanced SheetManager-compatible preview: `EmptySheet`, `WithSheetDetailing`, or `WithViews`; supports multiple copies, legends, schedules, revisions, title-block parameters, and preserved placement positions |
+| `revit_preview_apply_sheet_naming` | Previews composing a sheet name, number, or parameter from ordered parameter and separator tokens, with Project Information fallback |
+| `revit_preview_duplicate_views` | ViewManager-compatible preview with multiple copies, duplicate-option fallback, unique naming, and parameter overrides |
+| `revit_preview_set_view_crop_regions` | Previews copying a reference view's crop box/custom crop shape and visibility to selected target views |
 | `revit_preview_create_sheets_from_table` | Validates a table of `{sheetNumber, sheetName, ...params}` rows — flags conflicts and issues without creating anything |
-| `revit_preview_rename` | Previews view/sheet renames without changes. `entity` = `views` \| `sheets`, `mode` = `FindReplace` \| `PrefixSuffix` \| `Template` \| `RegexFindReplace`. sheets also take `target` = `Name` \| `Number` \| `Both` |
+| `revit_preview_rename` | Previews view/sheet renames without changes. `entity` = `views` \| `sheets`, `mode` = `FindReplace` \| `PrefixSuffix` \| `Template` \| `RegexFindReplace`. sheets also take `target` = `Name` \| `Number` \| `Both` \| `Parameter` (`parameterName` required) |
 
 #### Write Tools (requires approval)
 
 | Tool | Description |
 |------|-------------|
-| `revit_place_views_on_sheets` | Places views on matched sheets in a transaction — same parameters as the preview tool |
+| `revit_place_views_on_sheets` | Places views on matched sheets in a transaction. `matchMode=PlaceViews` selects one best view per selected sheet and centers it on the sheet outline |
 | `revit_duplicate` | Duplicates views/sheets. Run `revit_preview_duplicate` first. `entity` = `views` \| `sheets`, same parameters as the preview tool |
+| `revit_duplicate_sheets` | Advanced sheet duplication with detailing, duplicated model views, shared legends/schedules, revisions, sheet/title-block values, multiple copies, and preserved positions |
+| `revit_duplicate_views` | ViewManager-compatible duplication with multiple copies, `Duplicate`/`DuplicateWithDetailing`/`AsDependent`, fallback, unique naming, and explicit parameter overrides |
+| `revit_set_view_crop_regions` | Copies a reference view's crop region and visibility to selected plan, section, elevation, detail, or 3D views; activates target crops |
+| `revit_apply_sheet_naming` | Applies ordered parameter/separator naming tokens to sheet names, numbers, or writable parameters |
+| `revit_create_revision` | Creates a project revision and can assign it to selected sheets in the same transaction |
 | `revit_create_sheets_from_table` | Creates multiple sheets from a row table in one transaction |
 | `revit_apply_view_template` | Applies a view template to one or more views filtered by ID, type, or name |
 | `revit_set_parameters_bulk` | Sets parameters on multiple views/sheets in one transaction. `entity` = `views` \| `sheets`, `parameters` = name→value map |

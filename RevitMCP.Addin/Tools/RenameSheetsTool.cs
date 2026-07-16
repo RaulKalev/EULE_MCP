@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RevitMCP.Addin.Documentation.Naming;
+using RevitMCP.Addin.Documentation.Sheets;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Core.Models;
 
@@ -14,7 +15,7 @@ public class RenameSheetsTool : IRevitMcpTool
         "Renames sheets (name, number, or both). Requires approval. " +
         "Required: sheetIds (long array) OR (nameFilter/numberFilter) to select sheets, " +
         "mode (FindReplace|PrefixSuffix|Template|RegexFindReplace), " +
-        "target (Name|Number|Both, default Name). " +
+        "target (Name|Number|Both|Parameter, default Name); parameterName is required for target=Parameter. " +
         "Mode params: find, replace, prefix, suffix, template with {Name} or {Number}. " +
         "Use revit_preview_rename_sheets first to verify.";
     public ToolPermission Permission => ToolPermission.RequiresApproval;
@@ -30,6 +31,7 @@ public class RenameSheetsTool : IRevitMcpTool
         var sheetIds     = ToolArguments.GetLongArray(request.Arguments, "sheetIds");
         var mode         = ToolArguments.GetString(request.Arguments, "mode");
         var target       = ToolArguments.GetString(request.Arguments, "target", "Name");
+        var parameterName= ToolArguments.GetString(request.Arguments, "parameterName");
         var find         = ToolArguments.GetString(request.Arguments, "find");
         var replace      = ToolArguments.GetString(request.Arguments, "replace");
         var prefix       = ToolArguments.GetString(request.Arguments, "prefix");
@@ -41,6 +43,16 @@ public class RenameSheetsTool : IRevitMcpTool
         var modeError = RenameEngine.ValidateMode(mode);
         if (modeError != null)
             return Task.FromResult(Fail(request, modeError));
+
+        bool applyToName = target.Equals("Name", StringComparison.OrdinalIgnoreCase) ||
+                           target.Equals("Both", StringComparison.OrdinalIgnoreCase);
+        bool applyToNumber = target.Equals("Number", StringComparison.OrdinalIgnoreCase) ||
+                             target.Equals("Both", StringComparison.OrdinalIgnoreCase);
+        bool applyToParameter = target.Equals("Parameter", StringComparison.OrdinalIgnoreCase);
+        if (!applyToName && !applyToNumber && !applyToParameter)
+            return Task.FromResult(Fail(request, "target must be Name, Number, Both, or Parameter."));
+        if (applyToParameter && string.IsNullOrWhiteSpace(parameterName))
+            return Task.FromResult(Fail(request, "parameterName is required when target=Parameter."));
 
         IEnumerable<ViewSheet> sheets;
         if (sheetIds.Length > 0)
@@ -56,9 +68,6 @@ public class RenameSheetsTool : IRevitMcpTool
             if (!string.IsNullOrWhiteSpace(numberFilter)) sheets = sheets.Where(s => s.SheetNumber.Contains(numberFilter, StringComparison.OrdinalIgnoreCase));
         }
 
-        bool applyToName   = target is "Name" or "Both";
-        bool applyToNumber = target is "Number" or "Both";
-
         int renamed  = 0;
         var warnings = new List<string>();
         var results  = new List<object>();
@@ -72,8 +81,12 @@ public class RenameSheetsTool : IRevitMcpTool
             var tokens    = new Dictionary<string, string> { ["Number"] = s.SheetNumber };
             var newName   = applyToName   ? RenameEngine.Apply(s.Name, mode, find, replace, prefix, suffix, template, tokens) : null;
             var newNumber = applyToNumber ? RenameEngine.Apply(s.SheetNumber, mode, find, replace, prefix, suffix, template, tokens) : null;
+            var oldParameterValue = applyToParameter ? SheetNamingService.GetTargetValue(s, parameterName) : null;
+            var newParameterValue = applyToParameter
+                ? RenameEngine.Apply(oldParameterValue ?? string.Empty, mode, find, replace, prefix, suffix, template, tokens)
+                : null;
 
-            if (newName == null && newNumber == null) continue;
+            if (newName == null && newNumber == null && newParameterValue == null) continue;
 
             var oldName   = s.Name;
             var oldNumber = s.SheetNumber;
@@ -83,7 +96,12 @@ public class RenameSheetsTool : IRevitMcpTool
             {
                 if (newName != null)   { s.Name        = newName;   changed = true; }
                 if (newNumber != null) { s.SheetNumber = newNumber; changed = true; }
-                if (changed) { renamed++; results.Add(new { sheetId = s.Id.Value, oldNumber, oldName, newNumber = s.SheetNumber, newName = s.Name }); }
+                if (newParameterValue != null)
+                {
+                    SheetNamingService.SetTargetValue(s, parameterName, newParameterValue);
+                    changed = true;
+                }
+                if (changed) { renamed++; results.Add(new { sheetId = s.Id.Value, oldNumber, oldName, newNumber = s.SheetNumber, newName = s.Name, parameterName = applyToParameter ? parameterName : null, oldParameterValue, newParameterValue }); }
             }
             catch (Exception ex)
             {
@@ -91,6 +109,7 @@ public class RenameSheetsTool : IRevitMcpTool
                 // Attempt rollback of partial change
                 try { if (newName != null) s.Name = oldName; } catch { }
                 try { if (newNumber != null) s.SheetNumber = oldNumber; } catch { }
+                try { if (newParameterValue != null) SheetNamingService.SetTargetValue(s, parameterName, oldParameterValue ?? string.Empty); } catch { }
             }
         }
         RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(t);

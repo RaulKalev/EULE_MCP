@@ -146,19 +146,24 @@ public class App : IExternalApplication
             handler.RegisterTool(new PreviewDuplicateSheetsTool());
             handler.RegisterTool(new PreviewCreateSheetsFromTableTool());
             handler.RegisterTool(new PreviewDuplicateViewsTool());
+            handler.RegisterTool(new PreviewSetViewCropRegionsTool());
             handler.RegisterTool(new PreviewRenameViewsTool());
             handler.RegisterTool(new PreviewRenameSheetsTool());
+            handler.RegisterTool(new PreviewApplySheetNamingTool());
 
             // View / Sheet / Documentation (Phase 3 — Write)
             handler.RegisterTool(new PlaceViewsOnSheetsTool());
             handler.RegisterTool(new DuplicateSheetsTool());
             handler.RegisterTool(new CreateSheetsFromTableTool());
             handler.RegisterTool(new DuplicateViewsTool());
+            handler.RegisterTool(new SetViewCropRegionsTool());
             handler.RegisterTool(new ApplyViewTemplateTool());
             handler.RegisterTool(new SetSheetParametersBulkTool());
             handler.RegisterTool(new SetViewParametersBulkTool());
             handler.RegisterTool(new RenameViewsTool());
             handler.RegisterTool(new RenameSheetsTool());
+            handler.RegisterTool(new ApplySheetNamingTool());
+            handler.RegisterTool(new CreateRevisionTool());
 
             // View / Sheet / Documentation (Phase 4 — Destructive)
             handler.RegisterTool(new PreviewDeleteViewsTool());

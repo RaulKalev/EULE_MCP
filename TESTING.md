@@ -1290,8 +1290,11 @@ Preview duplicating sheets E-01 and E-02 with suffix "_V2".
 ```
 
 **Verify:**
-- Returns proposals with `sourceSheetNumber`, `newSheetNumber`, `newSheetName`, `titleBlockName`, `conflict`.
-- `conflict=true` when the generated sheet number already exists.
+- Returns proposals with `sourceSheetNumber`, `newSheetNumber`, `newSheetName`, `duplicateMode`, and source/copied content counts.
+- Test `duplicateMode=EmptySheet`, `WithSheetDetailing`, and `WithViews`.
+- `keepLegends`, `keepSchedules`, and `copyRevisions` report their respective proposed counts.
+- `numberOfCopies` accepts 1–50; `{index}` in name/number suffixes is expanded per copy.
+- Conflicting generated sheet numbers are resolved to unique values and reported as warnings.
 - No Revit transaction is created.
 
 ---
@@ -1327,6 +1330,8 @@ Preview adding prefix "EL-" to all electrical section views.
 - Returns `oldName`, `newName`, `willChange` per view.
 - Views where the new name equals the old name have `willChange=false`.
 - No Revit transaction is created.
+- `target=Parameter` with `parameterName` previews the same transform against a writable view parameter.
+- An explicit selector is required: `viewIds`, `viewTypes`, `nameFilter`, or `allViews=true`.
 
 ---
 
@@ -1340,7 +1345,7 @@ Preview renaming sheet numbers — replace "E-" with "EL-".
 ```
 
 **Verify:**
-- `target` parameter: `Name`, `Number`, or `Both`.
+- `target` parameter: `Name`, `Number`, `Both`, or `Parameter` (`parameterName` required).
 - Same rename modes as `revit_preview_rename_views`.
 - `numberFilter` / `nameFilter` narrow which sheets are included.
 - Returns `oldName`, `newName`, `oldNumber`, `newNumber`, `willChange` per sheet.
@@ -1359,6 +1364,7 @@ All write tools follow the standard approval flow: response shows `approval_requ
 **Prompts:**
 ```
 Run revit_preview_place_views_on_sheets first, then place the views.
+Preview PlaceViews matching for selected views [view IDs] and sheets [sheet IDs], then apply it.
 ```
 
 **Verify:**
@@ -1369,6 +1375,12 @@ Run revit_preview_place_views_on_sheets first, then place the views.
 5. Approve → views appear on matched sheets in Revit.
 6. Revit Undo shows `"Revit MCP - Place Views on Sheets"`.
 7. Already-placed views are skipped when `skipAlreadyPlaced=true`.
+8. With `matchMode=PlaceViews`, `sheetIds` or `allSheets=true` is required and the default for `skipAlreadyPlaced` is `false`, matching the source plugin.
+9. PlaceViews mode evaluates each selected sheet, chooses its best selected printable view by exact sheet/view name or the branch's number-aware word-prefix score, and reports unmatched sheets.
+10. Conflicting floor numbers do not match (`1` versus `10`, or `-1` versus `1`).
+11. Preview reports `canPlace=false` when Revit says the matched view is already placed/incompatible, and when the same non-legend view is proposed for multiple sheets.
+12. Approved PlaceViews placements use the center of `ViewSheet.Outline`, matching the source plugin.
+13. Estonian ordinal floor names from 1–99 match their digit equivalents, including inflected and compound forms such as `esimese` → `1`, `kolmanda` → `3`, and `kahekümne esimese` → `21`; conflicting ordinals remain unmatched.
 
 ---
 
@@ -1383,7 +1395,13 @@ Duplicate sheets E-01 and E-02 with number suffix "_COPY".
 - Approval required; new sheets created after approval.
 - New sheet numbers and names match the preview.
 - `keepTitleBlock=true` gives new sheets the same title block family.
-- `copyParameters=true` copies instance parameter values.
+- `copyParameters=true` copies sheet instance parameter values.
+- `copyTitleBlockParameters=true` copies writable title-block instance parameter values.
+- `WithSheetDetailing` copies sheet detail lines, text, generic annotations, dimensions, and tags.
+- `WithViews` also duplicates non-legend viewport views and preserves viewport positions.
+- `keepLegends=true` places the same legend at its original position.
+- `keepSchedules=true` places schedules at their original positions.
+- `copyRevisions=true` copies additional sheet revision assignments.
 - Transaction name: `"Revit MCP - Duplicate Sheets"`.
 
 ---
@@ -1413,8 +1431,10 @@ Duplicate view 12345 with option DuplicateWithDetailing and suffix " - Copy".
 
 **Verify:**
 - `duplicateOption`: `Duplicate`, `DuplicateWithDetailing`, `AsDependent`.
-- Views that do not support duplication are skipped with a warning.
-- New view names follow `{namePrefix}{originalName}{nameSuffix}`.
+- `numberOfCopies` accepts 1–50; `{index}` in `nameSuffix` is expanded per copy.
+- When the requested option is unsupported, `fallbackToDuplicate=true` uses plain `Duplicate` when available.
+- New view names follow `{namePrefix}{originalName}{nameSuffix}` and conflicts are resolved to unique names.
+- `copyParameters=true` applies explicit `parameterOverrides`; native Revit duplication retains its normal view values.
 - Transaction name: `"Revit MCP - Duplicate Views"`.
 
 **Test: EmptyDetailOnly returns a clear error (deferred)**
@@ -1424,13 +1444,33 @@ Duplicate view 12345 with option EmptyDetailOnly.
 ```
 
 Verify:
-- `revit_duplicate_views` returns `success: false` with message: `"EmptyDetailOnly is not implemented in this MCP version. Supported duplicateOption values are Duplicate, DuplicateWithDetailing, and AsDependent."`
+- `revit_duplicate_views` returns `success: false` with message: `"EmptyDetailOnly is not implemented. Valid: Duplicate, DuplicateWithDetailing, AsDependent."`
 - `revit_preview_duplicate_views` returns the same error for `EmptyDetailOnly`.
 - Model is not modified.
 
 ---
 
-### 28.5 Apply View Template
+### 28.5 Set View Crop Regions
+
+**Prompts:**
+```
+Preview copying the crop region from view 12345 to views 23456 and 34567.
+Copy the crop region from view 12345 to views 23456 and 34567.
+```
+
+**Verify:**
+- `revit_preview_set_view_crop_regions` makes no model changes and reports supported/skipped targets.
+- `revit_set_view_crop_regions` requires approval and uses the same `referenceViewId` and `targetViewIds` arguments.
+- Target crop boxes are activated and their crop visibility matches the reference view.
+- A single non-split custom crop loop is copied when the target supports shaped crops.
+- Split or multi-loop reference crops fall back to the rectangular reference crop box.
+- Floor, ceiling, engineering and area plans, sections, elevations, details, and 3D views are supported; other view types and templates are skipped.
+- The reference view is skipped if it also appears in `targetViewIds`.
+- Transaction name: `"Revit MCP - Set View Crop Regions"`.
+
+---
+
+### 28.6 Apply View Template
 
 **Prompts:**
 ```
@@ -1446,7 +1486,7 @@ Apply view template 56789 to all floor plan views containing "KORRUS".
 
 ---
 
-### 28.6 Rename Views
+### 28.7 Rename Views
 
 **Prompts:**
 ```
@@ -1461,10 +1501,12 @@ Add prefix "EL-" to all floor plan views with name containing "KORRUS".
 4. After approval, view names updated in Revit.
 5. Transaction name: `"Revit MCP - Rename Views"`.
 6. Rejection leaves all names unchanged.
+7. `target=Parameter` transforms the writable parameter named by `parameterName`.
+8. View-name swaps and rename chains use temporary unique names inside one transaction.
 
 ---
 
-### 28.7 Rename Sheets
+### 28.8 Rename Sheets
 
 **Prompts:**
 ```
@@ -1475,12 +1517,13 @@ Rename sheet numbers — replace prefix "E-" with "EL-".
 **Verify:**
 - Same modes as rename views.
 - `target=Name` only renames the sheet name; `target=Number` only the sheet number; `target=Both` renames both.
+- `target=Parameter` applies the same find/replace, prefix/suffix, template, or regex transform to a writable sheet parameter.
 - Transaction name: `"Revit MCP - Rename Sheets"`.
 - Duplicate resulting sheet numbers are rejected with a per-sheet error; others still renamed.
 
 ---
 
-### 28.8 Set Sheet Parameters Bulk
+### 28.9 Set Sheet Parameters Bulk
 
 **Prompts:**
 ```
@@ -1497,7 +1540,7 @@ Set "Project Status" to "Issued for Construction" on all sheets with number star
 
 ---
 
-### 28.9 Set View Parameters Bulk
+### 28.10 Set View Parameters Bulk
 
 **Prompts:**
 ```
@@ -1508,6 +1551,41 @@ Set "Comments" to "Reviewed" on all floor plan views.
 - Same verification as 28.8 but targets views.
 - `includeTemplates=false` (default) skips view templates.
 - Transaction name: `"Revit MCP - Set View Parameters Bulk"`.
+
+---
+
+### 28.11 Apply Sheet Naming
+
+**Prompts:**
+```
+Preview setting Sheet Number on sheets E-01 and E-02 from tokens: Discipline, "-", Grupi tähis, "-", Järjekorra tähis.
+Apply the previewed sheet naming.
+```
+
+**Verify:**
+- `tokens` accepts ordered `{type:"Parameter",value:"..."}` and `{type:"Separator",value:"..."}` entries.
+- Parameters absent from a sheet fall back to Project Information.
+- Empty parameter values do not leave doubled or trailing separators.
+- `targetParameter` supports `Sheet Number`, `Sheet Name`, or a writable sheet parameter.
+- Duplicate proposed sheet numbers are rejected in preview.
+- Sheet-number swaps use temporary numbers and commit as one Undo item named `"Revit MCP - Apply Sheet Naming"`.
+
+---
+
+### 28.12 Create Revision
+
+**Prompts:**
+```
+Create a revision dated 2026-07-16, description "Issued for coordination", issued by MB, and assign it to sheets E-01 and E-02.
+```
+
+**Verify:**
+- Approval is required.
+- Revit assigns the sequence/revision number.
+- Optional `numberingSequenceId` accepts an ID from `revit_list_revision_numbering_sequences`.
+- The revision is added to each requested sheet's additional revisions.
+- `isIssued=true` is applied only after all editable revision fields are set.
+- Transaction name: `"Revit MCP - Create Revision"`.
 
 ---
 

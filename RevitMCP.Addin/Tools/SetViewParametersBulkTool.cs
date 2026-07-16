@@ -4,6 +4,7 @@ using Autodesk.Revit.UI;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Core.Models;
 using Newtonsoft.Json.Linq;
+using RevitMCP.Addin.Documentation.Views;
 
 namespace RevitMCP.Addin.Tools;
 
@@ -74,7 +75,7 @@ public class SetViewParametersBulkTool : IRevitMcpTool
                     var p = ParameterFinder.Find(v, pName);
                     if (p == null) { warnings.Add($"View '{v.Name}': param '{pName}' not found."); continue; }
                     if (p.IsReadOnly) { warnings.Add($"View '{v.Name}': param '{pName}' is read-only."); continue; }
-                    SetParam(p, pVal?.ToString() ?? "");
+                    ViewParameterService.SetValue(p, pVal?.ToString() ?? "");
                     setCount++;
                 }
                 catch (Exception ex) { warnings.Add($"View '{v.Name}', param '{pName}': {ex.Message}"); }
@@ -93,18 +94,6 @@ public class SetViewParametersBulkTool : IRevitMcpTool
             Warnings   = warnings,
             DurationMs = sw.ElapsedMilliseconds
         });
-    }
-
-    private static void SetParam(Parameter p, string strVal)
-    {
-        switch (p.StorageType)
-        {
-            case StorageType.String:  p.Set(strVal); break;
-            case StorageType.Integer when int.TryParse(strVal, out var iv): p.Set(iv); break;
-            case StorageType.Double  when double.TryParse(strVal,
-                System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var dv): p.Set(dv); break;
-        }
     }
 
     private static Dictionary<string, object?> GetParamDict(Dictionary<string, object?> args)

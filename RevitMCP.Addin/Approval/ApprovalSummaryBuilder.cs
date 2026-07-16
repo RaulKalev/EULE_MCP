@@ -31,10 +31,13 @@ public static class ApprovalSummaryBuilder
             // Documentation tools
             "revit_place_views_on_sheets"       => BuildPlaceViewsOnSheets(request),
             "revit_duplicate_sheets"            => BuildDuplicateSheets(request),
+            "revit_create_revision"             => BuildCreateRevision(request),
             "revit_duplicate_views"             => BuildDuplicateViews(request),
+            "revit_set_view_crop_regions"       => BuildSetViewCropRegions(request),
             "revit_apply_view_template"         => BuildApplyViewTemplate(request),
             "revit_rename_views"                => BuildRenameViews(request),
             "revit_rename_sheets"               => BuildRenameSheets(request),
+            "revit_apply_sheet_naming"          => BuildApplySheetNaming(request),
             "revit_set_sheet_parameters_bulk"   => BuildSetSheetParametersBulk(request),
             "revit_set_view_parameters_bulk"    => BuildSetViewParametersBulk(request),
             "revit_create_sheets_from_table"    => BuildCreateSheetsFromTable(request),
@@ -181,16 +184,41 @@ public static class ApprovalSummaryBuilder
         var sourceIds  = ToolArguments.GetLongArray(request.Arguments, "sourceSheetIds");
         var sourceNums = ToolArguments.GetStringArray(request.Arguments, "sourceSheetNumbers");
         var numSuffix  = ToolArguments.GetString(request.Arguments, "newNumberSuffix", "_COPY");
+        var copies = ToolArguments.GetInt(request.Arguments, "numberOfCopies", 1);
+        var mode = ToolArguments.GetString(request.Arguments, "duplicateMode", "EmptySheet");
         var count = sourceIds.Length > 0 ? sourceIds.Length : sourceNums.Length;
-        var desc  = sourceNums.Length > 0 ? string.Join(", ", sourceNums) : $"{count} sheet{(count == 1 ? "" : "s")}";
-        return $"Duplicate {count} sheet{(count == 1 ? "" : "s")} ({desc}) with suffix '{numSuffix}'.";
+        var total = count * copies;
+        var desc  = sourceNums.Length > 0 ? string.Join(", ", sourceNums) : $"{count} source sheet{(count == 1 ? "" : "s")}";
+        return $"Create {total} duplicate sheet{(total == 1 ? "" : "s")} from {desc} using mode '{mode}' and suffix '{numSuffix}'.";
+    }
+
+    private static string BuildCreateRevision(McpToolRequest request)
+    {
+        var description = ToolArguments.GetString(request.Arguments, "description");
+        var sheetIds = ToolArguments.GetLongArray(request.Arguments, "sheetIds");
+        var sheetNumbers = ToolArguments.GetStringArray(request.Arguments, "sheetNumbers");
+        var sheetCount = sheetIds.Length > 0 ? sheetIds.Length : sheetNumbers.Length;
+        var assignment = sheetCount > 0
+            ? $" and assign it to {sheetCount} sheet{(sheetCount == 1 ? "" : "s")}"
+            : string.Empty;
+        return $"Create revision '{description}'{assignment}.";
     }
 
     private static string BuildDuplicateViews(McpToolRequest request)
     {
         var viewIds = ToolArguments.GetLongArray(request.Arguments, "viewIds");
         var option  = ToolArguments.GetString(request.Arguments, "duplicateOption", "DuplicateWithDetailing");
-        return $"Duplicate {viewIds.Length} view{(viewIds.Length == 1 ? "" : "s")} with option '{option}'.";
+        var copies = ToolArguments.GetInt(request.Arguments, "numberOfCopies", 1);
+        var total = viewIds.Length * copies;
+        return $"Create {total} duplicate view{(total == 1 ? "" : "s")} from {viewIds.Length} source view{(viewIds.Length == 1 ? "" : "s")} with option '{option}'.";
+    }
+
+    private static string BuildSetViewCropRegions(McpToolRequest request)
+    {
+        var referenceViewId = ToolArguments.GetLong(request.Arguments, "referenceViewId", 0L);
+        var targetViewIds = ToolArguments.GetLongArray(request.Arguments, "targetViewIds");
+        return $"Copy crop region from reference view ID:{referenceViewId} to " +
+               $"{targetViewIds.Length} target view{(targetViewIds.Length == 1 ? "" : "s")}.";
     }
 
     private static string BuildApplyViewTemplate(McpToolRequest request)
@@ -223,7 +251,8 @@ public static class ApprovalSummaryBuilder
     {
         var viewIds = ToolArguments.GetLongArray(request.Arguments, "viewIds");
         var mode    = ToolArguments.GetString(request.Arguments, "mode");
-        return $"Rename {viewIds.Length} view{(viewIds.Length == 1 ? "" : "s")} using mode '{mode}'.";
+        var target = ToolArguments.GetString(request.Arguments, "target", "Name");
+        return $"Update {viewIds.Length} view{(viewIds.Length == 1 ? "" : "s")} target '{target}' using mode '{mode}'.";
     }
 
     private static string BuildRenameSheets(McpToolRequest request)
@@ -231,6 +260,16 @@ public static class ApprovalSummaryBuilder
         var sheetIds = ToolArguments.GetLongArray(request.Arguments, "sheetIds");
         var mode     = ToolArguments.GetString(request.Arguments, "mode");
         return $"Rename {sheetIds.Length} sheet{(sheetIds.Length == 1 ? "" : "s")} using mode '{mode}'.";
+    }
+
+    private static string BuildApplySheetNaming(McpToolRequest request)
+    {
+        var sheetIds = ToolArguments.GetLongArray(request.Arguments, "sheetIds");
+        var sheetNumbers = ToolArguments.GetStringArray(request.Arguments, "sheetNumbers");
+        var count = sheetIds.Length > 0 ? sheetIds.Length : sheetNumbers.Length;
+        var target = ToolArguments.GetString(request.Arguments, "targetParameter");
+        var scope = count > 0 ? $"{count} selected sheet{(count == 1 ? "" : "s")}" : "the filtered sheets";
+        return $"Apply parameter-driven naming to {scope}; target '{target}'.";
     }
 
     private static string BuildSetSheetParametersBulk(McpToolRequest request)
