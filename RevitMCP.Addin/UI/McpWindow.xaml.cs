@@ -28,6 +28,34 @@ public partial class McpWindow : Window
         Closing += (_, _) => SaveWindowState();
     }
 
+    /// <summary>
+    /// A Revit-owned, borderless window has no taskbar entry. Sending it to the native
+    /// minimized state leaves an inaccessible desktop thumbnail, so minimize by hiding
+    /// it and let the ribbon command restore the same window instance.
+    /// </summary>
+    public void MinimizeToRevit()
+    {
+        SaveWindowState();
+        Hide();
+    }
+
+    public void HideAndSave()
+    {
+        SaveWindowState();
+        Hide();
+    }
+
+    public void ShowAndActivate()
+    {
+        if (WindowState == WindowState.Minimized)
+            WindowState = WindowState.Normal;
+
+        if (!IsVisible)
+            Show();
+
+        Activate();
+    }
+
     public void SetRevitOwner(IntPtr revitHandle)
     {
         var helper = new WindowInteropHelper(this);
@@ -48,19 +76,27 @@ public partial class McpWindow : Window
         try
         {
             if (!File.Exists(WindowStatePath)) return;
-            var state = JsonSerializer.Deserialize<SavedWindowState>(File.ReadAllText(WindowStatePath));
+            var state = JsonSerializer.Deserialize<WindowPlacement>(File.ReadAllText(WindowStatePath));
             if (state == null) return;
 
-            // Clamp so the window stays reachable even if the screen layout changed
-            double virtLeft   = SystemParameters.VirtualScreenLeft;
-            double virtTop    = SystemParameters.VirtualScreenTop;
-            double virtRight  = virtLeft + SystemParameters.VirtualScreenWidth;
-            double virtBottom = virtTop  + SystemParameters.VirtualScreenHeight;
+            var availableArea = new WindowPlacement(
+                SystemParameters.VirtualScreenLeft,
+                SystemParameters.VirtualScreenTop,
+                SystemParameters.VirtualScreenWidth,
+                SystemParameters.VirtualScreenHeight);
+            var restored = WindowPlacementMath.Normalize(
+                state,
+                availableArea,
+                MinWidth,
+                MinHeight,
+                Width,
+                Height);
 
-            Left   = Math.Max(virtLeft, Math.Min(state.Left, virtRight  - 100));
-            Top    = Math.Max(virtTop,  Math.Min(state.Top,  virtBottom - 100));
-            Width  = Math.Max(MinWidth,  state.Width);
-            Height = Math.Max(MinHeight, state.Height);
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Left = restored.Left;
+            Top = restored.Top;
+            Width = restored.Width;
+            Height = restored.Height;
         }
         catch { }
     }
@@ -69,14 +105,15 @@ public partial class McpWindow : Window
     {
         try
         {
-            var state = new SavedWindowState(Left, Top, Width, Height);
+            var bounds = WindowState == WindowState.Normal
+                ? new Rect(Left, Top, ActualWidth, ActualHeight)
+                : RestoreBounds;
+            var state = new WindowPlacement(bounds.Left, bounds.Top, bounds.Width, bounds.Height);
             Directory.CreateDirectory(Path.GetDirectoryName(WindowStatePath)!);
             File.WriteAllText(WindowStatePath, JsonSerializer.Serialize(state));
         }
         catch { }
     }
-
-    private sealed record SavedWindowState(double Left, double Top, double Width, double Height);
 
     private IntPtr ResizeHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {

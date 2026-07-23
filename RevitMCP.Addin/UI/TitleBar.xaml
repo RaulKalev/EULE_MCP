@@ -28,7 +28,7 @@
                     BorderThickness="0"
                     Cursor="Hand"
                     Click="MinimizeButton_Click"
-                    ToolTip="Minimize">
+                    ToolTip="Minimize (reopen from the RK Tools ribbon)">
                 <Button.Template>
                     <ControlTemplate TargetType="Button">
                         <Grid Background="Transparent">

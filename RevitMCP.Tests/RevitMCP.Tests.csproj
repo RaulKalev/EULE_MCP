@@ -66,6 +66,7 @@
     <!-- Configuration pure-logic files (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Configuration\ConfigPathResolver.cs" Link="Configuration\ConfigPathResolver.cs" />
     <Compile Include="..\RevitMCP.Addin\Configuration\JsonConfigService.cs" Link="Configuration\JsonConfigService.cs" />
+    <Compile Include="..\RevitMCP.Addin\UI\WindowPlacementMath.cs" Link="UI\WindowPlacementMath.cs" />
     <!-- Issue report pure-logic files (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Reports\IssueReportService.cs" Link="Reports\IssueReportService.cs" />
     <Compile Include="..\RevitMCP.Addin\Export\ExportPathService.cs" Link="Export\ExportPathService.cs" />

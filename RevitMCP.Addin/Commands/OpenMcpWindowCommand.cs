@@ -27,11 +27,12 @@ public class OpenMcpWindowCommand : IExternalCommand
 
         if (_window != null && _window.IsVisible)
         {
-            _window.Activate();
+            _window.ShowAndActivate();
             return Result.Succeeded;
         }
 
-        // Defer window creation via Idling — required for Revit 2026 to avoid Dispatcher issues
+        // Defer window creation/restoration via Idling — required for Revit 2026
+        // to avoid Dispatcher issues.
         if (!_pendingShow)
         {
             _pendingShow = true;
@@ -51,9 +52,14 @@ public class OpenMcpWindowCommand : IExternalCommand
         var vm = App.GetViewModel();
         if (vm == null) return;
 
-        _window = new McpWindow(vm);
-        _window.SetRevitOwner(uiapp.MainWindowHandle);
-        _window.Show();
+        if (_window == null)
+        {
+            _window = new McpWindow(vm);
+            _window.SetRevitOwner(uiapp.MainWindowHandle);
+            _window.Closed += (_, _) => _window = null;
+        }
+
+        _window.ShowAndActivate();
     }
 
     private static void OnRevitIdlingContextRefresh(object? sender, Autodesk.Revit.UI.Events.IdlingEventArgs e)

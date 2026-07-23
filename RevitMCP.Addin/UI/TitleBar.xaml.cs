@@ -19,13 +19,13 @@ public partial class TitleBar : UserControl
 
     private void MinimizeButton_Click(object sender, RoutedEventArgs e)
     {
-        var window = Window.GetWindow(this);
-        if (window != null)
-            window.WindowState = WindowState.Minimized;
+        if (Window.GetWindow(this) is McpWindow window)
+            window.MinimizeToRevit();
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e)
     {
-        Window.GetWindow(this)?.Hide();
+        if (Window.GetWindow(this) is McpWindow window)
+            window.HideAndSave();
     }
 }
