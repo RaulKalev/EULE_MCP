@@ -628,6 +628,36 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         }
     }
 
+    private static bool TryParseJsonObject(
+        string? json,
+        string argumentName,
+        out object? parsed,
+        out string? error)
+    {
+        parsed = null;
+        error = null;
+        if (string.IsNullOrWhiteSpace(json))
+            return true;
+
+        try
+        {
+            var token = Newtonsoft.Json.Linq.JToken.Parse(json);
+            if (token is not Newtonsoft.Json.Linq.JObject)
+            {
+                error = $"{argumentName} must be a JSON object.";
+                return false;
+            }
+            parsed = token;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error =
+                $"{argumentName} could not be parsed as JSON object: {ex.Message}";
+            return false;
+        }
+    }
+
     private static string FormatBridgeError(string message)
     {
         var response = new
@@ -1096,36 +1126,466 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
-    [McpServerTool(Name = "revit_place_tags"),
-     Description("Tags model elements in a view. Elements come from elementIds or the current selection. The tag family is resolved automatically from each element's category (first loaded tag family, multi-category tag as fallback) unless tagTypeId or tagFamilyName/tagTypeName is given. Optional leader and tag-head offset in mm (view plane). Requires approval; reversible via Revit Undo.")]
-    public async Task<string> PlaceTags(
-        [Description("Element IDs to tag.")] long[]? elementIds = null,
-        [Description("If true, tag the current Revit selection instead.")] bool useSelection = false,
-        [Description("View element ID to place tags in. Defaults to the active view.")] long viewId = 0,
-        [Description("Exact tag family type element ID.")] long tagTypeId = 0,
-        [Description("Tag family name (partial match), used with tagTypeName.")] string? tagFamilyName = null,
-        [Description("Tag type name (partial match).")] string? tagTypeName = null,
-        [Description("If true, tags get a leader line to the element.")] bool addLeader = false,
-        [Description("Tag orientation: Horizontal or Vertical.")] string orientation = "Horizontal",
-        [Description("Tag head offset right (+) / left (-) from the element, in mm along the view plane.")] double offsetXMm = 0,
-        [Description("Tag head offset up (+) / down (-) from the element, in mm along the view plane.")] double offsetYMm = 0,
+    [McpServerTool(Name = "revit_list_tag_types", ReadOnly = true),
+     Description("Lists loaded IndependentTag family types. Optionally filters by tagCategoryId and resolves Left/Right/Up/Down family-type variants using directionKeyword.")]
+    public async Task<string> ListTagTypes(
+        [Description("Optional tag category element ID.")] long tagCategoryId = 0,
+        [Description("Optional family/type keyword used to find directional Left/Right/Up/Down variants.")] string? directionKeyword = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
         {
+            ["tagCategoryId"] = tagCategoryId,
+            ["directionKeyword"] = directionKeyword ?? string.Empty
+        };
+        var result = await pipeClient.SendAsync(
+            "revit_list_tag_types",
+            args,
+            cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_find_managed_tags", ReadOnly = true),
+     Description("Finds tags carrying the SmartTags-compatible management marker in a graphical view. Filters by tagIds or referenced host elementIds and returns type, reference, leader, orientation, head, creator, version, and timestamp data.")]
+    public async Task<string> FindManagedTags(
+        [Description("View element ID. Defaults to the active view.")] long viewId = 0,
+        [Description("Optional managed tag element IDs.")] long[]? tagIds = null,
+        [Description("Optional referenced host element IDs.")] long[]? elementIds = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["viewId"] = viewId,
+            ["tagIds"] = tagIds ?? [],
+            ["elementIds"] = elementIds ?? []
+        };
+        var result = await pipeClient.SendAsync(
+            "revit_find_managed_tags",
+            args,
+            cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_preview_place_tags", ReadOnly = true),
+     Description("Read-only preview of the SmartTags-compatible batch placement pipeline. Supports IDs, current selection, or all elements of one category; nine anchors; direction-specific tag types; leaders; rotation; duplicate skipping; and collision avoidance.")]
+    public async Task<string> PreviewPlaceTags(
+        [Description("Element IDs to tag.")] long[]? elementIds = null,
+        [Description("Use the current Revit selection as targets.")] bool useSelection = false,
+        [Description("Tag every visible element in categoryId in the target view.")] bool tagAllInView = false,
+        [Description("Target model-category element ID; required with tagAllInView.")] long categoryId = 0,
+        [Description("View element ID. Defaults to the active view.")] long viewId = 0,
+        [Description("Exact tag family type element ID.")] long tagTypeId = 0,
+        [Description("Tag family name (partial match).")] string? tagFamilyName = null,
+        [Description("Tag type name (partial match).")] string? tagTypeName = null,
+        [Description("Right, Left, Up, or Down.")] string direction = "Right",
+        [Description("Center, TopLeft, TopCenter, TopRight, LeftCenter, RightCenter, BottomLeft, BottomCenter, or BottomRight.")] string anchorPoint = "Center",
+        [Description("Attached leader length in mm, multiplied by view scale.")] double attachedLengthMm = 0,
+        [Description("Free leader length in mm, multiplied by view scale.")] double freeLengthMm = 0,
+        [Description("Create a visible leader.")] bool addLeader = false,
+        [Description("Attached or Free.")] string leaderEndCondition = "Attached",
+        [Description("Horizontal or Vertical.")] string orientation = "Horizontal",
+        [Description("Base tag rotation in degrees.")] double rotationDegrees = 0,
+        [Description("Rotate placement and tag with each host's in-view orientation.")] bool detectElementRotation = false,
+        [Description("Enable deterministic two-pass collision avoidance.")] bool enableCollisionDetection = true,
+        [Description("Required collision gap in mm.")] double collisionGapMm = 1,
+        [Description("Minimum host-to-tag offset in mm.")] double minimumOffsetMm = 300,
+        [Description("Skip hosts already tagged in the view.")] bool skipAlreadyTagged = true,
+        [Description("Optional Left tag type ID.")] long leftTagTypeId = 0,
+        [Description("Optional Right tag type ID.")] long rightTagTypeId = 0,
+        [Description("Optional Up tag type ID.")] long upTagTypeId = 0,
+        [Description("Optional Down tag type ID.")] long downTagTypeId = 0,
+        [Description("Optional keyword for automatic directional type discovery.")] string? directionKeyword = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = BuildTagPlacementArgs(
+            elementIds, useSelection, tagAllInView, categoryId, viewId,
+            tagTypeId, tagFamilyName, tagTypeName, direction, anchorPoint,
+            attachedLengthMm, freeLengthMm, addLeader, leaderEndCondition,
+            orientation, rotationDegrees, detectElementRotation,
+            enableCollisionDetection, collisionGapMm, minimumOffsetMm,
+            skipAlreadyTagged, leftTagTypeId, rightTagTypeId, upTagTypeId,
+            downTagTypeId, directionKeyword);
+        var result = await pipeClient.SendAsync(
+            "revit_preview_place_tags",
+            args,
+            cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_place_tags"),
+     Description("Places SmartTags-compatible IndependentTags using IDs, current selection, or all visible elements of one category. Supports nine anchors, direction-specific tag types, leader/orientation/rotation settings, host rotation detection, duplicate skipping, two-pass collision avoidance, and managed-tag metadata. Requires approval and is reversible with one Revit Undo.")]
+    public async Task<string> PlaceTags(
+        [Description("Element IDs to tag.")] long[]? elementIds = null,
+        [Description("Use the current Revit selection as targets.")] bool useSelection = false,
+        [Description("Tag every visible element in categoryId in the target view.")] bool tagAllInView = false,
+        [Description("Target model-category element ID; required with tagAllInView.")] long categoryId = 0,
+        [Description("View element ID. Defaults to the active view.")] long viewId = 0,
+        [Description("Exact tag family type element ID.")] long tagTypeId = 0,
+        [Description("Tag family name (partial match).")] string? tagFamilyName = null,
+        [Description("Tag type name (partial match).")] string? tagTypeName = null,
+        [Description("Right, Left, Up, or Down.")] string direction = "Right",
+        [Description("Center or one of the eight bounding-box edge/corner anchors.")] string anchorPoint = "Center",
+        [Description("Attached leader length in mm, multiplied by view scale.")] double attachedLengthMm = 0,
+        [Description("Free leader length in mm, multiplied by view scale.")] double freeLengthMm = 0,
+        [Description("Create a visible leader.")] bool addLeader = false,
+        [Description("Attached or Free.")] string leaderEndCondition = "Attached",
+        [Description("Horizontal or Vertical.")] string orientation = "Horizontal",
+        [Description("Base tag rotation in degrees.")] double rotationDegrees = 0,
+        [Description("Rotate placement and tag with each host's in-view orientation.")] bool detectElementRotation = false,
+        [Description("Enable deterministic two-pass collision avoidance.")] bool enableCollisionDetection = true,
+        [Description("Required collision gap in mm.")] double collisionGapMm = 1,
+        [Description("Minimum host-to-tag offset in mm.")] double minimumOffsetMm = 300,
+        [Description("Skip hosts already tagged in the view.")] bool skipAlreadyTagged = true,
+        [Description("Optional Left tag type ID.")] long leftTagTypeId = 0,
+        [Description("Optional Right tag type ID.")] long rightTagTypeId = 0,
+        [Description("Optional Up tag type ID.")] long upTagTypeId = 0,
+        [Description("Optional Down tag type ID.")] long downTagTypeId = 0,
+        [Description("Optional keyword for automatic directional type discovery.")] string? directionKeyword = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = BuildTagPlacementArgs(
+            elementIds, useSelection, tagAllInView, categoryId, viewId,
+            tagTypeId, tagFamilyName, tagTypeName, direction, anchorPoint,
+            attachedLengthMm, freeLengthMm, addLeader, leaderEndCondition,
+            orientation, rotationDegrees, detectElementRotation,
+            enableCollisionDetection, collisionGapMm, minimumOffsetMm,
+            skipAlreadyTagged, leftTagTypeId, rightTagTypeId, upTagTypeId,
+            downTagTypeId, directionKeyword);
+        var result = await pipeClient.SendAsync(
+            "revit_place_tags",
+            args,
+            cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_analyze_selected_tag_template", ReadOnly = true),
+     Description("Analyzes one selected example IndependentTag and its referenced FamilyInstance without changing Revit. Learns exact tag type, host-local right/front offsets, placement side/distance, anchor, rotation behavior, orientation, and leader geometry; previews matching targets with counts, skip reasons, warnings, and pagination. Use before revit_apply_selected_tag_template.")]
+    public async Task<string> AnalyzeSelectedTagTemplate(
+        [Description("Optional explicit source tag ID; normally leave 0 and select one example tag in Revit.")] long sourceTagId = 0,
+        [Description("sameFamily (default), sameFamilyAndType, sameCategory, selection, or explicitElementIds.")] string scope = "sameFamily",
+        [Description("Targets for scope=explicitElementIds.")] long[]? explicitElementIds = null,
+        [Description("SmartTagCenter (default), LocationPoint, or ViewBoundingBoxCenter.")] string? anchorMode = null,
+        [Description("Include the source host as a target. Default false.")] bool includeSourceHost = false,
+        [Description("Skip targets with the same tag type in the source view. Default true.")] bool skipAlreadyTagged = true,
+        [Description("Include every type in the source family for sameFamily. Default true.")] bool includeAllHostTypes = true,
+        [Description("Optional learned local-right offset override in mm.")] double? localRightOffsetMm = null,
+        [Description("Optional learned local-front offset override in mm.")] double? localFrontOffsetMm = null,
+        [Description("Optional KeepViewAligned, FollowHost, or RelativeToHost override.")] string? rotationMode = null,
+        [Description("Optional relative tag-to-host rotation override in degrees.")] double? relativeRotationDegrees = null,
+        [Description("Optional Horizontal or Vertical orientation override.")] string? orientation = null,
+        [Description("Optional leader on/off override.")] bool? hasLeader = null,
+        [Description("1-based target-preview page.")] int page = 1,
+        [Description("Target-preview page size, 1-500.")] int pageSize = 100,
+        CancellationToken cancellationToken = default)
+    {
+        var args = BuildSelectedTagTemplateArgs(
+            sourceTagId, scope, explicitElementIds, anchorMode,
+            includeSourceHost, skipAlreadyTagged, false,
+            includeAllHostTypes, false, 1, 0, localRightOffsetMm,
+            localFrontOffsetMm, rotationMode, relativeRotationDegrees,
+            orientation, hasLeader, null, page, pageSize);
+        var result = await pipeClient.SendAsync(
+            "revit_analyze_selected_tag_template",
+            args,
+            cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_apply_selected_tag_template"),
+     Description("Tags matching FamilyInstances like one selected example IndependentTag. Re-analyzes the live source, validates optional analyzedTemplateJson, and reconstructs head/leader positions from host-local right/front offsets so rotated, flipped, and mirrored targets preserve the visual rule. Uses the exact example tag type. Existing matching tags are skipped by default. Requires approval; successful placements are one Revit Undo operation.")]
+    public async Task<string> ApplySelectedTagTemplate(
+        [Description("Optional explicit source tag ID; normally leave 0 and keep the analyzed example tag selected.")] long sourceTagId = 0,
+        [Description("sameFamily (default), sameFamilyAndType, sameCategory, selection, or explicitElementIds.")] string scope = "sameFamily",
+        [Description("Targets for scope=explicitElementIds.")] long[]? explicitElementIds = null,
+        [Description("SmartTagCenter, LocationPoint, or ViewBoundingBoxCenter. Omit to use the analyzed/default anchor.")] string? anchorMode = null,
+        [Description("Include the source host as a target. Default false.")] bool includeSourceHost = false,
+        [Description("Skip targets with the same tag type in the source view. Default true.")] bool skipAlreadyTagged = true,
+        [Description("Replacement/deletion is intentionally unsupported; must remain false.")] bool replaceExistingTags = false,
+        [Description("Include every type in the source family for sameFamily. Default true.")] bool includeAllHostTypes = true,
+        [Description("Enable collision avoidance after reproducing the learned rule. Default false.")] bool enableCollisionDetection = false,
+        [Description("Required collision gap in mm.")] double collisionGapMm = 1,
+        [Description("Optional minimum host-to-tag offset during collision adjustment, in mm.")] double minimumOffsetMm = 0,
+        [Description("Optional learned local-right offset override in mm.")] double? localRightOffsetMm = null,
+        [Description("Optional learned local-front offset override in mm.")] double? localFrontOffsetMm = null,
+        [Description("Optional KeepViewAligned, FollowHost, or RelativeToHost override.")] string? rotationMode = null,
+        [Description("Optional relative tag-to-host rotation override in degrees.")] double? relativeRotationDegrees = null,
+        [Description("Optional Horizontal or Vertical orientation override.")] string? orientation = null,
+        [Description("Optional leader on/off override.")] bool? hasLeader = null,
+        [Description("Optional JSON object copied from the analysis response (source + inferredRule). Identity fields are revalidated before writing.")] string? analyzedTemplateJson = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (replaceExistingTags)
+            return FormatBridgeError(
+                "replaceExistingTags=true is not supported. This workflow never deletes existing tags.");
+        if (!TryParseJsonObject(
+                analyzedTemplateJson,
+                "analyzedTemplateJson",
+                out var analyzedTemplate,
+                out var templateError))
+            return FormatBridgeError(templateError!);
+
+        var args = BuildSelectedTagTemplateArgs(
+            sourceTagId, scope, explicitElementIds, anchorMode,
+            includeSourceHost, skipAlreadyTagged, replaceExistingTags,
+            includeAllHostTypes, enableCollisionDetection, collisionGapMm,
+            minimumOffsetMm, localRightOffsetMm, localFrontOffsetMm,
+            rotationMode, relativeRotationDegrees, orientation, hasLeader,
+            analyzedTemplate, 1, 100);
+        var result = await pipeClient.SendAsync(
+            "revit_apply_selected_tag_template",
+            args,
+            cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_preview_retag", ReadOnly = true),
+     Description("Previews SmartTags-compatible retag/normalize adjustments for managed tags without changing Revit. Filter by viewId, tagIds, or referenced elementIds; with no filters, previews every managed tag in the view.")]
+    public async Task<string> PreviewRetag(
+        [Description("View ID. Defaults to active view.")] long viewId = 0,
+        [Description("Managed tag IDs.")] long[]? tagIds = null,
+        [Description("Referenced host IDs.")] long[]? elementIds = null,
+        [Description("Right, Left, Up, or Down.")] string direction = "Right",
+        [Description("Smart Tags anchor position.")] string anchorPoint = "Center",
+        [Description("Attached length in mm.")] double attachedLengthMm = 0,
+        [Description("Free length in mm.")] double freeLengthMm = 0,
+        [Description("Use leaders.")] bool addLeader = false,
+        [Description("Attached or Free.")] string leaderEndCondition = "Attached",
+        [Description("Horizontal or Vertical.")] string orientation = "Horizontal",
+        [Description("Rotation in degrees.")] double rotationDegrees = 0,
+        [Description("Follow host rotation.")] bool detectElementRotation = false,
+        [Description("Enable collision avoidance.")] bool enableCollisionDetection = true,
+        [Description("Collision gap in mm.")] double collisionGapMm = 1,
+        [Description("Minimum offset in mm.")] double minimumOffsetMm = 300,
+        CancellationToken cancellationToken = default)
+    {
+        var args = BuildRetagArgs(
+            viewId, tagIds, elementIds, direction, anchorPoint,
+            attachedLengthMm, freeLengthMm, addLeader, leaderEndCondition,
+            orientation, rotationDegrees, detectElementRotation,
+            enableCollisionDetection, collisionGapMm, minimumOffsetMm);
+        var result = await pipeClient.SendAsync(
+            "revit_preview_retag",
+            args,
+            cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_retag"),
+     Description("Applies SmartTags-compatible retag/normalize adjustments to managed tags. Filter by viewId, tagIds, or referenced elementIds; with no filters, adjusts every managed tag in the view. Requires approval and supports Revit Undo. Use revit_preview_retag first.")]
+    public async Task<string> Retag(
+        [Description("View ID. Defaults to active view.")] long viewId = 0,
+        [Description("Managed tag IDs.")] long[]? tagIds = null,
+        [Description("Referenced host IDs.")] long[]? elementIds = null,
+        [Description("Right, Left, Up, or Down.")] string direction = "Right",
+        [Description("Smart Tags anchor position.")] string anchorPoint = "Center",
+        [Description("Attached length in mm.")] double attachedLengthMm = 0,
+        [Description("Free length in mm.")] double freeLengthMm = 0,
+        [Description("Use leaders.")] bool addLeader = false,
+        [Description("Attached or Free.")] string leaderEndCondition = "Attached",
+        [Description("Horizontal or Vertical.")] string orientation = "Horizontal",
+        [Description("Rotation in degrees.")] double rotationDegrees = 0,
+        [Description("Follow host rotation.")] bool detectElementRotation = false,
+        [Description("Enable collision avoidance.")] bool enableCollisionDetection = true,
+        [Description("Collision gap in mm.")] double collisionGapMm = 1,
+        [Description("Minimum offset in mm.")] double minimumOffsetMm = 300,
+        CancellationToken cancellationToken = default)
+    {
+        var args = BuildRetagArgs(
+            viewId, tagIds, elementIds, direction, anchorPoint,
+            attachedLengthMm, freeLengthMm, addLeader, leaderEndCondition,
+            orientation, rotationDegrees, detectElementRotation,
+            enableCollisionDetection, collisionGapMm, minimumOffsetMm);
+        var result = await pipeClient.SendAsync(
+            "revit_retag",
+            args,
+            cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_annotate_detail_lines"),
+     Description("Places one loaded Detail Items family type at detail-line midpoints. Targets come from detailLineIds, current selection, or all detail lines in a view. Supports offset direction and optional alignment to each line. Requires approval and is reversible.")]
+    public async Task<string> AnnotateDetailLines(
+        [Description("Loaded Detail Items FamilySymbol ID.")] long detailItemTypeId,
+        [Description("DetailCurve element IDs.")] long[]? detailLineIds = null,
+        [Description("Use selected DetailCurve elements.")] bool useSelection = false,
+        [Description("Annotate every DetailCurve in the target view.")] bool annotateAllInView = false,
+        [Description("View ID. Defaults to active view.")] long viewId = 0,
+        [Description("Offset from line midpoint in mm.")] double offsetMm = 0,
+        [Description("Right, Left, Up, or Down.")] string direction = "Right",
+        [Description("Rotate each detail item to the line direction.")] bool alignToLineDirection = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["detailItemTypeId"] = detailItemTypeId,
+            ["detailLineIds"] = detailLineIds ?? [],
+            ["useSelection"] = useSelection,
+            ["annotateAllInView"] = annotateAllInView,
+            ["viewId"] = viewId,
+            ["offsetMm"] = offsetMm,
+            ["direction"] = direction,
+            ["alignToLineDirection"] = alignToLineDirection
+        };
+        var result = await pipeClient.SendAsync(
+            "revit_annotate_detail_lines",
+            args,
+            cancellationToken);
+        return FormatResult(result);
+    }
+
+    private static Dictionary<string, object?> BuildTagPlacementArgs(
+        long[]? elementIds,
+        bool useSelection,
+        bool tagAllInView,
+        long categoryId,
+        long viewId,
+        long tagTypeId,
+        string? tagFamilyName,
+        string? tagTypeName,
+        string direction,
+        string anchorPoint,
+        double attachedLengthMm,
+        double freeLengthMm,
+        bool addLeader,
+        string leaderEndCondition,
+        string orientation,
+        double rotationDegrees,
+        bool detectElementRotation,
+        bool enableCollisionDetection,
+        double collisionGapMm,
+        double minimumOffsetMm,
+        bool skipAlreadyTagged,
+        long leftTagTypeId,
+        long rightTagTypeId,
+        long upTagTypeId,
+        long downTagTypeId,
+        string? directionKeyword)
+    {
+        return new Dictionary<string, object?>
+        {
             ["elementIds"] = elementIds ?? [],
             ["useSelection"] = useSelection,
+            ["tagAllInView"] = tagAllInView,
+            ["categoryId"] = categoryId,
             ["viewId"] = viewId,
             ["tagTypeId"] = tagTypeId,
             ["tagFamilyName"] = tagFamilyName ?? string.Empty,
             ["tagTypeName"] = tagTypeName ?? string.Empty,
+            ["direction"] = direction,
+            ["anchorPoint"] = anchorPoint,
+            ["attachedLengthMm"] = attachedLengthMm,
+            ["freeLengthMm"] = freeLengthMm,
             ["addLeader"] = addLeader,
+            ["leaderEndCondition"] = leaderEndCondition,
             ["orientation"] = orientation,
-            ["offsetXMm"] = offsetXMm,
-            ["offsetYMm"] = offsetYMm
+            ["rotationDegrees"] = rotationDegrees,
+            ["detectElementRotation"] = detectElementRotation,
+            ["enableCollisionDetection"] = enableCollisionDetection,
+            ["collisionGapMm"] = collisionGapMm,
+            ["minimumOffsetMm"] = minimumOffsetMm,
+            ["skipAlreadyTagged"] = skipAlreadyTagged,
+            ["leftTagTypeId"] = leftTagTypeId,
+            ["rightTagTypeId"] = rightTagTypeId,
+            ["upTagTypeId"] = upTagTypeId,
+            ["downTagTypeId"] = downTagTypeId,
+            ["directionKeyword"] = directionKeyword ?? string.Empty
         };
-        var result = await pipeClient.SendAsync("revit_place_tags", args, cancellationToken);
-        return FormatResult(result);
+    }
+
+    private static Dictionary<string, object?> BuildSelectedTagTemplateArgs(
+        long sourceTagId,
+        string scope,
+        long[]? explicitElementIds,
+        string? anchorMode,
+        bool includeSourceHost,
+        bool skipAlreadyTagged,
+        bool replaceExistingTags,
+        bool includeAllHostTypes,
+        bool enableCollisionDetection,
+        double collisionGapMm,
+        double minimumOffsetMm,
+        double? localRightOffsetMm,
+        double? localFrontOffsetMm,
+        string? rotationMode,
+        double? relativeRotationDegrees,
+        string? orientation,
+        bool? hasLeader,
+        object? analyzedTemplate,
+        int page,
+        int pageSize)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["sourceTagId"] = sourceTagId,
+            ["scope"] = scope,
+            ["explicitElementIds"] = explicitElementIds ?? [],
+            ["includeSourceHost"] = includeSourceHost,
+            ["skipAlreadyTagged"] = skipAlreadyTagged,
+            ["replaceExistingTags"] = replaceExistingTags,
+            ["includeAllHostTypes"] = includeAllHostTypes,
+            ["enableCollisionDetection"] = enableCollisionDetection,
+            ["collisionGapMm"] = collisionGapMm,
+            ["minimumOffsetMm"] = minimumOffsetMm,
+            ["page"] = page,
+            ["pageSize"] = pageSize,
+            // Approval binds the write to the exact selection analyzed.
+            ["useSelection"] = true
+        };
+        if (!string.IsNullOrWhiteSpace(anchorMode))
+            args["anchorMode"] = anchorMode;
+        if (localRightOffsetMm.HasValue)
+            args["localRightOffsetMm"] = localRightOffsetMm.Value;
+        if (localFrontOffsetMm.HasValue)
+            args["localFrontOffsetMm"] = localFrontOffsetMm.Value;
+        if (!string.IsNullOrWhiteSpace(rotationMode))
+            args["rotationMode"] = rotationMode;
+        if (relativeRotationDegrees.HasValue)
+            args["relativeRotationDegrees"] =
+                relativeRotationDegrees.Value;
+        if (!string.IsNullOrWhiteSpace(orientation))
+            args["orientation"] = orientation;
+        if (hasLeader.HasValue)
+            args["hasLeader"] = hasLeader.Value;
+        if (analyzedTemplate != null)
+            args["analyzedTemplate"] = analyzedTemplate;
+        return args;
+    }
+
+    private static Dictionary<string, object?> BuildRetagArgs(
+        long viewId,
+        long[]? tagIds,
+        long[]? elementIds,
+        string direction,
+        string anchorPoint,
+        double attachedLengthMm,
+        double freeLengthMm,
+        bool addLeader,
+        string leaderEndCondition,
+        string orientation,
+        double rotationDegrees,
+        bool detectElementRotation,
+        bool enableCollisionDetection,
+        double collisionGapMm,
+        double minimumOffsetMm)
+    {
+        return new Dictionary<string, object?>
+        {
+            ["viewId"] = viewId,
+            ["tagIds"] = tagIds ?? [],
+            ["elementIds"] = elementIds ?? [],
+            ["direction"] = direction,
+            ["anchorPoint"] = anchorPoint,
+            ["attachedLengthMm"] = attachedLengthMm,
+            ["freeLengthMm"] = freeLengthMm,
+            ["addLeader"] = addLeader,
+            ["leaderEndCondition"] = leaderEndCondition,
+            ["orientation"] = orientation,
+            ["rotationDegrees"] = rotationDegrees,
+            ["detectElementRotation"] = detectElementRotation,
+            ["enableCollisionDetection"] = enableCollisionDetection,
+            ["collisionGapMm"] = collisionGapMm,
+            ["minimumOffsetMm"] = minimumOffsetMm
+        };
     }
 
     [McpServerTool(Name = "revit_create_text_notes"),

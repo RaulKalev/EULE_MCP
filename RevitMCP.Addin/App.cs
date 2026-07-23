@@ -218,7 +218,15 @@ public class App : IExternalApplication
 
             // Element Placement (issue #17)
             handler.RegisterTool(new PlaceFamilyInstancesTool());
+            handler.RegisterTool(new ListTagTypesTool());
+            handler.RegisterTool(new FindManagedTagsTool());
+            handler.RegisterTool(new PreviewPlaceTagsTool());
             handler.RegisterTool(new PlaceTagsTool());
+            handler.RegisterTool(new AnalyzeSelectedTagTemplateTool());
+            handler.RegisterTool(new ApplySelectedTagTemplateTool());
+            handler.RegisterTool(new PreviewRetagTool());
+            handler.RegisterTool(new RetagTool());
+            handler.RegisterTool(new AnnotateDetailLinesTool());
             handler.RegisterTool(new CreateTextNotesTool());
             handler.RegisterTool(new CreateLinesTool());
             handler.RegisterTool(new PlaceDimensionsTool());

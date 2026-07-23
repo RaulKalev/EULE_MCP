@@ -78,6 +78,8 @@
     <Compile Include="..\RevitMCP.Setup\Services\McpConfigMerger.cs" Link="Setup\McpConfigMerger.cs" />
     <!-- Transaction safety core and patch-panel assignment planner (no Autodesk dependency) -->
     <Compile Include="..\RevitMCP.Addin\Transactions\TransactionSafetyCore.cs" Link="Transactions\TransactionSafetyCore.cs" />
+    <Compile Include="..\RevitMCP.Addin\Tagging\TagCollisionMath.cs" Link="Tagging\TagCollisionMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Tagging\TagTemplateMath.cs" Link="Tagging\TagTemplateMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Documentation\Placement\PlaceViewsNameMatcher.cs" Link="Documentation\Placement\PlaceViewsNameMatcher.cs" />
     <Compile Include="..\RevitMCP.Addin\Electrical\PatchPanelAssignment\PatchPanelAssignmentModels.cs" Link="Electrical\PatchPanelAssignment\PatchPanelAssignmentModels.cs" />
     <Compile Include="..\RevitMCP.Addin\Electrical\PatchPanelAssignment\PatchPanelAssignmentPlanner.cs" Link="Electrical\PatchPanelAssignment\PatchPanelAssignmentPlanner.cs" />
