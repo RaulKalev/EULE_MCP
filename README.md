@@ -1,11 +1,11 @@
 # EULE MCP — Revit MCP Connector
 
-Ask your AI assistant about a live **Autodesk Revit 2026** model in plain English — count elements, inspect circuits, run QA checks, generate Excel reports — without writing scripts or code. EULE MCP is a local [Model Context Protocol](https://modelcontextprotocol.io) connector that gives Claude Code, Codex, and Antigravity CLI direct read/write access to an open Revit model through 149 tools across twelve functional areas.
+Ask your AI assistant about a live **Autodesk Revit 2026** model in plain English — count elements, inspect circuits, run QA checks, generate Excel reports — without writing scripts or code. EULE MCP is a local [Model Context Protocol](https://modelcontextprotocol.io) connector that gives Claude Code, Codex, and Antigravity CLI direct read/write access to an open Revit model through 157 tools across twelve functional areas.
 
-**149 tools** across twelve functional areas:
+**157 tools** across twelve functional areas:
 - **General** (25 tools) — element discovery, parameter QA, grouping, Excel exports, selection, write operations, config-driven parameter QA rule sets, and detailed geometry inspection of selected elements
 - **Electrical** (47 tools) — full circuit lifecycle: discovery, QA, creation, panel assignment, cable/wire type management, path mode control, load naming, circuit numbering, Excel reporting, electrical dashboard & panel QA, voltage drop prep, and fire alarm circuit preset workflows
-- **Documentation** (24 tools) — view and sheet management: discovery, summary, preview/apply workflows for placing views, creating/duplicating/renaming sheets and views, bulk parameter updates, revision tracking, preset inspection, and safe destructive delete with mandatory manual approval
+- **Documentation** (32 tools) — view and sheet management plus SmartTags-compatible tagging: discovery, collision-aware placement, selected-example tag templates, retag/normalize, detail-line annotation, preview/apply workflows, revisions, presets, and safe destructive delete
 - **Coordination** (15 tools) — Revit-native clash detection: category/link discovery, solid-intersection hard-clash and clearance checking, preset management, Excel reporting, and step-through review views
 - **Family Creation** (1 tool) — generate Detail Item families (.rfa) from DWG source files using company presets
 - **Skills** (10 tools) — multi-step QA workflow engine: run built-in or project-specific quality-check skill definitions, inspect task breakdowns, manage per-project setting overrides, compare overrides against master, propose master updates, and export Markdown diff reports
@@ -34,8 +34,8 @@ Scan delivery folder C:\Projects\1626\Export for temp files and old revisions.
 
 ## Requirements
 
-- **Revit 2026** (.NET 8) — full feature set, all 149 tools
-- **Revit 2024** (.NET Framework 4.8) — same plugin UI and tool surface as Revit 2026, all 149 tools, **except IFC Space-to-Room** (held back for now — see below)
+- **Revit 2026** (.NET 8) — full feature set, all 157 tools
+- **Revit 2024** (.NET Framework 4.8) — same plugin UI and tool surface as Revit 2026, all 157 tools, **except IFC Space-to-Room** (held back for now — see below)
 - .NET 9 SDK (to build the `.slnx`; the Revit 2026 add-in targets .NET 8)
 - Claude Code CLI (`claude`), Codex CLI (`codex`), **or** Antigravity CLI (`agy`)
 
@@ -205,13 +205,31 @@ Activity is logged to `%AppData%\RKTools\RevitMCP\Logs\{date}.jsonl` — one JSO
 | `revit_select_elements_by_query` | Selects elements by query in Revit UI *(requires approval)* |
 | `revit_set_parameter` | Sets a parameter value on elements — supports String, Integer, Double, and **ElementId** storage types *(requires approval, runs in transaction)* |
 | `revit_place_family_instances` | Places instances of a loaded family type at points (mm) — model components (level-based) and detail items (view-based) resolved automatically; optional `rotationDegrees`, `levelName`, `viewId`, `hostElementId` *(requires approval, runs in transaction)* |
-| `revit_place_tags` | Tags elements in a view (`elementIds` or selection). Tag family auto-resolved per element category unless `tagTypeId`/`tagFamilyName` given; optional leader and head offset in mm *(requires approval, runs in transaction)* |
+| `revit_list_tag_types` | Lists loaded tag family types and optionally resolves Left/Right/Up/Down type variants from a direction keyword |
+| `revit_find_managed_tags` | Finds tags carrying the original SmartTags-compatible marker, with host IDs, placement, leader state, and creation metadata |
+| `revit_preview_place_tags` | Previews smart tag placement, including anchors, direction types, duplicate skipping, and collision-adjusted head coordinates |
+| `revit_place_tags` | SmartTags-compatible batch placement from IDs, current selection, or all elements of a category. Supports nine anchors, direction-specific types, leaders, orientation/rotation, element-rotation detection, two-pass collision avoidance, least-overlap fallback, and managed-tag metadata *(requires approval, runs in transaction)* |
+| `revit_analyze_selected_tag_template` | Reads one selected example tag and learns its exact type, host-local right/front offsets, placement side/distance, rotation behavior, orientation, and leader geometry. Previews same-family/type/category, selection, or explicit-ID targets without changing Revit |
+| `revit_apply_selected_tag_template` | Tags other family instances like the selected example. Reconstructs positions and free-leader geometry in each target host's local frame, preserves view-aligned/follow-host/relative rotation, skips existing matching tags, and optionally avoids collisions *(requires approval, one transaction / one Undo)* |
+| `revit_preview_retag` | Previews retag/normalize proposals for managed tags, excluding each adjusted tag from self-collision |
+| `revit_retag` | Applies retag/normalize proposals to managed tags with collision-aware positioning and leader/orientation settings *(requires approval, runs in transaction)* |
+| `revit_annotate_detail_lines` | Places detail-item annotations at detail-line midpoints with optional view-plane offset and line alignment *(requires approval, runs in transaction)* |
 | `revit_create_text_notes` | Creates text notes in a view at mm positions; `widthMm`, `rotationDegrees`, and text note type optional *(requires approval, runs in transaction)* |
 | `revit_create_lines` | Creates straight lines from mm segments — `kind=detail` (view-specific) or `kind=model` (3D, sketch planes handled automatically); optional `lineStyle` *(requires approval, runs in transaction)* |
 | `revit_list_dimension_types` | Lists dimension types with their style (Linear, Angular, Radial, Diameter, ArcLength, SpotElevation, SpotCoordinate, SpotSlope); optional `styleFilter` |
 | `revit_place_dimensions` | Places dimensions in a view. `kind` = `aligned` \| `horizontal` \| `vertical` (2+ elements, one dimension) \| `angular` (2 linear elements) \| `radial` \| `diameter` \| `arcLength` (arc elements; Revit 2025+) \| `spotElevation` \| `spotCoordinate`. References auto-extracted from walls, grids, levels, reference planes, lines, and family instances. `offsetMm` = distance of the dimension line/leader bend from the elements; `leaderLengthMm` = spot leader segment length *(requires approval, runs in transaction)* |
 | `revit_query_linked_elements` | Queries elements **inside a linked model** (Revit link or converted IFC) by category/name — returns linked-document element ids for `revit_select_linked_elements` |
 | `revit_select_linked_elements` | Selects elements **inside a linked model** in the host Revit UI, like picking linked elements interactively; optional zoom to the selection |
+
+### Tag elements like an example
+
+Place and configure one tag manually, select that `IndependentTag`, then ask:
+
+- “Tag all devices like the selected tag.”
+- “Use the selected tag as a template for all instances of this family.”
+- “Tag the selected devices using the selected example tag.”
+
+The agent should call `revit_analyze_selected_tag_template` first, summarize the inferred host-local offsets, rotation/leader behavior, eligible and skipped counts, then call `revit_apply_selected_tag_template`. The write is routed through the normal Revit approval queue. The source tag's owner view and exact tag type are reused; linked hosts and ambiguous/multi-host source tags are rejected safely.
 
 ### Query Safety & Pagination
 

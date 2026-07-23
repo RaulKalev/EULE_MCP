@@ -37,3 +37,6 @@ local.settings.json
 
 # Fody
 FodyWeavers.xsd
+
+# Local code-graph analysis
+graphify-out/

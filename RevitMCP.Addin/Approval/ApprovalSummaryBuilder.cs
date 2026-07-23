@@ -49,6 +49,7 @@ public static class ApprovalSummaryBuilder
             "revit_update_skill"                => BuildUpdateSkill(request),
             // Dimensions
             "revit_place_dimensions"            => BuildPlaceDimensions(request),
+            "revit_apply_selected_tag_template" => BuildApplySelectedTagTemplate(request),
             // Coordination tools
             "revit_create_clash_review_view"    => BuildCreateClashReviewView(request),
             "revit_focus_clash"                 => BuildFocusClash(request),
@@ -190,6 +191,40 @@ public static class ApprovalSummaryBuilder
         var total = count * copies;
         var desc  = sourceNums.Length > 0 ? string.Join(", ", sourceNums) : $"{count} source sheet{(count == 1 ? "" : "s")}";
         return $"Create {total} duplicate sheet{(total == 1 ? "" : "s")} from {desc} using mode '{mode}' and suffix '{numSuffix}'.";
+    }
+
+    private static string BuildApplySelectedTagTemplate(McpToolRequest request)
+    {
+        var sourceTagId = ToolArguments.GetLong(
+            request.Arguments,
+            "sourceTagId");
+        var scope = ToolArguments.GetString(
+            request.Arguments,
+            "scope",
+            "sameFamily");
+        var explicitIds = ToolArguments.GetLongArray(
+            request.Arguments,
+            "explicitElementIds");
+        var collision = ToolArguments.GetBool(
+            request.Arguments,
+            "enableCollisionDetection");
+        var skipAlreadyTagged = ToolArguments.GetBool(
+            request.Arguments,
+            "skipAlreadyTagged",
+            true);
+        var source = sourceTagId > 0
+            ? $"source tag ID:{sourceTagId}"
+            : "the selected example tag";
+        var scopeDescription = string.Equals(
+            scope,
+            "explicitElementIds",
+            StringComparison.OrdinalIgnoreCase)
+            ? $"{explicitIds.Length} explicit target element(s)"
+            : $"scope '{scope}'";
+        return $"Tag {scopeDescription} like {source}. " +
+               $"Skip already tagged: {(skipAlreadyTagged ? "yes" : "no")}. " +
+               $"Collision detection: {(collision ? "on" : "off")}. " +
+               "Runs in one transaction and supports one-step Undo.";
     }
 
     private static string BuildCreateRevision(McpToolRequest request)
