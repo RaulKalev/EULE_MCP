@@ -25,5 +25,8 @@ public class ElementQueryOptions
 
     // When true, attach the annotation tags referencing each returned element
     public bool IncludeTags { get; set; } = false;
+
+    // Opt-in identity/value projection; the full DTO remains the default contract.
+    public bool CompactResponse { get; set; } = false;
 }
 

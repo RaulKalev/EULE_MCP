@@ -89,6 +89,7 @@ Important repository references:
 - [`INSTALL.md`](INSTALL.md) — installer and manifest details
 - [`TESTING.md`](TESTING.md) — Revit smoke-test matrix
 - [`docs/execution-safety.md`](docs/execution-safety.md) — execution guarantees
+- [`docs/mcp-performance.md`](docs/mcp-performance.md) — lower-latency queries and reduced-credit tool profiles
 - [`docs/compatibility.md`](docs/compatibility.md) — supported framework and API boundaries
 - [`AGENTS.md`](AGENTS.md) — repository rules for AI coding agents
 

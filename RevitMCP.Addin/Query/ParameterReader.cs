@@ -16,21 +16,19 @@ public class ParameterReader
         var results = new List<ParameterValueDto>();
 
         if (options.IncludeInstanceParameters)
-            results.AddRange(ReadFromElement(element, "Instance", null));
+            results.AddRange(ReadFromElement(element, "Instance", null, options));
 
         if (options.IncludeTypeParameters)
         {
             var typeId = element.GetTypeId();
             if (typeId != null && typeId != ElementId.InvalidElementId)
-                results.AddRange(GetTypeParameters(doc, typeId));
-        }
-
-        if (options.ParameterNames.Count > 0)
-        {
-            results = results
-                .Where(p => options.ParameterNames.Any(n =>
-                    ParameterMatcher.Matches(p.Name, n, options.ParameterNameMatchMode)))
-                .ToList();
+            {
+                foreach (var parameter in GetTypeParameters(doc, typeId))
+                {
+                    if (ShouldInclude(parameter.Name, "Type", options))
+                        results.Add(parameter);
+                }
+            }
         }
 
         return results;
@@ -42,26 +40,51 @@ public class ParameterReader
         {
             var typeElement = doc.GetElement(typeId);
             cached = typeElement != null
-                ? ReadFromElement(typeElement, "Type", typeId.Value)
+                ? ReadFromElement(typeElement, "Type", typeId.Value, null)
                 : [];
             _typeCache[typeId] = cached;
         }
         return cached;
     }
 
-    private static List<ParameterValueDto> ReadFromElement(Element element, string scope, long? typeElementId)
+    private static List<ParameterValueDto> ReadFromElement(
+        Element element,
+        string scope,
+        long? typeElementId,
+        ParameterReadOptions? options)
     {
         var result = new List<ParameterValueDto>();
         try
         {
             foreach (Parameter p in element.Parameters)
             {
-                try { result.Add(BuildDto(p, scope, typeElementId)); }
+                try
+                {
+                    var name = p.Definition?.Name ?? string.Empty;
+                    if (options != null && !ShouldInclude(name, scope, options))
+                        continue;
+
+                    result.Add(BuildDto(p, scope, typeElementId));
+                }
                 catch { }
             }
         }
         catch { }
         return result;
+    }
+
+    private static bool ShouldInclude(string parameterName, string scope, ParameterReadOptions options)
+    {
+        if (options.ParameterSelectors.Count > 0)
+            return options.ParameterSelectors.Any(selector => selector.Matches(parameterName, scope));
+
+        if (options.ParameterNames.Count > 0)
+        {
+            return options.ParameterNames.Any(name =>
+                ParameterMatcher.Matches(parameterName, name, options.ParameterNameMatchMode));
+        }
+
+        return true;
     }
 
     private static ParameterValueDto BuildDto(Parameter p, string scope, long? typeElementId)

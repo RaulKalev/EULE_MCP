@@ -5,3 +5,6 @@
 [mcp_servers.revit-mcp]
 command = "C:\\Users\\mibil\\Documents\\AntigravityGit\\EULE_MCP\\RevitMCP.Bridge\\bin\\Release\\net8.0\\RevitMCP.Bridge.exe"
 args = ["--client", "Codex"]
+
+# Optional lower-credit query-only catalog (31 tools instead of the full 181):
+# args = ["--client", "Codex", "--tool-profile", "query"]

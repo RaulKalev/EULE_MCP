@@ -33,6 +33,9 @@ set "SNIPPET_PATH=%SCRIPT_DIR%codex-mcp-snippet.toml"
     echo [mcp_servers.revit-mcp]
     echo command = "%BRIDGE_TOML%"
     echo args = ["--client", "Codex"]
+    echo.
+    echo # Optional lower-credit query-only catalog ^(31 tools instead of the full 181^):
+    echo # args = ["--client", "Codex", "--tool-profile", "query"]
 ) > "%SNIPPET_PATH%"
 
 echo.

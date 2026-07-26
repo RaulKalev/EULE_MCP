@@ -5,6 +5,8 @@ using RevitMCP.Bridge;
 
 var clientName = GetArg(args, "--client");
 var pipeName = GetArg(args, "--pipe");
+var toolProfile = GetArg(args, "--tool-profile");
+var toolNames = GetArg(args, "--tool-names");
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -17,13 +19,32 @@ if (clientName != null)
     builder.Configuration["RevitMCP:ClientName"] = clientName;
 if (pipeName != null)
     builder.Configuration["RevitMCP:PipeName"] = pipeName;
+if (toolProfile != null)
+    builder.Configuration["RevitMCP:ToolProfile"] = toolProfile;
+if (toolNames != null)
+    builder.Configuration["RevitMCP:ToolNames"] = toolNames;
 
 builder.Services.AddSingleton<RevitPipeClient>();
 
-builder.Services
+var mcpBuilder = builder.Services
     .AddMcpServer()
-    .WithStdioServerTransport()
-    .WithTools<RevitMcpTools>();
+    .WithStdioServerTransport();
+
+var configuredProfile = builder.Configuration["RevitMCP:ToolProfile"] ?? "full";
+var configuredToolNames = builder.Configuration["RevitMCP:ToolNames"];
+
+if (McpToolCatalog.IsFullProfile(configuredProfile, configuredToolNames))
+{
+    // Preserve the existing registration path and complete 181-tool surface by default.
+    mcpBuilder.WithTools<RevitMcpTools>();
+}
+else
+{
+    builder.Services.AddTransient<RevitMcpTools>();
+    mcpBuilder.WithTools(McpToolCatalog.CreateSelectedTools(
+        configuredProfile,
+        configuredToolNames));
+}
 
 await builder.Build().RunAsync();
 

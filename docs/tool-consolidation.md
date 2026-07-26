@@ -54,5 +54,16 @@ together, so the `ReadOnly` hint and approval boundary are preserved.
   `revit_get_electrical_circuits` (`includeElements` now defaults `false`).
 - Response size in bytes is now logged per call (`ActivityLogger` /
   `LogEntry.ResponseSizeBytes`) so the worst offenders can be measured.
+
+## Runtime tool profiles
+
+The full 181-tool surface remains the default. Sessions that primarily inspect the
+model can launch the bridge with `--tool-profile query`, which advertises 31 common
+query/discovery tools, or use `--tool-names` with a comma-separated exact allow-list.
+This reduces the MCP schema placed in model context without deleting or disabling any
+add-in implementation.
+
+See [`mcp-performance.md`](mcp-performance.md) for configuration, measured catalog
+sizes, compact query responses, and the Revit-side parameter-read optimization.
 </content>
 </invoke>

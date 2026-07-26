@@ -47,14 +47,11 @@ public class ElementQueryEngine
 
         // --- 2. Summary-only fast path ---
         var reader = new ParameterReader();
-        var readOpts = new ParameterReadOptions
-        {
-            IncludeInstanceParameters = options.IncludeInstanceParameters,
-            IncludeTypeParameters = options.IncludeTypeParameters
-        };
+        var responseReadOpts = CreateResponseReadOptions(options);
+        var filterReadOpts = CreateFilterReadOptions(options);
 
         if (options.SummaryOnly)
-            return BuildSummaryResult(doc, elementIds, options, reader, readOpts, cancellationToken);
+            return BuildSummaryResult(doc, elementIds, options, reader, filterReadOpts, cancellationToken);
 
         // --- 3. Resolve effective limits (clamp caller values against QueryLimits.Default) ---
         var (effectivePageSize, effectiveMaxParameters, effectiveTruncateLength) =
@@ -108,20 +105,30 @@ public class ElementQueryEngine
             var element = doc.GetElement(elementId);
             if (element?.Category == null) continue;
 
-            var allParams = reader.ReadParameters(doc, element, readOpts);
-
-            if (!PassesFilters(allParams, options.Filters)) continue;
+            // Filtering needs values only for parameters named by the filters.
+            // Materializing every value here is especially expensive because this loop
+            // continues past the requested page to preserve the exact totalMatched contract.
+            if (options.Filters.Count > 0)
+            {
+                var filterParams = reader.ReadParameters(doc, element, filterReadOpts);
+                if (!PassesFilters(filterParams, options.Filters))
+                    continue;
+            }
 
             // 0-based index of this matched element (capture before incrementing)
             var matchIndex = totalMatched;
             totalMatched++;
 
-            // Skip elements before the current page window; keep scanning for totalMatched
+            // Skip elements outside the current page window. Crucially, response
+            // parameters are not read for these elements; the scan continues only to
+            // retain the existing exact totalMatched/hasMore pagination metadata.
             if (matchIndex < pageStart || results.Count >= effectivePageSize) continue;
+
+            var responseParams = reader.ReadParameters(doc, element, responseReadOpts);
 
             // Build parameter map for response
             var paramMap = BuildParameterMap(
-                allParams,
+                responseParams,
                 options.ReturnParameters,
                 options.ReturnParameterMatchMode,
                 effectiveMaxParameters,
@@ -260,6 +267,34 @@ public class ElementQueryEngine
             "Type" => paramScope == "Type",
             _ => true
         };
+
+    private static ParameterReadOptions CreateResponseReadOptions(ElementQueryOptions options)
+    {
+        return new ParameterReadOptions
+        {
+            IncludeInstanceParameters = options.IncludeInstanceParameters,
+            IncludeTypeParameters = options.IncludeTypeParameters,
+            ParameterNames = options.ReturnParameters,
+            ParameterNameMatchMode = options.ReturnParameterMatchMode
+        };
+    }
+
+    private static ParameterReadOptions CreateFilterReadOptions(ElementQueryOptions options)
+    {
+        return new ParameterReadOptions
+        {
+            IncludeInstanceParameters = options.IncludeInstanceParameters,
+            IncludeTypeParameters = options.IncludeTypeParameters,
+            ParameterSelectors = options.Filters
+                .Select(filter => new ParameterSelector
+                {
+                    Name = filter.ParameterName,
+                    MatchMode = filter.MatchMode,
+                    Scope = filter.Scope
+                })
+                .ToList()
+        };
+    }
 
     private static bool EvaluateOperator(string value, string op, string filterValue) =>
         op switch
