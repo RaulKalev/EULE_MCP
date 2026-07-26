@@ -52,6 +52,11 @@ public class App : IExternalApplication
             handler.RegisterTool(new GetSelectedElementsTool());
             handler.RegisterTool(new InspectSelectedElementsTool());
             handler.RegisterTool(new ListViewsTool());
+            handler.RegisterTool(new ListCadImportsTool());
+            handler.RegisterTool(new PreviewSetCadOverridesTool());
+            handler.RegisterTool(new SetCadOverridesTool());
+            handler.RegisterTool(new PreviewCopyCadOverridesTool());
+            handler.RegisterTool(new CopyCadOverridesTool());
             handler.RegisterTool(new ListSheetsTool());
             handler.RegisterTool(new ListSchedulesTool());
             handler.RegisterTool(new GetElementParametersTool());
