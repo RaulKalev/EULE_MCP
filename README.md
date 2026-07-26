@@ -2,7 +2,7 @@
 
 EULE MCP connects Claude Code, Codex, and Antigravity CLI to a live Autodesk Revit model through the [Model Context Protocol](https://modelcontextprotocol.io). It provides local model queries, discipline workflows, controlled writes, QA, reporting, and file operations without requiring users to write Revit API scripts.
 
-The current bridge exposes **176 MCP tools** across ten documented capability groups.
+The current bridge exposes **181 MCP tools** across ten documented capability groups.
 
 ## Documentation
 
@@ -26,7 +26,7 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | [General queries](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-General-Queries) | 25 | Model discovery, parameters, grouping, selection, presets, QA, Excel exports |
 | [Tagging and annotation](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Tagging-Annotation) | 15 | SmartTags-compatible placement, selected-example templates, retagging, dimensions |
 | [Electrical](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Electrical) | 47 | Circuits, panels, patch panels, cable types, dashboards, voltage drop, fire alarm |
-| [Views and sheets](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Documentation) | 24 | Placement, duplication, naming, parameters, revisions, controlled deletion |
+| [Views and sheets](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Documentation) | 29 | Placement, duplication, CAD import/layer graphics, naming, revisions, controlled deletion |
 | [Coordination](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Coordination) | 15 | Hard and clearance clashes, presets, reporting, review navigation |
 | [Skills and QA](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Skills-QA) | 16 | Company skills, project overrides, skill authoring, parameter rule sets |
 | [Reports and delivery](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Reports-Delivery) | 6 | Shared issue reports, exports, folder/register/Revit-sheet checks |

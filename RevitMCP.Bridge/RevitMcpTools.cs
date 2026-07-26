@@ -129,6 +129,111 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    [McpServerTool(Name = "revit_list_cad_imports", ReadOnly = true),
+     Description("Lists CAD import instances and layers in a view, including visibility, halftone, projection line color, line weight, and line pattern. Returns presetChanges that can be reused with the CAD override tools.")]
+    public async Task<string> ListCadImports(
+        [Description("View element ID. 0 uses the active view.")] long viewId = 0,
+        [Description("Include individual CAD layers. Default true.")] bool includeLayers = true,
+        [Description("Read settings from the assigned view template when present. Default true.")] bool useViewTemplate = true,
+        [Description("Optional substring filter for CAD import/type name.")] string? importNameFilter = null,
+        [Description("Maximum category settings to return. 0 means all.")] int limit = 0,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["viewId"] = viewId,
+            ["includeLayers"] = includeLayers,
+            ["useViewTemplate"] = useViewTemplate,
+            ["importNameFilter"] = importNameFilter ?? string.Empty,
+            ["limit"] = limit
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_list_cad_imports", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_preview_set_cad_overrides", ReadOnly = true),
+     Description("Previews CAD visibility/graphics changes. Each changes item selects an import by importInstanceId, importName, or allImports=true. Omit layerName for the import category; use layerName='*' for all layers. Settings: visible, halftone, lineColor (#RRGGBB), lineWeight (1-16), linePatternId/linePatternName, clearGraphics.")]
+    public async Task<string> PreviewSetCadOverrides(
+        [Description("Change objects, for example [{\"importName\":\"site.dwg\",\"layerName\":\"A-WALL\",\"visible\":false}]")] object[] changes,
+        [Description("Single target view ID. 0 uses the active view when viewIds is empty.")] long viewId = 0,
+        [Description("Multiple target view IDs.")] long[]? viewIds = null,
+        [Description("Modify an assigned view template rather than the project view. Default true; this can affect other views using the template.")] bool useViewTemplate = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["changes"] = changes,
+            ["viewId"] = viewId,
+            ["viewIds"] = viewIds ?? [],
+            ["useViewTemplate"] = useViewTemplate
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_preview_set_cad_overrides", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_set_cad_overrides"),
+     Description("Applies CAD import/layer visibility, halftone, projection line color, weight, and pattern changes in a safe Revit transaction. Requires approval. Run revit_preview_set_cad_overrides with identical arguments first.")]
+    public async Task<string> SetCadOverrides(
+        [Description("Change objects, for example [{\"importName\":\"site.dwg\",\"layerName\":\"A-WALL\",\"visible\":false,\"halftone\":true,\"lineColor\":\"#808080\"}]")] object[] changes,
+        [Description("Single target view ID. 0 uses the active view when viewIds is empty.")] long viewId = 0,
+        [Description("Multiple target view IDs.")] long[]? viewIds = null,
+        [Description("Modify an assigned view template rather than the project view. Default true; this can affect other views using the template.")] bool useViewTemplate = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["changes"] = changes,
+            ["viewId"] = viewId,
+            ["viewIds"] = viewIds ?? [],
+            ["useViewTemplate"] = useViewTemplate
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_set_cad_overrides", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_preview_copy_cad_overrides", ReadOnly = true),
+     Description("Previews copying all CAD import/layer visibility and graphic settings from one view to target views. Imports and layers are matched by normalized name, and actual view/template owners are reported.")]
+    public async Task<string> PreviewCopyCadOverrides(
+        [Description("Source view ID. 0 uses the active view.")] long sourceViewId,
+        [Description("Target view element IDs.")] long[] targetViewIds,
+        [Description("Include individual CAD layers. Default true.")] bool includeLayers = true,
+        [Description("Read source settings from its assigned view template. Default true.")] bool useSourceViewTemplate = true,
+        [Description("Write target settings to assigned view templates. Default true; this can affect other views using those templates.")] bool useTargetViewTemplates = true,
+        [Description("Optional substring filter for CAD import/type name.")] string? importNameFilter = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["sourceViewId"] = sourceViewId,
+            ["targetViewIds"] = targetViewIds,
+            ["includeLayers"] = includeLayers,
+            ["useSourceViewTemplate"] = useSourceViewTemplate,
+            ["useTargetViewTemplates"] = useTargetViewTemplates,
+            ["importNameFilter"] = importNameFilter ?? string.Empty
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_preview_copy_cad_overrides", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_copy_cad_overrides"),
+     Description("Copies all CAD import/layer visibility and graphic settings from one view to target views in a safe Revit transaction. Requires approval. Run revit_preview_copy_cad_overrides with identical arguments first.")]
+    public async Task<string> CopyCadOverrides(
+        [Description("Source view ID. 0 uses the active view.")] long sourceViewId,
+        [Description("Target view element IDs.")] long[] targetViewIds,
+        [Description("Include individual CAD layers. Default true.")] bool includeLayers = true,
+        [Description("Read source settings from its assigned view template. Default true.")] bool useSourceViewTemplate = true,
+        [Description("Write target settings to assigned view templates. Default true; this can affect other views using those templates.")] bool useTargetViewTemplates = true,
+        [Description("Optional substring filter for CAD import/type name.")] string? importNameFilter = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["sourceViewId"] = sourceViewId,
+            ["targetViewIds"] = targetViewIds,
+            ["includeLayers"] = includeLayers,
+            ["useSourceViewTemplate"] = useSourceViewTemplate,
+            ["useTargetViewTemplates"] = useTargetViewTemplates,
+            ["importNameFilter"] = importNameFilter ?? string.Empty
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_copy_cad_overrides", args, cancellationToken));
+    }
+
     [McpServerTool(Name = "revit_list_sheets", ReadOnly = true),
      Description("Lists sheets in the active Revit document. Supports nameFilter, numberFilter, returnParameters, includeViewports, and limit.")]
     public async Task<string> ListSheets(
