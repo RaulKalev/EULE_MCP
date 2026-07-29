@@ -285,6 +285,56 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    [McpServerTool(Name = "revit_list_extensible_storage_schemas", ReadOnly = true),
+     Description("Lists Revit Extensible Storage schemas visible to this session — the custom data containers other add-ins write into. Returns vendor ID, read/write access levels, whether read access is granted, and each field's name, value type, container type (Simple/Array/Map), sub-schema, and unit spec. Also counts how many elements in the active model carry each schema. Call this before revit_read_extensible_storage to find the schema you want.")]
+    public async Task<string> ListExtensibleStorageSchemas(
+        [Description("Optional case-insensitive substring filter on schema name.")] string? schemaNameFilter = null,
+        [Description("Optional case-insensitive substring filter on vendor ID.")] string? vendorIdFilter = null,
+        [Description("Include field definitions for each schema. Default true.")] bool includeFields = true,
+        [Description("Count elements in the active document carrying each schema. Default true.")] bool includeElementCounts = true,
+        [Description("Return only schemas actually used by elements in this document. Default false.")] bool onlyUsedInDocument = false,
+        [Description("Maximum schemas to return. 0 means all.")] int limit = 0,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["schemaNameFilter"] = schemaNameFilter ?? string.Empty,
+            ["vendorIdFilter"] = vendorIdFilter ?? string.Empty,
+            ["includeFields"] = includeFields,
+            ["includeElementCounts"] = includeElementCounts,
+            ["onlyUsedInDocument"] = onlyUsedInDocument,
+            ["limit"] = limit
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_list_extensible_storage_schemas", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_read_extensible_storage", ReadOnly = true),
+     Description("Reads custom Extensible Storage data that other Revit add-ins stored on elements. Choose targets with elementIds, useSelection=true, or scanDocument=true (finds every element carrying the schema, including DataStorage elements that hold project-wide data). Narrow with schemaGuid or schemaName; omit both to read every schema present on the target elements. Decodes simple, array, and map fields plus nested sub-entities, and reports the unit used for measurable fields. Read-only: it never adds, changes, or deletes stored data.")]
+    public async Task<string> ReadExtensibleStorage(
+        [Description("Schema GUID to read, e.g. 'A7B3C4D5-E6F7-8901-2345-6789ABCDEF01'. Most precise filter.")] string? schemaGuid = null,
+        [Description("Case-insensitive substring of the schema name, used when schemaGuid is not given.")] string? schemaName = null,
+        [Description("Element IDs to read storage from.")] long[]? elementIds = null,
+        [Description("Read from the current Revit selection instead of elementIds.")] bool useSelection = false,
+        [Description("Find every element in the document carrying the requested schema. Requires schemaGuid or schemaName.")] bool scanDocument = false,
+        [Description("Include decoded field values. Set false to list only which schemas each element carries. Default true.")] bool includeValues = true,
+        [Description("Maximum elements to read. Default 25, hard cap 500.")] int maxElements = 25,
+        [Description("How deep to follow nested sub-entities. Default 3.")] int maxDepth = 3,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["schemaGuid"] = schemaGuid ?? string.Empty,
+            ["schemaName"] = schemaName ?? string.Empty,
+            ["elementIds"] = elementIds ?? [],
+            ["useSelection"] = useSelection,
+            ["scanDocument"] = scanDocument,
+            ["includeValues"] = includeValues,
+            ["maxElements"] = maxElements,
+            ["maxDepth"] = maxDepth
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_read_extensible_storage", args, cancellationToken));
+    }
+
     [McpServerTool(Name = "revit_count_elements", ReadOnly = true),
      Description("Counts model elements grouped by Category or FamilyAndType. Optionally filter to a specific category name. Cheap even for the whole model (no parameter reads) — good first call to discover what categories exist before running a narrower, detailed query like revit_find_elements_by_parameter.")]
     public async Task<string> CountElements(

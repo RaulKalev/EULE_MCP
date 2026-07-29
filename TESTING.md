@@ -3097,3 +3097,67 @@ What do I have selected? (after manually picking elements inside a link)
 | Docs | `revit_place_dimensions` | RA | "Dimension between walls A and B." | `approval_required` → dimension created, `createdCount` ≥ 1 | Required (DE bypasses) | Single Undo | Per-element warnings for unresolvable references; radial/diameter/arcLength need Revit 2025+ |
 | Selection | `revit_query_linked_elements` | RO | "Find walls in link `<id>`." | `{linkName, totalMatched, elements[]}` with linked-doc ids | N/A | N/A | Requires category and/or nameFilter |
 | Selection | `revit_select_linked_elements` | RO | "Select linked elements [ids] in link `<id>`." | Elements highlighted in host UI, `selectedCount` | N/A | N/A | Uses link references (SetReferences); zoom transforms link coordinates |
+
+---
+
+## 45. Extensible Storage Queries (issue #29)
+
+Requires a model containing data written by another add-in. A model where
+SmartTags-compatible tags were placed by this connector works as a fallback: it
+carries the `SmartTagsMarker` schema (`A7B3C4D5-E6F7-8901-2345-6789ABCDEF01`).
+
+### 45.1 Schema Discovery
+
+**Prompt:**
+```
+List the extensible storage schemas used in this model.
+```
+
+**Verify:**
+1. `revit_list_extensible_storage_schemas` returns `schemaGuid`, `schemaName`, `vendorId`, both access levels, and `readAccessGranted`.
+2. `fields[]` reports `fieldName`, `valueType`, `containerType` (Simple/Array/Map), and `isMeasurable` per field.
+3. `elementCount` is present by default and is 0 for schemas loaded in the session but unused in this model.
+4. `onlyUsedInDocument=true` drops the zero-count schemas; `includeFields=false` drops the field arrays.
+5. A model with no extensible storage still returns `success: true` with a warning, not an error.
+
+### 45.2 Read by Document Scan
+
+**Prompt:**
+```
+Read the values stored under schema <guid> in this model.
+```
+
+**Verify:**
+1. `revit_read_extensible_storage` with `scanDocument=true` finds every carrier, including `DataStorage` elements (`elementClass: "DataStorage"`, empty category) that no category browse would reach.
+2. `fields` holds decoded values; arrays come back as JSON arrays and maps as `{key, value}` pairs.
+3. Measurable fields report their unit in `fieldUnits`, and the value matches the document's display unit.
+4. `scanDocument=true` without `schemaGuid`/`schemaName` fails with a message pointing at the schema list tool.
+
+### 45.3 Read by Selection and Ids
+
+**Prompt:**
+```
+What extensible storage data is on the elements I have selected?
+```
+
+**Verify:**
+1. `useSelection=true` reads the current selection; omitting the schema filter returns every schema present on those elements.
+2. `elementIds` works the same way; missing ids produce per-id warnings without failing the call.
+3. Elements carrying no entity are omitted rather than returned empty.
+4. `includeValues=false` lists only which schemas each element carries.
+
+### 45.4 Access, Limits, and Failure Handling
+
+**Verify:**
+1. A `Vendor`- or `Application`-level schema owned by another add-in returns `readAccessGranted: false` with an explanatory error, and the call still succeeds.
+2. An element carrying a schema not loaded in the session is reported with an explanatory error, not a crash.
+3. `maxElements` caps results (default 25, hard cap 500); `totalElementsMatched` reveals how many matched.
+4. Nested sub-entities are followed to `maxDepth` (default 3); beyond that the value is `{truncated: true}`.
+5. No transaction is opened and the model is never modified — the Revit undo stack stays unchanged after every call in this section.
+
+### Matrix rows (Section 30)
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Query | `revit_list_extensible_storage_schemas` | RO | "List the extensible storage schemas used in this model." | `{schemaCount, schemas[]}` with fields and `elementCount` | N/A | N/A | Session-loaded schemas only; `onlyUsedInDocument` filters to this model |
+| Query | `revit_read_extensible_storage` | RO | "Read schema `<guid>` values in this model." | `{elementCount, entityCount, elements[]}` with decoded `fields` | N/A | N/A | `scanDocument` needs a schema; finds `DataStorage`; units in `fieldUnits` |
