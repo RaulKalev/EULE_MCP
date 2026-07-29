@@ -60,6 +60,8 @@ public class App : IExternalApplication
             handler.RegisterTool(new ListSheetsTool());
             handler.RegisterTool(new ListSchedulesTool());
             handler.RegisterTool(new GetElementParametersTool());
+            handler.RegisterTool(new ListExtensibleStorageSchemasTool());
+            handler.RegisterTool(new ReadExtensibleStorageTool());
             handler.RegisterTool(new CountElementsTool());
             handler.RegisterTool(new GroupByParameterTool());
             handler.RegisterTool(new FindElementsByParameterTool());
