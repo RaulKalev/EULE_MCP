@@ -46,8 +46,9 @@ public static class ApprovalSummaryBuilder
             "revit_delete_views"                => BuildDeleteViews(request),
             "revit_delete_sheets"               => BuildDeleteSheets(request),
             "revit_delete_elements"             => BuildDeleteElements(request),
-            // Element alignment
+            // Element alignment and DWG-driven placement
             "revit_align_elements"              => BuildAlignElements(request),
+            "revit_place_from_cad"              => BuildPlaceFromCad(request),
             // Family types
             "revit_duplicate_family_types"      => BuildDuplicateFamilyTypes(request),
             "revit_edit_family_types"           => BuildEditFamilyTypes(request),
@@ -273,6 +274,37 @@ public static class ApprovalSummaryBuilder
 
         return $"Move {target} against the nearest '{surface}' surface within {radiusMm:F0} mm " +
                $"(searching {scope}).{gapDesc}{rotateDesc}";
+    }
+
+    private static string BuildPlaceFromCad(McpToolRequest request)
+    {
+        var layers = ToolArguments.GetStringArray(request.Arguments, "layers");
+        var typeName = ToolArguments.GetString(request.Arguments, "typeName");
+        var familyName = ToolArguments.GetString(request.Arguments, "familyName");
+        var typeId = ToolArguments.GetLong(request.Arguments, "typeId");
+        var mode = ToolArguments.GetString(request.Arguments, "elevationMode");
+        var levelName = ToolArguments.GetString(request.Arguments, "levelName");
+        var offsetMm = ToolArguments.GetDouble(request.Arguments, "offsetMm");
+        var elevationMm = ToolArguments.GetDouble(request.Arguments, "elevationMm");
+        var maxInstances = ToolArguments.GetInt(request.Arguments, "maxInstances", 500);
+        var skipExisting = ToolArguments.GetBool(request.Arguments, "skipExisting", true);
+
+        var family = typeId > 0
+            ? $"type ID:{typeId}"
+            : string.Join(" : ", new[] { familyName, typeName }.Where(s => s.Length > 0));
+        if (string.IsNullOrEmpty(family)) family = "the matched family type";
+
+        var elevation = mode switch
+        {
+            "level" => $"on level '{levelName}' + {offsetMm:F0} mm",
+            "explicit" => $"at {elevationMm:F0} mm",
+            "dwg" => "at the height from the drawing",
+            _ => $"elevation mode '{mode}'"
+        };
+
+        return $"Place {family} at every location marked on CAD layer(s) {Summarize(layers.ToList())} " +
+               $"{elevation}. Up to {maxInstances} instance(s); " +
+               $"{(skipExisting ? "locations that already have one are skipped" : "existing instances are ignored")}.";
     }
 
     private static string BuildDuplicateFamilyTypes(McpToolRequest request)

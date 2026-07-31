@@ -14,7 +14,7 @@ response contracts.
 
 ## Reduced tool profiles
 
-The default profile remains `full` and advertises all 188 tools. Existing installations
+The default profile remains `full` and advertises all 191 tools. Existing installations
 therefore continue to work unchanged.
 
 For query-oriented sessions, start the bridge with:
@@ -50,7 +50,7 @@ In a local MCP handshake against this revision:
 
 | Catalog | Tools | `tools/list` JSON |
 |---|---:|---:|
-| `full` | 188 | 206,495 bytes |
+| `full` | 191 | 213,770 bytes |
 | `query` | 32 | 26,247 bytes |
 | two-tool exact allow-list | 2 | 1,144 bytes |
 

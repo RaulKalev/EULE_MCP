@@ -35,7 +35,7 @@ var configuredToolNames = builder.Configuration["RevitMCP:ToolNames"];
 
 if (McpToolCatalog.IsFullProfile(configuredProfile, configuredToolNames))
 {
-    // Preserve the existing registration path and complete 188-tool surface by default.
+    // Preserve the existing registration path and complete 191-tool surface by default.
     mcpBuilder.WithTools<RevitMcpTools>();
 }
 else
