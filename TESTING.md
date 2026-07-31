@@ -3321,3 +3321,83 @@ Align the selected devices to the wall with a 5 mm gap.
 |------|------|------------|--------------|-----------------|----------|------|-------|
 | Elements | `revit_preview_align_elements` | RO | "Preview moving the selection against the nearest wall." | `{total, canAlign, alreadyFlush, proposals[]}` with target and alternates | N/A | N/A | Reports the 3D view used; warns on an active section box |
 | Elements | `revit_align_elements` | Approval | "Align the selection to the wall with a 5 mm gap." | `{aligned, alreadyFlush, rotated, results[]}` | Yes | Yes | Host-model elements only; plans resolved before the first move |
+
+---
+
+## 48. Placing Items From a DWG (issue #32)
+
+Requires a model with an imported or linked DWG that marks device locations — blocks,
+POINT entities, or circles on a dedicated layer — plus a loaded family to place.
+
+### 48.1 Layer Inventory
+
+**Prompt:**
+```
+Which layers in the imported DWG hold device locations?
+```
+
+**Verify:**
+1. `revit_get_cad_placement_points` called WITHOUT `layers` returns every CAD layer with `blockCount`, `pointCount`, `circleCount`, `curveCount`, `textCount`, `otherCount`.
+2. `placeable` is true only for layers carrying blocks, points, or circles; a curves-and-text layer reports false.
+3. `minZmm` / `maxZmm` report the height range each layer sits at.
+4. With no `importInstanceId` and exactly one CAD import in the model, that import is used; with several, the call fails listing the candidates and their ids.
+5. A model with no CAD import fails with a clear message.
+
+### 48.2 Reading Points
+
+**Prompt:**
+```
+Show me the points on E-SOCKET-SYM.
+```
+
+**Verify:**
+1. Passing `layers` returns points in millimetres with `layer`, `source` (block/point/circle), `rotationDegrees`, and `mergedCount`.
+2. Coordinates land where the symbols visibly are in the model — spot-check two against Revit.
+3. A symbol drawn as a block around a circle yields ONE point, not two, and the survivor reports `source: "block"` with the block's rotation.
+4. `mergeToleranceMm=0` disables merging and the duplicate reappears.
+5. `pointSources=["circle"]` returns only circle centres; `["block"]` only insertion points.
+6. A layer name that does not exist produces a warning, not a failure.
+7. `limit` caps the returned points and `pointCount` still reports the true total.
+8. `elevation.isFlat` is true for a 2D drawing, and the note tells the caller to ask for a mounting height.
+
+### 48.3 The Two Required Answers
+
+**Verify:**
+1. `revit_place_from_cad` without `layers` fails, and the message says to run the inventory and ask the user which layers hold the locations.
+2. Without `elevationMode` it fails, and the message lists dwg / level / explicit and explains that a 2D drawing has no mounting height.
+3. `elevationMode=level` without `levelName` fails; a `levelName` that does not exist in the model fails naming it.
+4. The bridge rejects both omissions before the request reaches Revit.
+
+### 48.4 Placing
+
+**Prompt:**
+```
+Place the socket family at every location on E-SOCKET-SYM, 1100 above Level 1.
+```
+
+**Verify:**
+1. `revit_preview_place_from_cad` opens no transaction and reports `locationsFound`, `willPlace`, `alreadyPlaced`, the elevation range, and a sample of points.
+2. `revit_place_from_cad` requires approval; the pending summary names the family, the layers, the elevation, and the cap. Rejecting it leaves the model unchanged.
+3. Instances land at the marked positions, at level elevation + `offsetMm`.
+4. `elevationMode=explicit` places at the absolute `elevationMm`; `elevationMode=dwg` keeps the drawing's own heights on a 3D DWG.
+5. `applyBlockRotation=true` orients instances the way the DWG blocks are rotated; `false` leaves them at 0; `rotationOffsetDegrees` shifts them all by a constant.
+6. A single Revit undo removes every instance created by one call.
+7. A family whose placement type needs a host or a view fails per location with an explanatory error, and the rest still place.
+
+### 48.5 Re-running
+
+**Verify:**
+1. Running the same call twice places nothing the second time — every location reports `alreadyPlaced`.
+2. `skipExisting=false` places a second instance at every location (then undo).
+3. `duplicateToleranceMm` controls how close counts as the same location.
+4. Existing instances are matched in plan only: sockets already at 1100 still match marks at 0.
+5. Adding a second layer to the call places only the new locations.
+6. `maxInstances` caps the run with a warning naming how many were dropped; the cap is enforced at 2000.
+
+### Matrix rows (Section 30)
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Query | `revit_get_cad_placement_points` | RO | "Which DWG layers hold device locations?" | `{layers[]}` with per-source counts; `{points[]}` when layers are passed | N/A | N/A | Omit layers for the inventory; `elevation.isFlat` flags a 2D drawing |
+| Elements | `revit_preview_place_from_cad` | RO | "Preview placing sockets from E-SOCKET-SYM." | `{locationsFound, willPlace, alreadyPlaced, sample[]}` | N/A | N/A | Same plan the write tool executes |
+| Elements | `revit_place_from_cad` | Approval | "Place sockets from E-SOCKET-SYM, 1100 above Level 1." | `{createdCount, alreadyPlaced, created[]}` | Yes | Yes | `layers` and `elevationMode` are required; `skipExisting` makes re-runs top up |

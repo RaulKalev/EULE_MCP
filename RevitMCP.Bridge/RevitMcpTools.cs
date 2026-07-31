@@ -1285,6 +1285,143 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    // ── Placing Items From a DWG ──────────────────────────────────────────────
+
+    [McpServerTool(Name = "revit_get_cad_placement_points", ReadOnly = true),
+     Description("Reads candidate placement locations out of an imported or linked DWG. Call WITHOUT layers first: it returns every CAD layer with counts of block inserts, points, circles, curves and text, plus the height range each sits at — show that to the user and ask which layers hold the locations, and whether a mounting height is needed. Call again WITH layers to get the points in millimetres, including the rotation carried over from block references. Read-only.")]
+    public async Task<string> GetCadPlacementPoints(
+        [Description("CAD layer names to read points from; omit for the layer inventory")] string[]? layers = null,
+        [Description("CAD import element ID (required when the model has several CAD files)")] long importInstanceId = 0,
+        [Description("Which geometry counts as a location: block | point | circle (default: all three)")] string[]? pointSources = null,
+        [Description("Merge marks closer than this into one location, in mm (default 1)")] double mergeToleranceMm = 1,
+        [Description("Maximum points to return (default 200, max 2000)")] int limit = 200,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["layers"] = layers ?? [],
+            ["importInstanceId"] = importInstanceId,
+            ["pointSources"] = pointSources ?? [],
+            ["mergeToleranceMm"] = mergeToleranceMm,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_get_cad_placement_points", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_preview_place_from_cad", ReadOnly = true),
+     Description("Previews placing a family at every location a DWG marks, WITHOUT changing the model. Same arguments as revit_place_from_cad. Returns how many instances would be created, how many locations already have one, the elevation they would land at, and a sample of the points.")]
+    public Task<string> PreviewPlaceFromCad(
+        [Description("CAD layer names holding the locations — ask the user, names differ per project")] string[] layers,
+        [Description("Elevation source: dwg (keep the drawing height) | level (levelName + offsetMm) | explicit (elevationMm)")] string elevationMode,
+        [Description("Family type element ID to place")] long typeId = 0,
+        [Description("Family name (partial match) when typeId is omitted")] string? familyName = null,
+        [Description("Type name (partial match) when typeId is omitted")] string? typeName = null,
+        [Description("Level name — required for elevationMode=level, also used as the placement level")] string? levelName = null,
+        [Description("Height above the level, in mm (elevationMode=level)")] double offsetMm = 0,
+        [Description("Absolute elevation in mm (elevationMode=explicit)")] double elevationMm = 0,
+        [Description("CAD import element ID (required when the model has several CAD files)")] long importInstanceId = 0,
+        [Description("Which geometry counts as a location: block | point | circle (default: all three)")] string[]? pointSources = null,
+        [Description("Merge marks closer than this into one location, in mm (default 1)")] double mergeToleranceMm = 1,
+        [Description("Carry the block reference's rotation onto the instance (default true)")] bool applyBlockRotation = true,
+        [Description("Extra rotation applied on top, in degrees")] double rotationOffsetDegrees = 0,
+        [Description("Skip locations that already have an instance of this type (default true)")] bool skipExisting = true,
+        [Description("How close an existing instance counts as the same location, in mm (default 50)")] double duplicateToleranceMm = 50,
+        [Description("Cap on instances created (default 500, max 2000)")] int maxInstances = 500,
+        [Description("View element ID for view-based (detail item) families")] long viewId = 0,
+        [Description("Host element ID for hosted families")] long hostElementId = 0,
+        CancellationToken cancellationToken = default) =>
+        SendPlaceFromCad(
+            "revit_preview_place_from_cad", layers, elevationMode, typeId, familyName, typeName, levelName,
+            offsetMm, elevationMm, importInstanceId, pointSources, mergeToleranceMm, applyBlockRotation,
+            rotationOffsetDegrees, skipExisting, duplicateToleranceMm, maxInstances, viewId, hostElementId,
+            cancellationToken);
+
+    [McpServerTool(Name = "revit_place_from_cad"),
+     Description("Places a family at every location an imported DWG marks — block inserts, points, or circles on the layers you name. Requires approval. Layer names differ per project, so ask the user which layers hold the locations. A 2D drawing carries no mounting height, so elevationMode must be stated: 'dwg' keeps the drawing height, 'level' takes levelName + offsetMm, 'explicit' takes an absolute elevationMm. skipExisting (default true) means re-running tops the model up instead of doubling every location. Run revit_preview_place_from_cad first.")]
+    public Task<string> PlaceFromCad(
+        [Description("CAD layer names holding the locations — ask the user, names differ per project")] string[] layers,
+        [Description("Elevation source: dwg (keep the drawing height) | level (levelName + offsetMm) | explicit (elevationMm)")] string elevationMode,
+        [Description("Family type element ID to place")] long typeId = 0,
+        [Description("Family name (partial match) when typeId is omitted")] string? familyName = null,
+        [Description("Type name (partial match) when typeId is omitted")] string? typeName = null,
+        [Description("Level name — required for elevationMode=level, also used as the placement level")] string? levelName = null,
+        [Description("Height above the level, in mm (elevationMode=level)")] double offsetMm = 0,
+        [Description("Absolute elevation in mm (elevationMode=explicit)")] double elevationMm = 0,
+        [Description("CAD import element ID (required when the model has several CAD files)")] long importInstanceId = 0,
+        [Description("Which geometry counts as a location: block | point | circle (default: all three)")] string[]? pointSources = null,
+        [Description("Merge marks closer than this into one location, in mm (default 1)")] double mergeToleranceMm = 1,
+        [Description("Carry the block reference's rotation onto the instance (default true)")] bool applyBlockRotation = true,
+        [Description("Extra rotation applied on top, in degrees")] double rotationOffsetDegrees = 0,
+        [Description("Skip locations that already have an instance of this type (default true)")] bool skipExisting = true,
+        [Description("How close an existing instance counts as the same location, in mm (default 50)")] double duplicateToleranceMm = 50,
+        [Description("Cap on instances created (default 500, max 2000)")] int maxInstances = 500,
+        [Description("View element ID for view-based (detail item) families")] long viewId = 0,
+        [Description("Host element ID for hosted families")] long hostElementId = 0,
+        CancellationToken cancellationToken = default) =>
+        SendPlaceFromCad(
+            "revit_place_from_cad", layers, elevationMode, typeId, familyName, typeName, levelName,
+            offsetMm, elevationMm, importInstanceId, pointSources, mergeToleranceMm, applyBlockRotation,
+            rotationOffsetDegrees, skipExisting, duplicateToleranceMm, maxInstances, viewId, hostElementId,
+            cancellationToken);
+
+    private async Task<string> SendPlaceFromCad(
+        string toolName,
+        string[] layers,
+        string elevationMode,
+        long typeId,
+        string? familyName,
+        string? typeName,
+        string? levelName,
+        double offsetMm,
+        double elevationMm,
+        long importInstanceId,
+        string[]? pointSources,
+        double mergeToleranceMm,
+        bool applyBlockRotation,
+        double rotationOffsetDegrees,
+        bool skipExisting,
+        double duplicateToleranceMm,
+        int maxInstances,
+        long viewId,
+        long hostElementId,
+        CancellationToken cancellationToken)
+    {
+        if (layers == null || layers.Length == 0)
+            return FormatBridgeError(
+                "layers is required. Run revit_get_cad_placement_points without layers, show the user " +
+                "which layers carry blocks, points or circles, and ask which ones hold the locations.");
+
+        if (string.IsNullOrWhiteSpace(elevationMode))
+            return FormatBridgeError(
+                "elevationMode is required: 'dwg', 'level' (with levelName and offsetMm), or " +
+                "'explicit' (with elevationMm). A 2D drawing has no mounting height — ask the user.");
+
+        var args = new Dictionary<string, object?>
+        {
+            ["layers"] = layers,
+            ["elevationMode"] = elevationMode,
+            ["typeId"] = typeId,
+            ["familyName"] = familyName ?? "",
+            ["typeName"] = typeName ?? "",
+            ["levelName"] = levelName ?? "",
+            ["offsetMm"] = offsetMm,
+            ["elevationMm"] = elevationMm,
+            ["importInstanceId"] = importInstanceId,
+            ["pointSources"] = pointSources ?? [],
+            ["mergeToleranceMm"] = mergeToleranceMm,
+            ["applyBlockRotation"] = applyBlockRotation,
+            ["rotationOffsetDegrees"] = rotationOffsetDegrees,
+            ["skipExisting"] = skipExisting,
+            ["duplicateToleranceMm"] = duplicateToleranceMm,
+            ["maxInstances"] = maxInstances,
+            ["viewId"] = viewId,
+            ["hostElementId"] = hostElementId
+        };
+        var result = await pipeClient.SendAsync(toolName, args, cancellationToken);
+        return FormatResult(result);
+    }
+
     // ── Element Alignment ─────────────────────────────────────────────────────
 
     [McpServerTool(Name = "revit_preview_align_elements", ReadOnly = true),

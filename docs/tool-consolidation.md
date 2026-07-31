@@ -60,7 +60,7 @@ together, so the `ReadOnly` hint and approval boundary are preserved.
 
 ## Runtime tool profiles
 
-The full 188-tool surface remains the default. Sessions that primarily inspect the
+The full 191-tool surface remains the default. Sessions that primarily inspect the
 model can launch the bridge with `--tool-profile query`, which advertises 32 common
 query/discovery tools, or use `--tool-names` with a comma-separated exact allow-list.
 This reduces the MCP schema placed in model context without deleting or disabling any

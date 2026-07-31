@@ -237,6 +237,11 @@ public class App : IExternalApplication
             handler.RegisterTool(new PreviewAlignElementsTool());
             handler.RegisterTool(new AlignElementsTool());
 
+            // Placing items at locations marked in an imported DWG (issue #32)
+            handler.RegisterTool(new GetCadPlacementPointsTool());
+            handler.RegisterTool(new PreviewPlaceFromCadTool());
+            handler.RegisterTool(new PlaceFromCadTool());
+
             handler.RegisterTool(new ListTagTypesTool());
             handler.RegisterTool(new FindManagedTagsTool());
             handler.RegisterTool(new PreviewPlaceTagsTool());
