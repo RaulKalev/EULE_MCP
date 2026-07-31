@@ -24,7 +24,7 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | Area | Tools | Examples |
 |---|---:|---|
 | [General queries](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-General-Queries) | 27 | Model discovery, parameters, extensible storage, grouping, selection, presets, QA, Excel exports |
-| [Tagging and annotation](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Tagging-Annotation) | 20 | SmartTags-compatible placement, selected-example templates, retagging, dimensions, element placement from DWG, alignment |
+| [Element placement and annotation](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Tagging-Annotation) | 20 | Placement from DWG locations, alignment against walls/ceilings/floors, SmartTags-compatible tagging, selected-example templates, retagging, dimensions |
 | [Electrical](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Electrical) | 47 | Circuits, panels, patch panels, cable types, dashboards, voltage drop, fire alarm |
 | [Views and sheets](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Documentation) | 29 | Placement, duplication, CAD import/layer graphics, naming, revisions, controlled deletion |
 | [Coordination](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Coordination) | 15 | Hard and clearance clashes, presets, reporting, review navigation |
@@ -32,7 +32,7 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | [Reports and delivery](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Reports-Delivery) | 6 | Shared issue reports, exports, folder/register/Revit-sheet checks |
 | [Standards](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Standards) | 5 | Offline indexing, search, and contextual retrieval |
 | [Files, Excel, and configuration](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Files-Excel-Configuration) | 16 | Policy-scoped files, standalone workbooks, scoped JSON state |
-| [Family creation and IFC](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Family-IFC) | 10 | DWG-to-Detail-Item families, family type duplication and editing, IFC Space-to-Room |
+| [Family types, creation, and IFC](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Family-IFC) | 10 | Family type duplication and editing, DWG-to-Detail-Item families, IFC Space-to-Room |
 
 ## Supported environment
 
@@ -89,13 +89,16 @@ Important repository references:
 - [`INSTALL.md`](INSTALL.md) — installer and manifest details
 - [`TESTING.md`](TESTING.md) — Revit smoke-test matrix
 - [`docs/alignment.md`](docs/alignment.md) — moving elements against walls, ceilings, and floors, including linked IFC
-- [`docs/place-from-cad.md`](docs/place-from-cad.md) — placing families at locations marked in an imported DWG
+- [`docs/cad-management.md`](docs/cad-management.md) — CAD import layer visibility and graphic overrides
+- [`docs/compatibility.md`](docs/compatibility.md) — supported framework and API boundaries
 - [`docs/execution-safety.md`](docs/execution-safety.md) — execution guarantees
 - [`docs/extensible-storage.md`](docs/extensible-storage.md) — reading add-in data stored on elements
 - [`docs/family-types.md`](docs/family-types.md) — duplicating, renaming, and re-parameterising family types
 - [`docs/mcp-performance.md`](docs/mcp-performance.md) — lower-latency queries and reduced-credit tool profiles
-- [`docs/compatibility.md`](docs/compatibility.md) — supported framework and API boundaries
-- [`AGENTS.md`](AGENTS.md) — repository rules for AI coding agents
+- [`docs/place-from-cad.md`](docs/place-from-cad.md) — placing families at locations marked in an imported DWG
+- [`docs/skills.md`](docs/skills.md) — company skills, project overrides, and the skill runner
+- [`docs/standards-lookup.md`](docs/standards-lookup.md) — offline standards indexing and retrieval
+- [`docs/tool-consolidation.md`](docs/tool-consolidation.md) — discriminator-based tools and the old → new name mapping
 
 ## License
 
