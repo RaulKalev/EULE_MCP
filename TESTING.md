@@ -3239,3 +3239,85 @@ Rename type <id> to "<name>" and set its Comments.
 | Elements | `revit_duplicate` (`entity=familyTypes`) | Approval | "Duplicate type `<id>` into DN100 and DN150." | `{created, parametersSet, results[]}` | Yes | Yes | `variants` / `newTypeNames` / `nameSuffix`; `requireAllParameters` rolls a copy back |
 | Elements | `revit_preview_edit_family_types` | RO | "Preview renaming type `<id>` to `<name>`." | `{canEdit, plannedRenames, plannedParameterWrites, proposals[]}` | N/A | N/A | Name collisions are reported, not resolved |
 | Elements | `revit_edit_family_types` | Approval | "Rename type `<id>` and set its Comments." | `{edited, renamed, parametersSet, results[]}` | Yes | Yes | Rename affects every placed instance |
+
+---
+
+## 47. Element Alignment Against Surfaces (issue #33)
+
+Requires a model with a loaded link (an IFC converted to a Revit link is the target
+case) containing walls, slabs, or ceilings, plus a few host-model devices to move.
+A model where the linked walls land on Generic Models is the most valuable test case.
+
+### 47.1 Preview
+
+**Prompt:**
+```
+Preview moving the selected devices against the nearest wall.
+```
+
+**Verify:**
+1. `revit_preview_align_elements` opens no transaction and leaves the undo stack unchanged.
+2. Each proposal names the surface it would land on: `surfaceKind`, `targetCategory`, `targetName`, `model` (host or the link name), `distanceMm`, `currentGapMm`, `moveDistanceMm`.
+3. `alternates[]` lists the other surfaces found in range, so a wrong pick is diagnosable.
+4. `searchViewName` reports the 3D view the rays ran in.
+5. An element already touching the surface reports a `moveDistanceMm` near 0 and counts toward `alreadyFlush`.
+6. An element already inside the wall reports a negative `currentGapMm` and a negative `moveDistanceMm`.
+7. The preview's target and distances match what the write tool then does.
+
+### 47.2 Linked IFC With Unexpected Categories
+
+**Prompt:**
+```
+Move these devices against the wall in the linked IFC.
+```
+
+**Verify:**
+1. Walls that the IFC mapped onto Generic Models (or any other category) are still found — classification is by face orientation, not category.
+2. `targetCategory` reports the category the linked element actually has, however odd.
+3. `linkInstanceIds` restricts the search to the named links; other links stop being hit.
+4. `targetCategories` restricts which categories are accepted, and a too-narrow list produces a "none of them is a wall/ceiling/floor" style reason rather than a silent wrong move.
+5. `scope=host` ignores links entirely; `scope=links` ignores host geometry.
+6. An unloaded link contributes nothing and the failure reason points at the link/view.
+
+### 47.3 Surfaces and Tolerances
+
+**Verify:**
+1. `surface=ceiling` moves elements up to the underside of the slab above; `surface=floor` moves them down onto the floor top.
+2. `surface=wall` searches horizontally only — it never picks a slab.
+3. `surface=nearest` picks whichever of the three is closest and reports which kind it chose.
+4. A sloped soffit is classified `other` at the default tolerance and is refused for `surface=ceiling`; raising `angleToleranceDegrees` accepts it.
+5. `angleToleranceDegrees` above 44 is clamped with a warning (the bands would overlap).
+6. `horizontalSamples` outside 4–32 falls back to 8 with a warning.
+7. `surfaceNormalMeasured: false` appears when the face was too small or too irregular to measure, and the reason text says the orientation was inferred.
+
+### 47.4 Moving
+
+**Prompt:**
+```
+Align the selected devices to the wall with a 5 mm gap.
+```
+
+**Verify:**
+1. `revit_align_elements` requires approval; the pending summary names the surface, the element count, and the gap. Rejecting it leaves the model unchanged.
+2. Elements end up touching the surface, not centred on it — the move accounts for each element's own size along the search direction.
+3. `gapMm` leaves the requested clearance; a negative `gapMm` embeds the element by that much.
+4. A single Revit undo reverses every move from one call.
+5. Pinned elements are reported as `outcome: "pinned"` and are not moved; the rest of the batch still moves.
+6. Selecting several elements moves each to its own nearest surface — they never align to each other.
+7. Running the tool twice in a row reports everything as `alreadyFlush` the second time.
+
+### 47.5 Rotation and Search View
+
+**Verify:**
+1. `rotateToSurface=true` turns family instances square to the wall they land on; `rotationDegrees` in the response matches the applied rotation.
+2. Rotation is skipped for ceiling and floor surfaces and for elements with no facing direction — reported, not guessed.
+3. A 3D view with an active section box produces a warning, and geometry outside the box is not found.
+4. `searchViewId` pointing at a non-3D view or a view template fails with a clear message.
+5. A model with no 3D view fails with a message telling the user to create one or pass `searchViewId`.
+
+### Matrix rows (Section 30)
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Elements | `revit_preview_align_elements` | RO | "Preview moving the selection against the nearest wall." | `{total, canAlign, alreadyFlush, proposals[]}` with target and alternates | N/A | N/A | Reports the 3D view used; warns on an active section box |
+| Elements | `revit_align_elements` | Approval | "Align the selection to the wall with a 5 mm gap." | `{aligned, alreadyFlush, rotated, results[]}` | Yes | Yes | Host-model elements only; plans resolved before the first move |

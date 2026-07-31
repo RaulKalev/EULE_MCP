@@ -1285,6 +1285,88 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    // ── Element Alignment ─────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "revit_preview_align_elements", ReadOnly = true),
+     Description("Previews moving elements against the nearest wall, ceiling, floor, or whatever is closest, WITHOUT changes. Same arguments as revit_align_elements. Returns per element the surface it would land on (kind, source model, category, current gap, move distance) plus the other surfaces found in range, so a linked IFC that maps walls onto Generic Models can be checked before moving anything.")]
+    public Task<string> PreviewAlignElements(
+        [Description("Surface to align against: wall | ceiling | floor | nearest")] string surface,
+        [Description("Host-model element IDs to move")] long[]? elementIds = null,
+        [Description("Align the current Revit selection instead of elementIds")] bool useSelection = false,
+        [Description("How far to look for a surface, in mm (default 3000, max 50000)")] double searchRadiusMm = 3000,
+        [Description("Clearance to leave against the surface, in mm; negative embeds")] double gapMm = 0,
+        [Description("Where to search: both | links | host (default both)")] string scope = "both",
+        [Description("Only accept surfaces on elements of these categories (default: any)")] string[]? targetCategories = null,
+        [Description("Only search these link instance IDs (default: all loaded links)")] long[]? linkInstanceIds = null,
+        [Description("Also turn each element square to the wall it lands on (default false)")] bool rotateToSurface = false,
+        [Description("How far a face may tilt and still count as wall/ceiling/floor, in degrees (1-44, default 30)")] double angleToleranceDegrees = 30,
+        [Description("Horizontal directions sampled when looking for a wall (4-32, default 8)")] int horizontalSamples = 8,
+        [Description("3D view used for ray casting; defaults to the active 3D view, else the first one")] long searchViewId = 0,
+        CancellationToken cancellationToken = default) =>
+        SendAlignElements(
+            "revit_preview_align_elements", surface, elementIds, useSelection, searchRadiusMm, gapMm, scope,
+            targetCategories, linkInstanceIds, rotateToSurface, angleToleranceDegrees, horizontalSamples,
+            searchViewId, cancellationToken);
+
+    [McpServerTool(Name = "revit_align_elements"),
+     Description("Moves elements until they sit against the nearest wall, ceiling, floor, or whatever is closest. Requires approval. Surfaces are found by ray casting through the host model and loaded links, and classified by face orientation rather than category, so walls and slabs a linked IFC mapped onto Generic Models are still found. Run revit_preview_align_elements first.")]
+    public Task<string> AlignElements(
+        [Description("Surface to align against: wall | ceiling | floor | nearest")] string surface,
+        [Description("Host-model element IDs to move")] long[]? elementIds = null,
+        [Description("Align the current Revit selection instead of elementIds")] bool useSelection = false,
+        [Description("How far to look for a surface, in mm (default 3000, max 50000)")] double searchRadiusMm = 3000,
+        [Description("Clearance to leave against the surface, in mm; negative embeds")] double gapMm = 0,
+        [Description("Where to search: both | links | host (default both)")] string scope = "both",
+        [Description("Only accept surfaces on elements of these categories (default: any)")] string[]? targetCategories = null,
+        [Description("Only search these link instance IDs (default: all loaded links)")] long[]? linkInstanceIds = null,
+        [Description("Also turn each element square to the wall it lands on (default false)")] bool rotateToSurface = false,
+        [Description("How far a face may tilt and still count as wall/ceiling/floor, in degrees (1-44, default 30)")] double angleToleranceDegrees = 30,
+        [Description("Horizontal directions sampled when looking for a wall (4-32, default 8)")] int horizontalSamples = 8,
+        [Description("3D view used for ray casting; defaults to the active 3D view, else the first one")] long searchViewId = 0,
+        CancellationToken cancellationToken = default) =>
+        SendAlignElements(
+            "revit_align_elements", surface, elementIds, useSelection, searchRadiusMm, gapMm, scope,
+            targetCategories, linkInstanceIds, rotateToSurface, angleToleranceDegrees, horizontalSamples,
+            searchViewId, cancellationToken);
+
+    private async Task<string> SendAlignElements(
+        string toolName,
+        string surface,
+        long[]? elementIds,
+        bool useSelection,
+        double searchRadiusMm,
+        double gapMm,
+        string scope,
+        string[]? targetCategories,
+        long[]? linkInstanceIds,
+        bool rotateToSurface,
+        double angleToleranceDegrees,
+        int horizontalSamples,
+        long searchViewId,
+        CancellationToken cancellationToken)
+    {
+        if ((elementIds == null || elementIds.Length == 0) && !useSelection)
+            return FormatBridgeError("Provide elementIds, or set useSelection=true to align the current selection.");
+
+        var args = new Dictionary<string, object?>
+        {
+            ["surface"] = surface ?? "",
+            ["elementIds"] = elementIds ?? [],
+            ["useSelection"] = useSelection,
+            ["searchRadiusMm"] = searchRadiusMm,
+            ["gapMm"] = gapMm,
+            ["scope"] = scope ?? "both",
+            ["targetCategories"] = targetCategories ?? [],
+            ["linkInstanceIds"] = linkInstanceIds ?? [],
+            ["rotateToSurface"] = rotateToSurface,
+            ["angleToleranceDegrees"] = angleToleranceDegrees,
+            ["horizontalSamples"] = horizontalSamples,
+            ["searchViewId"] = searchViewId
+        };
+        var result = await pipeClient.SendAsync(toolName, args, cancellationToken);
+        return FormatResult(result);
+    }
+
     // ── Family Types ──────────────────────────────────────────────────────────
 
     [McpServerTool(Name = "revit_list_family_types", ReadOnly = true),

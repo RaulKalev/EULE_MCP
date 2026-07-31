@@ -46,6 +46,8 @@ public static class ApprovalSummaryBuilder
             "revit_delete_views"                => BuildDeleteViews(request),
             "revit_delete_sheets"               => BuildDeleteSheets(request),
             "revit_delete_elements"             => BuildDeleteElements(request),
+            // Element alignment
+            "revit_align_elements"              => BuildAlignElements(request),
             // Family types
             "revit_duplicate_family_types"      => BuildDuplicateFamilyTypes(request),
             "revit_edit_family_types"           => BuildEditFamilyTypes(request),
@@ -251,6 +253,26 @@ public static class ApprovalSummaryBuilder
         var copies = ToolArguments.GetInt(request.Arguments, "numberOfCopies", 1);
         var total = viewIds.Length * copies;
         return $"Create {total} duplicate view{(total == 1 ? "" : "s")} from {viewIds.Length} source view{(viewIds.Length == 1 ? "" : "s")} with option '{option}'.";
+    }
+
+    private static string BuildAlignElements(McpToolRequest request)
+    {
+        var surface = ToolArguments.GetString(request.Arguments, "surface", "nearest");
+        var elementIds = ToolArguments.GetLongArray(request.Arguments, "elementIds");
+        var useSelection = ToolArguments.GetBool(request.Arguments, "useSelection");
+        var gapMm = ToolArguments.GetDouble(request.Arguments, "gapMm");
+        var radiusMm = ToolArguments.GetDouble(request.Arguments, "searchRadiusMm", 3000);
+        var rotate = ToolArguments.GetBool(request.Arguments, "rotateToSurface");
+        var scope = ToolArguments.GetString(request.Arguments, "scope", "both");
+
+        var target = useSelection
+            ? "the current selection"
+            : $"{elementIds.Length} element{(elementIds.Length == 1 ? "" : "s")}";
+        var gapDesc = Math.Abs(gapMm) > 1e-6 ? $" Leaving a {gapMm:F0} mm gap." : string.Empty;
+        var rotateDesc = rotate ? " Elements are also turned square to the surface." : string.Empty;
+
+        return $"Move {target} against the nearest '{surface}' surface within {radiusMm:F0} mm " +
+               $"(searching {scope}).{gapDesc}{rotateDesc}";
     }
 
     private static string BuildDuplicateFamilyTypes(McpToolRequest request)
