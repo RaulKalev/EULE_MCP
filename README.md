@@ -2,7 +2,7 @@
 
 EULE MCP connects Claude Code, Codex, and Antigravity CLI to a live Autodesk Revit model through the [Model Context Protocol](https://modelcontextprotocol.io). It provides local model queries, discipline workflows, controlled writes, QA, reporting, and file operations without requiring users to write Revit API scripts.
 
-The current bridge exposes **186 MCP tools** across ten documented capability groups.
+The current bridge exposes **188 MCP tools** across ten documented capability groups.
 
 ## Documentation
 
@@ -24,7 +24,7 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | Area | Tools | Examples |
 |---|---:|---|
 | [General queries](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-General-Queries) | 27 | Model discovery, parameters, extensible storage, grouping, selection, presets, QA, Excel exports |
-| [Tagging and annotation](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Tagging-Annotation) | 15 | SmartTags-compatible placement, selected-example templates, retagging, dimensions |
+| [Tagging and annotation](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Tagging-Annotation) | 17 | SmartTags-compatible placement, selected-example templates, retagging, dimensions, element placement and alignment |
 | [Electrical](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Electrical) | 47 | Circuits, panels, patch panels, cable types, dashboards, voltage drop, fire alarm |
 | [Views and sheets](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Documentation) | 29 | Placement, duplication, CAD import/layer graphics, naming, revisions, controlled deletion |
 | [Coordination](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Coordination) | 15 | Hard and clearance clashes, presets, reporting, review navigation |
@@ -88,6 +88,7 @@ Important repository references:
 
 - [`INSTALL.md`](INSTALL.md) — installer and manifest details
 - [`TESTING.md`](TESTING.md) — Revit smoke-test matrix
+- [`docs/alignment.md`](docs/alignment.md) — moving elements against walls, ceilings, and floors, including linked IFC
 - [`docs/execution-safety.md`](docs/execution-safety.md) — execution guarantees
 - [`docs/extensible-storage.md`](docs/extensible-storage.md) — reading add-in data stored on elements
 - [`docs/family-types.md`](docs/family-types.md) — duplicating, renaming, and re-parameterising family types

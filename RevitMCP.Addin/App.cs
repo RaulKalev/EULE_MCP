@@ -232,6 +232,11 @@ public class App : IExternalApplication
 
             // Element Placement (issue #17)
             handler.RegisterTool(new PlaceFamilyInstancesTool());
+
+            // Element alignment against walls/ceilings/floors, host or linked (issue #33)
+            handler.RegisterTool(new PreviewAlignElementsTool());
+            handler.RegisterTool(new AlignElementsTool());
+
             handler.RegisterTool(new ListTagTypesTool());
             handler.RegisterTool(new FindManagedTagsTool());
             handler.RegisterTool(new PreviewPlaceTagsTool());
