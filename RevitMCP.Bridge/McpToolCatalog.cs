@@ -34,6 +34,7 @@ internal static class McpToolCatalog
             "revit_group_elements",
             "revit_get_text_notes",
             "revit_list_tag_types",
+            "revit_list_family_types",
             "revit_list_dimension_types",
             "revit_get_electrical_circuits",
             "revit_get_circuit_info",

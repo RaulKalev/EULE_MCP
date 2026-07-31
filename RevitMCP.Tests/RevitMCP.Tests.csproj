@@ -89,6 +89,7 @@
     <Compile Include="..\RevitMCP.Addin\Tagging\TagCollisionMath.cs" Link="Tagging\TagCollisionMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Tagging\TagTemplateMath.cs" Link="Tagging\TagTemplateMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Documentation\Placement\PlaceViewsNameMatcher.cs" Link="Documentation\Placement\PlaceViewsNameMatcher.cs" />
+    <Compile Include="..\RevitMCP.Addin\Families\FamilyTypeNamePlanner.cs" Link="Families\FamilyTypeNamePlanner.cs" />
     <Compile Include="..\RevitMCP.Addin\Electrical\PatchPanelAssignment\PatchPanelAssignmentModels.cs" Link="Electrical\PatchPanelAssignment\PatchPanelAssignmentModels.cs" />
     <Compile Include="..\RevitMCP.Addin\Electrical\PatchPanelAssignment\PatchPanelAssignmentPlanner.cs" Link="Electrical\PatchPanelAssignment\PatchPanelAssignmentPlanner.cs" />
     <!-- Approval and dispatch safety primitives (no Autodesk dependency) -->

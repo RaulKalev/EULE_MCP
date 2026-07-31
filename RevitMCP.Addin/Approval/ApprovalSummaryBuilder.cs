@@ -1,4 +1,6 @@
+using Newtonsoft.Json.Linq;
 using RevitMCP.Addin.Electrical;
+using RevitMCP.Addin.Families;
 using RevitMCP.Addin.Tools;
 using RevitMCP.Core.Models;
 
@@ -44,6 +46,9 @@ public static class ApprovalSummaryBuilder
             "revit_delete_views"                => BuildDeleteViews(request),
             "revit_delete_sheets"               => BuildDeleteSheets(request),
             "revit_delete_elements"             => BuildDeleteElements(request),
+            // Family types
+            "revit_duplicate_family_types"      => BuildDuplicateFamilyTypes(request),
+            "revit_edit_family_types"           => BuildEditFamilyTypes(request),
             // Skill builder
             "revit_create_skill"                => BuildCreateSkill(request),
             "revit_update_skill"                => BuildUpdateSkill(request),
@@ -246,6 +251,73 @@ public static class ApprovalSummaryBuilder
         var copies = ToolArguments.GetInt(request.Arguments, "numberOfCopies", 1);
         var total = viewIds.Length * copies;
         return $"Create {total} duplicate view{(total == 1 ? "" : "s")} from {viewIds.Length} source view{(viewIds.Length == 1 ? "" : "s")} with option '{option}'.";
+    }
+
+    private static string BuildDuplicateFamilyTypes(McpToolRequest request)
+    {
+        var parsed = FamilyTypeDuplicationPlanner.ParseRequest(request.Arguments);
+        var sourceCount = parsed.TypeIds.Length > 0
+            ? parsed.TypeIds.Distinct().Count()
+            : 1;
+        var total = parsed.Variants.Count > 0
+            ? parsed.Variants.Count
+            : sourceCount * Math.Max(1, parsed.NumberOfCopies);
+
+        var names = parsed.Variants.Count > 0
+            ? parsed.Variants.Select(v => v.Name).ToList()
+            : parsed.NewTypeNames.ToList();
+        var nameDesc = names.Count > 0
+            ? $" Named: {Summarize(names)}."
+            : $" Named with prefix '{parsed.NamePrefix}' and suffix '{parsed.NameSuffix}'.";
+
+        var parameterCount = parsed.Variants.Count > 0
+            ? parsed.Variants.Sum(v => v.Parameters.Count)
+            : parsed.ParameterOverrides.Count * total;
+        var parameterDesc = parameterCount > 0
+            ? $" Sets {parameterCount} type parameter value{(parameterCount == 1 ? "" : "s")}."
+            : string.Empty;
+
+        return $"Create {total} family type cop{(total == 1 ? "y" : "ies")} from " +
+               $"{sourceCount} source type{(sourceCount == 1 ? "" : "s")}.{nameDesc}{parameterDesc}";
+    }
+
+    private static string BuildEditFamilyTypes(McpToolRequest request)
+    {
+        var newName = ToolArguments.GetString(request.Arguments, "newName").Trim();
+        var parameters = ViewManagerToolSupport.GetStringDictionary(request.Arguments, "parameters");
+        var typeIds = ToolArguments.GetLongArray(request.Arguments, "typeIds");
+
+        var editsArray = request.Arguments.TryGetValue("edits", out var raw) && raw != null
+            ? raw as JArray ?? ToolArguments.TryParseJArray(raw.ToString() ?? string.Empty)
+            : null;
+
+        if (editsArray != null && editsArray.Count > 0)
+        {
+            var renames = editsArray.Count(token =>
+                !string.IsNullOrWhiteSpace(token["newName"]?.ToString()));
+            var values = editsArray.Sum(token =>
+                (token["parameters"] as JObject)?.Properties().Count() ?? 0);
+            return $"Edit {editsArray.Count} family type{(editsArray.Count == 1 ? "" : "s")}: " +
+                   $"{renames} rename{(renames == 1 ? "" : "s")}, " +
+                   $"{values} parameter value{(values == 1 ? "" : "s")}.";
+        }
+
+        var target = typeIds.Length > 0
+            ? $"{typeIds.Length} type{(typeIds.Length == 1 ? "" : "s")}"
+            : "the matched type";
+        var renameDesc = newName.Length > 0 ? $" Rename to '{newName}'." : string.Empty;
+        var valueDesc = parameters.Count > 0
+            ? $" Set {parameters.Count} parameter value{(parameters.Count == 1 ? "" : "s")}: {Summarize(parameters.Keys.ToList())}."
+            : string.Empty;
+        return $"Edit {target}.{renameDesc}{valueDesc}";
+    }
+
+    /// <summary>Renders a short, bounded preview of a name list for the approval summary.</summary>
+    private static string Summarize(List<string> values)
+    {
+        const int shown = 3;
+        var head = string.Join(", ", values.Take(shown));
+        return values.Count > shown ? $"{head} (+{values.Count - shown} more)" : head;
     }
 
     private static string BuildSetViewCropRegions(McpToolRequest request)
