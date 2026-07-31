@@ -2,7 +2,7 @@
 
 EULE MCP connects Claude Code, Codex, and Antigravity CLI to a live Autodesk Revit model through the [Model Context Protocol](https://modelcontextprotocol.io). It provides local model queries, discipline workflows, controlled writes, QA, reporting, and file operations without requiring users to write Revit API scripts.
 
-The current bridge exposes **183 MCP tools** across ten documented capability groups.
+The current bridge exposes **186 MCP tools** across ten documented capability groups.
 
 ## Documentation
 
@@ -32,7 +32,7 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | [Reports and delivery](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Reports-Delivery) | 6 | Shared issue reports, exports, folder/register/Revit-sheet checks |
 | [Standards](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Standards) | 5 | Offline indexing, search, and contextual retrieval |
 | [Files, Excel, and configuration](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Files-Excel-Configuration) | 16 | Policy-scoped files, standalone workbooks, scoped JSON state |
-| [Family creation and IFC](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Family-IFC) | 7 | DWG-to-Detail-Item families and IFC Space-to-Room |
+| [Family creation and IFC](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Family-IFC) | 10 | DWG-to-Detail-Item families, family type duplication and editing, IFC Space-to-Room |
 
 ## Supported environment
 
@@ -90,6 +90,7 @@ Important repository references:
 - [`TESTING.md`](TESTING.md) — Revit smoke-test matrix
 - [`docs/execution-safety.md`](docs/execution-safety.md) — execution guarantees
 - [`docs/extensible-storage.md`](docs/extensible-storage.md) — reading add-in data stored on elements
+- [`docs/family-types.md`](docs/family-types.md) — duplicating, renaming, and re-parameterising family types
 - [`docs/mcp-performance.md`](docs/mcp-performance.md) — lower-latency queries and reduced-credit tool profiles
 - [`docs/compatibility.md`](docs/compatibility.md) — supported framework and API boundaries
 - [`AGENTS.md`](AGENTS.md) — repository rules for AI coding agents

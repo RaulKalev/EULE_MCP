@@ -223,6 +223,13 @@ public class App : IExternalApplication
             // Family Creation
             handler.RegisterTool(new CreatePanelSchematicSymbolFromDwgTool());
 
+            // Family Types (issue #31) — discovery, duplication, rename and parameter edits
+            handler.RegisterTool(new ListFamilyTypesTool());
+            handler.RegisterTool(new PreviewDuplicateFamilyTypesTool());
+            handler.RegisterTool(new DuplicateFamilyTypesTool());
+            handler.RegisterTool(new PreviewEditFamilyTypesTool());
+            handler.RegisterTool(new EditFamilyTypesTool());
+
             // Element Placement (issue #17)
             handler.RegisterTool(new PlaceFamilyInstancesTool());
             handler.RegisterTool(new ListTagTypesTool());

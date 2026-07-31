@@ -3161,3 +3161,81 @@ What extensible storage data is on the elements I have selected?
 |------|------|------------|--------------|-----------------|----------|------|-------|
 | Query | `revit_list_extensible_storage_schemas` | RO | "List the extensible storage schemas used in this model." | `{schemaCount, schemas[]}` with fields and `elementCount` | N/A | N/A | Session-loaded schemas only; `onlyUsedInDocument` filters to this model |
 | Query | `revit_read_extensible_storage` | RO | "Read schema `<guid>` values in this model." | `{elementCount, entityCount, elements[]}` with decoded `fields` | N/A | N/A | `scanDocument` needs a schema; finds `DataStorage`; units in `fieldUnits` |
+
+---
+
+## 46. Family Types — Duplicate, Rename, Edit (issue #31)
+
+Requires a model with at least one loadable family (e.g. a door or lighting device)
+and one system family (e.g. Basic Wall). Section 30's matrix rows are at the end.
+
+### 46.1 Type Discovery
+
+**Prompt:**
+```
+List the lighting device types in this model with their parameters.
+```
+
+**Verify:**
+1. `revit_list_family_types` returns `typeId`, `familyName`, `typeName`, `category`, and `kind` (`Loadable` / `System`).
+2. `category`, `familyName`, `typeName`, and `typeIds` all narrow the result; an unknown category fails with category suggestions.
+3. `includeParameters=true` lists only writable type parameters with their current display values, for the first 25 types (a warning names the cap).
+4. `includeInstanceCounts=true` reports placed instances per type; types with no instances report 0.
+5. `includeSystemTypes=false` drops wall/duct/pipe types; `includeLoadableTypes=false` drops family symbols; both false is refused.
+6. `limit` caps the result and `totalMatched` reveals how many matched.
+
+### 46.2 Duplicate Preview
+
+**Prompt:**
+```
+Preview duplicating type <id> as "<name>" with Width = 200 mm.
+```
+
+**Verify:**
+1. `revit_preview_duplicate` with `entity=familyTypes` opens no transaction and leaves the undo stack unchanged.
+2. Each proposal reports `requestedName`, the resolved `newTypeName`, and `renamedForUniqueness` when the name was already taken.
+3. Per parameter, `status` is `willSet`, `notFound`, `readOnly`, or `invalidValue`, with the current value alongside.
+4. An invalid name (empty, padded, or containing a character Revit forbids in names — `` \ : { } [ ] | ; < > ? ` ~ ``) comes back as `canDuplicate: false` with the reason.
+5. The preview's names and parameter verdicts match what the write tool then does.
+
+### 46.3 Duplicate and Set Values
+
+**Prompt:**
+```
+Duplicate type <id> into DN100 and DN150 with matching diameters.
+```
+
+**Verify:**
+1. `revit_duplicate` with `entity=familyTypes` requires approval; rejecting it leaves the model unchanged.
+2. `variants` creates one copy per entry with its own name and values; `newTypeNames` names one copy per source type; `nameSuffix`/`namePrefix` with `numberOfCopies` covers the bulk case, and `{index}` is substituted in the affixes.
+3. Numeric values pass through project display units: `"200"` and `"200 mm"` both produce 200 mm in a metric model.
+4. A parameter that cannot be set is reported per copy and as a warning; the copy is still created.
+5. `requireAllParameters=true` rolls that copy back instead and reports `created: false` with the reason.
+6. A single Revit undo removes every type created by one call.
+7. Duplicating a system type (e.g. a wall type) works the same way as a loadable type.
+
+### 46.4 Rename and Edit Existing Types
+
+**Prompt:**
+```
+Rename type <id> to "<name>" and set its Comments.
+```
+
+**Verify:**
+1. `revit_preview_edit_family_types` reports the planned rename and parameter writes without touching the model.
+2. `revit_edit_family_types` requires approval and renames the type for every placed instance.
+3. `edits: [{typeId, newName, parameters}]` gives each type its own name and values; `typeIds` + `parameters` applies the same values to all of them.
+4. Renaming onto a name already used in the family is blocked with a reason — it is never silently renamed to something else.
+5. A `newName` equal to the current name is reported as a no-op rather than an error.
+6. `newName` with more than one resolved type is refused, pointing at the `edits` form.
+7. A request with neither `newName` nor `parameters` fails with "nothing to do".
+
+### Matrix rows (Section 30)
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Query | `revit_list_family_types` | RO | "List the lighting device types in this model." | `{totalMatched, returned, types[]}` with `typeId`, `kind` | N/A | N/A | `includeParameters` capped at 25 types; `includeInstanceCounts` scans the model |
+| Elements | `revit_preview_duplicate` (`entity=familyTypes`) | RO | "Preview duplicating type `<id>` as `<name>`." | `{total, canDuplicate, proposals[]}` with resolved names | N/A | N/A | Same plan the write tool executes |
+| Elements | `revit_duplicate` (`entity=familyTypes`) | Approval | "Duplicate type `<id>` into DN100 and DN150." | `{created, parametersSet, results[]}` | Yes | Yes | `variants` / `newTypeNames` / `nameSuffix`; `requireAllParameters` rolls a copy back |
+| Elements | `revit_preview_edit_family_types` | RO | "Preview renaming type `<id>` to `<name>`." | `{canEdit, plannedRenames, plannedParameterWrites, proposals[]}` | N/A | N/A | Name collisions are reported, not resolved |
+| Elements | `revit_edit_family_types` | Approval | "Rename type `<id>` and set its Comments." | `{edited, renamed, parametersSet, results[]}` | Yes | Yes | Rename affects every placed instance |

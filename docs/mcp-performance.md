@@ -14,7 +14,7 @@ response contracts.
 
 ## Reduced tool profiles
 
-The default profile remains `full` and advertises all 183 tools. Existing installations
+The default profile remains `full` and advertises all 186 tools. Existing installations
 therefore continue to work unchanged.
 
 For query-oriented sessions, start the bridge with:
@@ -30,7 +30,7 @@ Available profiles:
 | Profile | Purpose |
 |---|---|
 | `full` | All tools; backward-compatible default |
-| `query` | 31 common connection, model-query, selection, view/sheet, electrical, and coordination discovery tools |
+| `query` | 32 common connection, model-query, selection, view/sheet, family-type, electrical, and coordination discovery tools |
 | `read-only` | Every tool marked read-only or preview-only |
 
 An exact allow-list gives the smallest possible catalog:
@@ -50,8 +50,8 @@ In a local MCP handshake against this revision:
 
 | Catalog | Tools | `tools/list` JSON |
 |---|---:|---:|
-| `full` | 183 | 195,227 bytes |
-| `query` | 31 | 24,522 bytes |
+| `full` | 186 | 202,107 bytes |
+| `query` | 32 | 26,247 bytes |
 | two-tool exact allow-list | 2 | 1,144 bytes |
 
 The query profile reduces the advertised schema payload by about 87%. Actual credit

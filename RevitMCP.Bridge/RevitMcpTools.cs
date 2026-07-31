@@ -1285,6 +1285,87 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    // ── Family Types ──────────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "revit_list_family_types", ReadOnly = true),
+     Description("Lists family types (loadable family symbols and system types) in the active document, with the typeIds used by revit_duplicate (entity=familyTypes) and revit_edit_family_types. Filter by category, familyName, typeName or typeIds. Options: includeSystemTypes, includeLoadableTypes, includeInstanceCounts, includeParameters (writable type parameters and their current values), limit (default 100).")]
+    public async Task<string> ListFamilyTypes(
+        [Description("Category name filter, e.g. 'Walls', 'Lighting Fixtures'")] string? category = null,
+        [Description("Family name filter (partial match)")] string? familyName = null,
+        [Description("Type name filter (partial match)")] string? typeName = null,
+        [Description("Specific type element IDs to look up")] long[]? typeIds = null,
+        [Description("Include system types such as wall/duct/pipe types (default true)")] bool includeSystemTypes = true,
+        [Description("Include loadable family types (default true)")] bool includeLoadableTypes = true,
+        [Description("Include the placed instance count per type (extra model scan, default false)")] bool includeInstanceCounts = false,
+        [Description("Include writable type parameters and their current values (first 25 types, default false)")] bool includeParameters = false,
+        [Description("Maximum types to return (default 100, max 1000)")] int limit = 100,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["category"] = category ?? "",
+            ["familyName"] = familyName ?? "",
+            ["typeName"] = typeName ?? "",
+            ["typeIds"] = typeIds ?? [],
+            ["includeSystemTypes"] = includeSystemTypes,
+            ["includeLoadableTypes"] = includeLoadableTypes,
+            ["includeInstanceCounts"] = includeInstanceCounts,
+            ["includeParameters"] = includeParameters,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_list_family_types", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_preview_edit_family_types", ReadOnly = true),
+     Description("Previews family type renames and type parameter edits WITHOUT changes. Same arguments as revit_edit_family_types. Returns the planned name change plus, per parameter, its current value, whether it is writable, and whether the new value parses.")]
+    public Task<string> PreviewEditFamilyTypes(
+        [Description("Per-type edits: [{typeId, newName, parameters}]")] object[]? edits = null,
+        [Description("Type element IDs when using the shared newName/parameters form")] long[]? typeIds = null,
+        [Description("Family name when typeIds is omitted")] string? familyName = null,
+        [Description("Type name when typeIds is omitted")] string? typeName = null,
+        [Description("New type name — only valid when a single type is targeted")] string? newName = null,
+        [Description("Type parameter name-to-value object applied to every targeted type")] object? parameters = null,
+        CancellationToken cancellationToken = default) =>
+        SendEditFamilyTypes(
+            "revit_preview_edit_family_types", edits, typeIds, familyName, typeName, newName, parameters, cancellationToken);
+
+    [McpServerTool(Name = "revit_edit_family_types"),
+     Description("Renames family types and sets their type parameter values. Requires approval. Either edits ([{typeId, newName, parameters}], each type gets its own name and values) or typeIds/familyName/typeName with newName and/or parameters applied to all of them. Numeric values are written in project display units ('200' or '200 mm'). Renaming a type changes it for every placed instance. Run revit_preview_edit_family_types first.")]
+    public Task<string> EditFamilyTypes(
+        [Description("Per-type edits: [{typeId, newName, parameters}]")] object[]? edits = null,
+        [Description("Type element IDs when using the shared newName/parameters form")] long[]? typeIds = null,
+        [Description("Family name when typeIds is omitted")] string? familyName = null,
+        [Description("Type name when typeIds is omitted")] string? typeName = null,
+        [Description("New type name — only valid when a single type is targeted")] string? newName = null,
+        [Description("Type parameter name-to-value object applied to every targeted type")] object? parameters = null,
+        CancellationToken cancellationToken = default) =>
+        SendEditFamilyTypes(
+            "revit_edit_family_types", edits, typeIds, familyName, typeName, newName, parameters, cancellationToken);
+
+    private async Task<string> SendEditFamilyTypes(
+        string toolName,
+        object[]? edits,
+        long[]? typeIds,
+        string? familyName,
+        string? typeName,
+        string? newName,
+        object? parameters,
+        CancellationToken cancellationToken)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["edits"] = ToJToken(edits),
+            ["typeIds"] = typeIds ?? [],
+            ["familyName"] = familyName ?? "",
+            ["typeName"] = typeName ?? "",
+            ["newName"] = newName ?? "",
+            ["parameters"] = ToJToken(parameters)
+        };
+        var result = await pipeClient.SendAsync(toolName, args, cancellationToken);
+        return FormatResult(result);
+    }
+
     [McpServerTool(Name = "revit_list_tag_types", ReadOnly = true),
      Description("Lists loaded IndependentTag family types. Optionally filters by tagCategoryId and resolves Left/Right/Up/Down family-type variants using directionKeyword.")]
     public async Task<string> ListTagTypes(
@@ -2980,9 +3061,9 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_preview_duplicate", ReadOnly = true),
-     Description("Previews view/sheet duplication WITHOUT changes. entity=sheets: sourceSheetIds or sourceSheetNumbers; newNumberSuffix (default _COPY), newNameSuffix (default ' - Copy'), keepTitleBlock, copyParameters. entity=views: viewIds; duplicateOption (Duplicate|DuplicateWithDetailing|AsDependent), nameSuffix, namePrefix.")]
+     Description("Previews view/sheet/family-type duplication WITHOUT changes. entity=sheets: sourceSheetIds or sourceSheetNumbers; newNumberSuffix (default _COPY), newNameSuffix (default ' - Copy'), keepTitleBlock, copyParameters. entity=views: viewIds; duplicateOption (Duplicate|DuplicateWithDetailing|AsDependent), nameSuffix, namePrefix. entity=familyTypes: typeIds (or familyName/typeName); newTypeNames, variants, parameterOverrides, numberOfCopies, nameSuffix, namePrefix.")]
     public async Task<string> PreviewDuplicate(
-        [Description("What to duplicate: views | sheets")] string entity,
+        [Description("What to duplicate: views | sheets | familyTypes")] string entity,
         [Description("sheets only: source sheet element IDs")] long[]? sourceSheetIds = null,
         [Description("sheets only: source sheet numbers")] string[]? sourceSheetNumbers = null,
         [Description("sheets only: suffix for new sheet number (default _COPY)")] string newNumberSuffix = "_COPY",
@@ -2991,8 +3072,15 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("sheets only: copy instance parameters (default true)")] bool copyParameters = true,
         [Description("views only: view element IDs to duplicate")] long[]? viewIds = null,
         [Description("views only: Duplicate|DuplicateWithDetailing|AsDependent")] string duplicateOption = "DuplicateWithDetailing",
-        [Description("views only: suffix for new view name (default ' - Copy')")] string nameSuffix = " - Copy",
-        [Description("views only: prefix for new view name")] string namePrefix = "",
+        [Description("views/familyTypes only: suffix for the new name (default ' - Copy'); supports {index}")] string nameSuffix = " - Copy",
+        [Description("views/familyTypes only: prefix for the new name; supports {index}")] string namePrefix = "",
+        [Description("familyTypes only: source type element IDs (see revit_list_family_types)")] long[]? typeIds = null,
+        [Description("familyTypes only: family name when typeIds is omitted")] string? familyName = null,
+        [Description("familyTypes only: type name when typeIds is omitted")] string? typeName = null,
+        [Description("views/familyTypes only: copies per source (1-50, default 1)")] int numberOfCopies = 1,
+        [Description("familyTypes only: one explicit name per source type")] string[]? newTypeNames = null,
+        [Description("familyTypes only: [{name, parameters}] — one copy per entry, single source type")] object[]? variants = null,
+        [Description("familyTypes only: type parameter name-to-value object applied to every copy; numbers in project units")] object? parameterOverrides = null,
         CancellationToken cancellationToken = default)
     {
         var e = entity?.Trim().ToLowerInvariant();
@@ -3016,13 +3104,23 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             var viewArgs = new Dictionary<string, object?>
             {
                 ["viewIds"] = viewIds,
+                ["numberOfCopies"] = numberOfCopies,
                 ["duplicateOption"] = duplicateOption,
                 ["nameSuffix"] = nameSuffix,
                 ["namePrefix"] = namePrefix
             };
             return FormatResult(await pipeClient.SendAsync("revit_preview_duplicate_views", viewArgs, cancellationToken));
         }
-        return FormatBridgeError($"Invalid entity '{entity}'. Expected: views or sheets.");
+        if (e == "familytypes")
+        {
+            return FormatResult(await pipeClient.SendAsync(
+                "revit_preview_duplicate_family_types",
+                BuildFamilyTypeDuplicateArgs(
+                    typeIds, familyName, typeName, numberOfCopies, nameSuffix, namePrefix,
+                    newTypeNames, variants, parameterOverrides),
+                cancellationToken));
+        }
+        return FormatBridgeError($"Invalid entity '{entity}'. Expected: views, sheets or familyTypes.");
     }
 
     [McpServerTool(Name = "revit_preview_create_sheets_from_table", ReadOnly = true),
@@ -3109,9 +3207,9 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_duplicate"),
-     Description("Duplicates views/sheets. Requires approval. Run revit_preview_duplicate first. entity=sheets: sourceSheetIds or sourceSheetNumbers (empty shell, same titleblock + copied params). entity=views: viewIds; duplicateOption, nameSuffix, namePrefix.")]
+     Description("Duplicates views/sheets/family types. Requires approval. Run revit_preview_duplicate first. entity=sheets: sourceSheetIds or sourceSheetNumbers (empty shell, same titleblock + copied params). entity=views: viewIds; duplicateOption, nameSuffix, namePrefix. entity=familyTypes: typeIds (or familyName/typeName); name the copies with newTypeNames or nameSuffix/namePrefix, and set their type parameters with parameterOverrides or variants.")]
     public async Task<string> Duplicate(
-        [Description("What to duplicate: views | sheets")] string entity,
+        [Description("What to duplicate: views | sheets | familyTypes")] string entity,
         [Description("sheets only: source sheet element IDs")] long[]? sourceSheetIds = null,
         [Description("sheets only: source sheet numbers")] string[]? sourceSheetNumbers = null,
         [Description("sheets only: suffix for new sheet number (default _COPY)")] string newNumberSuffix = "_COPY",
@@ -3120,8 +3218,16 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("sheets only: copy instance parameters (default true)")] bool copyParameters = true,
         [Description("views only: view element IDs to duplicate")] long[]? viewIds = null,
         [Description("views only: Duplicate|DuplicateWithDetailing|AsDependent")] string duplicateOption = "DuplicateWithDetailing",
-        [Description("views only: suffix for new view name (default ' - Copy')")] string nameSuffix = " - Copy",
-        [Description("views only: prefix for new view name")] string namePrefix = "",
+        [Description("views/familyTypes only: suffix for the new name (default ' - Copy'); supports {index}")] string nameSuffix = " - Copy",
+        [Description("views/familyTypes only: prefix for the new name; supports {index}")] string namePrefix = "",
+        [Description("familyTypes only: source type element IDs (see revit_list_family_types)")] long[]? typeIds = null,
+        [Description("familyTypes only: family name when typeIds is omitted")] string? familyName = null,
+        [Description("familyTypes only: type name when typeIds is omitted")] string? typeName = null,
+        [Description("views/familyTypes only: copies per source (1-50, default 1)")] int numberOfCopies = 1,
+        [Description("familyTypes only: one explicit name per source type")] string[]? newTypeNames = null,
+        [Description("familyTypes only: [{name, parameters}] — one copy per entry, single source type")] object[]? variants = null,
+        [Description("familyTypes only: type parameter name-to-value object applied to every copy; numbers in project units")] object? parameterOverrides = null,
+        [Description("familyTypes only: roll a copy back if any of its parameters cannot be set (default false)")] bool requireAllParameters = false,
         CancellationToken cancellationToken = default)
     {
         var e = entity?.Trim().ToLowerInvariant();
@@ -3141,13 +3247,46 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
                 return FormatBridgeError("entity=views requires viewIds.");
             var viewArgs = new Dictionary<string, object?>
             {
-                ["viewIds"] = viewIds, ["duplicateOption"] = duplicateOption,
+                ["viewIds"] = viewIds, ["numberOfCopies"] = numberOfCopies,
+                ["duplicateOption"] = duplicateOption,
                 ["nameSuffix"] = nameSuffix, ["namePrefix"] = namePrefix
             };
             return FormatResult(await pipeClient.SendAsync("revit_duplicate_views", viewArgs, cancellationToken));
         }
-        return FormatBridgeError($"Invalid entity '{entity}'. Expected: views or sheets.");
+        if (e == "familytypes")
+        {
+            var familyTypeArgs = BuildFamilyTypeDuplicateArgs(
+                typeIds, familyName, typeName, numberOfCopies, nameSuffix, namePrefix,
+                newTypeNames, variants, parameterOverrides);
+            familyTypeArgs["requireAllParameters"] = requireAllParameters;
+            return FormatResult(await pipeClient.SendAsync(
+                "revit_duplicate_family_types", familyTypeArgs, cancellationToken));
+        }
+        return FormatBridgeError($"Invalid entity '{entity}'. Expected: views, sheets or familyTypes.");
     }
+
+    private static Dictionary<string, object?> BuildFamilyTypeDuplicateArgs(
+        long[]? typeIds,
+        string? familyName,
+        string? typeName,
+        int numberOfCopies,
+        string nameSuffix,
+        string namePrefix,
+        string[]? newTypeNames,
+        object[]? variants,
+        object? parameterOverrides) =>
+        new()
+        {
+            ["typeIds"] = typeIds ?? [],
+            ["familyName"] = familyName ?? "",
+            ["typeName"] = typeName ?? "",
+            ["numberOfCopies"] = numberOfCopies,
+            ["nameSuffix"] = nameSuffix,
+            ["namePrefix"] = namePrefix,
+            ["newTypeNames"] = newTypeNames ?? [],
+            ["variants"] = ToJToken(variants),
+            ["parameterOverrides"] = ToJToken(parameterOverrides)
+        };
 
     [McpServerTool(Name = "revit_create_sheets_from_table"),
      Description("Creates multiple sheets from a table. Requires approval. Required: rows (array of {sheetNumber, sheetName, ...params}), titleBlockId. Run revit_preview_create_sheets_from_table first.")]

@@ -25,8 +25,8 @@ together, so the `ReadOnly` hint and approval boundary are preserved.
 | `revit_rename_views`, `revit_rename_sheets` | `revit_rename` | `entity` = `views` \| `sheets` |
 | `revit_preview_delete_views`, `revit_preview_delete_sheets`, `revit_preview_delete_elements` | `revit_preview_delete` | `target` = `views` \| `sheets` \| `elements` |
 | `revit_delete_views`, `revit_delete_sheets`, `revit_delete_elements` | `revit_delete` | `target` = `views` \| `sheets` \| `elements` |
-| `revit_preview_duplicate_views`, `revit_preview_duplicate_sheets` | `revit_preview_duplicate` | `entity` = `views` \| `sheets` |
-| `revit_duplicate_views`, `revit_duplicate_sheets` | `revit_duplicate` | `entity` = `views` \| `sheets` |
+| `revit_preview_duplicate_views`, `revit_preview_duplicate_sheets`, `revit_preview_duplicate_family_types` | `revit_preview_duplicate` | `entity` = `views` \| `sheets` \| `familyTypes` |
+| `revit_duplicate_views`, `revit_duplicate_sheets`, `revit_duplicate_family_types` | `revit_duplicate` | `entity` = `views` \| `sheets` \| `familyTypes` |
 | `revit_set_view_parameters_bulk`, `revit_set_sheet_parameters_bulk` | `revit_set_parameters_bulk` | `entity` = `views` \| `sheets` |
 | `revit_estimate_circuit_length`, `revit_estimate_circuit_lengths` | `revit_estimate_circuit_length` | single: pass `circuitId` (>0); batch: omit `circuitId` and filter by `panelName`/`systemType`/`circuitIds` |
 
@@ -39,6 +39,9 @@ together, so the `ReadOnly` hint and approval boundary are preserved.
   descriptions with a `views only:` / `sheets only:` prefix.
 - `revit_merge_issue_reports` was **not** merged into `revit_export_issues` — it
   is a distinct read-only operation.
+- `revit_edit_family_types` was **not** merged into `revit_rename`: it also writes
+  type parameter values, and the rename tools take a mode-based argument shape
+  (`FindReplace`, `PrefixSuffix`, …) that does not apply to family types.
 - The config tools (`config_read` / `config_get_project_config`,
   `config_write` / `config_update` / `config_set_project_config`) were **not**
   merged: they target semantically distinct files and use different argument
@@ -57,13 +60,11 @@ together, so the `ReadOnly` hint and approval boundary are preserved.
 
 ## Runtime tool profiles
 
-The full 183-tool surface remains the default. Sessions that primarily inspect the
-model can launch the bridge with `--tool-profile query`, which advertises 31 common
+The full 186-tool surface remains the default. Sessions that primarily inspect the
+model can launch the bridge with `--tool-profile query`, which advertises 32 common
 query/discovery tools, or use `--tool-names` with a comma-separated exact allow-list.
 This reduces the MCP schema placed in model context without deleting or disabling any
 add-in implementation.
 
 See [`mcp-performance.md`](mcp-performance.md) for configuration, measured catalog
 sizes, compact query responses, and the Revit-side parameter-read optimization.
-</content>
-</invoke>
