@@ -5,6 +5,10 @@ is closest. Built for the case where the surfaces live in a **linked IFC**: the 
 never trusts categories, because an IFC import routinely lands walls and slabs on
 Generic Models, Mass, or whatever the exporter felt like.
 
+For the drafting-tool kind of aligning — putting tags, text, or elements on a common
+line within one view, or spreading them out evenly — see
+[`view-alignment.md`](view-alignment.md).
+
 ## Tools
 
 | Tool | Permission | Purpose |
