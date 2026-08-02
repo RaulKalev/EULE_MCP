@@ -1504,6 +1504,74 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    // ── Alignment Within A View ───────────────────────────────────────────────
+
+    [McpServerTool(Name = "revit_preview_align_in_view", ReadOnly = true),
+     Description("Previews lining elements up in a view WITHOUT changes: tags, text notes, detail lines, dimensions, viewports on a sheet, and model elements. Same arguments as revit_align_in_view. Returns per element the slide it would make in mm and which way, what was measured (bounding box or anchor point), and how far out of line the set currently is.")]
+    public Task<string> PreviewAlignInView(
+        [Description("How to line them up: left | right | top | bottom | centerVertical | centerHorizontal | distributeHorizontal | distributeVertical")] string mode,
+        [Description("Element IDs to line up, in the order 'first' and 'last' refer to")] long[]? elementIds = null,
+        [Description("Align the current Revit selection instead of elementIds")] bool useSelection = false,
+        [Description("Which element sets the line: extreme (default, the outermost one) | first | last | min | max | average")] string alignTo = "extreme",
+        [Description("Align everything to this element; it stays put. Must be one of the elements being aligned.")] long referenceElementId = 0,
+        [Description("What a distribute equalises: centers (default) or gaps between bounding boxes")] string spread = "centers",
+        [Description("Fixed distribute spacing in mm; 0 (default) fills the span the elements already occupy")] double spacingMm = 0,
+        [Description("What to measure: auto (default; bounding box, but the anchor point for tags and text with leaders) | boundingBox | origin")] string anchor = "auto",
+        [Description("View or sheet the alignment happens in; defaults to the active view")] long viewId = 0,
+        CancellationToken cancellationToken = default) =>
+        SendAlignInView(
+            "revit_preview_align_in_view", mode, elementIds, useSelection, alignTo, referenceElementId,
+            spread, spacingMm, anchor, viewId, cancellationToken);
+
+    [McpServerTool(Name = "revit_align_in_view"),
+     Description("Lines elements up in a view the way a drafting Align tool does — tags, text notes, detail lines, dimensions, viewports on a sheet, and model elements. Requires approval. Edge modes (left/right/top/bottom) and centre modes align onto a common line; distributeHorizontal/distributeVertical spread them evenly between the two outermost. Everything moves in the plane of the view only. Run revit_preview_align_in_view first.")]
+    public Task<string> AlignInView(
+        [Description("How to line them up: left | right | top | bottom | centerVertical | centerHorizontal | distributeHorizontal | distributeVertical")] string mode,
+        [Description("Element IDs to line up, in the order 'first' and 'last' refer to")] long[]? elementIds = null,
+        [Description("Align the current Revit selection instead of elementIds")] bool useSelection = false,
+        [Description("Which element sets the line: extreme (default, the outermost one) | first | last | min | max | average")] string alignTo = "extreme",
+        [Description("Align everything to this element; it stays put. Must be one of the elements being aligned.")] long referenceElementId = 0,
+        [Description("What a distribute equalises: centers (default) or gaps between bounding boxes")] string spread = "centers",
+        [Description("Fixed distribute spacing in mm; 0 (default) fills the span the elements already occupy")] double spacingMm = 0,
+        [Description("What to measure: auto (default; bounding box, but the anchor point for tags and text with leaders) | boundingBox | origin")] string anchor = "auto",
+        [Description("View or sheet the alignment happens in; defaults to the active view")] long viewId = 0,
+        CancellationToken cancellationToken = default) =>
+        SendAlignInView(
+            "revit_align_in_view", mode, elementIds, useSelection, alignTo, referenceElementId,
+            spread, spacingMm, anchor, viewId, cancellationToken);
+
+    private async Task<string> SendAlignInView(
+        string toolName,
+        string mode,
+        long[]? elementIds,
+        bool useSelection,
+        string alignTo,
+        long referenceElementId,
+        string spread,
+        double spacingMm,
+        string anchor,
+        long viewId,
+        CancellationToken cancellationToken)
+    {
+        if ((elementIds == null || elementIds.Length == 0) && !useSelection)
+            return FormatBridgeError("Provide elementIds, or set useSelection=true to align the current selection.");
+
+        var args = new Dictionary<string, object?>
+        {
+            ["mode"] = mode ?? "",
+            ["elementIds"] = elementIds ?? [],
+            ["useSelection"] = useSelection,
+            ["alignTo"] = alignTo ?? "extreme",
+            ["referenceElementId"] = referenceElementId,
+            ["spread"] = spread ?? "centers",
+            ["spacingMm"] = spacingMm,
+            ["anchor"] = anchor ?? "auto",
+            ["viewId"] = viewId
+        };
+        var result = await pipeClient.SendAsync(toolName, args, cancellationToken);
+        return FormatResult(result);
+    }
+
     // ── Family Types ──────────────────────────────────────────────────────────
 
     [McpServerTool(Name = "revit_list_family_types", ReadOnly = true),

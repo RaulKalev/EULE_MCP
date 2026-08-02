@@ -3401,3 +3401,95 @@ Place the socket family at every location on E-SOCKET-SYM, 1100 above Level 1.
 | Query | `revit_get_cad_placement_points` | RO | "Which DWG layers hold device locations?" | `{layers[]}` with per-source counts; `{points[]}` when layers are passed | N/A | N/A | Omit layers for the inventory; `elevation.isFlat` flags a 2D drawing |
 | Elements | `revit_preview_place_from_cad` | RO | "Preview placing sockets from E-SOCKET-SYM." | `{locationsFound, willPlace, alreadyPlaced, sample[]}` | N/A | N/A | Same plan the write tool executes |
 | Elements | `revit_place_from_cad` | Approval | "Place sockets from E-SOCKET-SYM, 1100 above Level 1." | `{createdCount, alreadyPlaced, created[]}` | Yes | Yes | `layers` and `elevationMode` are required; `skipExisting` makes re-runs top up |
+
+---
+
+## 49. Lining Elements Up In a View (issue #38)
+
+Requires a view with a handful of tags (some with leaders), text notes, detail lines,
+and a few model elements, plus a sheet with two or more viewports.
+
+### 49.1 Preview
+
+**Prompt:**
+```
+Preview aligning the selected tags to the left.
+```
+
+**Verify:**
+1. `revit_preview_align_in_view` opens no transaction and leaves the undo stack unchanged.
+2. Each proposal reports `moveMm`, `direction` (left/right/up/down/none), `anchor`, and `viewSpecific`.
+3. `misalignmentMm` reports how far out of line the set currently is; `axis` reports which way things move.
+4. Elements already on the line report `direction: "none"` and count toward `alreadyInLine`.
+5. A pinned element that would move is warned about in the preview, before approval is requested.
+6. The preview's `moveMm` matches what the write tool then does.
+
+### 49.2 Modes and Reference
+
+**Verify:**
+1. `left`, `right`, `top`, `bottom` line up the named edge; `centerVertical` and `centerHorizontal` line up centres.
+2. `centerVertical` moves elements sideways and `centerHorizontal` moves them vertically — the mode is named for the line, not the motion.
+3. `alignTo=extreme` (the default) never moves anything outside the set's current bounds.
+4. `mode=right, alignTo=min` pulls every right edge back to the leftmost one — the opposite of `extreme`.
+5. `alignTo=average` centres the set on its mean; `first` and `last` use the ends of `elementIds`.
+6. `referenceElementId` keeps that element still and moves the rest to it; an ID outside the set warns and falls back.
+7. `useSelection` with `alignTo=first` warns that a Revit selection has no picking order.
+8. `mode="centre vertically"`, `"align-left"` and `"distribute horizontally"` are accepted; `mode="center"` is rejected with the valid list.
+
+### 49.3 Distributing
+
+**Prompt:**
+```
+Spread these tags out evenly down the view.
+```
+
+**Verify:**
+1. `distributeVertical` leaves the top and bottom elements where they are and respaces the rest; `resultingSpacingMm` reports the step.
+2. `spread=gaps` equalises the clear space between bounding boxes; `spread=centers` equalises centre-to-centre distance. The two differ visibly when the elements are different sizes.
+3. Selecting the same elements bottom-to-top gives the same result as top-to-bottom.
+4. `spacingMm` lays the elements out from the lowest one at that fixed step, ignoring the original span.
+5. Two elements with no `spacingMm` fails with a message asking for a third element or a spacing.
+6. `spread=gaps` on elements too wide for their span warns with the overlap and still produces a deterministic layout.
+7. `alignTo` or `referenceElementId` on a distribute mode warns that it does not apply.
+
+### 49.4 Anchors and Element Kinds
+
+**Verify:**
+1. A tag with a leader is measured from its head, not its bounding box: `anchor: "origin"` with an `anchorNote` naming the leader.
+2. `anchor=boundingBox` forces the box even for those tags, and the leader visibly skews the result — this is the diagnostic case.
+3. `anchor=origin` on ordinary elements lines up location points, so `left`, `right` and `centerVertical` all give the same answer.
+4. Text notes, detail lines, dimensions, and model family instances all move; `viewSpecific` is `false` only for the model elements.
+5. A model element aligned in a plan view also moves in every other view — it is a model edit, not a drawing edit.
+6. An element with no graphics in the view falls back to its anchor point with a note rather than being dropped.
+
+### 49.5 Views and Sheets
+
+**Verify:**
+1. Passing a sheet as `viewId` and viewport IDs as `elementIds` lines the viewports up on the sheet.
+2. Passing a view ID instead of its viewport ID is dropped with a warning naming the viewport as the thing to pass.
+3. Annotation owned by a different view is dropped with a warning naming that view; the rest still align.
+4. In a rotated crop or a section, "left" follows the view, not model X.
+5. A perspective 3D view is refused; an orthographic 3D view is allowed with a warning.
+6. A view template as `viewId` is refused.
+
+### 49.6 Moving
+
+**Prompt:**
+```
+Align the selected tags to the left.
+```
+
+**Verify:**
+1. `revit_align_in_view` requires approval; the pending summary names the mode, the element count, the reference, and the view. Rejecting it leaves the model unchanged.
+2. A single Revit undo reverses every move from one call.
+3. Pinned elements are reported as `outcome: "pinned"` and are not moved; the rest of the batch still moves.
+4. Running the tool twice in a row reports everything as `alreadyAligned` the second time.
+5. A tag Revit refuses to transform still moves — the head position fallback is used and the outcome is `aligned`.
+6. Nothing moves perpendicular to the view: elevations are unchanged by a plan-view align, and plan positions are unchanged by a section-view align.
+
+### Matrix rows (Section 30)
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Elements | `revit_preview_align_in_view` | RO | "Preview aligning the selected tags to the left." | `{total, willMove, alreadyInLine, misalignmentMm, proposals[]}` | N/A | N/A | Reports the anchor used per element; same plan the write tool executes |
+| Elements | `revit_align_in_view` | Approval | "Align the selected tags to the left." | `{aligned, alreadyAligned, failed, results[]}` | Yes | Yes | Moves in the view plane only; everything measured before the first move |

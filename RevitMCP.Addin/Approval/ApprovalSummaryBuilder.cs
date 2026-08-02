@@ -1,6 +1,7 @@
 using Newtonsoft.Json.Linq;
 using RevitMCP.Addin.Electrical;
 using RevitMCP.Addin.Families;
+using RevitMCP.Addin.Placement;
 using RevitMCP.Addin.Tools;
 using RevitMCP.Core.Models;
 
@@ -48,6 +49,7 @@ public static class ApprovalSummaryBuilder
             "revit_delete_elements"             => BuildDeleteElements(request),
             // Element alignment and DWG-driven placement
             "revit_align_elements"              => BuildAlignElements(request),
+            "revit_align_in_view"               => BuildAlignInView(request),
             "revit_place_from_cad"              => BuildPlaceFromCad(request),
             // Family types
             "revit_duplicate_family_types"      => BuildDuplicateFamilyTypes(request),
@@ -274,6 +276,32 @@ public static class ApprovalSummaryBuilder
 
         return $"Move {target} against the nearest '{surface}' surface within {radiusMm:F0} mm " +
                $"(searching {scope}).{gapDesc}{rotateDesc}";
+    }
+
+    private static string BuildAlignInView(McpToolRequest request)
+    {
+        var rawMode = ToolArguments.GetString(request.Arguments, "mode");
+        var mode = ViewAlignmentMath.NormalizeMode(rawMode) ?? rawMode;
+        var elementIds = ToolArguments.GetLongArray(request.Arguments, "elementIds");
+        var useSelection = ToolArguments.GetBool(request.Arguments, "useSelection");
+        var referenceId = ToolArguments.GetLong(request.Arguments, "referenceElementId");
+        var alignTo = ToolArguments.GetString(request.Arguments, "alignTo", "extreme");
+        var spacingMm = ToolArguments.GetDouble(request.Arguments, "spacingMm");
+        var spread = ToolArguments.GetString(request.Arguments, "spread", "centers");
+        var viewId = ToolArguments.GetLong(request.Arguments, "viewId");
+
+        var target = useSelection
+            ? "the current selection"
+            : $"{elementIds.Length} element{(elementIds.Length == 1 ? "" : "s")}";
+
+        var action = ViewAlignmentMath.IsDistribute(ViewAlignmentMath.NormalizeMode(rawMode) ?? string.Empty)
+            ? $"Spread {target} evenly ({mode}, by {spread}" +
+              $"{(Math.Abs(spacingMm) > 1e-9 ? $" at {spacingMm:F0} mm" : string.Empty)})"
+            : $"Align {target} to '{mode}'" +
+              (referenceId > 0 ? $", using element {referenceId} as the reference" : $", alignTo '{alignTo}'");
+
+        var where = viewId > 0 ? $" in view {viewId}" : " in the active view";
+        return $"{action}{where}. Elements move in the plane of that view only.";
     }
 
     private static string BuildPlaceFromCad(McpToolRequest request)

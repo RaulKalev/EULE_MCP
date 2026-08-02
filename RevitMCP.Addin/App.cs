@@ -237,6 +237,10 @@ public class App : IExternalApplication
             handler.RegisterTool(new PreviewAlignElementsTool());
             handler.RegisterTool(new AlignElementsTool());
 
+            // Lining elements up within a view — tags, text, detail lines, viewports (issue #38)
+            handler.RegisterTool(new PreviewAlignInViewTool());
+            handler.RegisterTool(new AlignInViewTool());
+
             // Placing items at locations marked in an imported DWG (issue #32)
             handler.RegisterTool(new GetCadPlacementPointsTool());
             handler.RegisterTool(new PreviewPlaceFromCadTool());
