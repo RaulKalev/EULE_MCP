@@ -36,12 +36,11 @@ internal sealed class CadPointExtractor
         IncludeNonVisibleObjects = false
     };
 
-    private readonly Document _doc;
-    private readonly Dictionary<long, string> _layerNames = new();
+    private readonly CadLayerResolver _layers;
 
     public CadPointExtractor(Document doc)
     {
-        _doc = doc;
+        _layers = new CadLayerResolver(doc);
     }
 
     public List<string> Warnings { get; } = new();
@@ -109,7 +108,9 @@ internal sealed class CadPointExtractor
                 // Depth 0 is the import instance itself, not a block reference in the drawing.
                 if (depth > 0)
                 {
-                    var layer = LayerOf(instance) ?? FirstLayerInside(instance) ?? "(no layer)";
+                    var layer = _layers.LayerOf(instance)
+                                ?? _layers.FirstLayerInside(instance)
+                                ?? CadLayerResolver.NoLayer;
                     var summary = SummaryFor(layers, layer);
                     summary.BlockCount++;
                     TrackHeight(summary, composed.Origin.Z);
@@ -153,7 +154,7 @@ internal sealed class CadPointExtractor
         ISet<string>? layerFilter,
         ISet<string> sources)
     {
-        var layer = LayerOf(obj) ?? "(no layer)";
+        var layer = _layers.LayerOf(obj) ?? CadLayerResolver.NoLayer;
         var summary = SummaryFor(layers, layer);
 
         switch (obj)
@@ -244,65 +245,6 @@ internal sealed class CadPointExtractor
         var mm = ToMm(elevationFt);
         if (mm < summary.MinZmm) summary.MinZmm = mm;
         if (mm > summary.MaxZmm) summary.MaxZmm = mm;
-    }
-
-    /// <summary>The CAD layer behind a geometry object, read from its graphics style.</summary>
-    private string? LayerOf(GeometryObject obj)
-    {
-        ElementId styleId;
-        try { styleId = obj.GraphicsStyleId; }
-        catch { return null; }
-
-        if (styleId == null || styleId == ElementId.InvalidElementId)
-            return null;
-
-        if (_layerNames.TryGetValue(styleId.Value, out var cached))
-            return cached;
-
-        string? name = null;
-        try
-        {
-            if (_doc.GetElement(styleId) is GraphicsStyle style)
-                name = style.GraphicsStyleCategory?.Name;
-        }
-        catch { }
-
-        if (string.IsNullOrEmpty(name))
-            return null;
-
-        _layerNames[styleId.Value] = name!;
-        return name;
-    }
-
-    /// <summary>
-    /// A block reference often carries no graphics style of its own. Its contents do, and a symbol
-    /// block is drawn on one layer, so the first primitive inside names the block's layer.
-    /// </summary>
-    private string? FirstLayerInside(GeometryInstance instance)
-    {
-        GeometryElement? symbolGeometry;
-        try { symbolGeometry = instance.GetSymbolGeometry(); }
-        catch { return null; }
-
-        if (symbolGeometry == null)
-            return null;
-
-        foreach (var obj in symbolGeometry)
-        {
-            if (obj is GeometryInstance nested)
-            {
-                var deeper = LayerOf(nested) ?? FirstLayerInside(nested);
-                if (deeper != null)
-                    return deeper;
-                continue;
-            }
-
-            var layer = LayerOf(obj);
-            if (layer != null)
-                return layer;
-        }
-
-        return null;
     }
 
     private static double SafeCurveZ(Curve curve)

@@ -12,6 +12,10 @@ expensive:
 Both are required arguments on the write tool. The read tool exists to give the agent
 what it needs to ask.
 
+> Drawing never made its symbols into blocks — the luminaires are bare lines on one
+> layer? See [When the DWG Never Blocked Its Symbols](#when-the-dwg-never-blocked-its-symbols)
+> at the end of this document.
+
 ## Tools
 
 | Tool | Permission | Purpose |
@@ -119,3 +123,134 @@ sockets sit at 1100, and they are still the same location.
 - All instances are created in one transaction, so a single undo reverses the whole run.
 - A failure at one location is reported and the rest still go in.
 - The preview opens no transaction.
+
+---
+
+# When the DWG Never Blocked Its Symbols
+
+Everything above assumes the drawing marks its locations with block inserts, points or
+circles. Plenty of drawings do not: the luminaires are **loose lines** — four segments
+that happen to form a rectangle — all on one layer, with nothing tying them together.
+`revit_get_cad_placement_points` reports such a layer as pure `curveCount` and finds
+nothing to place.
+
+A second set of tools handles that case by reconstructing the fixtures from the line work.
+
+| Tool | Permission | Purpose |
+|---|---|---|
+| `revit_get_cad_shapes` | Read-only | Layer inventory, then the reconstructed fixtures and their signatures |
+| `revit_preview_place_from_cad_shapes` | Read-only | What would be created, with which type, where |
+| `revit_place_from_cad_shapes` | Requires approval | Creates the instances |
+
+## What the Revit API cannot do
+
+**DWG text is not readable.** A drawing that labels its luminaires `V11.1`, `V09.2` and
+so on next to each symbol is carrying exactly the information needed to pick a family
+type — and none of it reaches Revit:
+
+- no `GeometryObject` subclass carries text, so an `ImportInstance` yields only curves,
+  points, meshes and solids;
+- there is no `Explode` in the public API, so the text cannot be turned into `TextNote`
+  elements and read back either.
+
+So the type marks in the drawing **cannot** drive the placement. Fixtures are identified
+by **size** instead. Say so plainly when reporting to a user rather than implying the
+labels were read.
+
+## How a fixture is reconstructed
+
+1. **Collect.** Every curve on the named layers is tessellated into straight segments in
+   host coordinates. Arcs, splines and circles all become short pieces, flagged as having
+   come from a curve.
+2. **Group.** Segments whose endpoints land within `joinToleranceMm` (default 2 mm) of
+   each other are one fixture — the sides of a drawn rectangle touch, and touch nothing
+   else. Grouping never crosses a layer.
+3. **Measure.** The smallest box that contains the group, *at any angle*, gives the
+   centre (the insertion point) and the direction of its long side (the rotation). This
+   is the minimum-area box found by rotating calipers, not an axis-aligned bounding box:
+   a luminaire drawn at 37° still measures 1200 × 200, where its axis-aligned box would
+   read 1080 × 880.
+4. **Classify.** How much of that box the outline fills says what the symbol is — a
+   rectangle fills all of it, a circle fills π/4 of it, a bare line has no second
+   dimension.
+
+## Signatures
+
+Each fixture gets a **signature**: its kind plus its size, bucketed to
+`signatureBucketMm` (default 10 mm) because no two drawn symbols measure exactly alike.
+
+```
+rectangle 1200x200   x28
+rectangle 600x600    x14
+circle d200          x51
+```
+
+That table is what `revit_get_cad_shapes` returns, and it is what to show the user. The
+signature is the key a family type is mapped to.
+
+## Choosing the family type
+
+`typeMap` pins a type to a signature and always wins:
+
+```json
+[
+  { "signature": "rectangle 1200x200", "familyName": "POS-11-1" },
+  { "signature": "circle d200", "typeId": 987654 }
+]
+```
+
+Signatures the map leaves out fall back to **footprint matching** (`autoMatchTypes`,
+default true): the drawn size is compared against each candidate family's own plan
+footprint, and the closest within `autoMatchToleranceMm` (default 50 mm) wins. The
+candidates must be narrowed with `autoMatchFamilyName` or `autoMatchCategory` — matching
+a 1200 × 200 rectangle against every symbol in the model would happily return a door.
+
+The fallback **refuses to choose** when two families fit equally well, and when nothing
+fits at all. Those fixtures are reported unplaced with the reason. A silently wrong
+luminaire type is worse than a missing one.
+
+## Rotation
+
+`applyShapeRotation` (default true) puts the drawn angle on the instance.
+
+The angle is reported in **[0, 180)**. A drawn rectangle is symmetric, so which end is
+its "front" is simply not in the geometry — 190° and 10° are the same picture. Where a
+family's own origin faces the other way, `rotationOffsetDegrees` adds a constant on top.
+Circles report no rotation at all; a round downlight has no orientation, and reporting
+the tessellation's angle would set every one of them spinning.
+
+## When a drawing line touches a symbol
+
+This is the failure mode worth knowing about. If a wall line happens to end on a
+luminaire's corner, step 2 pulls both into the same group, and half the plan can arrive
+as one "fixture".
+
+`maxShapeSizeMm` (default 3000) catches it: a cluster longer than that is flagged
+`oversize`, reported, and skipped rather than placed. If it fires, either narrow the
+layers or lower `joinToleranceMm`.
+
+## Re-running
+
+`skipExisting` works as it does above, with one difference: the check is made **per
+family type**, so two signatures placing different families never shadow each other.
+
+## Worked example
+
+```
+1. revit_get_cad_shapes { "importInstanceId": 123456 }
+   -> layers, with the loose-geometry ones marked worthReconstructing
+
+2. revit_get_cad_shapes { "layers": ["New_Valgustid_SA..."] }
+   -> 93 fixtures; signatures rectangle 1200x200 x28, circle d200 x51, ...
+   -> elevation.isFlat = true, so ask the user for a mounting height
+
+3. revit_preview_place_from_cad_shapes {
+     "layers": ["New_Valgustid_SA..."],
+     "elevationMode": "explicit", "elevationMm": 2500,
+     "typeMap": "[{\"signature\": \"rectangle 1200x200\", \"familyName\": \"POS-11-1\"}]",
+     "autoMatchCategory": "Lighting Fixtures"
+   }
+   -> per signature: the type it resolved to, how it was resolved, how many would be placed
+
+4. revit_place_from_cad_shapes { ...same... }
+```
