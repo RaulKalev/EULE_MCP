@@ -50,6 +50,7 @@ public static class ApprovalSummaryBuilder
             // Element alignment and DWG-driven placement
             "revit_align_elements"              => BuildAlignElements(request),
             "revit_align_in_view"               => BuildAlignInView(request),
+            "revit_move_elements"               => BuildMoveElements(request),
             "revit_place_from_cad"              => BuildPlaceFromCad(request),
             // Family types
             "revit_duplicate_family_types"      => BuildDuplicateFamilyTypes(request),
@@ -302,6 +303,37 @@ public static class ApprovalSummaryBuilder
 
         var where = viewId > 0 ? $" in view {viewId}" : " in the active view";
         return $"{action}{where}. Elements move in the plane of that view only.";
+    }
+
+    private static string BuildMoveElements(McpToolRequest request)
+    {
+        request.Arguments.TryGetValue("moves", out var rawMoves);
+        var moves = MoveElementsMath.ParseMoves(rawMoves, new List<string>(), out _);
+        var count = moves?.Count ?? 0;
+
+        var atomic = ToolArguments.GetBool(request.Arguments, "atomic", true);
+        var skipPinned = ToolArguments.GetBool(request.Arguments, "skipPinned", true);
+        var tolerance = MoveElementsMath.ClampTolerance(ToolArguments.GetDouble(
+            request.Arguments, "positionToleranceMm", MoveElementsMath.DefaultPositionToleranceMm));
+
+        // Whether elevations are touched is the thing most worth seeing before approving: a batch
+        // that leaves every Z alone is a plan-position correction, and a much smaller commitment.
+        var verticalMoves = moves?.Count(move => move.TargetZMm.HasValue) ?? 0;
+        var elevationDesc = verticalMoves == 0
+            ? " Every elevation is preserved."
+            : $" {verticalMoves} of them also change elevation.";
+
+        var checkedCount = moves?.Count(move => move.HasExpected) ?? 0;
+        var checkDesc = checkedCount > 0
+            ? $" {checkedCount} carry expected coordinates and are skipped if they have drifted " +
+              $"more than {tolerance:0.###} mm."
+            : string.Empty;
+
+        return $"Move {count} element{(count == 1 ? "" : "s")} to exact model coordinates." +
+               elevationDesc + checkDesc +
+               $" {(atomic ? "Atomic: any failure undoes the whole batch." : "Non-atomic: failures are reported per element and the rest still move.")}" +
+               $" Pinned elements are {(skipPinned ? "skipped" : "reported as failures")}." +
+               " Nothing is deleted or recreated.";
     }
 
     private static string BuildPlaceFromCad(McpToolRequest request)

@@ -241,6 +241,10 @@ public class App : IExternalApplication
             handler.RegisterTool(new PreviewAlignInViewTool());
             handler.RegisterTool(new AlignInViewTool());
 
+            // Bulk moves onto exact model coordinates, without recreating anything
+            handler.RegisterTool(new PreviewMoveElementsTool());
+            handler.RegisterTool(new MoveElementsTool());
+
             // Placing items at locations marked in an imported DWG (issue #32)
             handler.RegisterTool(new GetCadPlacementPointsTool());
             handler.RegisterTool(new PreviewPlaceFromCadTool());

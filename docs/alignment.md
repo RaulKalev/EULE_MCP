@@ -7,7 +7,8 @@ Generic Models, Mass, or whatever the exporter felt like.
 
 For the drafting-tool kind of aligning — putting tags, text, or elements on a common
 line within one view, or spreading them out evenly — see
-[`view-alignment.md`](view-alignment.md).
+[`view-alignment.md`](view-alignment.md). For putting elements on coordinates you
+already know, see [`move-elements.md`](move-elements.md).
 
 ## Tools
 
