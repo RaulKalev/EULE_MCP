@@ -1422,6 +1422,162 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    // ── Placing From Loose CAD Geometry ───────────────────────────────────────
+    // For drawings that never made their symbols into blocks: the fixtures are reconstructed from
+    // the line work itself. The Revit API cannot read DWG text, so the drawing's type marks are not
+    // available and shapes are identified by size.
+
+    [McpServerTool(Name = "revit_get_cad_shapes", ReadOnly = true),
+     Description("Reconstructs fixtures from loose CAD line work — symbols drawn as bare lines, rectangles or circles that were never made into blocks, so revit_get_cad_placement_points finds nothing on them. Touching segments are grouped into one fixture and the smallest box around the group gives its centre and the angle it was drawn at. Call WITHOUT layers first for the layer inventory, then again WITH layers for the fixtures plus a signature table (e.g. 'rectangle 1200x200' x28) — those signatures are what revit_place_from_cad_shapes maps to family types. The Revit API cannot read DWG text, so the drawing's type marks (V11.1 and the like) are NOT available: tell the user that fixtures are identified by size, not by label. Read-only.")]
+    public async Task<string> GetCadShapes(
+        [Description("CAD layer names to reconstruct fixtures from; omit for the layer inventory")] string[]? layers = null,
+        [Description("CAD import element ID (required when the model has several CAD files)")] long importInstanceId = 0,
+        [Description("How close two endpoints must be to count as touching, in mm (default 2)")] double joinToleranceMm = 2,
+        [Description("Size bucket for the signature, in mm (default 10) — no two drawn symbols measure exactly alike")] double signatureBucketMm = 10,
+        [Description("Clusters longer than this are flagged as drawing line work, not fixtures, in mm (default 3000)")] double maxShapeSizeMm = 3000,
+        [Description("Maximum fixtures to return (default 200, max 2000)")] int limit = 200,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["layers"] = layers ?? [],
+            ["importInstanceId"] = importInstanceId,
+            ["joinToleranceMm"] = joinToleranceMm,
+            ["signatureBucketMm"] = signatureBucketMm,
+            ["maxShapeSizeMm"] = maxShapeSizeMm,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_get_cad_shapes", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_preview_place_from_cad_shapes", ReadOnly = true),
+     Description("Previews placing families on fixtures reconstructed from loose CAD line work, WITHOUT changing the model. Same arguments as revit_place_from_cad_shapes. Returns the signature table with the family type each one resolved to, how many instances would be created, how many fixtures already have one, and which signatures still have no type.")]
+    public Task<string> PreviewPlaceFromCadShapes(
+        [Description("CAD layer names holding the fixtures — ask the user, names differ per project")] string[] layers,
+        [Description("Elevation source: dwg (keep the drawing height) | level (levelName + offsetMm) | explicit (elevationMm)")] string elevationMode,
+        [Description("Signature-to-type map, JSON array: [{\"signature\": \"rectangle 1200x200\", \"typeId\": 123}] or the same with familyName/typeName")] string? typeMap = null,
+        [Description("Level name — required for elevationMode=level, also used as the placement level")] string? levelName = null,
+        [Description("Height above the level, in mm (elevationMode=level)")] double offsetMm = 0,
+        [Description("Absolute elevation in mm (elevationMode=explicit)")] double elevationMm = 0,
+        [Description("CAD import element ID (required when the model has several CAD files)")] long importInstanceId = 0,
+        [Description("How close two endpoints must be to count as touching, in mm (default 2)")] double joinToleranceMm = 2,
+        [Description("Size bucket for the signature, in mm (default 10)")] double signatureBucketMm = 10,
+        [Description("Clusters longer than this are skipped as drawing line work, in mm (default 3000)")] double maxShapeSizeMm = 3000,
+        [Description("Match unmapped signatures against the family's own footprint (default true)")] bool autoMatchTypes = true,
+        [Description("Restrict auto-matching to families whose name contains this")] string? autoMatchFamilyName = null,
+        [Description("Restrict auto-matching to this category, e.g. 'Lighting Fixtures'")] string? autoMatchCategory = null,
+        [Description("How far a family footprint may differ and still auto-match, in mm (default 50)")] double autoMatchToleranceMm = 50,
+        [Description("Carry the drawn rotation onto the instance (default true)")] bool applyShapeRotation = true,
+        [Description("Extra rotation applied on top, in degrees")] double rotationOffsetDegrees = 0,
+        [Description("Skip fixtures that already have an instance of their type (default true)")] bool skipExisting = true,
+        [Description("How close an existing instance counts as the same fixture, in mm (default 50)")] double duplicateToleranceMm = 50,
+        [Description("Cap on instances created (default 500, max 2000)")] int maxInstances = 500,
+        [Description("View element ID for view-based (detail item) families")] long viewId = 0,
+        [Description("Host element ID for hosted families")] long hostElementId = 0,
+        CancellationToken cancellationToken = default) =>
+        SendPlaceFromCadShapes(
+            "revit_preview_place_from_cad_shapes", layers, elevationMode, typeMap, levelName, offsetMm,
+            elevationMm, importInstanceId, joinToleranceMm, signatureBucketMm, maxShapeSizeMm,
+            autoMatchTypes, autoMatchFamilyName, autoMatchCategory, autoMatchToleranceMm,
+            applyShapeRotation, rotationOffsetDegrees, skipExisting, duplicateToleranceMm, maxInstances,
+            viewId, hostElementId, cancellationToken);
+
+    [McpServerTool(Name = "revit_place_from_cad_shapes"),
+     Description("Places families on fixtures reconstructed from loose CAD line work — symbols drawn as bare lines or circles that were never made into blocks. Touching segments are grouped into one fixture; the smallest box around the group gives the insertion point and the rotation. Requires approval. Layer names differ per project, so ask the user which layers hold the fixtures. A 2D drawing carries no mounting height, so elevationMode must be stated. Types come from typeMap keyed on shape signature; unmapped signatures fall back to matching the family's own footprint and are skipped when nothing fits unambiguously. The Revit API cannot read DWG text, so the drawing's type marks (V11.1 and the like) cannot be used — say so rather than implying the labels were read. Run revit_preview_place_from_cad_shapes first.")]
+    public Task<string> PlaceFromCadShapes(
+        [Description("CAD layer names holding the fixtures — ask the user, names differ per project")] string[] layers,
+        [Description("Elevation source: dwg (keep the drawing height) | level (levelName + offsetMm) | explicit (elevationMm)")] string elevationMode,
+        [Description("Signature-to-type map, JSON array: [{\"signature\": \"rectangle 1200x200\", \"typeId\": 123}] or the same with familyName/typeName")] string? typeMap = null,
+        [Description("Level name — required for elevationMode=level, also used as the placement level")] string? levelName = null,
+        [Description("Height above the level, in mm (elevationMode=level)")] double offsetMm = 0,
+        [Description("Absolute elevation in mm (elevationMode=explicit)")] double elevationMm = 0,
+        [Description("CAD import element ID (required when the model has several CAD files)")] long importInstanceId = 0,
+        [Description("How close two endpoints must be to count as touching, in mm (default 2)")] double joinToleranceMm = 2,
+        [Description("Size bucket for the signature, in mm (default 10)")] double signatureBucketMm = 10,
+        [Description("Clusters longer than this are skipped as drawing line work, in mm (default 3000)")] double maxShapeSizeMm = 3000,
+        [Description("Match unmapped signatures against the family's own footprint (default true)")] bool autoMatchTypes = true,
+        [Description("Restrict auto-matching to families whose name contains this")] string? autoMatchFamilyName = null,
+        [Description("Restrict auto-matching to this category, e.g. 'Lighting Fixtures'")] string? autoMatchCategory = null,
+        [Description("How far a family footprint may differ and still auto-match, in mm (default 50)")] double autoMatchToleranceMm = 50,
+        [Description("Carry the drawn rotation onto the instance (default true)")] bool applyShapeRotation = true,
+        [Description("Extra rotation applied on top, in degrees")] double rotationOffsetDegrees = 0,
+        [Description("Skip fixtures that already have an instance of their type (default true)")] bool skipExisting = true,
+        [Description("How close an existing instance counts as the same fixture, in mm (default 50)")] double duplicateToleranceMm = 50,
+        [Description("Cap on instances created (default 500, max 2000)")] int maxInstances = 500,
+        [Description("View element ID for view-based (detail item) families")] long viewId = 0,
+        [Description("Host element ID for hosted families")] long hostElementId = 0,
+        CancellationToken cancellationToken = default) =>
+        SendPlaceFromCadShapes(
+            "revit_place_from_cad_shapes", layers, elevationMode, typeMap, levelName, offsetMm,
+            elevationMm, importInstanceId, joinToleranceMm, signatureBucketMm, maxShapeSizeMm,
+            autoMatchTypes, autoMatchFamilyName, autoMatchCategory, autoMatchToleranceMm,
+            applyShapeRotation, rotationOffsetDegrees, skipExisting, duplicateToleranceMm, maxInstances,
+            viewId, hostElementId, cancellationToken);
+
+    private async Task<string> SendPlaceFromCadShapes(
+        string toolName,
+        string[] layers,
+        string elevationMode,
+        string? typeMap,
+        string? levelName,
+        double offsetMm,
+        double elevationMm,
+        long importInstanceId,
+        double joinToleranceMm,
+        double signatureBucketMm,
+        double maxShapeSizeMm,
+        bool autoMatchTypes,
+        string? autoMatchFamilyName,
+        string? autoMatchCategory,
+        double autoMatchToleranceMm,
+        bool applyShapeRotation,
+        double rotationOffsetDegrees,
+        bool skipExisting,
+        double duplicateToleranceMm,
+        int maxInstances,
+        long viewId,
+        long hostElementId,
+        CancellationToken cancellationToken)
+    {
+        if (layers == null || layers.Length == 0)
+            return FormatBridgeError(
+                "layers is required. Run revit_get_cad_shapes without layers, show the user which " +
+                "layers carry curves, and ask which ones hold the fixtures.");
+
+        if (string.IsNullOrWhiteSpace(elevationMode))
+            return FormatBridgeError(
+                "elevationMode is required: 'dwg', 'level' (with levelName and offsetMm), or " +
+                "'explicit' (with elevationMm). A 2D drawing has no mounting height — ask the user.");
+
+        var args = new Dictionary<string, object?>
+        {
+            ["layers"] = layers,
+            ["elevationMode"] = elevationMode,
+            ["typeMap"] = typeMap ?? "",
+            ["levelName"] = levelName ?? "",
+            ["offsetMm"] = offsetMm,
+            ["elevationMm"] = elevationMm,
+            ["importInstanceId"] = importInstanceId,
+            ["joinToleranceMm"] = joinToleranceMm,
+            ["signatureBucketMm"] = signatureBucketMm,
+            ["maxShapeSizeMm"] = maxShapeSizeMm,
+            ["autoMatchTypes"] = autoMatchTypes,
+            ["autoMatchFamilyName"] = autoMatchFamilyName ?? "",
+            ["autoMatchCategory"] = autoMatchCategory ?? "",
+            ["autoMatchToleranceMm"] = autoMatchToleranceMm,
+            ["applyShapeRotation"] = applyShapeRotation,
+            ["rotationOffsetDegrees"] = rotationOffsetDegrees,
+            ["skipExisting"] = skipExisting,
+            ["duplicateToleranceMm"] = duplicateToleranceMm,
+            ["maxInstances"] = maxInstances,
+            ["viewId"] = viewId,
+            ["hostElementId"] = hostElementId
+        };
+        var result = await pipeClient.SendAsync(toolName, args, cancellationToken);
+        return FormatResult(result);
+    }
+
     // ── Element Alignment ─────────────────────────────────────────────────────
 
     [McpServerTool(Name = "revit_preview_align_elements", ReadOnly = true),

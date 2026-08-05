@@ -246,6 +246,12 @@ public class App : IExternalApplication
             handler.RegisterTool(new PreviewPlaceFromCadTool());
             handler.RegisterTool(new PlaceFromCadTool());
 
+            // Same, for drawings that never blocked their symbols: fixtures are reconstructed from
+            // the loose line work instead of read off block inserts.
+            handler.RegisterTool(new GetCadShapesTool());
+            handler.RegisterTool(new PreviewPlaceFromCadShapesTool());
+            handler.RegisterTool(new PlaceFromCadShapesTool());
+
             handler.RegisterTool(new ListTagTypesTool());
             handler.RegisterTool(new FindManagedTagsTool());
             handler.RegisterTool(new PreviewPlaceTagsTool());
