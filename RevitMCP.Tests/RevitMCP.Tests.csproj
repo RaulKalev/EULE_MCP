@@ -92,6 +92,7 @@
     <Compile Include="..\RevitMCP.Addin\Families\FamilyTypeNamePlanner.cs" Link="Families\FamilyTypeNamePlanner.cs" />
     <Compile Include="..\RevitMCP.Addin\Placement\AlignmentMath.cs" Link="Placement\AlignmentMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Placement\ViewAlignmentMath.cs" Link="Placement\ViewAlignmentMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Placement\MoveElementsMath.cs" Link="Placement\MoveElementsMath.cs" />
     <Compile Include="..\RevitMCP.Addin\CadManagement\CadPointMath.cs" Link="CadManagement\CadPointMath.cs" />
     <Compile Include="..\RevitMCP.Addin\CadManagement\CadShapeMath.cs" Link="CadManagement\CadShapeMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Electrical\PatchPanelAssignment\PatchPanelAssignmentModels.cs" Link="Electrical\PatchPanelAssignment\PatchPanelAssignmentModels.cs" />

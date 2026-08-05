@@ -1728,6 +1728,54 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    // ── Moving Elements To Exact Coordinates ──────────────────────────────────
+
+    [McpServerTool(Name = "revit_preview_move_elements", ReadOnly = true),
+     Description("Previews moving existing elements onto exact model coordinates, WITHOUT changes. Same arguments as revit_move_elements. Returns per element its current point, target point, translation and distance in mm, whether it is pinned, and whether it can move. An omitted targetZmm keeps the element's elevation. Optional expected coordinates are a concurrency check — an element that has drifted further than positionToleranceMm is reported stale. Elements without a LocationPoint (walls, pipes, ducts and anything else placed on a curve) are reported as unsupported rather than guessed at from a bounding box.")]
+    public Task<string> PreviewMoveElements(
+        [Description("JSON array of moves: [{elementId, targetXmm, targetYmm, targetZmm, expectedXmm, expectedYmm, expectedZmm}]. Omit an axis to keep it.")] string moves,
+        [Description("How far the element may sit from expectedXmm/Ymm/Zmm before it counts as stale, in mm (default 1.0)")] double positionToleranceMm = 1.0,
+        [Description("All or nothing: any failure undoes the whole batch (default true)")] bool atomic = true,
+        [Description("Skip pinned elements instead of failing on them (default true)")] bool skipPinned = true,
+        CancellationToken cancellationToken = default) =>
+        SendMoveElements(
+            "revit_preview_move_elements", moves, positionToleranceMm, atomic, skipPinned, cancellationToken);
+
+    [McpServerTool(Name = "revit_move_elements"),
+     Description("Moves existing elements onto exact model coordinates. Requires approval. Nothing is deleted or recreated, so element ids, types, parameters, circuits and tags survive; an omitted targetZmm preserves the elevation the family and level gave the element. Optional expected coordinates guard against the model having changed since the targets were worked out. atomic=true (default) undoes the whole batch on any failure; atomic=false moves what it can and reports the rest. Up to 2000 moves per call, in one transaction, reversible with a single Revit undo. Run revit_preview_move_elements first.")]
+    public Task<string> MoveElements(
+        [Description("JSON array of moves: [{elementId, targetXmm, targetYmm, targetZmm, expectedXmm, expectedYmm, expectedZmm}]. Omit an axis to keep it.")] string moves,
+        [Description("How far the element may sit from expectedXmm/Ymm/Zmm before it counts as stale, in mm (default 1.0)")] double positionToleranceMm = 1.0,
+        [Description("All or nothing: any failure undoes the whole batch (default true)")] bool atomic = true,
+        [Description("Skip pinned elements instead of failing on them (default true)")] bool skipPinned = true,
+        CancellationToken cancellationToken = default) =>
+        SendMoveElements(
+            "revit_move_elements", moves, positionToleranceMm, atomic, skipPinned, cancellationToken);
+
+    private async Task<string> SendMoveElements(
+        string toolName,
+        string moves,
+        double positionToleranceMm,
+        bool atomic,
+        bool skipPinned,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(moves))
+            return FormatBridgeError("Provide 'moves': a JSON array of {elementId, targetXmm, targetYmm, targetZmm}.");
+        if (!TryParseJsonArray(moves, "moves", out var parsedMoves, out var movesError))
+            return FormatBridgeError(movesError!);
+
+        var args = new Dictionary<string, object?>
+        {
+            ["moves"] = parsedMoves,
+            ["positionToleranceMm"] = positionToleranceMm,
+            ["atomic"] = atomic,
+            ["skipPinned"] = skipPinned
+        };
+        var result = await pipeClient.SendAsync(toolName, args, cancellationToken);
+        return FormatResult(result);
+    }
+
     // ── Family Types ──────────────────────────────────────────────────────────
 
     [McpServerTool(Name = "revit_list_family_types", ReadOnly = true),

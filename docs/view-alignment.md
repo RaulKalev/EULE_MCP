@@ -5,7 +5,8 @@ or model elements and put them on a common line, or spread them out evenly. Ever
 happens in the plane of one view — this never moves anything toward or away from you.
 
 For the other kind of aligning — pushing an element until it sits against a wall,
-ceiling or floor in 3D — see [`alignment.md`](alignment.md).
+ceiling or floor in 3D — see [`alignment.md`](alignment.md). For putting elements on
+coordinates you already know, see [`move-elements.md`](move-elements.md).
 
 ## Tools
 

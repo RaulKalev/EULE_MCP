@@ -95,6 +95,7 @@ Important repository references:
 - [`docs/extensible-storage.md`](docs/extensible-storage.md) — reading add-in data stored on elements
 - [`docs/family-types.md`](docs/family-types.md) — duplicating, renaming, and re-parameterising family types
 - [`docs/mcp-performance.md`](docs/mcp-performance.md) — lower-latency queries and reduced-credit tool profiles
+- [`docs/move-elements.md`](docs/move-elements.md) — moving existing elements onto exact model coordinates in bulk
 - [`docs/place-from-cad.md`](docs/place-from-cad.md) — placing families at locations marked in an imported DWG, and reconstructing fixtures from loose DWG line work
 - [`docs/skills.md`](docs/skills.md) — company skills, project overrides, and the skill runner
 - [`docs/standards-lookup.md`](docs/standards-lookup.md) — offline standards indexing and retrieval

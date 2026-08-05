@@ -3493,3 +3493,104 @@ Align the selected tags to the left.
 |------|------|------------|--------------|-----------------|----------|------|-------|
 | Elements | `revit_preview_align_in_view` | RO | "Preview aligning the selected tags to the left." | `{total, willMove, alreadyInLine, misalignmentMm, proposals[]}` | N/A | N/A | Reports the anchor used per element; same plan the write tool executes |
 | Elements | `revit_align_in_view` | Approval | "Align the selected tags to the left." | `{aligned, alreadyAligned, failed, results[]}` | Yes | Yes | Moves in the view plane only; everything measured before the first move |
+
+---
+
+## 50. Moving Elements To Exact Coordinates
+
+Requires a plan with a handful of point-based fixtures (family instances, sockets,
+luminaires), at least one pinned, at least one wall or pipe, and a DWG whose fixture
+positions differ from the model's.
+
+### 50.1 Preview
+
+**Prompt:**
+```
+Preview moving element 1756386 to X 76871.5, Y 71602.9.
+```
+
+**Verify:**
+1. `revit_preview_move_elements` opens no transaction and leaves the undo stack unchanged.
+2. Each entry reports `currentPointMm`, `targetPointMm`, `translationMm`, `distanceMm`, `pinned`, `canMove` and `status`.
+3. `currentPointMm` matches what `revit_inspect_selected_elements` reports for the same element.
+4. `distanceMm` equals the length of `translationMm`, and both are in millimetres.
+5. The preview's numbers match what the write tool then does.
+
+### 50.2 Omitted Axes
+
+**Verify:**
+1. Omitting `targetZmm` leaves `targetPointMm.z` equal to `currentPointMm.z` and `translationMm.z` at 0.
+2. After the move, the fixture's elevation-from-level parameter is unchanged.
+3. `"targetZmm": 0` is treated as a target, not an omission — the element moves to the project origin plane.
+4. A move with only `targetXmm` leaves Y and Z alone.
+5. A move with no target coordinate at all warns and reports `AlreadyThere`.
+
+### 50.3 Staleness
+
+**Verify:**
+1. Correct `expectedXmm`/`expectedYmm`/`expectedZmm` let the move through; `staleDeviationMm` reports roughly 0.
+2. Nudging the element by more than `positionToleranceMm` in Revit, then re-running the same request, reports `Stale` and moves nothing.
+3. `staleDeviationMm` reports the worst axis, not the 3D distance.
+4. Only the axes supplied are checked — an expected X alone does not catch a Z drift.
+5. A stale element is reported `Stale` even when it is also pinned.
+6. `positionToleranceMm` outside 0.001–10000 warns and is clamped.
+
+### 50.4 Unsupported Elements and Missing Ids
+
+**Verify:**
+1. A wall, pipe, duct or cable tray is reported `UnsupportedLocation` naming the curve placement — never moved to a bounding-box centre.
+2. A family type id (rather than an instance id) is reported `UnsupportedLocation`.
+3. An id that does not exist is reported `Missing`.
+4. Under `atomic=true` any of these rejects the whole batch before the transaction opens; the undo stack is untouched.
+
+### 50.5 Pinned Elements
+
+**Verify:**
+1. With `skipPinned=true` (the default) a pinned element is reported `Pinned` and the rest of the batch still moves.
+2. With `skipPinned=false` the pinned element is a failure, and under `atomic=true` the batch is rejected.
+3. The element is still pinned afterwards — the tool never unpins anything.
+
+### 50.6 Moving
+
+**Prompt:**
+```
+Move element 1756386 to X 76871.5, Y 71602.9.
+```
+
+**Verify:**
+1. `revit_move_elements` requires approval; the pending summary names the element count. Rejecting it leaves the model unchanged.
+2. A single Revit undo reverses every move from one call.
+3. The element keeps its id, type, parameters, circuit membership and tags; its tags follow it.
+4. Running the same call twice reports everything as `AlreadyThere` the second time.
+5. `elementIds` groups every element into exactly one of `moved`, `skipped`, `stale`, `missing`, `pinned`, `unsupportedLocation`, `failed`, `rolledBack`, `notAttempted`.
+6. A 500-move batch completes in one transaction and one undo step.
+
+### 50.7 Atomic and Non-Atomic
+
+**Verify:**
+1. `atomic=true` with one bad entry moves nothing; the good elements report `NotAttempted` and are still at their original coordinates.
+2. `atomic=false` with the same batch moves the good elements and reports the rest individually.
+3. `atomic=false` with a Revit refusal mid-batch keeps the earlier moves; only that element reports `Failed`.
+4. Elements already at their target, and pinned elements under `skipPinned=true`, never trigger an atomic rollback.
+5. An oversized batch (over 2000) is rejected with a message asking for it to be split, rather than truncated.
+6. The same element id twice in one `moves` array is rejected naming both positions.
+
+### 50.8 DWG Alignment End To End
+
+**Prompt:**
+```
+Line the ceiling fixtures up with the DWG.
+```
+
+**Verify:**
+1. `revit_get_cad_shapes` reconstructs the fixture outlines and centres.
+2. The preview shows each fixture's travel; ambiguous matches are visible as outliers before anything moves.
+3. After `revit_move_elements`, `revit_inspect_selected_elements` reports the target coordinates.
+4. Elevations are unchanged because `targetZmm` was omitted.
+
+### Matrix rows (Section 30)
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Elements | `revit_preview_move_elements` | RO | "Preview moving element 1756386 to X 76871.5, Y 71602.9." | `{total, canMove, blocked, totalTravelMm, moves[]}` | N/A | N/A | Same plan the write tool executes; omitted axes keep their current value |
+| Elements | `revit_move_elements` | Approval | "Move element 1756386 to X 76871.5, Y 71602.9." | `{moved, skipped, failed, elementIds{}, moves[]}` | Yes | Yes | Never deletes or recreates; `atomic=true` undoes the whole batch on any failure |
