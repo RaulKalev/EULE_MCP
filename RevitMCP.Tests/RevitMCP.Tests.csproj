@@ -19,6 +19,10 @@
     <!-- ClosedXML for Excel service tests (same pinned versions as Addin) -->
     <PackageReference Include="ClosedXML" />
     <PackageReference Include="DocumentFormat.OpenXml" />
+    <!-- Model graph SQLite tests. The cross-platform e_sqlite3 bundle replaces the add-in's
+         winsqlite3 bundle so the linked Graph sources run on Linux/CI as well as Windows. -->
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
   </ItemGroup>
 
   <!-- RevitMCP.Core has no Revit dependency — safe to reference directly -->
@@ -105,5 +109,12 @@
     <Compile Include="..\RevitMCP.Addin\Approval\ApprovalService.cs" Link="Approval\ApprovalService.cs" />
     <Compile Include="..\RevitMCP.Addin\Services\ExternalEventWorkItem.cs" Link="Services\ExternalEventWorkItem.cs" />
     <Compile Include="..\RevitMCP.Addin\Services\ExternalEventWorkQueue.cs" Link="Services\ExternalEventWorkQueue.cs" />
+    <!-- Model graph pure-logic files (SQLite layer, path resolution, freshness; no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\Graph\GraphSchema.cs" Link="Graph\GraphSchema.cs" />
+    <Compile Include="..\RevitMCP.Addin\Graph\GraphModels.cs" Link="Graph\GraphModels.cs" />
+    <Compile Include="..\RevitMCP.Addin\Graph\GraphDatabase.cs" Link="Graph\GraphDatabase.cs" />
+    <Compile Include="..\RevitMCP.Addin\Graph\GraphPathResolver.cs" Link="Graph\GraphPathResolver.cs" />
+    <Compile Include="..\RevitMCP.Addin\Graph\GraphStore.cs" Link="Graph\GraphStore.cs" />
+    <Compile Include="..\RevitMCP.Addin\Graph\GraphFreshness.cs" Link="Graph\GraphFreshness.cs" />
   </ItemGroup>
 </Project>

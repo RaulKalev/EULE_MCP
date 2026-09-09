@@ -51,6 +51,10 @@
     <!-- WPF theming for the plugin window — both TFMs build the UI now. -->
     <PackageReference Include="MaterialDesignColors" />
     <PackageReference Include="MaterialDesignThemes" />
+    <!-- Model graph routing layer (Graph\). SQLite via the Windows-bundled winsqlite3.dll:
+         nothing native to ship, so Costura embedding keeps working unchanged. -->
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" />
+    <PackageReference Include="SQLitePCLRaw.bundle_winsqlite3" />
   </ItemGroup>
 
   <!-- Revit SDK — TFM-conditional -->
