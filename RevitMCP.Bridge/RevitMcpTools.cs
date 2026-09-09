@@ -5283,5 +5283,126 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         var result = await pipeClient.SendAsync("sync_ifc_space_room_data", args, cancellationToken);
         return FormatResult(result);
     }
-}
 
+    // ── Model Graph (routing layer) ───────────────────────────────────────────
+
+    [McpServerTool(Name = "revit_graph_build", ReadOnly = true),
+     Description("Builds the model knowledge graph for the open document into a per-model SQLite file (full rebuild). " +
+                 "Nodes: element, type, panel, circuit, space, level, workset, sheet, view. " +
+                 "Edges: fed_by, located_in, hosted_on, type_of, tagged_in, on_sheet, in_workset, on_level. " +
+                 "Writes only the graph file (never the model). Reports node/edge counts and elapsed time. " +
+                 "The graph is a routing layer: use it to find ids, then fetch live values by id.")]
+    public async Task<string> GraphBuild(
+        [Description("Reserved: incremental rebuild. Not implemented yet — reported and falls back to a full rebuild. Default false.")] bool incremental = false,
+        [Description("Maximum model elements to index (safety cap). Default 250000.")] int elementLimit = 250000,
+        [Description("Optional shared folder root overriding the graph.sharedFolder config for this call.")] string? sharedFolder = null,
+        [Description("Optional explicit database file path overriding folder resolution entirely.")] string? dbPath = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["incremental"]  = incremental,
+            ["elementLimit"] = elementLimit,
+            ["sharedFolder"] = sharedFolder ?? string.Empty,
+            ["dbPath"]       = dbPath ?? string.Empty
+        };
+        var result = await pipeClient.SendAsync("revit_graph_build", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_graph_status", ReadOnly = true),
+     Description("Reports whether a model graph exists for the open document, where it is stored, built_at, central_version, " +
+                 "the current document version, and stale (true/false) with a human-readable reason. " +
+                 "Call at session start; when stale is true, rebuild with revit_graph_build or re-verify ids against the live model.")]
+    public async Task<string> GraphStatus(
+        [Description("Optional shared folder root overriding the graph.sharedFolder config for this call.")] string? sharedFolder = null,
+        [Description("Optional explicit database file path overriding folder resolution entirely.")] string? dbPath = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["sharedFolder"] = sharedFolder ?? string.Empty,
+            ["dbPath"]       = dbPath ?? string.Empty
+        };
+        var result = await pipeClient.SendAsync("revit_graph_status", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_graph_query", ReadOnly = true),
+     Description("Structured queries against the model graph (no SQL). operation=neighbors (id, rel?, direction? in|out|both, limit?) | " +
+                 "find (kind?, category?, level?, workset?, nameContains?, page?, pageSize?) → ids + names, paginated, hard-capped | " +
+                 "path (fromId, toId, maxHops?) → shortest undirected path | " +
+                 "subtree (id, rel, depth?, direction? in|out, maxNodes?) e.g. everything fed_by a panel. " +
+                 "Kinds: element, type, panel, circuit, space, level, workset, sheet, view. " +
+                 "Rels: fed_by, located_in, hosted_on, type_of, tagged_in, on_sheet, in_workset, on_level. " +
+                 "Every response carries built_at, central_version, stale and a routing-only note — never quote graph values as facts.")]
+    public async Task<string> GraphQuery(
+        [Description("neighbors | find | path | subtree")] string operation,
+        [Description("Node id for neighbors/subtree (Revit element id as string; worksets use ws:<id>).")] string? id = null,
+        [Description("Relationship filter: fed_by, located_in, hosted_on, type_of, tagged_in, on_sheet, in_workset, on_level. Required for subtree.")] string? rel = null,
+        [Description("Edge direction relative to the node: in | out | both. Default both for neighbors, in for subtree.")] string? direction = null,
+        [Description("neighbors only: maximum neighbours to return (1-500). Default 100.")] int limit = 100,
+        [Description("find only: node kind filter.")] string? kind = null,
+        [Description("find only: Revit category name filter (exact, case-insensitive).")] string? category = null,
+        [Description("find only: level name filter (exact, case-insensitive).")] string? level = null,
+        [Description("find only: workset name filter (exact, case-insensitive).")] string? workset = null,
+        [Description("find only: substring of the node name (case-insensitive for ASCII).")] string? nameContains = null,
+        [Description("find only: zero-based page index. Default 0.")] int page = 0,
+        [Description("find only: page size (default 100, max 500).")] int pageSize = 100,
+        [Description("path only: start node id.")] string? fromId = null,
+        [Description("path only: end node id.")] string? toId = null,
+        [Description("path only: maximum hops (1-10). Default 6.")] int maxHops = 6,
+        [Description("subtree only: traversal depth (1-10). Default 3.")] int depth = 3,
+        [Description("subtree only: maximum nodes returned (1-2000). Default 500.")] int maxNodes = 500,
+        [Description("Optional shared folder root overriding the graph.sharedFolder config for this call.")] string? sharedFolder = null,
+        [Description("Optional explicit database file path overriding folder resolution entirely.")] string? dbPath = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["operation"]    = operation,
+            ["id"]           = id ?? string.Empty,
+            ["rel"]          = rel ?? string.Empty,
+            ["direction"]    = direction ?? string.Empty,
+            ["limit"]        = limit,
+            ["kind"]         = kind ?? string.Empty,
+            ["category"]     = category ?? string.Empty,
+            ["level"]        = level ?? string.Empty,
+            ["workset"]      = workset ?? string.Empty,
+            ["nameContains"] = nameContains ?? string.Empty,
+            ["page"]         = page,
+            ["pageSize"]     = pageSize,
+            ["fromId"]       = fromId ?? string.Empty,
+            ["toId"]         = toId ?? string.Empty,
+            ["maxHops"]      = maxHops,
+            ["depth"]        = depth,
+            ["maxNodes"]     = maxNodes,
+            ["sharedFolder"] = sharedFolder ?? string.Empty,
+            ["dbPath"]       = dbPath ?? string.Empty
+        };
+        var result = await pipeClient.SendAsync("revit_graph_query", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_graph_summary", ReadOnly = true),
+     Description("Summarises the model graph for cheap orientation at session start: node counts per kind, element counts per " +
+                 "category/level/workset, panels with circuit and fed-element counts, orphan circuits (no panel / no elements), " +
+                 "and elements with no located_in edge. Includes built_at, central_version, stale and the routing-only note.")]
+    public async Task<string> GraphSummary(
+        [Description("Maximum rows per count list (1-200). Default 25.")] int topN = 25,
+        [Description("Sample ids listed for orphan circuits and unlocated elements (0-200). Default 25.")] int sampleSize = 25,
+        [Description("Optional shared folder root overriding the graph.sharedFolder config for this call.")] string? sharedFolder = null,
+        [Description("Optional explicit database file path overriding folder resolution entirely.")] string? dbPath = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["topN"]         = topN,
+            ["sampleSize"]   = sampleSize,
+            ["sharedFolder"] = sharedFolder ?? string.Empty,
+            ["dbPath"]       = dbPath ?? string.Empty
+        };
+        var result = await pipeClient.SendAsync("revit_graph_summary", args, cancellationToken);
+        return FormatResult(result);
+    }
+}
