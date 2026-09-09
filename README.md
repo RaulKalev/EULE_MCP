@@ -2,7 +2,7 @@
 
 EULE MCP connects Claude Code, Codex, and Antigravity CLI to a live Autodesk Revit model through the [Model Context Protocol](https://modelcontextprotocol.io). It provides local model queries, discipline workflows, controlled writes, QA, reporting, and file operations without requiring users to write Revit API scripts.
 
-The current bridge exposes **191 MCP tools** across ten documented capability groups.
+The current bridge exposes **195 MCP tools** across eleven documented capability groups.
 
 ## Documentation
 
@@ -33,6 +33,7 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | [Standards](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Standards) | 5 | Offline indexing, search, and contextual retrieval |
 | [Files, Excel, and configuration](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Files-Excel-Configuration) | 16 | Policy-scoped files, standalone workbooks, scoped JSON state |
 | [Family types, creation, and IFC](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Family-IFC) | 10 | Family type duplication and editing, DWG-to-Detail-Item families, IFC Space-to-Room |
+| [Model graph (routing layer)](docs/model-graph.md) | 4 | Per-model SQLite graph of element ids and relationships: build, freshness status, structured queries (neighbors/find/path/subtree), summary |
 
 ## Supported environment
 
@@ -95,6 +96,7 @@ Important repository references:
 - [`docs/extensible-storage.md`](docs/extensible-storage.md) — reading add-in data stored on elements
 - [`docs/family-types.md`](docs/family-types.md) — duplicating, renaming, and re-parameterising family types
 - [`docs/mcp-performance.md`](docs/mcp-performance.md) — lower-latency queries and reduced-credit tool profiles
+- [`docs/model-graph.md`](docs/model-graph.md) — per-model routing graph: find element ids cheaply before querying the live model
 - [`docs/move-elements.md`](docs/move-elements.md) — moving existing elements onto exact model coordinates in bulk
 - [`docs/place-from-cad.md`](docs/place-from-cad.md) — placing families at locations marked in an imported DWG, and reconstructing fixtures from loose DWG line work
 - [`docs/skills.md`](docs/skills.md) — company skills, project overrides, and the skill runner
