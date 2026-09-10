@@ -9,16 +9,16 @@ namespace RevitMCP.Addin.Graph;
 /// Captures the "current model version" used for graph freshness. Must run on the Revit API thread.
 ///
 /// Signal used, in order:
-///  1. Workshared file-based models: <c>BasicFileInfo.Extract(path).LatestCentralVersion</c> +
-///     <c>LatestCentralEpisodeGUID</c>, read from the central file when reachable, otherwise from
-///     the local file header (which reflects the last sync).
+///  1. Workshared file-based models: <c>BasicFileInfo.Extract(doc.PathName).LatestCentralVersion</c> +
+///     <c>LatestCentralEpisodeGUID</c>, read from the open document's file header. For a local
+///     workshared file this reflects the central version that its extracted contents actually match.
 ///  2. Everything else (non-workshared, cloud/server workshared, or when the header read fails):
 ///     <c>Document.GetDocumentVersion(doc)</c> → <c>NumberOfSaves</c> + <c>VersionGUID</c>.
 ///  3. Unsaved documents: no version; the element count is the only freshness signal.
 ///
 /// Limitations: neither signal changes for unsaved in-session edits — the element count is the
-/// only hint for those. The local header only advances when the user syncs, so a stale local of a
-/// file-based central whose central file is unreachable reports the last synced version.
+/// only hint for those. The local header only advances when the user syncs, so freshness is relative
+/// to the open document rather than a possibly newer central file.
 /// </summary>
 public static class RevitModelVersionReader
 {
@@ -72,25 +72,30 @@ public static class RevitModelVersionReader
     {
         if (isWorkshared)
         {
-            foreach (var (candidate, label) in new[] { (centralUserPath, "central file"), (localPath, "local file header") })
+            // The graph is extracted from the open document, not directly from central. Reading the
+            // central header here can stamp an out-of-date local document with a newer central version
+            // and make stale graph contents look fresh. Use only the open document's file header;
+            // DocumentVersion below is the safe fallback when that header is unavailable.
+            if (IsReadableFile(localPath))
             {
-                if (!IsReadableFile(candidate)) continue;
                 try
                 {
-                    var info = BasicFileInfo.Extract(candidate);
-                    if (info == null) continue;
-                    var version = info.LatestCentralVersion;
-                    var episode = info.LatestCentralEpisodeGUID;
-                    if (version > 0)
+                    var info = BasicFileInfo.Extract(localPath);
+                    if (info != null)
                     {
-                        return (
-                            $"central:{version.ToString(CultureInfo.InvariantCulture)}:{episode:N}",
-                            $"BasicFileInfo.LatestCentralVersion of the {label}");
+                        var version = info.LatestCentralVersion;
+                        var episode = info.LatestCentralEpisodeGUID;
+                        if (version > 0)
+                        {
+                            return (
+                                $"central:{version.ToString(CultureInfo.InvariantCulture)}:{episode:N}",
+                                "BasicFileInfo.LatestCentralVersion of the open document file header");
+                        }
                     }
                 }
                 catch
                 {
-                    // Header unreadable (locked, newer format, cloud path) — try the next candidate.
+                    // Header unreadable (locked, newer format, cloud path) — use DocumentVersion.
                 }
             }
         }

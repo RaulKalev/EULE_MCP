@@ -28,7 +28,7 @@ source of truth — fetch live values by id with the regular `revit_*` tools.
 |---|---|
 | `element` | `family`, `type` (family instances) or `type` (system families) |
 | `type` | `family`, `type` |
-| `panel` | `family`, `type`, `panelName` (RBS_ELEC_PANEL_NAME) |
+| `panel` | `family`, `type`, `panelName` (RBS_ELEC_PANEL_NAME). Panel nodes are electrical equipment referenced by `ElectricalSystem.BaseEquipment`; other electrical equipment remains `element`. |
 | `circuit` | `circuitNumber`, `loadName`, `panel`, `panelId`, `systemType` |
 | `space` | `number`, `name`, `spatialType` (`Room` or `Space`) |
 | `level` | `elevationMm` |
@@ -86,15 +86,17 @@ own `fed_by` edge to the upstream circuit.
 
 ## Version signal (`central_version`)
 
-1. **File-based workshared models** — `BasicFileInfo.Extract(path).LatestCentralVersion` and
-   `LatestCentralEpisodeGUID`, formatted `central:<version>:<guid>`. The central file is read when
-   reachable, otherwise the local file header (which reflects the last synchronisation).
+1. **File-based workshared models** — `BasicFileInfo.Extract(doc.PathName).LatestCentralVersion` and
+   `LatestCentralEpisodeGUID`, formatted `central:<version>:<guid>`, from the open document's file
+   header. This describes the version whose contents were actually extracted; it never substitutes
+   a newer central-file header for an older local document.
 2. **Everything else** (non-workshared, cloud/server worksharing, unreadable header) —
    `Document.GetDocumentVersion(doc)` → `saves:<NumberOfSaves>:<VersionGUID>`.
 3. **Unsaved documents** — empty; only `element_count` is compared.
 
 Limitations: neither signal changes for unsaved edits in the current session (the element count
-is the only hint), and a local file whose central is unreachable reports the last synced version.
+is the only hint), and freshness is relative to the open local document's last synced version rather
+than a newer central version the document has not reloaded.
 A graph is reported `stale` when the schema version differs, the model name differs, the version
 signal differs, or the element count differs.
 

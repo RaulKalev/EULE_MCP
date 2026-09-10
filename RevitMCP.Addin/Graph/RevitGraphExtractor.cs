@@ -43,6 +43,7 @@ public static class RevitGraphExtractor
         private readonly Dictionary<long, string> _levelNames = new();
         private readonly Dictionary<int, string> _worksetNames = new();
         private readonly HashSet<string> _userWorksetIds = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, FamilyInstance> _panels = new(StringComparer.Ordinal);
         private readonly bool _isWorkshared;
 
         public Builder(Document doc, int elementLimit)
@@ -60,8 +61,8 @@ public static class RevitGraphExtractor
             Step("sheets", CollectSheets);
             Step("views", CollectViews);
             Step("spaces", CollectSpaces);
-            Step("panels", CollectPanels);
             Step("circuits", CollectCircuits);
+            Step("panels", CollectPanels);
             Step("elements", CollectElements);
             Step("tags", CollectTags);
             Finish();
@@ -238,11 +239,10 @@ public static class RevitGraphExtractor
 
         private void CollectPanels()
         {
-            var panels = new FilteredElementCollector(_doc)
-                .OfClass(typeof(FamilyInstance))
-                .OfCategory(BuiltInCategory.OST_ElectricalEquipment)
-                .Cast<FamilyInstance>();
-            foreach (var panel in panels)
+            // Electrical Equipment also contains transformers and other equipment that cannot serve
+            // as a circuit panel. Circuits identify actual panels through BaseEquipment, so only
+            // instances observed there are promoted from ordinary elements to panel nodes.
+            foreach (var panel in _panels.Values)
             {
                 var id = Id(panel.Id);
                 var (levelName, levelId) = LevelOf(panel);
@@ -298,7 +298,12 @@ public static class RevitGraphExtractor
                         ("systemType", SafeString(() => circuit.SystemType.ToString())))
                 });
                 AddWorksetEdge(circuit, id);
-                if (panel != null) AddEdge(id, Id(panel.Id), GraphSchema.Rels.FedBy);
+                if (panel != null)
+                {
+                    var panelId = Id(panel.Id);
+                    _panels[panelId] = panel;
+                    AddEdge(id, panelId, GraphSchema.Rels.FedBy);
+                }
 
                 try
                 {

@@ -98,7 +98,7 @@ or for the whole company, `scope=company`. Environment variables in the value ar
 
 | Model | Signal | Changes when |
 |---|---|---|
-| File-based workshared | `BasicFileInfo.LatestCentralVersion` + `LatestCentralEpisodeGUID` (central file if reachable, else local header) | Someone synchronises with central |
+| File-based workshared | `BasicFileInfo.LatestCentralVersion` + `LatestCentralEpisodeGUID` from the open document's file header | That local document synchronises with central |
 | Non-workshared, cloud/server workshared | `Document.GetDocumentVersion` → `NumberOfSaves` + `VersionGUID` | The document is saved (or synced, for cloud locals) |
 | Unsaved | none | — |
 
@@ -107,7 +107,8 @@ is compared, which catches most unsaved in-session edits. `stale` is `true` when
 version, model name, version signal or element count differs; `stale_reason` says which.
 
 Known limitations: unsaved edits that do not change the element count (parameter edits, moves)
-are not detected; a local file whose central is unreachable reports the last synced version.
+are not detected; freshness is relative to the open local document's last synchronised version,
+not to a newer central version that the document has not reloaded.
 When in doubt, rebuild — a full build of a 100k-element model takes a few seconds.
 
 ---

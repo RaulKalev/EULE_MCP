@@ -116,8 +116,8 @@ CREATE INDEX IF NOT EXISTS ix_edges_rel      ON edges(rel);
 ";
 
     public static bool IsKind(string? value) =>
-        !string.IsNullOrWhiteSpace(value) && Array.IndexOf(Kinds.All, value.Trim().ToLowerInvariant()) >= 0;
+        !string.IsNullOrWhiteSpace(value) && Array.IndexOf(Kinds.All, value!.Trim().ToLowerInvariant()) >= 0;
 
     public static bool IsRel(string? value) =>
-        !string.IsNullOrWhiteSpace(value) && Array.IndexOf(Rels.All, value.Trim().ToLowerInvariant()) >= 0;
+        !string.IsNullOrWhiteSpace(value) && Array.IndexOf(Rels.All, value!.Trim().ToLowerInvariant()) >= 0;
 }
