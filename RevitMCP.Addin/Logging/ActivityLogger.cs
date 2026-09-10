@@ -22,6 +22,9 @@ public class ActivityLogger
 
     public async Task WriteAsync(McpToolRequest request, McpToolResult result, RevitDocumentContext? context = null, long? responseSizeBytes = null)
     {
+        // Project Village observer (Village\): O(1), never throws, no-op when disabled. Does not alter the entry.
+        Village.Hosting.VillageHooks.ToolCompleted(request, result, context);
+
         var entry = new LogEntry
         {
             Timestamp = DateTimeOffset.Now,

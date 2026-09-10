@@ -138,6 +138,8 @@ public class PipeServer
                     if (request == null) throw new InvalidOperationException("Null request deserialized.");
 
                     DiagLog($"Dispatching tool: {request.ToolName}");
+                    // Project Village observer (Village\): O(1), never throws, no-op when disabled. Does not touch the request.
+                    Village.Hosting.VillageHooks.ToolStarted(request, _eventService.GetLastContext());
                     // QueryLimits controls the maximum time a tool may run before the dispatch layer returns a timeout.
                     var timeoutMs = Math.Max(1, QueryLimits.Default.TimeoutSeconds) * 1000;
                     result = await _eventService.DispatchAsync(request, timeoutMs: timeoutMs, cancellationToken: ct);

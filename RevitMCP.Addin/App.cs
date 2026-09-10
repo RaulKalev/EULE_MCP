@@ -16,6 +16,7 @@ using RevitMCP.Addin.Tools.ParameterQA;
 using RevitMCP.Addin.Tools.Reports;
 using RevitMCP.Addin.Tools.Standards;
 using RevitMCP.Addin.UI.ViewModels;
+using RevitMCP.Addin.Village.Hosting;
 using RevitMCP.Core.Configuration;
 using ricaun.Revit.UI;
 
@@ -28,6 +29,8 @@ public class App : IExternalApplication
     public static McpWindowViewModel? GetViewModel() => _viewModel;
     private static ConnectorService? _connector;
     public static ConnectorService? GetConnector() => _connector;
+    private static VillageService? _village;
+    public static VillageService? GetVillage() => _village;
 
     private static readonly string DiagLogPath = System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -370,6 +373,22 @@ public class App : IExternalApplication
             connector.Start();
             DiagLog("ConnectorService auto-started.");
 
+            // Project Village (Village\) — passive, read-only activity visualizer. The loopback
+            // listener is opt-in (village.enabled in the user/company config). Roll back by deleting
+            // the Village folder, this block, the OnShutdown line and the two one-line hooks in
+            // PipeServer and ActivityLogger. A failure here is logged and never fails startup.
+            try
+            {
+                _village = VillageService.Create(revitVersion, processId);
+                _village.StartIfEnabled();
+                _viewModel.Village = new VillageStatusViewModel(_village);
+                DiagLog($"Project Village: {(_village.IsRunning ? "listening at " + _village.Url : "disabled")}");
+            }
+            catch (Exception ex)
+            {
+                DiagLog($"Project Village unavailable: {ex.GetType().Name}: {ex.Message}");
+            }
+
             // Startup validation: log all registered tool names so mismatches (e.g. after a
             // partial rebuild before Revit restart) are visible in the diagnostic log.
             var registeredTools = handler.GetRegisteredToolNames();
@@ -397,6 +416,7 @@ public class App : IExternalApplication
     public Result OnShutdown(UIControlledApplication application)
     {
         application.ControlledApplication.DocumentChanged -= OnDocumentChanged;
+        try { _village?.Dispose(); } catch { }
         _connector?.PanicStop();
         return Result.Succeeded;
     }

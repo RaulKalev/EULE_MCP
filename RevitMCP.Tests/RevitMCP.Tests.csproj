@@ -131,5 +131,6 @@
     <Compile Include="..\RevitMCP.Addin\Village\VillageGraphReader.cs" Link="Village\VillageGraphReader.cs" />
     <Compile Include="..\RevitMCP.Addin\Village\VillageStateHub.cs" Link="Village\VillageStateHub.cs" />
     <Compile Include="..\RevitMCP.Addin\Village\VillageSseServer.cs" Link="Village\VillageSseServer.cs" />
+    <Compile Include="..\RevitMCP.Addin\Village\VillageInstanceRegistry.cs" Link="Village\VillageInstanceRegistry.cs" />
   </ItemGroup>
 </Project>

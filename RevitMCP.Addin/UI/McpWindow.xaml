@@ -46,6 +46,7 @@
 
                 <!-- ═══════════════════  STATUS TAB  ═══════════════════ -->
                 <TabItem Header="STATUS" Style="{StaticResource McpTabItemStyle}">
+                  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Margin="12,10,12,12">
 
                         <!-- Status Chip -->
@@ -215,7 +216,34 @@
                                 Margin="0,0,0,6"
                                 ToolTip="Route AI agent requests to this Revit instance when several Revit windows (e.g. 2024 and 2026) are open at the same time." />
 
+                        <!-- Project Village — passive, read-only activity visualizer (localhost page) -->
+                        <TextBlock Text="PROJECT VILLAGE" Style="{StaticResource SectionHeaderStyle}" />
+                        <Border Background="{DynamicResource SecondaryBackgroundBrush}"
+                                CornerRadius="4" Padding="8,5" Margin="0,0,0,6">
+                            <StackPanel>
+                                <TextBlock Text="{Binding Village.StatusText}"
+                                           Foreground="{DynamicResource ForegroundBrush}"
+                                           FontSize="11" TextWrapping="Wrap" />
+                                <TextBlock Text="Read-only: it never sends commands to Revit or to the agent."
+                                           Foreground="{DynamicResource IconForegroundBrush}"
+                                           FontSize="10" Margin="0,2,0,0" />
+                                <UniformGrid Columns="2" Margin="0,6,0,0">
+                                    <Button Content="{Binding Village.ToggleLabel}"
+                                            Command="{Binding Village.ToggleCommand}"
+                                            Style="{StaticResource ActionButtonStyle}"
+                                            Margin="0,0,4,0"
+                                            ToolTip="Starts or stops the localhost-only viewer page and remembers the choice in the user config (village.enabled)." />
+                                    <Button Content="Open Village"
+                                            Command="{Binding Village.OpenCommand}"
+                                            Style="{StaticResource ActionButtonStyle}"
+                                            Margin="4,0,0,0"
+                                            ToolTip="Opens the Project Village page in your browser." />
+                                </UniformGrid>
+                            </StackPanel>
+                        </Border>
+
                     </StackPanel>
+                  </ScrollViewer>
                 </TabItem>
 
                 <!-- ═══════════════════  PENDING TAB  ═══════════════════ -->

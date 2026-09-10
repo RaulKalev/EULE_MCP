@@ -78,6 +78,11 @@
     <ProjectReference Include="..\RevitMCP.Core\RevitMCP.Core.csproj" />
   </ItemGroup>
 
+  <!-- Project Village viewer: one self-contained HTML page served from the loopback listener. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Village\Viewer\village.html" LogicalName="RevitMCP.Addin.Village.Viewer.village.html" />
+  </ItemGroup>
+
   <!-- Assets (WPF Resource items) — ribbon icons and window branding, needed by both TFMs. -->
   <ItemGroup>
     <Resource Include="Assets\RevitMCP.tiff" />
