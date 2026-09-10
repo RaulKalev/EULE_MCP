@@ -120,5 +120,10 @@
     <Compile Include="..\RevitMCP.Addin\Village\VillageEvent.cs" Link="Village\VillageEvent.cs" />
     <Compile Include="..\RevitMCP.Addin\Village\VillageToolClassifier.cs" Link="Village\VillageToolClassifier.cs" />
     <Compile Include="..\RevitMCP.Addin\Village\VillageEventFactory.cs" Link="Village\VillageEventFactory.cs" />
+    <Compile Include="..\RevitMCP.Addin\Village\VillageOptions.cs" Link="Village\VillageOptions.cs" />
+    <Compile Include="..\RevitMCP.Addin\Village\VillageEventQueue.cs" Link="Village\VillageEventQueue.cs" />
+    <Compile Include="..\RevitMCP.Addin\Village\VillageLayout.cs" Link="Village\VillageLayout.cs" />
+    <Compile Include="..\RevitMCP.Addin\Village\VillageState.cs" Link="Village\VillageState.cs" />
+    <Compile Include="..\RevitMCP.Addin\Village\VillageAggregator.cs" Link="Village\VillageAggregator.cs" />
   </ItemGroup>
 </Project>
