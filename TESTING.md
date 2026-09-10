@@ -3697,3 +3697,66 @@ Summarise the model graph.
 | Graph | `revit_graph_status` | RO | "Check the model graph status." | `{exists, databasePath, built_at, central_version, stale, stale_reason, note}` | N/A | N/A | Reports which config source chose the root |
 | Graph | `revit_graph_query` | RO | "Show everything fed by panel 123456." | `{operation, …, built_at, central_version, stale, note}` | N/A | N/A | neighbors / find / path / subtree; hard caps on result size |
 | Graph | `revit_graph_summary` | RO | "Summarise the model graph." | `{nodesByKind, edgesByRel, panels, orphanCircuits, elementsWithoutLocation, …}` | N/A | N/A | Cheap orientation at session start |
+
+## 52. Project Village (read-only activity visualizer)
+
+Opt-in localhost page that shows connector activity as a village. It never sends commands to
+Revit or MCP. See `docs/project-village.md`. Enable it in the connector window (Status tab →
+Project Village → Enable Village) or with `config_update scope=user updates={"$.village.enabled": true}`.
+
+### 52.1 Viewer absent
+
+1. Keep the village disabled. Run any ten tools. **Verify:** responses and timings are unchanged; `%LOCALAPPDATA%\RevitMCP_startup.log` has no `[VILLAGE` errors.
+2. Enable the village but open no browser. Run tools. **Verify:** no change in tool behaviour; the Status tab shows "0 viewers connected".
+
+### 52.2 Viewer connected
+
+1. Click *Open Village*. **Verify:** header shows the document title, `read-only`, `connected`, `live`; one agent per MCP client name.
+2. Run `revit_list_sheets`. **Verify:** the agent walks to the Archive and the feed shows "Inspected sheets".
+3. Click the Archive. **Verify:** counters (reads 1) and, with a graph, "Graph: sheets".
+
+### 52.3 Viewer disconnects during a tool call
+
+Start a long tool (e.g. `revit_graph_build`), close the browser tab mid-run. **Verify:** the tool completes normally; reopening the page shows the completed step in the feed.
+
+### 52.4 Rapid tool calls
+
+Ask the agent to read parameters of 100+ elements one by one. **Verify:** the feed shows one merged step ("Inspected model elements (N tools)"); the agent stays in place; a `catch-up` badge may appear and clears; Revit stays responsive.
+
+### 52.5 Failed MCP tool
+
+Call a write tool with an invalid id. **Verify:** red "… failed in …" step, agent shows `!`, warning area pulses, Diagnostics counts the failure; nothing else changes.
+
+### 52.6 Approval flow
+
+Run `revit_place_tags` with approval required, approve later. **Verify:** "Awaiting approval" (amber) then "24 tags created" on approval.
+
+### 52.7 Project switch
+
+Open a second model. **Verify:** "Switched to <title>" step, counters reset, the graph badge changes to the new model's status, colours/pattern differ from the first model.
+
+### 52.8 Graph rebuild, stale and no graph
+
+1. `revit_graph_build` → badge `fresh`, sizes update, "Graph rebuilt (N nodes)".
+2. Edit an element unsaved, `revit_graph_status` → badge `stale` with the reason in the tooltip.
+3. Model without a graph → badge `graph: none (limited mode)`, neutral theme, default sizes.
+4. Write tools after a fresh report → `possibly stale`.
+
+### 52.9 Workshared and non-workshared models
+
+Repeat 52.2 on both. **Verify:** the graph is found in the shared folder for the workshared model (Diagnostics: "via local cache copy"); the shared file can be renamed while the page is open.
+
+### 52.10 Connector and Revit shutdown
+
+1. Stop the connector → the page shows `reconnecting` and retries with backoff; start again → `connected`.
+2. Close Revit → the page keeps animating idle and shows `reconnecting`; no error dialogs in Revit.
+
+### 52.11 No reverse channel
+
+From a browser console on the page run `fetch('/snapshot', {method: 'POST', body: 'revit_delete'})`. **Verify:** HTTP 405; nothing happens in Revit.
+
+### Matrix rows (Section 30)
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Village | (none — passive observer) | RO | "List sheets." with the page open | Agent walks to the Archive; feed "Inspected sheets" | N/A | N/A | No tool, no tokens; page is GET-only on 127.0.0.1 |
