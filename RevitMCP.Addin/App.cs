@@ -8,6 +8,7 @@ using RevitMCP.Addin.Tools.Configuration;
 using RevitMCP.Addin.Tools.Delivery;
 using RevitMCP.Addin.Tools.Excel;
 using RevitMCP.Addin.Tools.FileSystem;
+using RevitMCP.Addin.Tools.Graph;
 #if !REVIT2024
 using RevitMCP.Addin.Tools.IfcSpaceToRoom;
 #endif
@@ -329,6 +330,13 @@ public class App : IExternalApplication
             handler.RegisterTool(new ConfigUpdateTool());
             handler.RegisterTool(new ConfigGetProjectConfigTool());
             handler.RegisterTool(new ConfigSetProjectConfigTool());
+
+            // Model graph routing layer (Graph\) — per-model SQLite index of ids and relationships.
+            // Roll back by deleting the Graph and Tools\Graph folders and these four lines.
+            handler.RegisterTool(new GraphBuildTool());
+            handler.RegisterTool(new GraphStatusTool());
+            handler.RegisterTool(new GraphQueryTool());
+            handler.RegisterTool(new GraphSummaryTool());
 
             var eventService = new ExternalEventService(handler);
 
