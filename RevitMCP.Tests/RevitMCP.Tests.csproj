@@ -129,5 +129,7 @@
     <Compile Include="..\RevitMCP.Addin\Village\VillageThemeScorer.cs" Link="Village\VillageThemeScorer.cs" />
     <Compile Include="..\RevitMCP.Addin\Village\VillageGraphSnapshot.cs" Link="Village\VillageGraphSnapshot.cs" />
     <Compile Include="..\RevitMCP.Addin\Village\VillageGraphReader.cs" Link="Village\VillageGraphReader.cs" />
+    <Compile Include="..\RevitMCP.Addin\Village\VillageStateHub.cs" Link="Village\VillageStateHub.cs" />
+    <Compile Include="..\RevitMCP.Addin\Village\VillageSseServer.cs" Link="Village\VillageSseServer.cs" />
   </ItemGroup>
 </Project>
