@@ -158,7 +158,11 @@ public sealed class VillageStateHub : IDisposable
             Queue.TryEnqueue(e);
 
             if (success && VillageActivities.IsWrite(e.Activity))
+            {
+                // Re-evaluate freshness soon (the file is unchanged, so the reader answers from its cache).
                 Interlocked.Exchange(ref _lastWriteTicks, _clock().UtcTicks);
+                RequestGraphRefresh();
+            }
 
             if (success && e.ToolName != null && Array.IndexOf(GraphTools, e.ToolName) >= 0)
             {

@@ -245,6 +245,47 @@ public class VillageStateHubTests : IDisposable
     }
 
     [Fact]
+    public async Task BackgroundConsumer_AppliesGraphHintsInConnectorOrder()
+    {
+        // Same order as the connector: session start, a first tool that reveals the document, then a
+        // graph tool reporting freshness, then writes. Driven by the real background consumer.
+        var dbPath = Path.Combine(_root, "1626", "1626_PP_EN.graph.db");
+        WriteFireAlarmGraph(dbPath, devices: 30);
+        var reader = new VillageGraphReader(Path.Combine(_root, "cache"));
+        using var hub = new VillageStateHub(new VillageOptions(), graphReader: reader,
+            graphSourceProvider: (ctx, hint) => new VillageGraphSource { DatabasePath = hint?.DatabasePath, Roots = { _root }, ModelName = ctx.ModelName });
+        hub.Start();
+
+        async Task<string> FreshnessAsync(string expected)
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            string status = "";
+            while (DateTime.UtcNow < deadline)
+            {
+                var g = ((JObject)VillageEventSerializer.ParseToken(hub.SnapshotJson))["graph"];
+                status = g != null && g.Type == JTokenType.Object ? g["freshness"]!.Value<string>("status")! : "(none)";
+                if (status == expected) break;
+                await Task.Delay(25);
+            }
+            return status;
+        }
+
+        hub.ToolCompleted("revit_get_connection_status", "Claude Code", true, null, 5, new { documentTitle = "1626_PP_EN" }, Context());
+        Assert.Equal("unknown", await FreshnessAsync("unknown"));
+
+        hub.ToolCompleted("revit_graph_status", "Claude Code", true, null, 5, new { exists = true, databasePath = dbPath, stale = false, stale_reason = "matches" }, Context());
+        Assert.Equal("fresh", await FreshnessAsync("fresh"));
+
+        await Task.Delay(30);
+        hub.ToolCompleted("revit_retag", "Claude Code", true, null, 5, new { updatedCount = 24 }, Context());
+        Assert.Equal("possibly_stale", await FreshnessAsync("possibly_stale"));
+
+        hub.ToolCompleted("revit_graph_build", "Claude Code", true, null, 5, new { databasePath = dbPath, nodeCount = 40 }, Context());
+        Assert.Equal("fresh", await FreshnessAsync("fresh"));
+        hub.Stop();
+    }
+
+    [Fact]
     public async Task BackgroundConsumer_StartsProcessesAndStops()
     {
         using var hub = new VillageStateHub(new VillageOptions());
