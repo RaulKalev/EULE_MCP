@@ -89,6 +89,24 @@ public sealed class VillageAggregator
     /// <summary>Layout with graph-derived sizes; replaced by the hub when the graph changes.</summary>
     public List<VillageBuilding> Buildings { get; set; }
 
+    /// <summary>Category warehouses; replaced by the hub when the graph changes. Empty without a graph.</summary>
+    public List<VillageWarehouse> Warehouses { get; private set; } = new();
+
+    /// <summary>
+    /// Replaces the yard. A character standing at a warehouse the rebuild removed walks back to
+    /// its area's landmark, so no agent is ever parked on an id the viewer cannot place.
+    /// </summary>
+    public void SetWarehouses(List<VillageWarehouse>? warehouses)
+    {
+        Warehouses = warehouses ?? new List<VillageWarehouse>();
+        foreach (var agent in _agents.Values)
+        {
+            if (agent.Warehouse == null || WarehouseFor(agent.Warehouse, agent.Area) != null) continue;
+            agent.Warehouse = null;
+            agent.Building = VillageLayout.BuildingFor(agent.Area, Buildings);
+        }
+    }
+
     public JToken? Graph { get; set; }
     public JToken? Theme { get; set; }
     public VillageQueueStats? QueueStats { get; set; }
@@ -233,6 +251,21 @@ public sealed class VillageAggregator
                 changed = true;
             }
 
+            // Finished work with nothing queued: step outside to the overlook on the edge of town.
+            // Still nothing after parkAfterSeconds: wander to the park in the middle of the village.
+            if (agent.State == VillageAgentStates.Idle && agent.InProgress == 0 && !_openSteps.ContainsKey(agent.Id))
+            {
+                if (silentMs > _options.ParkAfterSeconds * 1000.0)
+                {
+                    if (SendAgentTo(agent, VillageLayout.Park, "Heads to the park", now)) changed = true;
+                }
+                else if (silentMs > IdleAfterMs &&
+                         !string.Equals(agent.Building, VillageLayout.Park, StringComparison.Ordinal))
+                {
+                    if (SendAgentTo(agent, VillageLayout.Overlook, "Heads to the overlook", now)) changed = true;
+                }
+            }
+
             if (agent.State == VillageAgentStates.Idle && silentMs > _options.AgentIdleSeconds * 1000.0)
             {
                 agent.State = VillageAgentStates.Disconnected;
@@ -276,6 +309,7 @@ public sealed class VillageAggregator
             UpdatedAt = VillageEventSerializer.FormatTimestamp(now),
             Mode = CatchUp ? "catch_up" : "live",
             Buildings = VillageLayout.Clone(Buildings),
+            Warehouses = VillageWarehouseYard.Clone(Warehouses),
             Graph = Graph?.DeepClone(),
             Theme = Theme?.DeepClone(),
             Stats = new VillageAggregateStats
@@ -294,6 +328,7 @@ public sealed class VillageAggregator
             {
                 AnimationSpeed = _options.AnimationSpeed,
                 MaxBuildings = _options.MaxBuildings,
+                MaxWarehouses = _options.MaxWarehouses,
                 MaxEffects = _options.MaxEffects,
                 RecentActivityLimit = _options.RecentActivityLimit,
                 ReconnectBackoffMs = _options.ReconnectBackoffMs,
@@ -306,7 +341,7 @@ public sealed class VillageAggregator
         {
             snapshot.Agents.Add(new VillageAgent
             {
-                Id = agent.Id, Name = agent.Name, State = agent.State, Area = agent.Area, Building = agent.Building,
+                Id = agent.Id, Name = agent.Name, State = agent.State, Area = agent.Area, Building = agent.Building, Warehouse = agent.Warehouse,
                 Activity = agent.Activity, LastTool = agent.LastTool, LastEventAt = agent.LastEventAt,
                 InProgress = agent.InProgress, ToolCount = agent.ToolCount, FailureCount = agent.FailureCount,
                 LastEvent = agent.LastEvent, StateSince = agent.StateSince
@@ -357,7 +392,7 @@ public sealed class VillageAggregator
         agent.LastTool = e.ToolName;
         Touch(agent, now);
 
-        if (!string.Equals(agent.Area, e.Area, StringComparison.Ordinal))
+        if (ShouldMove(agent, e))
             MoveAgent(agent, e.Area, e, now);
 
         agent.Activity = e.Activity;
@@ -381,7 +416,7 @@ public sealed class VillageAggregator
         agent.LastTool = e.ToolName;
         Touch(agent, now);
 
-        if (!string.Equals(agent.Area, e.Area, StringComparison.Ordinal))
+        if (ShouldMove(agent, e))
             MoveAgent(agent, e.Area, e, now);
 
         var counters = CountersFor(e.Area);
@@ -455,16 +490,72 @@ public sealed class VillageAggregator
         }
     }
 
+    /// <summary>
+    /// The warehouse for this event, or null: only a live warehouse, only for an area that stores
+    /// model elements. A stale id (the yard is rebuilt whenever the graph changes) resolves to
+    /// null, so the character falls back to the area's landmark rather than walking nowhere.
+    /// </summary>
+    private VillageWarehouse? WarehouseFor(VillageEvent e) => WarehouseFor(e.Warehouse, e.Area);
+
+    private VillageWarehouse? WarehouseFor(string? id, string? area)
+    {
+        if (string.IsNullOrEmpty(id) || !VillageLayout.IsStorableArea(area)) return null;
+        foreach (var warehouse in Warehouses)
+            if (string.Equals(warehouse.Id, id, StringComparison.Ordinal)) return warehouse;
+        return null;
+    }
+
+    /// <summary>
+    /// The character moves when the area changes, and also when a tool names a different category
+    /// warehouse inside the same area. A tool that names no category leaves it where it is, so a
+    /// follow-up call on the same elements does not walk it back to the area's landmark.
+    /// </summary>
+    private bool ShouldMove(VillageAgent agent, VillageEvent e)
+    {
+        if (!string.Equals(agent.Area, e.Area, StringComparison.Ordinal)) return true;
+        var warehouse = WarehouseFor(e);
+        return warehouse != null && !string.Equals(agent.Building, warehouse.Id, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Walks a character to a landmark that belongs to no area (the overlook, the park). Returns
+    /// false when it is already there, so Tick can call this every few hundred milliseconds
+    /// without emitting a step each time. The area becomes unknown, so the next tool moves it back
+    /// to wherever that tool's work belongs.
+    /// </summary>
+    private bool SendAgentTo(VillageAgent agent, string buildingId, string label, DateTimeOffset now)
+    {
+        if (string.Equals(agent.Building, buildingId, StringComparison.Ordinal)) return false;
+
+        var from = agent.Area;
+        agent.Area = VillageAreas.Unknown;
+        agent.Warehouse = null;
+        agent.Building = buildingId;
+        agent.Activity = VillageActivities.Unknown;
+
+        var move = SimpleStep(VillageStepKinds.Move, agent.Id, VillageAreas.Unknown, label, null, now);
+        move.Building = buildingId;
+        move.FromArea = from;
+        Emit(move);
+        return true;
+    }
+
     private void MoveAgent(VillageAgent agent, string toArea, VillageEvent e, DateTimeOffset now)
     {
         CloseStep(agent.Id, now);
         var from = agent.Area;
+        var warehouse = WarehouseFor(e.Warehouse, toArea);
         agent.Area = toArea;
-        agent.Building = VillageLayout.BuildingFor(toArea, Buildings);
+        agent.Warehouse = warehouse?.Id;
+        agent.Building = warehouse?.Id ?? VillageLayout.BuildingFor(toArea, Buildings);
         agent.State = VillageAgentStates.Moving;
         agent.StateSince = now;
 
-        var move = SimpleStep(VillageStepKinds.Move, agent.Id, toArea, "Heads to " + VillageLayout.AreaLabel(toArea), e, now);
+        var label = warehouse?.Label ?? VillageLayout.AreaLabel(toArea);
+        var move = SimpleStep(VillageStepKinds.Move, agent.Id, toArea, "Heads to " + label, e, now);
+        move.Warehouse = warehouse?.Id;
+        move.WarehouseLabel = warehouse?.Label;
+        if (warehouse != null) move.Building = warehouse.Id;
         move.FromArea = from;
         Emit(move);
     }
@@ -474,19 +565,25 @@ public sealed class VillageAggregator
         if (_openSteps.TryGetValue(agent.Id, out var open))
         {
             var sameGroup = string.Equals(open.Group, group, StringComparison.Ordinal) &&
-                            string.Equals(open.Area, e.Area, StringComparison.Ordinal);
+                            string.Equals(open.Area, e.Area, StringComparison.Ordinal) &&
+                            string.Equals(open.Warehouse, agent.Warehouse, StringComparison.Ordinal);
             var inWindow = (now - open.LastEvent).TotalMilliseconds <= CurrentWindowMs();
             if (sameGroup && inWindow) return open;
             CloseStep(agent.Id, now);
         }
 
+        // The step happens where the character is standing, which stays the warehouse while it
+        // keeps working there even if this particular tool named no category.
+        var standing = WarehouseFor(agent.Warehouse, e.Area);
         var step = new VillageStoryStep
         {
             Id = ++_stepId,
             Kind = VillageStepKinds.Work,
             Agent = agent.Id,
             Area = e.Area,
-            Building = VillageLayout.BuildingFor(e.Area, Buildings),
+            Building = standing?.Id ?? VillageLayout.BuildingFor(e.Area, Buildings),
+            Warehouse = standing?.Id,
+            WarehouseLabel = standing?.Label,
             Activity = e.Activity,
             Group = group,
             Started = now,
@@ -666,8 +763,9 @@ public sealed class VillageAggregator
     /// <summary>Deterministic, template-based label. Never free text from tools or agents.</summary>
     public static string LabelFor(VillageStoryStep step)
     {
-        var area = VillageLayout.AreaLabel(step.Area);
-        var noun = AreaNouns.TryGetValue(step.Area, out var n) ? n : "items";
+        // A step that happened at a category warehouse names the category instead of the area.
+        var area = step.WarehouseLabel ?? VillageLayout.AreaLabel(step.Area);
+        var noun = step.WarehouseLabel ?? (AreaNouns.TryGetValue(step.Area, out var n) ? n : "items");
         var suffix = step.ToolCount > 1 ? $" ({Num(step.ToolCount)} tools)" : string.Empty;
         var tool = step.Tools.Count > 0 ? step.Tools[0] : "tool";
 

@@ -173,6 +173,14 @@ public sealed class VillageEvent
     [JsonProperty("affected_count")]
     public long? AffectedCount { get; set; }
 
+    /// <summary>
+    /// Id of the category warehouse this tool worked in, or null. Never a raw tool argument: the
+    /// category named in the request is only used to look up a warehouse that the graph snapshot
+    /// already published, and anything that does not match one is dropped.
+    /// </summary>
+    [JsonProperty("warehouse")]
+    public string? Warehouse { get; set; }
+
     /// <summary>The MCP client that issued the request (e.g. "Claude Code"). Drives the agent character.</summary>
     [JsonProperty("client_name")]
     public string? ClientName { get; set; }
@@ -272,6 +280,7 @@ public static class VillageEventSerializer
             Success       = Bool(obj, "success"),
             DurationMs    = Long(obj, "duration_ms"),
             AffectedCount = Long(obj, "affected_count"),
+            Warehouse     = Str(obj, "warehouse"),
             ClientName    = Str(obj, "client_name"),
             Status        = Str(obj, "status"),
             Sequence      = Long(obj, "sequence") ?? 0

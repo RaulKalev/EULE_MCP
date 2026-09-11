@@ -23,6 +23,8 @@ public sealed class VillageAgent
     [JsonProperty("state")] public string State { get; set; } = VillageAgentStates.Idle;
     [JsonProperty("area")] public string Area { get; set; } = VillageAreas.Unknown;
     [JsonProperty("building")] public string Building { get; set; } = VillageLayout.Square;
+    /// <summary>Warehouse the agent is standing at, when <see cref="Building"/> is one.</summary>
+    [JsonProperty("warehouse")] public string? Warehouse { get; set; }
     [JsonProperty("activity")] public string Activity { get; set; } = VillageActivities.Unknown;
     [JsonProperty("last_tool")] public string? LastTool { get; set; }
     [JsonProperty("last_event_at")] public string LastEventAt { get; set; } = string.Empty;
@@ -75,6 +77,8 @@ public sealed class VillageStoryStep
     [JsonProperty("agent")] public string Agent { get; set; } = string.Empty;
     [JsonProperty("area")] public string Area { get; set; } = VillageAreas.Unknown;
     [JsonProperty("building")] public string Building { get; set; } = VillageLayout.Square;
+    /// <summary>Warehouse id when the work named a category that has one; <see cref="Building"/> then holds it too.</summary>
+    [JsonProperty("warehouse")] public string? Warehouse { get; set; }
     [JsonProperty("from_area")] public string? FromArea { get; set; }
     [JsonProperty("activity")] public string Activity { get; set; } = VillageActivities.Unknown;
     [JsonProperty("tool_count")] public int ToolCount { get; set; }
@@ -94,12 +98,15 @@ public sealed class VillageStoryStep
     [JsonIgnore] public DateTimeOffset Started { get; set; }
     [JsonIgnore] public DateTimeOffset LastEvent { get; set; }
     [JsonIgnore] public string Group { get; set; } = string.Empty;
+    /// <summary>Category name behind <see cref="Warehouse"/>; used to word the label, not published separately.</summary>
+    [JsonIgnore] public string? WarehouseLabel { get; set; }
 
     public VillageStoryStep Clone()
     {
         return new VillageStoryStep
         {
-            Id = Id, Kind = Kind, Agent = Agent, Area = Area, Building = Building, FromArea = FromArea,
+            Id = Id, Kind = Kind, Agent = Agent, Area = Area, Building = Building, Warehouse = Warehouse,
+            WarehouseLabel = WarehouseLabel, FromArea = FromArea,
             Activity = Activity, ToolCount = ToolCount, Tools = new List<string>(Tools), Affected = Affected,
             Failures = Failures, Deferred = Deferred, Label = Label, StartedAt = StartedAt, EndedAt = EndedAt,
             Open = Open, FirstSequence = FirstSequence, LastSequence = LastSequence,
@@ -144,6 +151,8 @@ public sealed class VillageStateSnapshot
     [JsonProperty("recent_steps")] public List<VillageStoryStep> RecentSteps { get; set; } = new();
     [JsonProperty("recent_failures")] public int RecentFailures { get; set; }
     [JsonProperty("buildings")] public List<VillageBuilding> Buildings { get; set; } = new();
+    /// <summary>One warehouse per Revit category that has elements in the graph; empty in limited mode.</summary>
+    [JsonProperty("warehouses")] public List<VillageWarehouse> Warehouses { get; set; } = new();
     /// <summary>Graph snapshot object (see VillageGraphSnapshot) or null in limited mode.</summary>
     [JsonProperty("graph")] public JToken? Graph { get; set; }
     /// <summary>Theme result object (see VillageThemeResult) or null when no graph is available.</summary>
@@ -158,7 +167,8 @@ public sealed class VillageStateSnapshot
 public sealed class VillageViewerOptions
 {
     [JsonProperty("animation_speed")] public double AnimationSpeed { get; set; } = 1.0;
-    [JsonProperty("max_buildings")] public int MaxBuildings { get; set; } = 12;
+    [JsonProperty("max_buildings")] public int MaxBuildings { get; set; } = 14;
+    [JsonProperty("max_warehouses")] public int MaxWarehouses { get; set; } = VillageWarehouseYard.DefaultMax;
     [JsonProperty("max_effects")] public int MaxEffects { get; set; } = 6;
     [JsonProperty("recent_activity_limit")] public int RecentActivityLimit { get; set; } = 200;
     [JsonProperty("reconnect_backoff_ms")] public int ReconnectBackoffMs { get; set; } = 1000;

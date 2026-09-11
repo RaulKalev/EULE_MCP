@@ -78,6 +78,81 @@ public static class VillageModelId
 }
 
 /// <summary>
+/// Reads the Revit category a request names, so the agent can walk to that category's warehouse
+/// instead of the generic area landmark. Only a fixed allow-list of top-level argument keys is
+/// consulted, one level deep, and the value is never published as-is: the caller resolves it
+/// against the warehouses the graph snapshot already exposes and drops anything that misses.
+/// Several different categories in one request return null — there is no single place to walk to.
+/// </summary>
+public static class VillageCategoryArgument
+{
+    public static readonly string[] Keys = { "category", "categoryName", "categories", "categoryNames" };
+
+    /// <summary>Longest category name accepted; Revit's own names are far shorter.</summary>
+    public const int MaxLength = 100;
+
+    public static string? TryExtract(IReadOnlyDictionary<string, object?>? arguments)
+    {
+        if (arguments == null || arguments.Count == 0) return null;
+        try
+        {
+            foreach (var key in Keys)
+            {
+                if (!arguments.TryGetValue(key, out var value) || value == null) continue;
+                var found = FromValue(value);
+                if (found != null) return found;
+            }
+        }
+        catch
+        {
+            // A malformed argument must never cost a tool call.
+        }
+        return null;
+    }
+
+    private static string? FromValue(object value)
+    {
+        switch (value)
+        {
+            case string s:
+                return Clean(s);
+
+            case JValue jv:
+                return Clean(jv.Value<string>());
+
+            case JArray ja:
+                return Single(ja.Select(t => t is JValue v ? Clean(v.Value<string>()) : null));
+
+            case IEnumerable list when value is not string:
+                return Single(list.Cast<object?>().Select(o => o is string s2 ? Clean(s2) : o is JValue v2 ? Clean(v2.Value<string>()) : null));
+
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>One distinct non-empty name, or null when the request spans several categories.</summary>
+    private static string? Single(IEnumerable<string?> values)
+    {
+        string? only = null;
+        foreach (var value in values)
+        {
+            if (value == null) continue;
+            if (only == null) only = value;
+            else if (!string.Equals(only, value, StringComparison.OrdinalIgnoreCase)) return null;
+        }
+        return only;
+    }
+
+    private static string? Clean(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var trimmed = value!.Trim();
+        return trimmed.Length > MaxLength ? null : trimmed;
+    }
+}
+
+/// <summary>
 /// Reads an aggregate count from a tool result without serializing or retaining it: only a fixed
 /// allow-list of top-level numeric fields is consulted, in priority order, one level deep.
 /// </summary>
@@ -190,11 +265,32 @@ public sealed class VillageEventFactory
     public VillageEventFactory(
         string? sessionId = null,
         VillageToolClassifier? classifier = null,
-        Func<DateTimeOffset>? clock = null)
+        Func<DateTimeOffset>? clock = null,
+        Func<string, string?>? warehouseResolver = null)
     {
         SessionId = string.IsNullOrWhiteSpace(sessionId) ? Guid.NewGuid().ToString() : sessionId!;
         _classifier = classifier ?? VillageToolClassifier.Default;
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
+        _warehouseResolver = warehouseResolver;
+    }
+
+    /// <summary>
+    /// Maps a category named in a request to an existing warehouse id, or null. Supplied by the
+    /// hub, which owns the yard; without it no request ever routes to a warehouse.
+    /// </summary>
+    private readonly Func<string, string?>? _warehouseResolver;
+
+    /// <summary>
+    /// Resolves the request's category argument to a warehouse id. The raw argument is never
+    /// stored on the event — only an id the graph snapshot already published can come back.
+    /// </summary>
+    private string? WarehouseFor(IReadOnlyDictionary<string, object?>? arguments)
+    {
+        if (_warehouseResolver == null) return null;
+        var category = VillageCategoryArgument.TryExtract(arguments);
+        if (category == null) return null;
+        try { return _warehouseResolver(category); }
+        catch { return null; }
     }
 
     public string SessionId { get; }
@@ -207,12 +303,17 @@ public sealed class VillageEventFactory
     public VillageEvent ProjectChanged(VillageProjectContext? context) =>
         Base(VillageEventTypes.ProjectChanged, context, VillageAreas.Project, VillageActivities.Inspect);
 
-    public VillageEvent ToolStarted(string? toolName, string? clientName, VillageProjectContext? context)
+    public VillageEvent ToolStarted(
+        string? toolName,
+        string? clientName,
+        VillageProjectContext? context,
+        IReadOnlyDictionary<string, object?>? arguments = null)
     {
         var c = _classifier.Classify(toolName);
         var e = Base(VillageEventTypes.ToolStarted, context, c.Area, c.Activity);
         e.ToolName = SanitizeToolName(toolName);
         e.ClientName = SanitizeClientName(clientName);
+        e.Warehouse = WarehouseFor(arguments);
         return e;
     }
 
@@ -227,7 +328,8 @@ public sealed class VillageEventFactory
         string? status,
         long durationMs,
         object? resultData,
-        VillageProjectContext? context)
+        VillageProjectContext? context,
+        IReadOnlyDictionary<string, object?>? arguments = null)
     {
         var c = _classifier.Classify(toolName);
         var code = SanitizeStatus(status);
@@ -257,6 +359,7 @@ public sealed class VillageEventFactory
         e.Status = code;
         e.DurationMs = durationMs < 0 ? 0 : durationMs;
         e.AffectedCount = success ? VillageAffectedCount.TryExtract(resultData) : null;
+        e.Warehouse = WarehouseFor(arguments);
         return e;
     }
 

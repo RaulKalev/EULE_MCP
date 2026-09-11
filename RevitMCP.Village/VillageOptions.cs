@@ -49,17 +49,33 @@ public sealed class VillageOptions
     /// <summary>Agents with no activity for this long are shown as disconnected.</summary>
     public int AgentIdleSeconds { get; set; } = 300;
 
+    /// <summary>A character idle this long walks to the park in the village centre.</summary>
+    public int ParkAfterSeconds { get; set; } = 120;
+
     /// <summary>Viewer default; the viewer has its own slider.</summary>
     public double AnimationSpeed { get; set; } = 1.0;
 
     public int MaxViewers { get; set; } = 8;
-    public int MaxBuildings { get; set; } = 12;
+    public int MaxBuildings { get; set; } = 14;
+
+    /// <summary>
+    /// Category warehouses drawn in the yard, largest categories first. Zero hides the yard; the
+    /// map grows taller with every extra row of five, so the default stays modest.
+    /// </summary>
+    public int MaxWarehouses { get; set; } = VillageWarehouseYard.DefaultMax;
+
     public int MaxEffects { get; set; } = 6;
     public int ReconnectBackoffMs { get; set; } = 1000;
     public int ReconnectBackoffMaxMs { get; set; } = 15000;
 
     /// <summary>Writes village diagnostics into the connector's startup log.</summary>
     public bool DiagnosticLogging { get; set; }
+
+    /// <summary>
+    /// Revit categories that never get a warehouse (<c>village.warehouseExcludeCategories</c>).
+    /// A configured list replaces the defaults in <see cref="VillageWarehouseYard.DefaultExcludedCategories"/>.
+    /// </summary>
+    public List<string> WarehouseExcludeCategories { get; set; } = new(VillageWarehouseYard.DefaultExcludedCategories);
 
     /// <summary>Per-tool area overrides (<c>village.toolAreas</c>).</summary>
     public Dictionary<string, string> ToolAreas { get; } = new(StringComparer.OrdinalIgnoreCase);
@@ -95,9 +111,11 @@ public sealed class VillageOptions
         o.HistoryLimit = Int(user, company, "historyLimit", o.HistoryLimit, 50, 5000);
         o.GraphRefreshSeconds = Int(user, company, "graphRefreshSeconds", o.GraphRefreshSeconds, 10, 3600);
         o.AgentIdleSeconds = Int(user, company, "agentIdleSeconds", o.AgentIdleSeconds, 30, 3600);
+        o.ParkAfterSeconds = Int(user, company, "parkAfterSeconds", o.ParkAfterSeconds, 15, 3600);
         o.AnimationSpeed = Dbl(user, company, "animationSpeed", o.AnimationSpeed, 0.1, 5.0);
         o.MaxViewers = Int(user, company, "maxViewers", o.MaxViewers, 1, 32);
-        o.MaxBuildings = Int(user, company, "maxBuildings", o.MaxBuildings, 6, 12);
+        o.MaxBuildings = Int(user, company, "maxBuildings", o.MaxBuildings, 8, 16);
+        o.MaxWarehouses = Int(user, company, "maxWarehouses", o.MaxWarehouses, 0, 20);
         o.MaxEffects = Int(user, company, "maxEffects", o.MaxEffects, 1, 24);
         o.ReconnectBackoffMs = Int(user, company, "reconnectBackoffMs", o.ReconnectBackoffMs, 250, 60000);
         o.ReconnectBackoffMaxMs = Int(user, company, "reconnectBackoffMaxMs", o.ReconnectBackoffMaxMs, o.ReconnectBackoffMs, 300000);
@@ -107,6 +125,9 @@ public sealed class VillageOptions
         CopyMap(user, "toolAreas", o.ToolAreas);
         CopyMap(company, "toolActivities", o.ToolActivities);
         CopyMap(user, "toolActivities", o.ToolActivities);
+
+        var exclude = Strings(user, company, "warehouseExcludeCategories");
+        if (exclude != null) o.WarehouseExcludeCategories = exclude;
 
         var themes = user?["themes"] as JsonObject ?? company?["themes"] as JsonObject;
         o.ThemesJson = themes?.ToJsonString();
@@ -170,6 +191,20 @@ public sealed class VillageOptions
         else return fallback;
         if (double.IsNaN(result) || double.IsInfinity(result)) return fallback;
         return result < min ? min : result > max ? max : result;
+    }
+
+    /// <summary>A configured string array, or null when neither config supplies one.</summary>
+    private static List<string>? Strings(JsonObject? user, JsonObject? company, string key)
+    {
+        if (Pick(user, company, key) is not JsonArray array) return null;
+        var list = new List<string>();
+        foreach (var item in array)
+        {
+            if (item is JsonValue v && v.TryGetValue<string>(out var s) && !string.IsNullOrWhiteSpace(s))
+                list.Add(s.Trim());
+            if (list.Count >= 200) break;
+        }
+        return list;
     }
 
     private static void CopyMap(JsonObject? section, string key, Dictionary<string, string> target)

@@ -7,7 +7,9 @@ namespace RevitMCP.Addin.Village.Hosting;
 /// The only two places the connector touches the village. Both calls are O(1), never block,
 /// never throw, and do nothing when the village is disabled or not running. They read values the
 /// connector already has (tool name, client, success, status, duration, document context) and
-/// never keep the request or result.
+/// never keep the request or result. The arguments are handed over only so an allow-listed
+/// category name can be matched against an existing warehouse (see VillageCategoryArgument);
+/// no other argument is read and none is retained.
 /// </summary>
 public static class VillageHooks
 {
@@ -18,7 +20,7 @@ public static class VillageHooks
         {
             var service = VillageService.Current;
             if (service == null || request == null || !service.IsRunning) return;
-            service.Hub.ToolStarted(request.ToolName, request.ClientName, ToProject(context));
+            service.Hub.ToolStarted(request.ToolName, request.ClientName, ToProject(context), request.Arguments);
         }
         catch
         {
