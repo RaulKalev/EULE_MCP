@@ -1,7 +1,7 @@
 using System.IO;
 using Newtonsoft.Json;
 
-namespace RevitMCP.Addin.Village;
+namespace RevitMCP.Village;
 
 /// <summary>One Revit process's village, as written to the local instance folder.</summary>
 public sealed class VillageInstanceRecord

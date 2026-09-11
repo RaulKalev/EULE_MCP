@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
 
-namespace RevitMCP.Addin.Village;
+namespace RevitMCP.Village;
 
 /// <summary>One persistent landmark of the village and the areas it represents.</summary>
 public sealed class VillageBuilding

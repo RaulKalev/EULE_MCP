@@ -7,7 +7,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 
-namespace RevitMCP.Addin.Village;
+namespace RevitMCP.Village;
 
 /// <summary>
 /// The little the village needs to know about the open document. Built from values the connector

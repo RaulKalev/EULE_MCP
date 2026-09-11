@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace RevitMCP.Addin.Village;
+namespace RevitMCP.Village;
 
 /// <summary>
 /// Project Village settings, read from the <c>village</c> object of the user config

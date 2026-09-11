@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 
-namespace RevitMCP.Addin.Village;
+namespace RevitMCP.Village;
 
 /// <summary>
 /// Deterministic aggregation of raw events into the village state and a story of steps.

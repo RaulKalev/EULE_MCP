@@ -25,9 +25,10 @@
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
   </ItemGroup>
 
-  <!-- RevitMCP.Core has no Revit dependency — safe to reference directly -->
+  <!-- RevitMCP.Core and RevitMCP.Village have no Revit dependency — safe to reference directly -->
   <ItemGroup>
     <ProjectReference Include="..\RevitMCP.Core\RevitMCP.Core.csproj" />
+    <ProjectReference Include="..\RevitMCP.Village\RevitMCP.Village.csproj" />
   </ItemGroup>
 
   <!-- Reference only the pure-logic types; no Revit API dependency -->
@@ -116,21 +117,7 @@
     <Compile Include="..\RevitMCP.Addin\Graph\GraphPathResolver.cs" Link="Graph\GraphPathResolver.cs" />
     <Compile Include="..\RevitMCP.Addin\Graph\GraphStore.cs" Link="Graph\GraphStore.cs" />
     <Compile Include="..\RevitMCP.Addin\Graph\GraphFreshness.cs" Link="Graph\GraphFreshness.cs" />
-    <!-- Project Village pure-logic files (event schema, classification, aggregation, graph snapshot, SSE bridge; no Revit API) -->
-    <Compile Include="..\RevitMCP.Addin\Village\VillageEvent.cs" Link="Village\VillageEvent.cs" />
-    <Compile Include="..\RevitMCP.Addin\Village\VillageToolClassifier.cs" Link="Village\VillageToolClassifier.cs" />
-    <Compile Include="..\RevitMCP.Addin\Village\VillageEventFactory.cs" Link="Village\VillageEventFactory.cs" />
-    <Compile Include="..\RevitMCP.Addin\Village\VillageOptions.cs" Link="Village\VillageOptions.cs" />
-    <Compile Include="..\RevitMCP.Addin\Village\VillageEventQueue.cs" Link="Village\VillageEventQueue.cs" />
-    <Compile Include="..\RevitMCP.Addin\Village\VillageLayout.cs" Link="Village\VillageLayout.cs" />
-    <Compile Include="..\RevitMCP.Addin\Village\VillageState.cs" Link="Village\VillageState.cs" />
-    <Compile Include="..\RevitMCP.Addin\Village\VillageAggregator.cs" Link="Village\VillageAggregator.cs" />
-    <Compile Include="..\RevitMCP.Addin\Village\VillageThemeConfig.cs" Link="Village\VillageThemeConfig.cs" />
-    <Compile Include="..\RevitMCP.Addin\Village\VillageThemeScorer.cs" Link="Village\VillageThemeScorer.cs" />
-    <Compile Include="..\RevitMCP.Addin\Village\VillageGraphSnapshot.cs" Link="Village\VillageGraphSnapshot.cs" />
+    <!-- Project Village: only the add-in-side graph reader is linked here; the rest of the module comes from the RevitMCP.Village project reference above. -->
     <Compile Include="..\RevitMCP.Addin\Village\VillageGraphReader.cs" Link="Village\VillageGraphReader.cs" />
-    <Compile Include="..\RevitMCP.Addin\Village\VillageStateHub.cs" Link="Village\VillageStateHub.cs" />
-    <Compile Include="..\RevitMCP.Addin\Village\VillageSseServer.cs" Link="Village\VillageSseServer.cs" />
-    <Compile Include="..\RevitMCP.Addin\Village\VillageInstanceRegistry.cs" Link="Village\VillageInstanceRegistry.cs" />
   </ItemGroup>
 </Project>

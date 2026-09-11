@@ -1,33 +1,9 @@
 using System.Diagnostics;
 using System.IO;
 using RevitMCP.Addin.Graph;
+using RevitMCP.Village;
 
 namespace RevitMCP.Addin.Village;
-
-/// <summary>Where to look for a model's graph. Built by the hub from values already in hand.</summary>
-public sealed class VillageGraphSource
-{
-    /// <summary>Exact database path learned from a graph tool response. Wins when set and present.</summary>
-    public string? DatabasePath { get; set; }
-
-    /// <summary>Roots to search (configured shared folder, local fallback). Searched one level deep.</summary>
-    public List<string> Roots { get; set; } = new();
-
-    /// <summary>Model file name without extension; the graph file is <c>&lt;ModelName&gt;.graph.db</c>.</summary>
-    public string ModelName { get; set; } = string.Empty;
-
-    public string RootSource { get; set; } = string.Empty;
-    public VillageFreshnessHint? Hint { get; set; }
-}
-
-public sealed class VillageGraphReadResult
-{
-    public VillageGraphSnapshot Snapshot { get; set; } = new();
-    public VillageThemeResult? Theme { get; set; }
-    /// <summary>False when the file was unchanged and the cached result was returned.</summary>
-    public bool Changed { get; set; }
-    public string? DatabasePath { get; set; }
-}
 
 /// <summary>
 /// Reads a model graph strictly for visualization, honouring the shared-folder rules:
@@ -37,7 +13,7 @@ public sealed class VillageGraphReadResult
 /// are cached until the file's size or timestamp changes. Never throws; failures are reported in
 /// <see cref="VillageGraphSnapshot.Error"/>. No Revit API dependency.
 /// </summary>
-public sealed class VillageGraphReader
+public sealed class VillageGraphReader : IVillageGraphReader
 {
     /// <summary>Category rows requested from the summary (the graph caps at 200).</summary>
     public const int CategoryTopN = 200;
@@ -248,14 +224,6 @@ public sealed class VillageGraphReader
         {
             return Failure(source, path, now, ex.GetType().Name + ": " + ex.Message);
         }
-    }
-
-    /// <summary>Re-scores the last read with the real model id (identity hue) without touching the file.</summary>
-    public VillageThemeResult? RescoreIdentity(string modelId)
-    {
-        if (_last?.Theme == null) return null;
-        _last.Theme.Identity = VillageThemeScorer.IdentityFor(modelId);
-        return _last.Theme;
     }
 
     private VillageGraphReadResult Failure(VillageGraphSource source, string path, DateTimeOffset now, string error)

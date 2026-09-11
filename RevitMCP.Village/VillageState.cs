@@ -1,7 +1,7 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace RevitMCP.Addin.Village;
+namespace RevitMCP.Village;
 
 /// <summary>Agent character states. The viewer animates transitions; the connector only sets them.</summary>
 public static class VillageAgentStates

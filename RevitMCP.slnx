@@ -4,4 +4,5 @@
   <Project Path="RevitMCP.Core/RevitMCP.Core.csproj" />
   <Project Path="RevitMCP.Setup/RevitMCP.Setup.csproj" />
   <Project Path="RevitMCP.Tests/RevitMCP.Tests.csproj" />
+  <Project Path="RevitMCP.Village/RevitMCP.Village.csproj" />
 </Solution>

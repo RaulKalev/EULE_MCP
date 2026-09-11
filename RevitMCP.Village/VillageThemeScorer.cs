@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 
-namespace RevitMCP.Addin.Village;
+namespace RevitMCP.Village;
 
 /// <summary>One family/type name with the number of instances it has in the graph (capped by the reader).</summary>
 public sealed class VillageTypeSample

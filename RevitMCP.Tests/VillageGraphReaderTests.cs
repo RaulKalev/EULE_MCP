@@ -1,6 +1,7 @@
 using Newtonsoft.Json.Linq;
 using RevitMCP.Addin.Graph;
 using RevitMCP.Addin.Village;
+using RevitMCP.Village;
 using Xunit;
 
 namespace RevitMCP.Tests;

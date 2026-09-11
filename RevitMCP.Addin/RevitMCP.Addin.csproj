@@ -76,6 +76,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\RevitMCP.Core\RevitMCP.Core.csproj" />
+    <ProjectReference Include="..\RevitMCP.Village\RevitMCP.Village.csproj" />
   </ItemGroup>
 
   <!-- Project Village viewer: one self-contained HTML page served from the loopback listener. -->

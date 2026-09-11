@@ -3,7 +3,7 @@ using System.Reflection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace RevitMCP.Addin.Village;
+namespace RevitMCP.Village;
 
 /// <summary>What the last graph tool response told the connector, kept for the freshness display.</summary>
 public sealed class VillageGraphHint
@@ -39,7 +39,7 @@ public sealed class VillageStateHub : IDisposable
     private readonly Func<DateTimeOffset> _clock;
     private readonly Func<VillageProjectContext, VillageGraphHint?, VillageGraphSource>? _graphSourceProvider;
     private readonly Func<List<VillageInstanceLink>>? _instancesProvider;
-    private readonly VillageGraphReader? _graphReader;
+    private readonly IVillageGraphReader? _graphReader;
     private readonly Action<string>? _log;
     private readonly int _catchUpEnterDepth;
 
@@ -62,7 +62,7 @@ public sealed class VillageStateHub : IDisposable
         VillageEventFactory? factory = null,
         VillageAggregator? aggregator = null,
         VillageEventQueue? queue = null,
-        VillageGraphReader? graphReader = null,
+        IVillageGraphReader? graphReader = null,
         Func<VillageProjectContext, VillageGraphHint?, VillageGraphSource>? graphSourceProvider = null,
         Func<List<VillageInstanceLink>>? instancesProvider = null,
         Func<DateTimeOffset>? clock = null,

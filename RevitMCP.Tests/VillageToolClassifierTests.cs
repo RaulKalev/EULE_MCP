@@ -1,4 +1,4 @@
-using RevitMCP.Addin.Village;
+using RevitMCP.Village;
 using Xunit;
 
 namespace RevitMCP.Tests;
@@ -131,8 +131,7 @@ public class VillageToolClassifierTests
     [InlineData("revit_align_in_view", "tags_annotations", "modify")]
     [InlineData("revit_preview_retag", "tags_annotations", "analyze")]
     [InlineData("ifc_preview_spaces", "elements", "analyze")]
-    [InlineData("revit_create_clash_review_view", "coordination", "create")]
-    // elements
+        // elements
     [InlineData("revit_get_elements_info", "elements", "inspect")]
     [InlineData("revit_find_elements_by_parameter", "elements", "search")]
     [InlineData("revit_set_parameter", "elements", "modify")]

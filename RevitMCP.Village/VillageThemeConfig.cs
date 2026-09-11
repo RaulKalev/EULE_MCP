@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace RevitMCP.Addin.Village;
+namespace RevitMCP.Village;
 
 /// <summary>Evidence rules for one system: Revit category names and family/type name keywords.</summary>
 public sealed class VillageThemeSystem

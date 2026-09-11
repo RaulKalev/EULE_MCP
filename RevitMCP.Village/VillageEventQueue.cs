@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using Newtonsoft.Json;
 
-namespace RevitMCP.Addin.Village;
+namespace RevitMCP.Village;
 
 /// <summary>Priority used by the queue's drop policy. Errors and transitions are kept; routine reads go first.</summary>
 public static class VillagePriority

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text.Json.Nodes;
 using RevitMCP.Addin.Configuration;
+using RevitMCP.Village;
 using RevitMCP.Addin.Graph;
 
 namespace RevitMCP.Addin.Village.Hosting;

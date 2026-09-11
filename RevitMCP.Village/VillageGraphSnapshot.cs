@@ -1,7 +1,7 @@
 using System.Globalization;
 using Newtonsoft.Json;
 
-namespace RevitMCP.Addin.Village;
+namespace RevitMCP.Village;
 
 /// <summary>Freshness as the village can know it without touching Revit.</summary>
 public static class VillageGraphFreshnessStatus

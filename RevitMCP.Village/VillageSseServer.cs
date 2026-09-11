@@ -5,7 +5,7 @@ using System.Net.Sockets;
 using System.Text;
 using Newtonsoft.Json;
 
-namespace RevitMCP.Addin.Village;
+namespace RevitMCP.Village;
 
 /// <summary>Counters for the diagnostics panel and tests.</summary>
 public sealed class VillageServerStats
@@ -400,7 +400,7 @@ public sealed class VillageSseServer : IDisposable
     }
 
     /// <summary>Loopback hosts only. An absent Host header is accepted for HTTP/1.0-style local tools.</summary>
-    internal static bool IsAllowedHost(string? host)
+    public static bool IsAllowedHost(string? host)
     {
         if (string.IsNullOrWhiteSpace(host)) return true;
         var h = host!.Trim().ToLowerInvariant();

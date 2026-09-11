@@ -40,14 +40,22 @@ hub has no reference back into the pipe server or the tool registry, and the hoo
 delay or retain the request or the result. If the village is disabled, not running, or failing,
 the two hook calls return immediately.
 
-Source layout:
+Source layout. The feature is a separate project so the boundary is enforced by the compiler
+rather than by convention: `RevitMCP.Village` cannot reference the add-in, so it can never reach
+Revit, the pipe server or the tool registry. It also keeps the option of extracting the module
+into its own repository later without untangling anything.
 
-| Folder | Contents |
+| Project / folder | Contents |
 |---|---|
-| `RevitMCP.Addin/Village/` | Pure logic, no Revit API (linked into the test project) |
+| `RevitMCP.Village/` | Class library (netstandard2.0 + net8.0). Event schema, tool classification, bounded queue, aggregation, theme scoring, the loopback SSE server and the state hub. No Revit API, no add-in reference. |
+| `RevitMCP.Addin/Village/VillageGraphReader.cs` | The one piece that needs the add-in's graph classes: implements `IVillageGraphReader` from the library. |
 | `RevitMCP.Addin/Village/Hosting/` | `VillageService` (wiring, config, instance registration), `VillageHooks`, the WPF status view model |
 | `RevitMCP.Addin/Village/Viewer/village.html` | The viewer page, embedded as a resource |
 | `RevitMCP.Tests/Village*Tests.cs` | Automated tests (no Revit needed) |
+
+`VillageStateHub` takes an `IVillageGraphReader`, so the library depends on the graph only through
+that interface: an implementation may read, must never hold the published file open, and must
+never throw.
 
 ## Why it costs no AI credits
 
@@ -331,9 +339,11 @@ Graph values are routing and visualization metadata captured at build time, not 
 
 ## Rolling back
 
-Delete `RevitMCP.Addin/Village`, remove the village block in `App.OnStartup` and the
-`_village?.Dispose()` line in `OnShutdown`, the one-line hooks in `PipeServer.HandleClientAsync`
-and `ActivityLogger.WriteAsync`, the `Village` property in `McpWindowViewModel`, the
-**PROJECT VILLAGE** section (and `ScrollViewer`) in `McpWindow.xaml`, the `EmbeddedResource` in
-`RevitMCP.Addin.csproj`, the `Village\*.cs` links and `Village*Tests.cs` in the test project, and
-this document. No tool, response format or configuration file format depends on the module.
+Delete the `RevitMCP.Village` project (and its entry in `RevitMCP.slnx`) and `RevitMCP.Addin/Village`,
+then remove: the village block in `App.OnStartup` and the `_village?.Dispose()` line in
+`OnShutdown`; the one-line hooks in `PipeServer.HandleClientAsync` and `ActivityLogger.WriteAsync`;
+the `Village` property in `McpWindowViewModel`; the **PROJECT VILLAGE** section (and the
+`ScrollViewer`) in `McpWindow.xaml`; the `EmbeddedResource` and the `RevitMCP.Village`
+`ProjectReference` in `RevitMCP.Addin.csproj`; the `RevitMCP.Village` `ProjectReference`, the
+`VillageGraphReader.cs` link and `Village*Tests.cs` in the test project; and this document.
+No tool, response format or configuration file format depends on the module.

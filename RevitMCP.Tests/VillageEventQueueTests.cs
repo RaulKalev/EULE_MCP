@@ -1,4 +1,4 @@
-using RevitMCP.Addin.Village;
+using RevitMCP.Village;
 using Xunit;
 
 namespace RevitMCP.Tests;

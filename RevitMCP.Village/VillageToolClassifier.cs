@@ -1,4 +1,4 @@
-namespace RevitMCP.Addin.Village;
+namespace RevitMCP.Village;
 
 /// <summary>Result of classifying a tool name, with the rule that decided it (for the diagnostics panel).</summary>
 public sealed class VillageClassification

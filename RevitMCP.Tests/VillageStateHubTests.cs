@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Newtonsoft.Json.Linq;
 using RevitMCP.Addin.Graph;
 using RevitMCP.Addin.Village;
+using RevitMCP.Village;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -59,7 +60,7 @@ public class VillageStateHubTests : IDisposable
         var state = (JObject)VillageEventSerializer.ParseToken(hub.SnapshotJson);
         Assert.Equal("1626_PP_EN", state.Value<string>("project_name"));
         Assert.Equal("archive", state["agents"]![0]!.Value<string>("building"));
-        Assert.Equal(1, state["current_steps"]!.Count());
+        Assert.Single(state["current_steps"]!);
         Assert.True(state.Value<bool>("read_only"));
         Assert.Equal(0, hub.HookFailures);
     }
