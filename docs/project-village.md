@@ -126,12 +126,22 @@ aggregator. Adding optional fields keeps the schema version; changing a field's 
 
 ## Privacy and sanitization
 
-Never published: prompts, AI responses, raw tool arguments, tool results, messages, warnings,
+Never published: prompts, AI responses, tool arguments, tool results, messages, warnings,
 errors, parameter values, element ids, model geometry, file contents, file paths, user names,
 credentials or tokens. The hooks read only the tool name, client name, success flag, status code,
 duration, the document title and the model path (hashed), plus a shallow allow-listed numeric
 count from the result. The graph snapshot carries counts, category and level names, health
 counters and freshness — never node ids, element names or the `built_by` user.
+
+The one thing read from the request itself is the Revit **category**, and only through
+`VillageCategoryArgument`: a fixed allow-list of argument keys (`category`, `categoryName`,
+`categories`, `categoryNames`), one level deep, capped at 100 characters. It is never published
+as text. The hub matches it against the warehouses the graph snapshot already exposes and emits
+only the resulting **warehouse id** — a value derived from the graph, not from the request. A
+category with no warehouse, a misspelling, or a request naming several categories all resolve to
+null and change nothing. `VillageWarehouseRoutingTests.TheEventStillCarriesNoArgumentsOrValues`
+pins that a request carrying a parameter name, a value and a file path still serializes none of
+them.
 
 The tests `VillageEventTests.Serialize_NeverContainsPathsArgumentsOrResults`,
 `VillageStateHubTests.GraphToolResponses_FeedTheFreshnessHintWithoutRetainingTheResult` and
@@ -245,9 +255,28 @@ The yard grows the isometric grid downwards, and the viewer refits the tile size
 grid needs, so more categories mean a slightly smaller village rather than a clipped one. Set
 `village.maxWarehouses` to `0` to get the village exactly as it was before the yard existed.
 
-Warehouses are **inventory, not activity**: characters never walk to them (agents are routed by
-area, and an area covers many categories), and no story step targets one. Clicking a warehouse
-shows its element count, its share of all counted elements, its system and its rank.
+### Walking to a warehouse
+
+When a tool names a Revit category that has a warehouse, the character works **at that warehouse**
+instead of the area landmark: "how many fire alarm devices have Ahela nr 2" walks it to the Fire
+Alarm Devices warehouse, not to Houses. The step is worded after the category too — "Searched Fire
+Alarm Devices (2 tools)".
+
+The rules, all of them deterministic:
+
+- Only areas that hold model elements redirect: `elements`, `fire_alarm`, `security`,
+  `lighting`, `it_av`, `electrical` (`VillageLayout.StorableAreas`). A sheet or graph tool that
+  happens to take a category keeps its landmark.
+- Only a category that currently has a warehouse redirects. Everything else — an unknown category,
+  a request spanning several categories, a category whose warehouse fell outside `maxWarehouses` —
+  leaves the character at the landmark.
+- A follow-up tool that names **no** category leaves the character where it is, so fetching
+  parameters for ids you just found does not walk it back to Houses every call.
+- Work at two different warehouses never merges into one story step.
+- Rebuilding the yard walks characters off warehouses that no longer exist.
+
+Clicking a warehouse still shows its element count, its share of all counted elements, its system
+and its rank.
 
 Without a graph the yard is empty — like the rest of the graph-derived display, it runs in limited
 mode. The counts come from the graph file and are as old as the last build; the inspector says so.

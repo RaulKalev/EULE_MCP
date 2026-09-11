@@ -23,6 +23,8 @@ public sealed class VillageAgent
     [JsonProperty("state")] public string State { get; set; } = VillageAgentStates.Idle;
     [JsonProperty("area")] public string Area { get; set; } = VillageAreas.Unknown;
     [JsonProperty("building")] public string Building { get; set; } = VillageLayout.Square;
+    /// <summary>Warehouse the agent is standing at, when <see cref="Building"/> is one.</summary>
+    [JsonProperty("warehouse")] public string? Warehouse { get; set; }
     [JsonProperty("activity")] public string Activity { get; set; } = VillageActivities.Unknown;
     [JsonProperty("last_tool")] public string? LastTool { get; set; }
     [JsonProperty("last_event_at")] public string LastEventAt { get; set; } = string.Empty;
@@ -75,6 +77,8 @@ public sealed class VillageStoryStep
     [JsonProperty("agent")] public string Agent { get; set; } = string.Empty;
     [JsonProperty("area")] public string Area { get; set; } = VillageAreas.Unknown;
     [JsonProperty("building")] public string Building { get; set; } = VillageLayout.Square;
+    /// <summary>Warehouse id when the work named a category that has one; <see cref="Building"/> then holds it too.</summary>
+    [JsonProperty("warehouse")] public string? Warehouse { get; set; }
     [JsonProperty("from_area")] public string? FromArea { get; set; }
     [JsonProperty("activity")] public string Activity { get; set; } = VillageActivities.Unknown;
     [JsonProperty("tool_count")] public int ToolCount { get; set; }
@@ -94,12 +98,15 @@ public sealed class VillageStoryStep
     [JsonIgnore] public DateTimeOffset Started { get; set; }
     [JsonIgnore] public DateTimeOffset LastEvent { get; set; }
     [JsonIgnore] public string Group { get; set; } = string.Empty;
+    /// <summary>Category name behind <see cref="Warehouse"/>; used to word the label, not published separately.</summary>
+    [JsonIgnore] public string? WarehouseLabel { get; set; }
 
     public VillageStoryStep Clone()
     {
         return new VillageStoryStep
         {
-            Id = Id, Kind = Kind, Agent = Agent, Area = Area, Building = Building, FromArea = FromArea,
+            Id = Id, Kind = Kind, Agent = Agent, Area = Area, Building = Building, Warehouse = Warehouse,
+            WarehouseLabel = WarehouseLabel, FromArea = FromArea,
             Activity = Activity, ToolCount = ToolCount, Tools = new List<string>(Tools), Affected = Affected,
             Failures = Failures, Deferred = Deferred, Label = Label, StartedAt = StartedAt, EndedAt = EndedAt,
             Open = Open, FirstSequence = FirstSequence, LastSequence = LastSequence,

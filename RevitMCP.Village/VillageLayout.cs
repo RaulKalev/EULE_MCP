@@ -93,13 +93,13 @@ public static class VillageLayout
         },
         new VillageBuilding
         {
-            Id = Workshop, Label = "Workshop", Sprite = "workshop", TileX = 7, TileY = 6, BaseSize = 2,
+            Id = Workshop, Label = "Workshop", Sprite = "workshop", TileX = 6, TileY = 6, BaseSize = 2,
             Areas = new[] { VillageAreas.FamiliesTypes },
             Description = "Families and types."
         },
         new VillageBuilding
         {
-            Id = SignShop, Label = "Sign workshop", Sprite = "sign", TileX = 9, TileY = 8, BaseSize = 2,
+            Id = SignShop, Label = "Sign workshop", Sprite = "sign", TileX = 10, TileY = 8, BaseSize = 2,
             Areas = new[] { VillageAreas.TagsAnnotations },
             Description = "Tags, dimensions, text and detail lines."
         },
@@ -117,7 +117,7 @@ public static class VillageLayout
         },
         new VillageBuilding
         {
-            Id = Survey, Label = "Survey post", Sprite = "survey", TileX = 10, TileY = 5, BaseSize = 1,
+            Id = Survey, Label = "Survey post", Sprite = "survey", TileX = 11, TileY = 5, BaseSize = 1,
             Areas = new[] { VillageAreas.Coordination },
             Description = "Clash detection and coordination reviews."
         },
@@ -134,6 +134,21 @@ public static class VillageLayout
             Description = "Recent failures, stale graph data and reported model-health issues."
         }
     };
+
+    /// <summary>
+    /// Areas whose work is about model elements. When a tool in one of these names a Revit
+    /// category that has a warehouse, the character walks to that warehouse instead of the area's
+    /// landmark — "counted fire alarm devices" belongs at the Fire Alarm Devices warehouse, not at
+    /// the generic Houses. Areas about drawings, files or the graph are never redirected.
+    /// </summary>
+    public static readonly string[] StorableAreas =
+    {
+        VillageAreas.Elements, VillageAreas.FireAlarm, VillageAreas.Security,
+        VillageAreas.Lighting, VillageAreas.ItAv, VillageAreas.Electrical
+    };
+
+    public static bool IsStorableArea(string? area) =>
+        area != null && Array.IndexOf(StorableAreas, area) >= 0;
 
     /// <summary>Human names for areas, used in deterministic step labels.</summary>
     public static readonly Dictionary<string, string> AreaLabels = new(StringComparer.Ordinal)

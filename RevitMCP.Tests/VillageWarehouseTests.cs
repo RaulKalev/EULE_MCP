@@ -228,7 +228,7 @@ public class VillageWarehouseTests
     public void SnapshotCarriesTheYardAndItsLimit()
     {
         var aggregator = new VillageAggregator(new VillageOptions { MaxWarehouses = 7 });
-        aggregator.Warehouses = VillageWarehouseYard.Plan(Categories(("Fire Alarm Devices", 120)));
+        aggregator.SetWarehouses(VillageWarehouseYard.Plan(Categories(("Fire Alarm Devices", 120))));
 
         var snapshot = aggregator.Snapshot();
 

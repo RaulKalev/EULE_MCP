@@ -207,7 +207,7 @@
     (s.agents || []).forEach((a, i) => {
       seen.add(a.id);
       let ag = V.agents.get(a.id);
-      const target = a.building && V.byId.has(a.building) ? a.building : 'square';
+      const target = a.building && placeOf(a.building) ? a.building : 'square';
       if (!ag) {
         const p = posOf(target);
         ag = { id: a.id, name: a.name, x: p.x, y: p.y, at: target, target, queue: [], color: AGENT_COLORS[V.agents.size % AGENT_COLORS.length], bob: Math.random() * 6, stateSince: V.time };
@@ -239,7 +239,7 @@
     if (V.feed.length > V.feedLimit) V.feed.length = V.feedLimit;
 
     const ag = step.agent ? V.agents.get(step.agent) : null;
-    const building = step.building && V.byId.has(step.building) ? step.building : 'square';
+    const building = step.building && placeOf(step.building) ? step.building : 'square';
     if (step.kind === 'move' && ag) {
       ag.queue.push(building);
       if (ag.queue.length > MOVE_QUEUE_LIMIT) { V.skipped += ag.queue.length - 1; ag.queue = [building]; ag.teleport = true; }
@@ -299,7 +299,7 @@
       const name = document.createElement('strong'); name.textContent = ag.name;
       const what = document.createElement('span'); what.className = 'what';
       const st = open.get(ag.id);
-      const where = ag.at === 'square' ? 'the village square' : (V.byId.get(ag.at) || {}).label || ag.at;
+      const where = ag.at === 'square' ? 'the village square' : placeLabel(ag.at);
       what.textContent = ' — ' + (STATE_TEXT[ag.state] || ag.state) + (st ? ': ' + st.label : ag.state === 'disconnected' ? '' : ' at ' + where) + (ag.inProgress ? ' (' + ag.inProgress + ' running)' : '');
       row.append(sw, name, what); el.appendChild(row);
     }
@@ -398,9 +398,14 @@
   }
 
   // ─── Rendering: canvas ──────────────────────────────────────────────────
+  // A destination is a landmark or a category warehouse; both carry tile coordinates.
+  function placeOf(id) { return (id && (V.byId.get(id) || V.whById.get(id))) || null; }
+  function placeLabel(id) { const p = placeOf(id); return p ? p.label : (id === 'square' ? 'the village square' : id); }
+
   function posOf(buildingId) {
-    if (buildingId === 'square' || !V.byId.has(buildingId)) return SQUARE;
-    const b = V.byId.get(buildingId); return { x: b.tile_x + 0.5, y: b.tile_y + 1.1 };
+    const b = placeOf(buildingId);
+    if (!b) return SQUARE;
+    return { x: b.tile_x + 0.5, y: b.tile_y + (V.whById.has(buildingId) ? 1.0 : 1.1) };
   }
 
   function theme() {
@@ -755,9 +760,9 @@
     const B = [
       ['town_hall', 'Town hall', ['project', 'graph'], 5, 2, 3, 'town_hall'], ['archive', 'Archive', ['sheets'], 2, 3, 2, 'archive'],
       ['lookout', 'Lookout tower', ['views'], 8, 3, 2, 'tower'], ['market', 'Market hall', ['schedules'], 3, 6, 2, 'market'],
-      ['workshop', 'Workshop', ['families_types'], 7, 6, 2, 'workshop'], ['sign_workshop', 'Sign workshop', ['tags_annotations'], 9, 8, 2, 'sign'],
+      ['workshop', 'Workshop', ['families_types'], 6, 6, 2, 'workshop'], ['sign_workshop', 'Sign workshop', ['tags_annotations'], 10, 8, 2, 'sign'],
       ['houses', 'Houses', ['elements'], 1, 9, 2, 'houses'], ['utility_district', 'Utility district', ['electrical', 'fire_alarm', 'security', 'lighting', 'it_av'], 5, 11, 2, 'substation'],
-      ['survey_post', 'Survey post', ['coordination'], 10, 5, 1, 'survey'], ['records_office', 'Records office', ['office'], 1, 5, 1, 'office'],
+      ['survey_post', 'Survey post', ['coordination'], 11, 5, 1, 'survey'], ['records_office', 'Records office', ['office'], 1, 5, 1, 'office'],
       ['warning_area', 'Warning area', [], 10, 11, 1, 'warning']
     ].map(x => ({ id: x[0], label: x[1], areas: x[2], tile_x: x[3], tile_y: x[4], base_size: x[5], size: x[5] + (x[5] < 3 ? 1 : 0), sprite: x[6], description: 'Demo landmark for ' + x[1].toLowerCase() + '.' }));
     const areas = Object.keys(AREA_LABELS).map(a => ({ area: a, reads: 0, writes: 0, exports: 0, failures: 0, deferred: 0, affected: 0 }));
@@ -798,7 +803,8 @@
     let id = 0; const agent = snap.agents[0];
     const script = [
       ['move', 'town_hall', 'graph', 'search'], ['work', 'town_hall', 'graph', 'search', 'Searched the model graph', 0],
-      ['move', 'houses', 'elements', 'inspect'], ['work', 'houses', 'elements', 'inspect', 'Inspected model elements (6 tools)', 60],
+      ['move', 'wh_fire_alarm_devices', 'elements', 'search'], ['work', 'wh_fire_alarm_devices', 'elements', 'search', 'Searched Fire Alarm Devices (2 tools)', 412],
+      ['move', 'wh_data_devices', 'elements', 'inspect'], ['work', 'wh_data_devices', 'elements', 'inspect', 'Inspected Data Devices (6 tools)', 154],
       ['move', 'sign_workshop', 'tags_annotations', 'modify'], ['work', 'sign_workshop', 'tags_annotations', 'modify', '24 tags updated (24 tools)', 24],
       ['move', 'utility_district', 'fire_alarm', 'validate'], ['work', 'utility_district', 'fire_alarm', 'validate', 'Checked the fire alarm system', 0],
       ['error', 'houses', 'elements', 'error', 'revit_set_parameter failed in model elements'],
@@ -812,7 +818,7 @@
       const s = script[i % script.length]; i++;
       const now = new Date().toISOString();
       if (s[0] === 'idle') { agent.state = 'idle'; agent.building = 'square'; agent.area = 'unknown'; snap.current_steps = []; applySnapshot(snap, false); setTimeout(tick, 4000 / V.speed); return; }
-      const stp = { id: ++id, kind: s[0] === 'move' ? 'move' : s[0] === 'work' ? 'work' : s[0], agent: 'claude-code', area: s[2], building: s[1], activity: s[3], label: s[4] || ('Heads to ' + AREA_LABELS[s[2]]), affected: s[5] || 0, tool_count: 1, tools: [], failures: s[0] === 'error' ? 1 : 0, deferred: s[0] === 'deferred' ? 1 : 0, started_at: now, ended_at: now, open: false };
+      const stp = { id: ++id, kind: s[0] === 'move' ? 'move' : s[0] === 'work' ? 'work' : s[0], agent: 'claude-code', area: s[2], building: s[1], activity: s[3], label: s[4] || ('Heads to ' + ((warehouses.find(w => w.id === s[1]) || {}).label || AREA_LABELS[s[2]])), affected: s[5] || 0, tool_count: 1, tools: [], failures: s[0] === 'error' ? 1 : 0, deferred: s[0] === 'deferred' ? 1 : 0, started_at: now, ended_at: now, open: false };
       agent.building = s[1]; agent.area = s[2]; agent.activity = s[3];
       agent.state = s[0] === 'move' ? 'moving' : s[0] === 'error' ? 'error' : s[0] === 'deferred' ? 'idle' : (s[3] === 'modify' || s[3] === 'create' || s[3] === 'delete') ? 'working' : 'inspecting';
       if (s[0] === 'work') { agent.state = 'success'; agent.tool_count += 1; const a = areas.find(x => x.area === s[2]); if (a) { (s[3] === 'export' ? (a.exports++) : (s[3] === 'modify' || s[3] === 'create') ? (a.writes++) : (a.reads++)); a.affected += s[5] || 0; } }

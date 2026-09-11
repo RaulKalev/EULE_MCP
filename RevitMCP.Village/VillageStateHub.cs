@@ -45,6 +45,14 @@ public sealed class VillageStateHub : IDisposable
     /// <summary>Same rules the graph reader's scorer uses; only the category lists matter here.</summary>
     private readonly VillageThemeConfig _themes;
 
+    /// <summary>
+    /// Revit category name → warehouse id, rebuilt on the consumer thread whenever the yard
+    /// changes and read (lock-free) on the hook thread. Replaced wholesale, never mutated in
+    /// place, so a hook always sees a complete map.
+    /// </summary>
+    private volatile Dictionary<string, string> _warehouseByCategory =
+        new(StringComparer.OrdinalIgnoreCase);
+
     private CancellationTokenSource? _cts;
     private Task? _consumer;
     private volatile VillageProjectContext _context = VillageProjectContext.Empty;
@@ -73,7 +81,7 @@ public sealed class VillageStateHub : IDisposable
         _options = options ?? VillageOptions.Default;
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
         var classifier = new VillageToolClassifier(_options.ToolAreas, _options.ToolActivities);
-        Factory = factory ?? new VillageEventFactory(classifier: classifier, clock: _clock);
+        Factory = factory ?? new VillageEventFactory(classifier: classifier, clock: _clock, warehouseResolver: ResolveWarehouse);
         Aggregator = aggregator ?? new VillageAggregator(_options, _clock);
         Queue = queue ?? new VillageEventQueue(_options.QueueSize, _options.MaxEventsPerSecond);
         _graphReader = graphReader;
@@ -142,22 +150,32 @@ public sealed class VillageStateHub : IDisposable
         catch { Interlocked.Increment(ref _hookFailures); return false; }
     }
 
-    public void ToolStarted(string? toolName, string? clientName, VillageProjectContext? context)
+    /// <summary>
+    /// Category name → warehouse id, or null when the yard has no warehouse for it. Called from
+    /// the hook thread, so it only reads the immutable map published by the consumer thread.
+    /// </summary>
+    public string? ResolveWarehouse(string? category)
+    {
+        if (string.IsNullOrWhiteSpace(category)) return null;
+        return _warehouseByCategory.TryGetValue(category!.Trim(), out var id) ? id : null;
+    }
+
+    public void ToolStarted(string? toolName, string? clientName, VillageProjectContext? context, IReadOnlyDictionary<string, object?>? arguments = null)
     {
         try
         {
             var ctx = UpdateContext(context);
-            Queue.TryEnqueue(Factory.ToolStarted(toolName, clientName, ctx));
+            Queue.TryEnqueue(Factory.ToolStarted(toolName, clientName, ctx, arguments));
         }
         catch { Interlocked.Increment(ref _hookFailures); }
     }
 
-    public void ToolCompleted(string? toolName, string? clientName, bool success, string? status, long durationMs, object? resultData, VillageProjectContext? context)
+    public void ToolCompleted(string? toolName, string? clientName, bool success, string? status, long durationMs, object? resultData, VillageProjectContext? context, IReadOnlyDictionary<string, object?>? arguments = null)
     {
         try
         {
             var ctx = UpdateContext(context);
-            var e = Factory.ToolCompleted(toolName, clientName, success, status, durationMs, resultData, ctx);
+            var e = Factory.ToolCompleted(toolName, clientName, success, status, durationMs, resultData, ctx, arguments);
             Queue.TryEnqueue(e);
 
             if (success && VillageActivities.IsWrite(e.Activity))
@@ -370,7 +388,10 @@ public sealed class VillageStateHub : IDisposable
             Aggregator.Theme = themeToken;
             Aggregator.Buildings = VillageLayoutSizer.Apply(VillageLayout.Default, result.Snapshot, theme);
             // One warehouse per category with elements; none at all when the graph is missing.
-            Aggregator.Warehouses = VillageWarehouseYard.Plan(result.Snapshot.Categories, _themes, _options.MaxWarehouses);
+            Aggregator.SetWarehouses(VillageWarehouseYard.Plan(result.Snapshot.Categories, _themes, _options.MaxWarehouses));
+            var lookup = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var warehouse in Aggregator.Warehouses) lookup[warehouse.Category] = warehouse.Id;
+            _warehouseByCategory = lookup;
             if (result.Changed)
                 Aggregator.Process(Factory.GraphRefreshed(context, result.Snapshot.Exists && result.Snapshot.Error == null, result.Snapshot.Counts.Nodes));
             _stateDirty = true;
