@@ -12,9 +12,9 @@
 -->
 <style>
   :root {
-    /* Soft dusk palette: deep indigo surfaces, warm lamplight, one clear cyan accent. */
-    --bg: #0e1220; --panel: #151a2b; --panel-2: #1d2337; --line: #283049; --text: #eef1f8; --muted: #98a2c0;
-    --accent: #7ee0ff; --ok: #62d9a0; --warn: #ffc978; --err: #ff8a9b; --catch: #c79bff;
+    /* A sunlit island on deep navy, warm light in the windows. */
+    --bg: #0a1428; --panel: #101c33; --panel-2: #17253f; --line: #24354f; --text: #eaf1fb; --muted: #94a6c2;
+    --accent: #5ec8f0; --ok: #6fd48f; --warn: #ffc76b; --err: #ff8a86; --catch: #c79bff;
     --r: 12px; --r-sm: 8px;
   }
   * { box-sizing: border-box; }
@@ -29,7 +29,7 @@
   .badge.warn { color: var(--warn); } .badge.warn .dot { background: var(--warn); }
   .badge.err { color: var(--err); } .badge.err .dot { background: var(--err); }
   .badge.catch { color: var(--catch); } .badge.catch .dot { background: var(--catch); }
-  .badge.readonly { color: #0e1220; background: var(--accent); border-color: transparent; }
+  .badge.readonly { color: #0a1428; background: var(--accent); border-color: transparent; }
   header select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 4px 8px; font-size: 12px; }
   header .spacer { flex: 1; }
   main { display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
@@ -44,7 +44,7 @@
   #activity .swatch { width: 10px; height: 10px; border-radius: 50%; flex: none; box-shadow: 0 0 0 3px rgba(255,255,255,.06); }
   #activity .what { color: var(--muted); font-size: 12px; }
   #feed ul { list-style: none; margin: 0; padding: 0; max-height: 34vh; overflow-y: auto; }
-  #feed li { display: grid; grid-template-columns: 44px 1fr; gap: 8px; padding: 4px 0; border-bottom: 1px solid rgba(40,48,73,.6); font-size: 12px; }
+  #feed li { display: grid; grid-template-columns: 44px 1fr; gap: 8px; padding: 4px 0; border-bottom: 1px solid rgba(36,53,79,.7); font-size: 12px; }
   #feed li time { color: var(--muted); font-variant-numeric: tabular-nums; }
   #feed li.error { color: var(--err); } #feed li.deferred { color: var(--warn); } #feed li.move { color: var(--muted); }
   #feed li.project, #feed li.session, #feed li.graph, #feed li.bridge { color: var(--accent); }
@@ -53,11 +53,11 @@
   #selected .desc { color: var(--muted); font-size: 12px; margin: 4px 0 8px; }
   #controls { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
   button { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 999px; padding: 5px 13px; font-size: 12px; cursor: pointer; transition: border-color .15s, background .15s; }
-  button:hover { border-color: var(--accent); background: #232a41; }
+  button:hover { border-color: var(--accent); background: #1e3050; }
   input[type=range] { width: 110px; }
   #diag { font-size: 11px; color: var(--muted); }
   #diag table { border-collapse: collapse; width: 100%; margin: 4px 0 8px; }
-  #diag th, #diag td { text-align: left; padding: 3px 4px; border-bottom: 1px solid rgba(40,48,73,.6); font-weight: normal; }
+  #diag th, #diag td { text-align: left; padding: 3px 4px; border-bottom: 1px solid rgba(36,53,79,.7); font-weight: normal; }
   #diag td.num { text-align: right; font-variant-numeric: tabular-nums; }
   #diag .reason { color: var(--text); margin: 4px 0; }
   footer { padding: 6px 14px; border-top: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: 11px; }
@@ -462,14 +462,17 @@
 
   // One light direction for the whole scene: a warm key from the upper left, a cool sky fill on the
   // other face. Everything else (shadows, rim lights, ambient occlusion) follows from it.
-  const LIGHT = { warm: '#ffd9a8', cool: '#8fb2ff' };
+  const LIGHT = { warm: '#fff0cf', cool: '#8ea6d8' };
+  /// Screen offset of a cast shadow per unit of building height. The sun sits low to the upper
+  /// left, so shadows stretch down and to the right — the signature of this hour.
+  const SUN = { dx: 0.78, dy: 0.40 };
 
   function theme() {
     const th = (V.snapshot && V.snapshot.theme) || null;
     const hue = th && th.identity ? th.identity.hue : 205;
     const pattern = th && th.identity ? th.identity.pattern : 0;
-    // 96-156 degrees: sage through to a cool mint, never brown and never neon.
-    const gh = 96 + (hue % 60);
+    // 88-124 degrees: lush grass. Narrow on purpose - every project should read as the same place.
+    const gh = 88 + (hue % 36);
     const key = (th ? th.theme : 'neutral') + ':' + hue + ':' + pattern;
     if (THEME_CACHE.key === key) return THEME_CACHE.value;
     const value = {
@@ -477,10 +480,10 @@
       visible: (th && th.visible_systems) || [], hue, pattern, key,
       // A soft meadow rather than a dark checkerboard. The identity hue only nudges it inside a
       // narrow green band, so a fire-alarm project is not a field of mud.
-      ground: 'hsl(' + gh + ', 16%, 44%)',
-      groundAlt: 'hsl(' + (gh - 8) + ', 18%, 37%)',
-      groundEdge: 'hsl(' + (gh - 10) + ', 22%, 21%)',
-      road: (th && th.theme === 'lighting') ? 'hsl(42, 24%, 62%)' : 'hsl(' + (gh + 10) + ', 12%, 62%)'
+      ground: 'hsl(' + gh + ', 62%, 46%)',
+      groundAlt: 'hsl(' + (gh + 4) + ', 58%, 39%)',
+      groundEdge: 'hsl(' + (gh + 2) + ', 46%, 26%)',
+      road: 'hsl(38, 42%, 68%)'
     };
     THEME_CACHE.key = key; THEME_CACHE.value = value;
     return value;
@@ -513,20 +516,20 @@
     g.setTransform(DPR, 0, 0, DPR, 0, 0);
     g.clearRect(0, 0, W, H);
 
-    // Sky: a calm vertical wash with a warm pool of light over the town.
-    const sky = g.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, '#0c1020'); sky.addColorStop(0.55, '#131a2e'); sky.addColorStop(1, '#0d1122');
-    g.fillStyle = sky; g.fillRect(0, 0, W, H);
+    // Deep navy surroundings with a soft vignette, so the lit island reads as the only thing here.
     const c0 = iso(GRID_W / 2, GRID_H / 2);
-    const glow = g.createRadialGradient(c0.x, c0.y - TILE, TILE * 0.5, c0.x, c0.y - TILE, Math.max(W, H) * 0.55);
-    glow.addColorStop(0, 'rgba(255,206,150,.10)'); glow.addColorStop(1, 'rgba(255,206,150,0)');
-    g.fillStyle = glow; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#0a1428'; g.fillRect(0, 0, W, H);
+    const halo = g.createRadialGradient(c0.x, c0.y, TILE, c0.x, c0.y, Math.max(W, H) * 0.62);
+    halo.addColorStop(0, 'rgba(40,80,130,.30)');
+    halo.addColorStop(0.55, 'rgba(18,40,72,.16)');
+    halo.addColorStop(1, 'rgba(6,12,26,0)');
+    g.fillStyle = halo; g.fillRect(0, 0, W, H);
 
     // The island the town sits on: a rounded diamond with a thin extruded side, so the village
     // reads as a solid slab rather than a flat pattern.
     const pad = 0.55;
     const n = iso(-pad, -pad), e = iso(GRID_W + pad, -pad), s2 = iso(GRID_W + pad, GRID_H + pad), w = iso(-pad, GRID_H + pad);
-    const depth = TILE * 0.55;
+    const depth = TILE * 0.95;
 
     g.save();
     g.filter = 'blur(' + Math.round(TILE * 0.5) + 'px)';
@@ -547,8 +550,18 @@
     g.fillStyle = top;
     g.beginPath(); g.moveTo(n.x, n.y); g.lineTo(e.x, e.y); g.lineTo(s2.x, s2.y); g.lineTo(w.x, w.y); g.closePath(); g.fill();
 
-    // Contact line where the top face meets the side, and a soft inner vignette.
-    g.strokeStyle = 'rgba(255,255,255,.10)'; g.lineWidth = 1.5;
+    // Soil under the turf, and a bright lip where the sunlit top rolls over the edge.
+    const soil = g.createLinearGradient(0, s2.y - depth, 0, s2.y + depth);
+    soil.addColorStop(0, T.groundEdge);
+    soil.addColorStop(1, 'hsl(28, 30%, 16%)');
+    g.fillStyle = soil;
+    g.beginPath();
+    g.moveTo(w.x, w.y); g.lineTo(s2.x, s2.y); g.lineTo(e.x, e.y);
+    g.lineTo(e.x, e.y + depth); g.lineTo(s2.x, s2.y + depth); g.lineTo(w.x, w.y + depth);
+    g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(190,255,170,.28)'; g.lineWidth = Math.max(1.5, TILE * 0.035);
+    g.beginPath(); g.moveTo(w.x, w.y); g.lineTo(s2.x, s2.y); g.lineTo(e.x, e.y); g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,.12)'; g.lineWidth = 1.5;
     g.beginPath(); g.moveTo(w.x, w.y); g.lineTo(n.x, n.y); g.lineTo(e.x, e.y); g.stroke();
 
     // Large soft patches so the field is not one flat colour. Deterministic, drawn once.
@@ -588,10 +601,12 @@
     for (const b of V.buildings) {
       if (b.id === 'warning_area' || b.id === 'park') continue;
       const c = iso(b.tile_x + 0.5, b.tile_y + 1.0);
-      g.strokeStyle = 'rgba(0,0,0,.18)'; g.lineWidth = TILE * 0.2;
-      g.beginPath(); g.moveTo(hub.x, hub.y); g.lineTo(c.x, c.y); g.stroke();
-      g.strokeStyle = T.road; g.lineWidth = TILE * 0.13;
-      g.beginPath(); g.moveTo(hub.x, hub.y); g.lineTo(c.x, c.y); g.stroke();
+      // A gentle bow so the lanes wander rather than radiate.
+      const mx = (hub.x + c.x) / 2 + (c.y - hub.y) * 0.12, my = (hub.y + c.y) / 2 - (c.x - hub.x) * 0.06;
+      g.strokeStyle = 'hsl(36, 30%, 44%)'; g.lineWidth = TILE * 0.30;
+      g.beginPath(); g.moveTo(hub.x, hub.y); g.quadraticCurveTo(mx, my, c.x, c.y); g.stroke();
+      g.strokeStyle = T.road; g.lineWidth = TILE * 0.22;
+      g.beginPath(); g.moveTo(hub.x, hub.y); g.quadraticCurveTo(mx, my, c.x, c.y); g.stroke();
     }
     if (V.warehouses.length) {
       const rows = yardRows();
@@ -612,7 +627,85 @@
     }
     g.restore();
 
+    scatterScenery(g, T);
+
     GROUND.dirty = false; GROUND.key = key;
+  }
+
+  /// Deterministic trees and boulders over the open grass. Scenery never animates, so it is baked
+  /// into the cached layer and costs nothing per frame. Anything too close to a building, to the
+  /// centre or to the slab edge is skipped, which is what keeps the village readable.
+  function scatterScenery(g, T) {
+    const blocked = [];
+    for (const b of V.buildings) blocked.push({ x: b.tile_x + 0.5, y: b.tile_y + 0.5, r: 1.5 + (b.size || 1) * 0.34 });
+    for (const wh of V.warehouses) blocked.push({ x: wh.tile_x + 0.5, y: wh.tile_y + 0.5, r: 1.4 + (wh.footprint || 1) * 0.5 });
+    blocked.push({ x: SQUARE.x, y: SQUARE.y, r: 2.2 });
+
+    let seed = 1337;
+    const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    const items = [];
+    for (let ty = -0.2; ty < GRID_H + 0.2; ty += 0.62) {
+      for (let tx = -0.2; tx < GRID_W + 0.2; tx += 0.62) {
+        const x = tx + (rnd() - 0.5) * 0.7, y = ty + (rnd() - 0.5) * 0.7;
+        const roll = rnd();
+        if (roll > 0.55) continue;
+        let clear = true;
+        for (const b of blocked) {
+          const dx = x - b.x, dy = y - b.y;
+          if (dx * dx + dy * dy < b.r * b.r) { clear = false; break; }
+        }
+        if (!clear) continue;
+        // Keep lanes free: skip anything sitting on the line from the centre to a landmark.
+        let onPath = false;
+        for (const b of V.buildings) {
+          if (b.id === 'warning_area' || b.id === 'park') continue;
+          if (distToSegment(x, y, SQUARE.x, SQUARE.y, b.tile_x + 0.5, b.tile_y + 1.0) < 0.85) { onPath = true; break; }
+        }
+        if (onPath) continue;
+        items.push({ x, y, rock: roll > 0.47, s: 0.7 + rnd() * 0.6, tint: rnd() });
+      }
+    }
+    items.sort((a, b) => (a.x + a.y) - (b.x + b.y));
+    for (const it of items) {
+      const p = iso(it.x, it.y);
+      if (it.rock) gRock(g, p.x, p.y, TILE * 0.12 * it.s);
+      else gTree(g, p.x, p.y, TILE * it.s, it.tint);
+    }
+  }
+
+  function distToSegment(px, py, ax, ay, bx, by) {
+    const dx = bx - ax, dy = by - ay;
+    const len = dx * dx + dy * dy;
+    let t = len ? ((px - ax) * dx + (py - ay) * dy) / len : 0;
+    t = Math.max(0, Math.min(1, t));
+    const cx = ax + t * dx, cy = ay + t * dy;
+    return Math.hypot(px - cx, py - cy);
+  }
+
+  /// A low-poly conifer: two stacked shells with a lit left face, matching the key light.
+  function gTree(g, x, y, h, tint) {
+    const green = 96 + Math.round(tint * 34);
+    const trunkH = h * 0.20, r = h * 0.30;
+    g.fillStyle = 'rgba(6,18,10,.30)';
+    g.beginPath(); g.ellipse(x + r * 0.22, y + r * 0.12, r * 0.95, r * 0.42, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#5a4028';
+    g.fillRect(x - h * 0.028, y - trunkH, h * 0.056, trunkH);
+    for (let i = 0; i < 2; i++) {
+      const cy = y - trunkH - i * h * 0.26, rr = r * (1 - i * 0.26), hh = h * 0.40;
+      g.fillStyle = 'hsl(' + green + ', 46%, ' + (30 - i * 2) + '%)';
+      g.beginPath(); g.moveTo(x, cy - hh); g.lineTo(x + rr, cy); g.lineTo(x, cy + rr * 0.42); g.lineTo(x - rr, cy); g.closePath(); g.fill();
+      g.fillStyle = 'hsl(' + green + ', 50%, ' + (43 - i * 2) + '%)';
+      g.beginPath(); g.moveTo(x, cy - hh); g.lineTo(x - rr, cy); g.lineTo(x, cy + rr * 0.42); g.closePath(); g.fill();
+    }
+  }
+
+  function gRock(g, x, y, r) {
+    g.fillStyle = 'rgba(6,18,10,.28)';
+    g.beginPath(); g.ellipse(x + r * 0.2, y + r * 0.28, r * 1.15, r * 0.5, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#8b93a2';
+    g.beginPath(); g.moveTo(x - r, y); g.lineTo(x - r * 0.4, y - r * 0.95); g.lineTo(x + r * 0.6, y - r * 0.8); g.lineTo(x + r, y + r * 0.1); g.lineTo(x, y + r * 0.45); g.closePath(); g.fill();
+    g.fillStyle = '#aeb6c4';
+    g.beginPath(); g.moveTo(x - r, y); g.lineTo(x - r * 0.4, y - r * 0.95); g.lineTo(x + r * 0.1, y - r * 0.35); g.lineTo(x, y + r * 0.45); g.closePath(); g.fill();
   }
 
   function slab(g, n, e, s2, w, depth, r) {
@@ -688,16 +781,20 @@
     dot(x, y - TILE * 0.5, 2.5, '#ffe08a');
   }
 
+  // Cottage roofs: clay, slate, teal, ochre, plum, moss. Varied like the reference, all muted
+  // enough that the warehouses' system colours still stand out.
+  const ROOFS = ['#b6553f', '#5a6a86', '#3f7d75', '#c08a3e', '#8a5570', '#5d7a48', '#a34b45'];
+
   function drawBuilding(b, T) {
     const size = Math.max(1, Math.min(4, b.size || b.base_size || 1));
     const fp = 0.7 + size * 0.28;                      // footprint in tiles
-    const hgt = TILE * (0.35 + size * 0.22);           // wall height
+    const hgt = TILE * (0.26 + size * 0.15);           // wall height
     const c = iso(b.tile_x + 0.5, b.tile_y + 0.5);
     const hw = fp * TILE / 2, hh = fp * TILE / 4;
     const selected = V.selected === b.id;
     const roof = b.id === 'warning_area' ? '#6b5733'
       : b.id === 'utility_district' ? T.primary
-      : shade(T.primary, ((b.tile_x * 7 + b.tile_y * 5) % 5) * 13 - 26);
+      : ROOFS[(b.tile_x * 7 + b.tile_y * 5) % ROOFS.length];
     const wallL = '#e4ded3', wallR = '#a2abc4';
 
     if (b.sprite === 'houses') { cluster(c, hw, hh, hgt, roof, wallL, wallR, size); }
@@ -838,33 +935,28 @@
     let busy = false;
     for (const ag of V.agents.values()) if (ag.at === b.id || ag.target === b.id) { busy = true; break; }
 
-    const size = Math.max(10.5, TILE * 0.175);
+    const size = Math.max(10.5, TILE * 0.18);
     const prominent = selected || hovered;
-    ctx.font = (prominent ? '600 ' : '500 ') + size + 'px system-ui, sans-serif';
+    ctx.font = (prominent ? '650 ' : '560 ') + size + 'px system-ui, sans-serif';
     ctx.textAlign = 'center';
-    const x = b._screen.x, y = b._screen.labelY + size * 0.9;
+    const x = b._screen.x, y = b._screen.labelY + size * 1.05;
 
-    const w = ctx.measureText(b.label).width;
-    if (prominent || busy) {
-      const padX = size * 0.7, h = size * 1.65;
-      roundRect(x - w / 2 - padX, y - h * 0.74, w + padX * 2, h, h / 2,
-        prominent ? 'rgba(126,224,255,.16)' : 'rgba(14,18,32,.55)',
-        prominent ? 'rgba(126,224,255,.55)' : null);
-    }
-    // A dark halo keeps the text readable over any roof without a box behind it.
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = 'rgba(8,11,22,.7)'; ctx.lineWidth = Math.max(2, size * 0.32);
-    ctx.strokeText(b.label, x, y);
-    ctx.fillStyle = prominent ? '#eaf7ff' : (busy ? '#e7ecf8' : 'rgba(226,232,246,.78)');
-    ctx.fillText(b.label, x, y);
+    const text = suffix ? b.label : b.label;
+    const w = ctx.measureText(text).width;
+    const padX = size * 0.62, h = size * 1.62;
+    roundRect(x - w / 2 - padX, y - h * 0.76, w + padX * 2, h, h / 2,
+      prominent ? 'rgba(24,58,86,.94)' : (busy ? 'rgba(16,32,56,.92)' : 'rgba(10,20,40,.82)'),
+      prominent ? 'rgba(94,200,240,.85)' : 'rgba(255,255,255,.10)');
+    ctx.fillStyle = prominent ? '#eaf7ff' : '#e7eefb';
+    ctx.fillText(text, x, y);
 
     if (suffix) {
-      const sub = Math.max(9, size * 0.8);
-      ctx.font = '500 ' + sub + 'px system-ui, sans-serif';
-      const sy = y + sub * 1.18;
-      ctx.strokeStyle = 'rgba(8,11,22,.65)'; ctx.lineWidth = Math.max(2, sub * 0.3);
-      ctx.strokeText(suffix, x, sy);
-      ctx.fillStyle = prominent ? 'rgba(126,224,255,.95)' : 'rgba(168,180,208,.8)';
+      const sub = Math.max(9, size * 0.78);
+      ctx.font = '600 ' + sub + 'px system-ui, sans-serif';
+      const sy = y + h * 0.92;
+      const sw = ctx.measureText(suffix).width, sp = sub * 0.55, sh = sub * 1.5;
+      roundRect(x - sw / 2 - sp, sy - sh * 0.76, sw + sp * 2, sh, sh / 2, 'rgba(10,20,40,.72)', null);
+      ctx.fillStyle = prominent ? 'rgba(126,224,255,.98)' : 'rgba(176,198,226,.92)';
       ctx.fillText(suffix, x, sy);
     }
     ctx.textAlign = 'left';
@@ -881,6 +973,41 @@
     }
     if (fill) { ctx.fillStyle = fill; ctx.fill(); }
     if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+  }
+
+  /// A hipped roof with overhanging eaves — the silhouette that makes these read as cottages
+  /// rather than capped boxes. Four faces, shaded from the one key light: up-left is brightest,
+  /// down-right darkest, and a shadowed soffit under the overhang.
+  function hipRoof(x, top, hw, hh, roof) {
+    const ow = hw * 1.22, oh = hh * 1.22;             // eaves reach past the walls
+    const apex = top - oh * 1.9;                      // well clear of the eave corners, or it inverts
+    const faces = [
+      [[-ow, 0], [0, -oh], 26],   // north-west, into the light
+      [[0, -oh], [ow, 0], 4],     // north-east
+      [[-ow, 0], [0, oh], -20],   // south-west
+      [[0, oh], [ow, 0], -40]     // south-east, deepest shade
+    ];
+    // Soffit: the underside of the overhang, always dark.
+    ctx.fillStyle = shade(roof, -62);
+    ctx.beginPath();
+    ctx.moveTo(x - ow, top); ctx.lineTo(x, top + oh); ctx.lineTo(x + ow, top);
+    ctx.lineTo(x + ow, top + oh * 0.22); ctx.lineTo(x, top + oh * 1.22); ctx.lineTo(x - ow, top + oh * 0.22);
+    ctx.closePath(); ctx.fill();
+
+    for (const [a, b, d] of faces) {
+      ctx.fillStyle = shade(roof, d);
+      ctx.beginPath();
+      ctx.moveTo(x + a[0], top + a[1]); ctx.lineTo(x + b[0], top + b[1]); ctx.lineTo(x, apex);
+      ctx.closePath(); ctx.fill();
+    }
+    // Highlight along the two hips that catch the light.
+    ctx.strokeStyle = 'rgba(255,246,224,.45)'; ctx.lineWidth = Math.max(1, TILE * 0.016);
+    ctx.beginPath();
+    ctx.moveTo(x - ow, top); ctx.lineTo(x, apex); ctx.lineTo(x, top - oh);
+    ctx.stroke();
+    // Eave line so the overhang reads against the wall below.
+    ctx.strokeStyle = 'rgba(20,14,10,.35)'; ctx.lineWidth = Math.max(1, TILE * 0.014);
+    ctx.beginPath(); ctx.moveTo(x - ow, top); ctx.lineTo(x, top + oh); ctx.lineTo(x + ow, top); ctx.stroke();
   }
 
   /// Soft contact shadow on the ground, offset away from the key light.
@@ -907,26 +1034,46 @@
     ctx.fillStyle = vgrad(x, top - hh, y + hh, wallR, shade(wallR, -30));
     ctx.beginPath(); ctx.moveTo(x + hw, y); ctx.lineTo(x, y + hh); ctx.lineTo(x, y + hh - h); ctx.lineTo(x + hw, y - h); ctx.closePath(); ctx.fill();
 
-    // Roof: an eave skirt, then a cap lifted towards the light, so it reads as a pitched volume
-    // instead of a flat sticker.
-    diamond(x, top, hw, hh, shade(roof, -34));
-    const lift = Math.min(TILE * 0.16, h * 0.22);
-    diamond(x, top - lift, hw * 0.82, hh * 0.82, roof);
-    // Sunlit half of the cap.
-    ctx.fillStyle = 'rgba(255,236,208,.20)';
-    ctx.beginPath();
-    ctx.moveTo(x, top - lift - hh * 0.82); ctx.lineTo(x - hw * 0.82, top - lift); ctx.lineTo(x, top - lift + hh * 0.82);
-    ctx.closePath(); ctx.fill();
-
-    // Rim light along the two cap edges that face the sky.
-    ctx.strokeStyle = 'rgba(255,248,236,.42)'; ctx.lineWidth = Math.max(1, TILE * 0.018);
-    ctx.beginPath();
-    ctx.moveTo(x - hw * 0.82, top - lift); ctx.lineTo(x, top - lift - hh * 0.82); ctx.lineTo(x + hw * 0.82, top - lift);
-    ctx.stroke();
+    hipRoof(x, top, hw, hh, roof);
 
     // Soft vertical crease where the two faces meet, instead of the old hard black line.
     ctx.strokeStyle = 'rgba(10,14,26,.28)'; ctx.lineWidth = Math.max(1, TILE * 0.014);
     ctx.beginPath(); ctx.moveTo(x, y + hh); ctx.lineTo(x, top + hh); ctx.stroke();
+
+    windows(x, y, hw, hh, h);
+  }
+
+  /// Lamplit windows on both faces, with a little spill onto the wall. Deterministic per position
+  /// so they never flicker between frames.
+  function windows(x, y, hw, hh, h) {
+    if (h < TILE * 0.3) return;
+    const rows = h > TILE * 0.95 ? 2 : 1;
+    const cols = hw > TILE * 0.5 ? 2 : 1;
+    const ww = hw * 0.2, wh2 = h * (rows > 1 ? 0.17 : 0.22);
+    for (let face = 0; face < 2; face++) {
+      const dir = face === 0 ? -1 : 1;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const u = (c + 1) / (cols + 1);
+          const bx = x + dir * u * hw, by = y + u * hh;
+          const ty2 = by - h + (r + 0.62) * (h / (rows + 0.7));
+          const lit = ((Math.round(x * 7 + y * 3) + r * 5 + c * 11 + face * 3) % 7) !== 0;
+          ctx.fillStyle = lit ? (face === 0 ? 'rgba(255,214,130,.92)' : 'rgba(255,198,112,.78)') : 'rgba(40,52,74,.75)';
+          ctx.beginPath();
+          ctx.moveTo(bx - dir * ww, ty2 - ww * 0.5);
+          ctx.lineTo(bx, ty2);
+          ctx.lineTo(bx, ty2 + wh2);
+          ctx.lineTo(bx - dir * ww, ty2 + wh2 - ww * 0.5);
+          ctx.closePath(); ctx.fill();
+          if (lit) {
+            const gl = ctx.createRadialGradient(bx - dir * ww * 0.5, ty2 + wh2 * 0.4, 1, bx - dir * ww * 0.5, ty2 + wh2 * 0.4, ww * 3.2);
+            gl.addColorStop(0, 'rgba(255,196,110,.20)'); gl.addColorStop(1, 'rgba(255,196,110,0)');
+            ctx.fillStyle = gl;
+            ctx.beginPath(); ctx.arc(bx - dir * ww * 0.5, ty2 + wh2 * 0.4, ww * 3.2, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+      }
+    }
   }
   function cluster(c, hw, hh, hgt, roof, wallL, wallR, size) {
     const n = Math.min(4, 1 + size); const offs = [[0, 0], [-0.5, 0.3], [0.5, 0.3], [0, 0.6]];

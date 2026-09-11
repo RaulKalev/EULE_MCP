@@ -374,10 +374,16 @@ consulted, and no text is generated.
 
 ## How the scene is drawn
 
-One light direction governs the whole village: a warm key from the upper left, a cool sky fill
-opposite. Every block is shaded from it — lit face, shaded face, ambient occlusion at the base, a
-contact shadow on the ground and a rim highlight along the roof edges — which is what gives the
-fixed isometric view its depth. The town sits on an extruded slab rather than a tiled floor.
+A sunlit island on deep navy. One light direction governs everything: a warm key from the upper
+left, a cool sky fill opposite. Every block is shaded from it — lit face, shaded face, ambient
+occlusion at the base, a contact shadow on the ground — and wears a hipped roof with overhanging
+eaves and a shadowed soffit, which is what makes the buildings read as cottages rather than capped
+boxes. Windows are lit from within. The town sits on a thick extruded slab of turf, and trees and
+boulders are scattered over the open grass, deterministically and always clear of the buildings
+and the lanes.
+
+Landmark roofs use a fixed palette of muted cottage colours rather than the theme colour, so the
+warehouses system colours stay the thing that carries meaning.
 
 Tile coordinates are spread apart by `SPREAD` (1.34) while footprints stay a fixed multiple of
 `TILE`, so the gaps between buildings grow without the buildings growing with them.
@@ -390,7 +396,7 @@ pill; everything else stays quiet.
 painted once into an offscreen canvas and blitted each frame; wall gradients are cached by colour
 and size. Only buildings, characters and effects are redrawn. Diagnostics reports the cost as
 `Renderer: N ms/frame` — about **0.9 ms** (p95 1.4 ms) for thirteen landmarks, eight warehouses
-and one character on a 1260 px canvas, against a 16.7 ms budget at 60 fps. That figure measures
+and one character on a 1260 px canvas, against a 16.7 ms budget at 60 fps. Scenery is part of the cached layer, so a fully planted island costs nothing per frame. That figure measures
 the drawing work itself, so it stays meaningful even when a hidden tab throttles the frame
 callback.
 
