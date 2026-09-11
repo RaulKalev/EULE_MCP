@@ -520,6 +520,13 @@
         "dependencies": {
           "Newtonsoft.Json": "[13.0.3, )"
         }
+      },
+      "revitmcp.village": {
+        "type": "Project",
+        "dependencies": {
+          "Newtonsoft.Json": "[13.0.3, )",
+          "System.Text.Json": "[8.0.5, )"
+        }
       }
     },
     "net8.0-windows7.0": {
@@ -1577,6 +1584,12 @@
         }
       },
       "revitmcp.core": {
+        "type": "Project",
+        "dependencies": {
+          "Newtonsoft.Json": "[13.0.3, )"
+        }
+      },
+      "revitmcp.village": {
         "type": "Project",
         "dependencies": {
           "Newtonsoft.Json": "[13.0.3, )"

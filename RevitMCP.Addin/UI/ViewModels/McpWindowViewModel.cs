@@ -92,6 +92,10 @@ public class McpWindowViewModel : BaseViewModel
     public int SelectedTabIndex { get => _selectedTabIndex; set => SetProperty(ref _selectedTabIndex, value); }
     public Action<Action<bool>>? RequestDirectEditConfirmation { get; set; }
 
+    // ── Project Village (read-only visualizer; null when unavailable) ─────────
+    private Village.Hosting.VillageStatusViewModel? _village;
+    public Village.Hosting.VillageStatusViewModel? Village { get => _village; set => SetProperty(ref _village, value); }
+
     // ── Commands ──────────────────────────────────────────────────────────────
     public ICommand StartCommand { get; }
     public ICommand StopCommand { get; }

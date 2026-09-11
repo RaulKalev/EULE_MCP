@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project Village</title>
+<!--
+  Project Village — passive, read-only visualization of EULE MCP activity.
+  Self-contained: no external scripts, fonts or images. Served by the connector's loopback
+  listener; also runs from a file with ?demo=1 (built-in deterministic demo, no server).
+  It never sends commands: the only network calls are GET /events (SSE) and GET /snapshot.
+-->
+<style>
+  :root {
+    --bg: #14181f; --panel: #1c2129; --panel-2: #232a34; --line: #2f3844; --text: #e6ebf2; --muted: #93a0b2;
+    --accent: #7fc8ff; --ok: #4fbf7a; --warn: #e3b341; --err: #ff6b6b; --catch: #d07ff0;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, "Segoe UI", sans-serif; }
+  body { display: grid; grid-template-rows: auto 1fr auto; height: 100vh; overflow: hidden; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 15px; margin: 0 6px 0 0; letter-spacing: .3px; }
+  header .project { font-weight: 600; color: var(--accent); max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: .4px; text-transform: uppercase; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); }
+  .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .badge.ok { color: var(--ok); } .badge.ok .dot { background: var(--ok); }
+  .badge.warn { color: var(--warn); } .badge.warn .dot { background: var(--warn); }
+  .badge.err { color: var(--err); } .badge.err .dot { background: var(--err); }
+  .badge.catch { color: var(--catch); } .badge.catch .dot { background: var(--catch); }
+  .badge.readonly { color: #fff; background: #3a4a5c; border-color: #56708d; }
+  header select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font-size: 12px; }
+  header .spacer { flex: 1; }
+  main { display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
+  #stage { position: relative; min-width: 0; min-height: 0; }
+  canvas { display: block; width: 100%; height: 100%; cursor: pointer; }
+  #hint { position: absolute; left: 12px; bottom: 10px; font-size: 11px; color: var(--muted); pointer-events: none; }
+  #catchup { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); padding: 4px 12px; border-radius: 8px; background: rgba(208,127,240,.18); border: 1px solid var(--catch); color: var(--catch); font-size: 12px; font-weight: 600; }
+  aside { border-left: 1px solid var(--line); background: var(--panel); overflow-y: auto; display: flex; flex-direction: column; }
+  aside section { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  aside h2 { margin: 0 0 6px; font-size: 11px; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); }
+  #activity .agent { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+  #activity .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  #activity .what { color: var(--muted); font-size: 12px; }
+  #feed ul { list-style: none; margin: 0; padding: 0; max-height: 34vh; overflow-y: auto; }
+  #feed li { display: grid; grid-template-columns: 44px 1fr; gap: 8px; padding: 3px 0; border-bottom: 1px dashed #262e39; font-size: 12px; }
+  #feed li time { color: var(--muted); font-variant-numeric: tabular-nums; }
+  #feed li.error { color: var(--err); } #feed li.deferred { color: var(--warn); } #feed li.move { color: var(--muted); }
+  #feed li.project, #feed li.session, #feed li.graph, #feed li.bridge { color: var(--accent); }
+  #selected .kv { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 12px; }
+  #selected .kv span:nth-child(2n) { text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
+  #selected .desc { color: var(--muted); font-size: 12px; margin: 4px 0 8px; }
+  #controls { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+  button { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  input[type=range] { width: 110px; }
+  #diag { font-size: 11px; color: var(--muted); }
+  #diag table { border-collapse: collapse; width: 100%; margin: 4px 0 8px; }
+  #diag th, #diag td { text-align: left; padding: 2px 4px; border-bottom: 1px solid #262e39; font-weight: normal; }
+  #diag td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  #diag .reason { color: var(--text); margin: 4px 0; }
+  footer { padding: 6px 14px; border-top: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: 11px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; } aside { border-left: 0; border-top: 1px solid var(--line); max-height: 45vh; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Project Village</h1>
+  <span class="project" id="projectName">—</span>
+  <span class="badge" id="graphBadge"><span class="dot"></span><span>graph: unknown</span></span>
+  <span class="badge" id="bridgeBadge"><span class="dot"></span><span>connecting</span></span>
+  <span class="badge" id="modeBadge"><span class="dot"></span><span>live</span></span>
+  <span class="badge readonly" title="This page cannot send commands to Revit or to the AI agent.">read-only</span>
+  <span class="spacer"></span>
+  <select id="instances" title="Other running villages (one per Revit instance)" hidden></select>
+</header>
+<main>
+  <div id="stage">
+    <canvas id="village"></canvas>
+    <div id="catchup" hidden>Catching up…</div>
+    <div id="hint">Click a building for its counters. Nothing on this page can change the model.</div>
+  </div>
+  <aside>
+    <section id="activity"><h2>Current activity</h2><div id="agents">No agent connected yet.</div></section>
+    <section id="feed"><h2>Recent activity</h2><ul id="feedList"></ul></section>
+    <section id="selected"><h2>Selected building</h2><div id="selectedBody">Click a landmark in the village.</div></section>
+    <section id="controls">
+      <button id="pauseBtn" type="button">Pause animation</button>
+      <label>Speed <input id="speed" type="range" min="0.25" max="3" step="0.25" value="1"> <span id="speedLabel">1×</span></label>
+      <button id="diagBtn" type="button">Diagnostics</button>
+    </section>
+    <section id="diag" hidden><h2>Diagnostics</h2><div id="diagBody"></div></section>
+  </aside>
+</main>
+<footer id="notice">The Project Village is a passive visualization. It does not make AI calls, add content to the agent context, execute MCP tools, or write to Revit. It displays deterministic summaries of connector activity and read-only graph snapshots.</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  // ─── Constants and limits ───────────────────────────────────────────────
+  const GRID_W = 12, GRID_H = 14;               // isometric tile grid
+  const FEED_LIMIT_DEFAULT = 200;
+  const MOVE_QUEUE_LIMIT = 8;                   // pending moves per agent before catch-up (teleport)
+  const EFFECT_LIMIT_DEFAULT = 6;
+  const AGENT_COLORS = ['#7fc8ff', '#ffb86b', '#b8ff8a', '#ff8ad4', '#f6f07b', '#9ea8ff'];
+  const SQUARE = { x: 5.4, y: 6.6 };            // where idle agents wait
+  const AREA_LABELS = {
+    project: 'the project', graph: 'the model graph', sheets: 'sheets', schedules: 'schedules', views: 'views',
+    families_types: 'families and types', tags_annotations: 'tags and annotations', elements: 'model elements',
+    fire_alarm: 'the fire alarm system', security: 'the security system', lighting: 'lighting', it_av: 'IT and AV',
+    electrical: 'electrical systems', coordination: 'coordination', office: 'the records office', unknown: 'the village square'
+  };
+  const STATE_TEXT = { idle: 'idle', moving: 'walking', inspecting: 'inspecting', working: 'working', success: 'done', error: 'failed', disconnected: 'disconnected' };
+
+  const params = new URLSearchParams(location.search);
+  const DEMO = params.get('demo') === '1';
+
+  // ─── Viewer state (derived only; nothing here is ever sent anywhere) ────
+  const V = {
+    snapshot: null, buildings: [], byId: new Map(), agents: new Map(), feed: [], effects: [],
+    feedLimit: FEED_LIMIT_DEFAULT, effectLimit: EFFECT_LIMIT_DEFAULT, selected: null,
+    paused: false, speed: 1, connection: 'connecting', skipped: 0, lastStepId: 0, time: 0
+  };
+
+  // ─── DOM ────────────────────────────────────────────────────────────────
+  const $ = id => document.getElementById(id);
+  const canvas = $('village'), ctx = canvas.getContext('2d');
+  let W = 0, H = 0, DPR = 1, TILE = 56, ORIGIN = { x: 0, y: 0 };
+
+  function badge(el, cls, text) { el.className = 'badge' + (cls ? ' ' + cls : ''); el.lastElementChild.textContent = text; }
+
+  try {
+    const s = parseFloat(localStorage.getItem('village.speed'));
+    if (s >= 0.25 && s <= 3) V.speed = s;
+    V.paused = localStorage.getItem('village.paused') === '1';
+  } catch (e) { /* storage may be unavailable */ }
+  $('speed').value = String(V.speed);
+  $('speedLabel').textContent = V.speed + '×';
+  $('pauseBtn').textContent = V.paused ? 'Resume animation' : 'Pause animation';
+
+  $('pauseBtn').addEventListener('click', () => {
+    V.paused = !V.paused;
+    $('pauseBtn').textContent = V.paused ? 'Resume animation' : 'Pause animation';
+    try { localStorage.setItem('village.paused', V.paused ? '1' : '0'); } catch (e) { }
+  });
+  $('speed').addEventListener('input', e => {
+    V.speed = parseFloat(e.target.value) || 1;
+    $('speedLabel').textContent = V.speed + '×';
+    try { localStorage.setItem('village.speed', String(V.speed)); } catch (e2) { }
+  });
+  $('diagBtn').addEventListener('click', () => { const d = $('diag'); d.hidden = !d.hidden; renderDiagnostics(); });
+  $('instances').addEventListener('change', e => { const url = e.target.value; if (url && url !== location.origin + '/') location.href = url; });
+
+  // ─── Geometry ───────────────────────────────────────────────────────────
+  function resize() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = Math.max(200, rect.width); H = Math.max(200, rect.height);
+    canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+    // The diamond is span*TILE/2 wide and span*TILE/4 tall; leave headroom for the tallest landmark.
+    const span = GRID_W + GRID_H;
+    TILE = Math.max(24, Math.min((W - 40) / (span / 2), (H - 70) / (span / 4 + 1.6)));
+    const mapH = span * TILE / 4 + TILE * 1.6;
+    ORIGIN = { x: W / 2 + (GRID_H - GRID_W) * TILE / 4, y: (H - mapH) / 2 + TILE * 1.4 };
+  }
+  function iso(tx, ty) { return { x: ORIGIN.x + (tx - ty) * TILE / 2, y: ORIGIN.y + (tx + ty) * TILE / 4 }; }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ─── Snapshot handling ──────────────────────────────────────────────────
+  function applySnapshot(s, initial) {
+    if (!s || typeof s !== 'object') return;
+    V.snapshot = s;
+    V.feedLimit = (s.viewer_options && s.viewer_options.recent_activity_limit) || FEED_LIMIT_DEFAULT;
+    V.effectLimit = (s.viewer_options && s.viewer_options.max_effects) || EFFECT_LIMIT_DEFAULT;
+
+    const maxBuildings = (s.viewer_options && s.viewer_options.max_buildings) || 12;
+    V.buildings = (Array.isArray(s.buildings) ? s.buildings : []).slice(0, maxBuildings);
+    V.byId = new Map(V.buildings.map(b => [b.id, b]));
+
+    const seen = new Set();
+    (s.agents || []).forEach((a, i) => {
+      seen.add(a.id);
+      let ag = V.agents.get(a.id);
+      const target = a.building && V.byId.has(a.building) ? a.building : 'square';
+      if (!ag) {
+        const p = posOf(target);
+        ag = { id: a.id, name: a.name, x: p.x, y: p.y, at: target, target, queue: [], color: AGENT_COLORS[V.agents.size % AGENT_COLORS.length], bob: Math.random() * 6, stateSince: V.time };
+        V.agents.set(a.id, ag);
+      }
+      if (ag.state !== a.state) ag.stateSince = V.time;
+      ag.state = a.state; ag.activity = a.activity; ag.lastTool = a.last_tool; ag.name = a.name;
+      ag.inProgress = a.in_progress; ag.toolCount = a.tool_count; ag.failureCount = a.failure_count;
+      // The live state is authoritative: converge the queued walk to the current building.
+      if (ag.queue.length === 0 && ag.target !== target && ag.at !== target) ag.queue.push(target);
+      if (ag.queue.length > MOVE_QUEUE_LIMIT) { V.skipped += ag.queue.length - 1; ag.queue = [target]; ag.teleport = true; }
+    });
+    for (const id of Array.from(V.agents.keys())) if (!seen.has(id)) V.agents.delete(id);
+
+    if (initial) {
+      V.feed = (s.recent_steps || []).slice(-V.feedLimit).reverse();
+      V.lastStepId = V.feed.length ? V.feed[0].id : 0;
+    }
+    if (V.selected && !V.byId.has(V.selected)) V.selected = null;
+    renderHeader(); renderAgents(); renderFeed(); renderSelected(); renderInstances();
+    if (!$('diag').hidden) renderDiagnostics();
+  }
+
+  function onStep(step) {
+    if (!step || typeof step !== 'object') return;
+    if (step.id && step.id <= V.lastStepId) return; // duplicate after a reconnect
+    if (step.id) V.lastStepId = step.id;
+    V.feed.unshift(step);
+    if (V.feed.length > V.feedLimit) V.feed.length = V.feedLimit;
+
+    const ag = step.agent ? V.agents.get(step.agent) : null;
+    const building = step.building && V.byId.has(step.building) ? step.building : 'square';
+    if (step.kind === 'move' && ag) {
+      ag.queue.push(building);
+      if (ag.queue.length > MOVE_QUEUE_LIMIT) { V.skipped += ag.queue.length - 1; ag.queue = [building]; ag.teleport = true; }
+    } else if (step.kind === 'work' && !step.open) {
+      addEffect({ kind: 'label', text: step.label, building, color: '#e6ebf2' });
+      if (step.affected > 0 || step.activity === 'create' || step.activity === 'modify') addEffect({ kind: 'sparkle', building, color: '#ffe08a' });
+    } else if (step.kind === 'error') {
+      addEffect({ kind: 'flash', building, color: '#ff6b6b' });
+      addEffect({ kind: 'label', text: step.label, building, color: '#ff6b6b' });
+    } else if (step.kind === 'deferred') {
+      addEffect({ kind: 'label', text: step.label, building, color: '#e3b341' });
+    } else if (step.kind === 'graph' || step.kind === 'project' || step.kind === 'session') {
+      addEffect({ kind: 'label', text: step.label, building: 'town_hall', color: '#7fc8ff' });
+    }
+    renderFeed();
+  }
+
+  function addEffect(e) {
+    if (V.effects.length >= V.effectLimit) V.effects.shift();
+    e.t = 0; e.life = e.kind === 'label' ? 2.6 : e.kind === 'flash' ? 0.9 : 1.4;
+    V.effects.push(e);
+  }
+
+  // ─── Rendering: header and panels ───────────────────────────────────────
+  function renderHeader() {
+    const s = V.snapshot; if (!s) return;
+    $('projectName').textContent = s.project_name || '—';
+    document.title = 'Project Village — ' + (s.project_name || '');
+    const g = s.graph;
+    if (!g || !g.exists) badge($('graphBadge'), 'warn', 'graph: none (limited mode)');
+    else {
+      const f = g.freshness || {}; const age = f.age_seconds != null ? ' · ' + ageText(f.age_seconds) : '';
+      const cls = f.status === 'fresh' ? 'ok' : f.status === 'stale' ? 'err' : 'warn';
+      badge($('graphBadge'), cls, 'graph: ' + (f.status || 'unknown').replace('_', ' ') + age);
+    }
+    $('graphBadge').title = g && g.freshness ? g.freshness.reason : 'No graph';
+    badge($('bridgeBadge'), V.connection === 'connected' ? 'ok' : V.connection === 'demo' ? 'ok' : 'warn', V.connection === 'demo' ? 'demo mode' : V.connection);
+    const catching = s.mode === 'catch_up' || V.skipped > 0;
+    badge($('modeBadge'), catching ? 'catch' : 'ok', catching ? 'catch-up' : 'live');
+    $('catchup').hidden = !catching;
+    $('catchup').textContent = s.mode === 'catch_up' ? 'Catching up: the connector is compressing a backlog' : 'Catching up: ' + V.skipped + ' moves skipped';
+  }
+
+  function ageText(sec) {
+    if (sec < 90) return sec + 's old'; if (sec < 5400) return Math.round(sec / 60) + 'min old';
+    if (sec < 172800) return Math.round(sec / 3600) + 'h old'; return Math.round(sec / 86400) + 'd old';
+  }
+
+  function renderAgents() {
+    const el = $('agents');
+    if (V.agents.size === 0) { el.textContent = 'No agent connected yet.'; return; }
+    const open = new Map(((V.snapshot && V.snapshot.current_steps) || []).map(st => [st.agent, st]));
+    el.innerHTML = '';
+    for (const ag of V.agents.values()) {
+      const row = document.createElement('div'); row.className = 'agent';
+      const sw = document.createElement('span'); sw.className = 'swatch'; sw.style.background = ag.color;
+      const name = document.createElement('strong'); name.textContent = ag.name;
+      const what = document.createElement('span'); what.className = 'what';
+      const st = open.get(ag.id);
+      const where = ag.at === 'square' ? 'the village square' : (V.byId.get(ag.at) || {}).label || ag.at;
+      what.textContent = ' — ' + (STATE_TEXT[ag.state] || ag.state) + (st ? ': ' + st.label : ag.state === 'disconnected' ? '' : ' at ' + where) + (ag.inProgress ? ' (' + ag.inProgress + ' running)' : '');
+      row.append(sw, name, what); el.appendChild(row);
+    }
+  }
+
+  function renderFeed() {
+    const ul = $('feedList'); ul.innerHTML = '';
+    for (const st of V.feed.slice(0, 60)) {
+      const li = document.createElement('li'); li.className = st.kind || '';
+      const t = document.createElement('time'); t.textContent = (st.ended_at || st.started_at || '').substring(11, 19);
+      const span = document.createElement('span'); span.textContent = st.label || '';
+      li.append(t, span); ul.appendChild(li);
+    }
+    if (V.feed.length === 0) { const li = document.createElement('li'); li.textContent = 'Waiting for activity…'; ul.appendChild(li); }
+  }
+
+  function renderSelected() {
+    const body = $('selectedBody');
+    const b = V.selected ? V.byId.get(V.selected) : null;
+    if (!b) { body.textContent = 'Click a landmark in the village.'; return; }
+    const s = V.snapshot || {}; const areas = s.areas || []; const g = s.graph; const counts = (g && g.counts) || {};
+    let html = '<strong>' + esc(b.label) + '</strong><div class="desc">' + esc(b.description || '') + '</div><div class="kv">';
+    let reads = 0, writes = 0, exports = 0, failures = 0, deferred = 0, affected = 0, lastTool = null;
+    for (const a of areas) if ((b.areas || []).includes(a.area)) { reads += a.reads; writes += a.writes; exports += a.exports; failures += a.failures; deferred += a.deferred; affected += a.affected; if (a.last_tool) lastTool = a.last_tool; }
+    if (b.id === 'warning_area') {
+      html += kv('Recent failures (5 min)', s.recent_failures || 0);
+      html += kv('Graph status', g && g.freshness ? g.freshness.status : 'none');
+      if (g && g.health) { html += kv('Circuits without panel', g.health.circuits_without_panel); html += kv('Circuits without elements', g.health.circuits_without_elements); html += kv('Elements without room/space', g.health.elements_without_location); }
+    } else {
+      html += kv('Reads', reads) + kv('Writes', writes) + kv('Exports', exports) + kv('Failures', failures) + kv('Awaiting approval', deferred) + kv('Items affected', affected);
+      if (lastTool) html += kv('Last tool', lastTool);
+      const gk = { archive: ['sheets'], lookout: ['views'], market: ['schedules'], workshop: ['types'], sign_workshop: ['tags'], houses: ['elements', 'levels', 'spaces'], utility_district: ['panels', 'circuits'], town_hall: ['nodes', 'edges', 'worksets'] }[b.id] || [];
+      for (const k of gk) if (counts[k] != null) html += kv('Graph: ' + k, counts[k].toLocaleString());
+      if (b.id === 'town_hall' && g && g.built_at) html += kv('Graph built', g.built_at.replace('T', ' ').replace('Z', ' UTC'));
+    }
+    html += '</div>';
+    body.innerHTML = html;
+  }
+  function kv(k, v) { return '<span>' + esc(String(k)) + '</span><span>' + esc(String(v)) + '</span>'; }
+  function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+  function renderInstances() {
+    const sel = $('instances'); const list = (V.snapshot && V.snapshot.instances) || [];
+    if (list.length < 2) { sel.hidden = true; return; }
+    sel.hidden = false; sel.innerHTML = '';
+    for (const inst of list) {
+      const o = document.createElement('option'); o.value = inst.url; o.textContent = (inst.is_current ? '● ' : '') + inst.project_name + ' (Revit ' + inst.revit_version + ')';
+      if (inst.is_current) o.selected = true; sel.appendChild(o);
+    }
+  }
+
+  function renderDiagnostics() {
+    const s = V.snapshot; const body = $('diagBody'); if (!s) { body.textContent = 'No snapshot yet.'; return; }
+    let html = '';
+    const th = s.theme;
+    if (th) {
+      html += '<div class="reason"><strong>Theme: ' + esc(th.label) + '</strong> — ' + esc(th.reason) + '</div>';
+      html += '<table><tr><th>System</th><th>Cat.</th><th>Names</th><th>Score</th><th>Share</th><th>Vis.</th></tr>';
+      for (const sc of th.scores || []) html += '<tr><td>' + esc(sc.label) + '</td><td class="num">' + sc.category_score + '</td><td class="num">' + sc.name_score + '→' + sc.name_contribution + '</td><td class="num">' + sc.score + '</td><td class="num">' + Math.round(sc.share * 100) + '%</td><td>' + (sc.dominant ? 'dominant' : sc.visible ? 'yes' : '') + '</td></tr>';
+      html += '</table>';
+      const t = th.thresholds || {};
+      html += '<div>Thresholds: min sample ' + t.min_sample_count + ', min system ' + t.min_system_count + ', dominant ≥ ' + Math.round((t.dominant_share || 0) * 100) + '%, visible ≥ ' + Math.round((t.visible_share || 0) * 100) + '%, category weight ' + t.category_weight + ', name weight ' + t.name_weight + ' (' + esc(th.config_source) + '). Identity hue ' + (th.identity || {}).hue + ', pattern ' + (th.identity || {}).pattern + '.</div>';
+    } else html += '<div class="reason">No theme: no graph snapshot (limited mode).</div>';
+    const q = s.queue || {}; const st = s.stats || {};
+    html += '<table><tr><th>Queue</th><td class="num">' + (q.depth || 0) + ' / ' + (q.capacity || '?') + '</td><th>High water</th><td class="num">' + (q.high_water || 0) + '</td></tr>';
+    html += '<tr><th>Enqueued</th><td class="num">' + (q.enqueued || 0) + '</td><th>Dropped / evicted / rate-limited</th><td class="num">' + (q.dropped || 0) + ' / ' + (q.evicted || 0) + ' / ' + (q.rate_limited || 0) + '</td></tr>';
+    html += '<tr><th>Events processed</th><td class="num">' + (st.events_processed || 0) + '</td><th>Steps emitted</th><td class="num">' + (st.steps_emitted || 0) + '</td></tr>';
+    html += '<tr><th>Unknown tools / events</th><td class="num">' + (st.unknown_tools || 0) + ' / ' + (st.unknown_events || 0) + '</td><th>Catch-up entries</th><td class="num">' + (st.catch_up_entries || 0) + '</td></tr>';
+    html += '<tr><th>Last sequence</th><td class="num">' + (st.last_sequence || 0) + '</td><th>Viewer moves skipped</th><td class="num">' + V.skipped + '</td></tr></table>';
+    const g = s.graph;
+    if (g) html += '<div>Graph: ' + (g.exists ? esc(g.file_name || '') + ' (' + esc(g.root_source || '') + '), read in ' + g.read_ms + ' ms' + (g.used_cache ? ' via local cache copy' : '') + (g.error ? ', error: ' + esc(g.error) : '') : 'none') + '. Freshness: ' + esc((g.freshness || {}).reason || '') + '</div>';
+    html += '<div style="margin-top:6px">Session ' + esc(s.session_id || '') + ' · schema v' + s.schema_version + ' · updated ' + esc(s.updated_at || '') + ' · connection: ' + esc(V.connection) + '</div>';
+    body.innerHTML = html;
+  }
+
+  // ─── Rendering: canvas ──────────────────────────────────────────────────
+  function posOf(buildingId) {
+    if (buildingId === 'square' || !V.byId.has(buildingId)) return SQUARE;
+    const b = V.byId.get(buildingId); return { x: b.tile_x + 0.5, y: b.tile_y + 1.1 };
+  }
+
+  function theme() {
+    const th = (V.snapshot && V.snapshot.theme) || null;
+    const hue = th && th.identity ? th.identity.hue : 200;
+    const pattern = th && th.identity ? th.identity.pattern : 0;
+    return {
+      primary: (th && th.primary) || '#7a8b99', accent: (th && th.accent) || '#c9d3dc', name: th ? th.theme : 'neutral',
+      visible: (th && th.visible_systems) || [], hue, pattern,
+      ground: 'hsl(' + hue + ', 22%, 27%)', groundAlt: 'hsl(' + hue + ', 24%, 24%)', road: (th && th.theme === 'lighting') ? '#5a5240' : '#4a5563'
+    };
+  }
+
+  function draw() {
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    const T = theme();
+
+    // Ground tiles
+    for (let ty = 0; ty < GRID_H; ty++) for (let tx = 0; tx < GRID_W; tx++) {
+      const p = iso(tx, ty);
+      diamond(p.x, p.y + TILE / 4, TILE / 2, TILE / 4, ((tx + ty) % 2 === 0) ? T.ground : T.groundAlt);
+      if (T.pattern === 1 && (tx * 7 + ty * 3) % 5 === 0) dot(p.x, p.y + TILE / 4, TILE * 0.03, 'rgba(255,255,255,.08)');
+      if (T.pattern === 2 && (tx + ty) % 3 === 0) dot(p.x + TILE * 0.1, p.y + TILE * 0.2, TILE * 0.025, 'rgba(0,0,0,.18)');
+      if (T.pattern === 3 && tx % 3 === 1 && ty % 3 === 1) tuft(p.x, p.y + TILE / 4);
+    }
+
+    // Roads from the square to each landmark
+    ctx.lineCap = 'round';
+    for (const b of V.buildings) {
+      if (b.id === 'warning_area') continue;
+      const a = iso(SQUARE.x, SQUARE.y), c = iso(b.tile_x + 0.5, b.tile_y + 1.05);
+      ctx.strokeStyle = T.road; ctx.lineWidth = TILE * 0.16; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(c.x, c.y); ctx.stroke();
+      if (T.name === 'lighting' || T.visible.includes('lighting')) {
+        const mx = (a.x + c.x) / 2, my = (a.y + c.y) / 2; lantern(mx, my, 0.35 + 0.15 * Math.sin(V.time * 2 + b.tile_x));
+      }
+    }
+    // Village square
+    const sq = iso(SQUARE.x, SQUARE.y);
+    diamond(sq.x, sq.y, TILE * 0.9, TILE * 0.45, '#56606e');
+    ctx.fillStyle = 'rgba(255,255,255,.10)'; ctx.beginPath(); ctx.arc(sq.x, sq.y, TILE * 0.12, 0, Math.PI * 2); ctx.fill();
+
+    // Depth-sorted drawables
+    const items = [];
+    for (const b of V.buildings) items.push({ d: b.tile_x + b.tile_y + 1, draw: () => drawBuilding(b, T) });
+    for (const ag of V.agents.values()) items.push({ d: ag.x + ag.y + 0.2, draw: () => drawAgent(ag) });
+    for (const e of V.effects) { const p = posOf(e.building); items.push({ d: p.x + p.y + 3, draw: () => drawEffect(e) }); }
+    items.sort((a, b) => a.d - b.d);
+    for (const it of items) it.draw();
+    // Labels last so a taller neighbour never hides them.
+    for (const b of V.buildings) drawLabel(b);
+
+    // Legend
+    ctx.fillStyle = 'rgba(230,235,242,.75)'; ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'right';
+    ctx.fillText('theme: ' + T.name.replace('_', ' ') + (T.visible.length ? ' · districts: ' + T.visible.map(v => v.replace('_', ' ')).join(', ') : ''), W - 12, H - 12);
+    ctx.textAlign = 'left';
+  }
+
+  function diamond(x, y, hw, hh, fill) { ctx.fillStyle = fill; ctx.beginPath(); ctx.moveTo(x, y - hh); ctx.lineTo(x + hw, y); ctx.lineTo(x, y + hh); ctx.lineTo(x - hw, y); ctx.closePath(); ctx.fill(); }
+  function dot(x, y, r, fill) { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+  function tuft(x, y) { ctx.strokeStyle = 'rgba(160,210,120,.35)'; ctx.lineWidth = 1; for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(x + i * 3, y); ctx.lineTo(x + i * 4, y - 6); ctx.stroke(); } }
+  function lantern(x, y, glow) {
+    ctx.strokeStyle = '#3b3f46'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - TILE * 0.5); ctx.stroke();
+    const g = ctx.createRadialGradient(x, y - TILE * 0.5, 1, x, y - TILE * 0.5, TILE * 0.35);
+    g.addColorStop(0, 'rgba(255,224,138,' + glow + ')'); g.addColorStop(1, 'rgba(255,224,138,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y - TILE * 0.5, TILE * 0.35, 0, Math.PI * 2); ctx.fill();
+    dot(x, y - TILE * 0.5, 2.5, '#ffe08a');
+  }
+
+  function drawBuilding(b, T) {
+    const size = Math.max(1, Math.min(4, b.size || b.base_size || 1));
+    const fp = 0.7 + size * 0.28;                      // footprint in tiles
+    const hgt = TILE * (0.35 + size * 0.22);           // wall height
+    const c = iso(b.tile_x + 0.5, b.tile_y + 0.5);
+    const hw = fp * TILE / 2, hh = fp * TILE / 4;
+    const selected = V.selected === b.id;
+    const roof = b.id === 'warning_area' ? '#5b4a2a' : (b.id === 'utility_district' ? T.primary : shade(T.primary, b.tile_x * 3 - 10));
+    const wallL = '#8d8f99', wallR = '#6f7280';
+
+    if (b.sprite === 'houses') { cluster(c, hw, hh, hgt, roof, wallL, wallR, size); }
+    else if (b.sprite === 'tower') { box(c.x, c.y, hw * 0.55, hh * 0.55, hgt * 1.8, roof, wallL, wallR); pole(c.x, c.y - hgt * 1.8 - hh * 0.55, TILE * 0.25, T.accent); }
+    else if (b.sprite === 'warning') { drawWarning(c, hw, hh, hgt); }
+    else { box(c.x, c.y, hw, hh, hgt, roof, wallL, wallR); }
+
+    // Sprite details
+    const top = c.y - hgt;
+    if (b.sprite === 'town_hall') { box(c.x, top - hh * 0.2, hw * 0.28, hh * 0.28, hgt * 0.55, roof, wallL, wallR); pole(c.x, top - hh * 0.2 - hgt * 0.55 - hh * 0.28, TILE * 0.3, T.accent, true); }
+    if (b.sprite === 'archive') for (let i = 0; i < 3; i++) { ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(c.x - hw * 0.55 + i * hw * 0.35, top + hh * 0.25 + hgt * 0.25, hw * 0.16, hgt * 0.45); }
+    if (b.sprite === 'market') { ctx.fillStyle = T.accent; for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(c.x + i * hw * 0.3, top - hh - 2); ctx.lineTo(c.x + (i + 0.5) * hw * 0.3, top - hh - 2); ctx.lineTo(c.x + (i + 0.25) * hw * 0.3, top - hh + hh * 0.5); ctx.closePath(); ctx.fill(); } }
+    if (b.sprite === 'workshop') { ctx.fillStyle = '#4a4d55'; ctx.fillRect(c.x + hw * 0.35, top - hh * 1.2, hw * 0.14, hh * 1.2); smoke(c.x + hw * 0.42, top - hh * 1.3); }
+    if (b.sprite === 'sign') { ctx.fillStyle = T.accent; ctx.fillRect(c.x - hw * 0.9, top + hh * 0.2, hw * 0.5, hgt * 0.3); ctx.fillStyle = '#1c2129'; ctx.fillRect(c.x - hw * 0.85, top + hh * 0.25, hw * 0.4, hgt * 0.2); }
+    if (b.sprite === 'substation') { drawSubstation(c, hw, hh, hgt, T); }
+    if (b.sprite === 'survey') { pole(c.x + hw * 0.6, c.y + hh * 0.3, TILE * 0.5, '#c9d3dc'); ctx.strokeStyle = '#c9d3dc'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(c.x + hw * 0.6, c.y + hh * 0.3 - TILE * 0.5); ctx.lineTo(c.x + hw * 0.45, c.y + hh * 0.3); ctx.moveTo(c.x + hw * 0.6, c.y + hh * 0.3 - TILE * 0.5); ctx.lineTo(c.x + hw * 0.75, c.y + hh * 0.3); ctx.stroke(); }
+    if (b.sprite === 'office') for (let r = 0; r < 2; r++) for (let i = 0; i < 3; i++) { ctx.fillStyle = 'rgba(255,240,200,.6)'; ctx.fillRect(c.x - hw * 0.7 + i * hw * 0.28, top + hh * 0.3 + r * hgt * 0.35, hw * 0.12, hgt * 0.2); }
+
+    if (selected) { ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(c.x, c.y - hh); ctx.lineTo(c.x + hw, c.y); ctx.lineTo(c.x, c.y + hh); ctx.lineTo(c.x - hw, c.y); ctx.closePath(); ctx.stroke(); }
+    // Hit box: from the roof (tallest sprites reach ~1.8 × height) down to the label.
+    b._screen = { x: c.x, y: c.y - hgt / 2, hw: hw * 1.05, top: c.y - hgt * (b.sprite === 'tower' ? 1.9 : 1.15) - hh, bottom: c.y + hh + TILE * 0.3, labelY: c.y + hh + 4 };
+  }
+
+  function drawLabel(b) {
+    if (!b._screen) return;
+    const selected = V.selected === b.id;
+    ctx.font = (selected ? 'bold ' : '') + Math.max(10, TILE * 0.2) + 'px system-ui, sans-serif'; ctx.textAlign = 'center';
+    const lw = ctx.measureText(b.label).width + 10; const y = b._screen.labelY;
+    ctx.fillStyle = 'rgba(20,24,31,.78)'; ctx.fillRect(b._screen.x - lw / 2, y, lw, TILE * 0.24 + 4);
+    ctx.fillStyle = selected ? '#ffe08a' : '#e6ebf2'; ctx.fillText(b.label, b._screen.x, y + TILE * 0.2 - 2);
+    ctx.textAlign = 'left';
+  }
+
+  function box(x, y, hw, hh, h, roof, wallL, wallR) {
+    ctx.fillStyle = wallL; ctx.beginPath(); ctx.moveTo(x - hw, y); ctx.lineTo(x, y + hh); ctx.lineTo(x, y + hh - h); ctx.lineTo(x - hw, y - h); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = wallR; ctx.beginPath(); ctx.moveTo(x + hw, y); ctx.lineTo(x, y + hh); ctx.lineTo(x, y + hh - h); ctx.lineTo(x + hw, y - h); ctx.closePath(); ctx.fill();
+    diamond(x, y - h, hw, hh, roof);
+    ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, y + hh); ctx.lineTo(x, y + hh - h); ctx.stroke();
+  }
+  function cluster(c, hw, hh, hgt, roof, wallL, wallR, size) {
+    const n = Math.min(4, 1 + size); const offs = [[0, 0], [-0.5, 0.3], [0.5, 0.3], [0, 0.6]];
+    for (let i = n - 1; i >= 0; i--) { const o = offs[i]; box(c.x + o[0] * hw, c.y + o[1] * hh * 1.3, hw * 0.38, hh * 0.38, hgt * 0.5, roof, wallL, wallR); }
+  }
+  function pole(x, y, h, color, flag) {
+    ctx.strokeStyle = '#3b3f46'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y - h); ctx.stroke();
+    if (flag) { const w = Math.sin(V.time * 3) * 2; ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(x, y - h); ctx.lineTo(x + TILE * 0.22 + w, y - h + TILE * 0.06); ctx.lineTo(x, y - h + TILE * 0.13); ctx.closePath(); ctx.fill(); }
+    else dot(x, y - h, 2.5, color);
+  }
+  function smoke(x, y) { for (let i = 0; i < 3; i++) { const t = (V.time * 0.4 + i * 0.33) % 1; dot(x + Math.sin(t * 6) * 3, y - t * TILE * 0.5, 2 + t * 4, 'rgba(200,200,210,' + (0.35 * (1 - t)) + ')'); } }
+  function drawWarning(c, hw, hh, hgt) {
+    const s = V.snapshot || {}; const g = s.graph || {}; const f = (g.freshness || {}).status;
+    const alert = (s.recent_failures || 0) > 0 || f === 'stale' || f === 'possibly_stale' || ((g.health || {}).issues || 0) > 0;
+    diamond(c.x, c.y, hw, hh, '#3d4350');
+    for (let i = -1; i <= 1; i++) { ctx.fillStyle = (i % 2 === 0) ? '#e3b341' : '#2a2f38'; ctx.fillRect(c.x + i * hw * 0.3 - hw * 0.15, c.y - hh * 0.5, hw * 0.3, hh * 0.4); }
+    const pulse = alert ? 0.6 + 0.4 * Math.sin(V.time * 4) : 0.25;
+    ctx.fillStyle = alert ? 'rgba(255,107,107,' + pulse + ')' : 'rgba(147,160,178,.4)';
+    ctx.beginPath(); ctx.moveTo(c.x, c.y - hgt); ctx.lineTo(c.x + TILE * 0.22, c.y - hgt * 0.35); ctx.lineTo(c.x - TILE * 0.22, c.y - hgt * 0.35); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#14181f'; ctx.font = 'bold ' + TILE * 0.22 + 'px system-ui'; ctx.textAlign = 'center'; ctx.fillText('!', c.x, c.y - hgt * 0.45); ctx.textAlign = 'left';
+  }
+  function drawSubstation(c, hw, hh, hgt, T) {
+    const top = c.y - hgt; const vis = T.visible;
+    pole(c.x - hw * 0.8, c.y + hh * 0.5, TILE * 0.7, '#c9d3dc'); pole(c.x + hw * 0.8, c.y - hh * 0.5, TILE * 0.7, '#c9d3dc');
+    ctx.strokeStyle = 'rgba(200,210,220,.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(c.x - hw * 0.8, c.y + hh * 0.5 - TILE * 0.7); ctx.quadraticCurveTo(c.x, top - hh, c.x + hw * 0.8, c.y - hh * 0.5 - TILE * 0.7); ctx.stroke();
+    if (vis.includes('fire_alarm') || T.name === 'fire_alarm') { const x = c.x + hw * 1.15, y = c.y + hh * 0.9; ctx.fillStyle = '#7a3b32'; ctx.fillRect(x - 4, y - TILE * 0.9, 8, TILE * 0.9); const on = Math.sin(V.time * 2.5) > 0.6; dot(x, y - TILE * 0.95, on ? 5 : 3.5, on ? '#ff8a75' : '#b8432f'); if (on) dot(x, y - TILE * 0.95, 10, 'rgba(255,138,117,.25)'); }
+    if (vis.includes('security') || T.name === 'security') { ctx.strokeStyle = '#aab7b8'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(c.x - hw * 1.3, c.y + hh * 0.2); ctx.lineTo(c.x - hw * 0.6, c.y + hh * 1.0); ctx.stroke(); for (let i = 0; i < 4; i++) { const t = i / 3; ctx.beginPath(); ctx.moveTo(c.x - hw * 1.3 + t * hw * 0.7, c.y + hh * 0.2 + t * hh * 0.8); ctx.lineTo(c.x - hw * 1.3 + t * hw * 0.7, c.y + hh * 0.2 + t * hh * 0.8 - TILE * 0.25); ctx.stroke(); } }
+    if (vis.includes('it_av') || T.name === 'it_av') { const x = c.x - hw * 0.1, y = top - hh * 0.9; pole(x, top, TILE * 0.9, '#7fc8ff'); const r = ((V.time * 0.6) % 1) * TILE * 0.5; ctx.strokeStyle = 'rgba(127,200,255,' + (1 - r / (TILE * 0.5)) + ')'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, r + 3, 0, Math.PI * 2); ctx.stroke(); }
+    if (vis.includes('lighting') || T.name === 'lighting') lantern(c.x + hw * 0.3, c.y + hh * 1.2, 0.4 + 0.2 * Math.sin(V.time * 2));
+  }
+
+  function drawAgent(ag) {
+    const p = iso(ag.x, ag.y); const bob = Math.sin(V.time * 4 + ag.bob) * (ag.state === 'moving' ? 3 : 1.2);
+    const y = p.y - TILE * 0.05 + bob; const r = TILE * 0.11;
+    const dim = ag.state === 'disconnected';
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(p.x, p.y + 2, r * 1.2, r * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = dim ? '#5b6472' : ag.color; ctx.fillRect(p.x - r * 0.8, y - r * 2.2, r * 1.6, r * 1.6);          // body
+    ctx.fillStyle = dim ? '#8b93a0' : '#f2e2c8'; ctx.beginPath(); ctx.arc(p.x, y - r * 2.9, r * 0.85, 0, Math.PI * 2); ctx.fill(); // head
+    ctx.fillStyle = '#1c2129'; ctx.fillRect(p.x - r * 0.35, y - r * 3.05, r * 0.2, r * 0.2); ctx.fillRect(p.x + r * 0.15, y - r * 3.05, r * 0.2, r * 0.2);
+    // state icon
+    const ix = p.x + r * 1.5, iy = y - r * 3.6;
+    if (ag.state === 'inspecting') { ctx.strokeStyle = '#e6ebf2'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ix, iy, r * 0.5, 0, Math.PI * 2); ctx.moveTo(ix + r * 0.35, iy + r * 0.35); ctx.lineTo(ix + r * 0.8, iy + r * 0.8); ctx.stroke(); }
+    else if (ag.state === 'working') { const a = Math.sin(V.time * 10) * 0.5; ctx.save(); ctx.translate(ix, iy); ctx.rotate(a); ctx.fillStyle = '#c9d3dc'; ctx.fillRect(-1, -r * 0.6, 2, r * 1.2); ctx.fillStyle = '#8d8f99'; ctx.fillRect(-r * 0.45, -r * 0.7, r * 0.9, r * 0.35); ctx.restore(); }
+    else if (ag.state === 'success') { const t = Math.min(1, (V.time - ag.stateSince) / 0.8); for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + V.time; dot(ix + Math.cos(a) * r * (0.4 + t * 0.8), iy + Math.sin(a) * r * (0.4 + t * 0.8), 2, 'rgba(79,191,122,' + (1 - t * 0.6) + ')'); } }
+    else if (ag.state === 'error') { ctx.fillStyle = '#ff6b6b'; ctx.font = 'bold ' + r * 1.6 + 'px system-ui'; ctx.textAlign = 'center'; ctx.fillText('!', ix, iy + r * 0.5); ctx.textAlign = 'left'; }
+    else if (ag.state === 'idle') { const z = (V.time * 0.7 + ag.bob) % 1; if (z < 0.5) { ctx.fillStyle = 'rgba(230,235,242,.6)'; ctx.font = r * 1.1 + 'px system-ui'; ctx.fillText('z', ix, iy - z * r * 2); } }
+    // name tag
+    ctx.font = Math.max(9, TILE * 0.17) + 'px system-ui, sans-serif'; ctx.textAlign = 'center';
+    const label = ag.name + (dim ? ' (offline)' : ''); const lw = ctx.measureText(label).width + 8;
+    ctx.fillStyle = 'rgba(20,24,31,.7)'; ctx.fillRect(p.x - lw / 2, y - r * 5.2, lw, TILE * 0.2 + 2);
+    ctx.fillStyle = dim ? '#93a0b2' : ag.color; ctx.fillText(label, p.x, y - r * 5.2 + TILE * 0.16); ctx.textAlign = 'left';
+  }
+
+  function drawEffect(e) {
+    const pos = posOf(e.building); const p = iso(pos.x, pos.y); const k = e.t / e.life;
+    if (e.kind === 'label') {
+      ctx.globalAlpha = 1 - Math.max(0, k - 0.6) / 0.4; ctx.font = 'bold ' + Math.max(11, TILE * 0.2) + 'px system-ui, sans-serif'; ctx.textAlign = 'center';
+      const y = p.y - TILE * 0.9 - k * TILE * 0.6; const lw = ctx.measureText(e.text).width + 12;
+      ctx.fillStyle = 'rgba(20,24,31,.8)'; ctx.fillRect(p.x - lw / 2, y - TILE * 0.2, lw, TILE * 0.26);
+      ctx.fillStyle = e.color; ctx.fillText(e.text, p.x, y); ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+    } else if (e.kind === 'sparkle') {
+      for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3 + k * 2; const d = TILE * (0.2 + k * 0.5); dot(p.x + Math.cos(a) * d, p.y - TILE * 0.5 + Math.sin(a) * d * 0.5, 2.5 * (1 - k), e.color); }
+    } else if (e.kind === 'flash') {
+      ctx.globalAlpha = 0.5 * (1 - k); diamond(p.x, p.y, TILE * 1.1, TILE * 0.55, e.color); ctx.globalAlpha = 1;
+    }
+  }
+
+  function shade(hex, delta) {
+    const m = /^#([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return hex || '#7a8b99';
+    const n = parseInt(m[1], 16); const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => Math.max(0, Math.min(255, v + delta)));
+    return '#' + c.map(v => v.toString(16).padStart(2, '0')).join('');
+  }
+
+  // ─── Animation loop (independent of connector timing) ───────────────────
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000) * (V.paused ? 0 : V.speed); last = now;
+    V.time += dt;
+    if (!V.paused) step(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  function step(dt) {
+    for (const ag of V.agents.values()) {
+      if (ag.queue.length > 0 && ag.target === ag.at) { ag.target = ag.queue.shift(); }
+      if (ag.target !== ag.at) {
+        const p = posOf(ag.target);
+        if (ag.teleport) { ag.x = p.x; ag.y = p.y; ag.at = ag.target; ag.teleport = false; continue; }
+        // Walk faster the further behind the story the character is; only a long backlog teleports.
+        const dx = p.x - ag.x, dy = p.y - ag.y; const dist = Math.hypot(dx, dy); const spd = 2.2 * (1 + 0.8 * ag.queue.length) * dt;
+        if (dist <= spd) { ag.x = p.x; ag.y = p.y; ag.at = ag.target; }
+        else { ag.x += dx / dist * spd; ag.y += dy / dist * spd; }
+      }
+    }
+    for (const e of V.effects) e.t += dt;
+    V.effects = V.effects.filter(e => e.t < e.life);
+    if (V.skipped > 0) {
+      V.skippedFor = (V.skippedFor || 0) + dt;
+      if (V.skippedFor > 6 && Array.from(V.agents.values()).every(a => a.queue.length <= 1)) { V.skipped = 0; V.skippedFor = 0; renderHeader(); }
+    }
+  }
+  requestAnimationFrame(frame);
+
+  canvas.addEventListener('click', ev => {
+    const rect = canvas.getBoundingClientRect(); const x = ev.clientX - rect.left, y = ev.clientY - rect.top;
+    let best = null, bestD = Infinity;
+    for (const b of V.buildings) {
+      const s = b._screen; if (!s) continue;
+      if (Math.abs(x - s.x) > s.hw || y < s.top || y > s.bottom) continue;
+      const d = Math.hypot(s.x - x, s.y - y); if (d < bestD) { best = b.id; bestD = d; }
+    }
+    V.selected = best === V.selected ? null : best; renderSelected();
+  });
+
+  // ─── Connection: EventSource with bounded backoff (GET only; nothing is sent) ──
+  let es = null, failures = 0, backoffTimer = null;
+  function connect() {
+    if (es) { try { es.close(); } catch (e) { } es = null; }
+    V.connection = failures === 0 ? 'connecting' : 'reconnecting'; renderHeader();
+    try { es = new EventSource('/events'); } catch (e) { scheduleReconnect(); return; }
+    es.onopen = () => { failures = 0; V.connection = 'connected'; renderHeader(); };
+    es.addEventListener('snapshot', ev => { try { applySnapshot(JSON.parse(ev.data), true); } catch (e) { } });
+    es.addEventListener('state', ev => { try { applySnapshot(JSON.parse(ev.data), false); } catch (e) { } });
+    es.addEventListener('step', ev => { try { onStep(JSON.parse(ev.data)); } catch (e) { } });
+    es.onerror = () => {
+      // The browser retries on its own; after repeated failures back off manually so a stopped
+      // connector is not hammered. Backoff limits come from the last snapshot (or defaults).
+      failures++; V.connection = 'reconnecting'; renderHeader();
+      if (failures >= 3) { try { es.close(); } catch (e) { } es = null; scheduleReconnect(); }
+    };
+  }
+  function scheduleReconnect() {
+    const o = (V.snapshot && V.snapshot.viewer_options) || {};
+    const base = o.reconnect_backoff_ms || 1000, max = o.reconnect_backoff_max_ms || 15000;
+    const delay = Math.min(max, base * Math.pow(2, Math.min(6, failures)));
+    clearTimeout(backoffTimer); backoffTimer = setTimeout(connect, delay);
+    // Between attempts, a cheap GET keeps the header honest if the stream is blocked but the server lives.
+    fetch('/snapshot', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(s => { if (s) applySnapshot(s, V.snapshot == null); }).catch(() => { });
+  }
+
+  // ─── Demo mode: deterministic, offline, no server ───────────────────────
+  function runDemo() {
+    V.connection = 'demo';
+    let seed = 7; const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    const B = [
+      ['town_hall', 'Town hall', ['project', 'graph'], 5, 2, 3, 'town_hall'], ['archive', 'Archive', ['sheets'], 2, 3, 2, 'archive'],
+      ['lookout', 'Lookout tower', ['views'], 8, 3, 2, 'tower'], ['market', 'Market hall', ['schedules'], 3, 6, 2, 'market'],
+      ['workshop', 'Workshop', ['families_types'], 7, 6, 2, 'workshop'], ['sign_workshop', 'Sign workshop', ['tags_annotations'], 9, 8, 2, 'sign'],
+      ['houses', 'Houses', ['elements'], 1, 9, 2, 'houses'], ['utility_district', 'Utility district', ['electrical', 'fire_alarm', 'security', 'lighting', 'it_av'], 5, 11, 2, 'substation'],
+      ['survey_post', 'Survey post', ['coordination'], 10, 5, 1, 'survey'], ['records_office', 'Records office', ['office'], 1, 5, 1, 'office'],
+      ['warning_area', 'Warning area', [], 10, 11, 1, 'warning']
+    ].map(x => ({ id: x[0], label: x[1], areas: x[2], tile_x: x[3], tile_y: x[4], base_size: x[5], size: x[5] + (x[5] < 3 ? 1 : 0), sprite: x[6], description: 'Demo landmark for ' + x[1].toLowerCase() + '.' }));
+    const areas = Object.keys(AREA_LABELS).map(a => ({ area: a, reads: 0, writes: 0, exports: 0, failures: 0, deferred: 0, affected: 0 }));
+    const snap = {
+      schema_version: 1, read_only: true, project_name: '1626_PP_EN (demo)', session_id: 'demo', mode: 'live', updated_at: new Date().toISOString(),
+      agents: [{ id: 'claude-code', name: 'Claude Code', state: 'idle', area: 'unknown', building: 'square', activity: 'unknown', in_progress: 0, tool_count: 0, failure_count: 0 }],
+      areas, current_steps: [], recent_steps: [], recent_failures: 0, buildings: B,
+      graph: { exists: true, file_name: '1626_PP_EN.graph.db', root_source: 'demo', built_at: new Date(Date.now() - 42 * 60000).toISOString(), freshness: { status: 'fresh', reason: 'Demo graph.', age_seconds: 2520 }, counts: { nodes: 2110, edges: 5300, elements: 1900, types: 140, sheets: 34, views: 212, schedules: 8, levels: 3, spaces: 120, worksets: 6, panels: 6, circuits: 40, tags: 420 }, health: { circuits_without_panel: 1, circuits_without_elements: 3, elements_without_location: 40, issues: 4 } },
+      theme: { theme: 'fire_alarm', label: 'Fire alarm', dominant: 'fire_alarm', visible_systems: ['fire_alarm', 'lighting'], primary: '#b8432f', accent: '#ff8a75', reason: 'Fire alarm holds 69% of the evidence (420 by category, 380 by name) — dominant.', identity: { hue: 14, pattern: 1, seed: 1 }, config_source: 'default', thresholds: { min_sample_count: 20, min_system_count: 10, dominant_share: 0.45, visible_share: 0.1, category_weight: 1, name_weight: 0.5 },
+        scores: [{ system: 'fire_alarm', label: 'Fire alarm', category_score: 420, name_score: 380, name_contribution: 190, score: 610, share: 0.69, visible: true, dominant: true }, { system: 'lighting', label: 'Lighting / DALI', category_score: 90, name_score: 30, name_contribution: 15, score: 105, share: 0.12, visible: true, dominant: false }, { system: 'it_av', label: 'IT / AV / data', category_score: 60, name_score: 0, name_contribution: 0, score: 60, share: 0.07, visible: false, dominant: false }, { system: 'security', label: 'Security / access control', category_score: 40, name_score: 80, name_contribution: 40, score: 80, share: 0.09, visible: false, dominant: false }, { system: 'electrical', label: 'General electrical', category_score: 30, name_score: 0, name_contribution: 0, score: 30, share: 0.03, visible: false, dominant: false }] },
+      stats: { events_processed: 0, steps_emitted: 0, unknown_tools: 0, unknown_events: 0, catch_up_entries: 0, last_sequence: 0 }, queue: { enqueued: 0, depth: 0, capacity: 2000, high_water: 0 },
+      viewer_options: { animation_speed: 1, max_buildings: 12, max_effects: 6, recent_activity_limit: 200, reconnect_backoff_ms: 1000, reconnect_backoff_max_ms: 15000, aggregation_window_ms: 1500 },
+      instances: [{ process_id: 1, revit_version: '2026', project_name: '1626_PP_EN (demo)', url: location.href, is_current: true }]
+    };
+    applySnapshot(snap, true);
+    let id = 0; const agent = snap.agents[0];
+    const script = [
+      ['move', 'town_hall', 'graph', 'search'], ['work', 'town_hall', 'graph', 'search', 'Searched the model graph', 0],
+      ['move', 'houses', 'elements', 'inspect'], ['work', 'houses', 'elements', 'inspect', 'Inspected model elements (6 tools)', 60],
+      ['move', 'sign_workshop', 'tags_annotations', 'modify'], ['work', 'sign_workshop', 'tags_annotations', 'modify', '24 tags updated (24 tools)', 24],
+      ['move', 'utility_district', 'fire_alarm', 'validate'], ['work', 'utility_district', 'fire_alarm', 'validate', 'Checked the fire alarm system', 0],
+      ['error', 'houses', 'elements', 'error', 'revit_set_parameter failed in model elements'],
+      ['deferred', 'lookout', 'views', 'delete', 'Awaiting approval: revit_delete_views'],
+      ['move', 'records_office', 'office', 'export'], ['work', 'records_office', 'office', 'export', 'Exported from the records office', 480],
+      ['move', 'archive', 'sheets', 'create'], ['work', 'archive', 'sheets', 'create', '3 sheets created', 3],
+      ['idle']
+    ];
+    let i = 0;
+    const tick = () => {
+      const s = script[i % script.length]; i++;
+      const now = new Date().toISOString();
+      if (s[0] === 'idle') { agent.state = 'idle'; agent.building = 'square'; agent.area = 'unknown'; snap.current_steps = []; applySnapshot(snap, false); setTimeout(tick, 4000 / V.speed); return; }
+      const stp = { id: ++id, kind: s[0] === 'move' ? 'move' : s[0] === 'work' ? 'work' : s[0], agent: 'claude-code', area: s[2], building: s[1], activity: s[3], label: s[4] || ('Heads to ' + AREA_LABELS[s[2]]), affected: s[5] || 0, tool_count: 1, tools: [], failures: s[0] === 'error' ? 1 : 0, deferred: s[0] === 'deferred' ? 1 : 0, started_at: now, ended_at: now, open: false };
+      agent.building = s[1]; agent.area = s[2]; agent.activity = s[3];
+      agent.state = s[0] === 'move' ? 'moving' : s[0] === 'error' ? 'error' : s[0] === 'deferred' ? 'idle' : (s[3] === 'modify' || s[3] === 'create' || s[3] === 'delete') ? 'working' : 'inspecting';
+      if (s[0] === 'work') { agent.state = 'success'; agent.tool_count += 1; const a = areas.find(x => x.area === s[2]); if (a) { (s[3] === 'export' ? (a.exports++) : (s[3] === 'modify' || s[3] === 'create') ? (a.writes++) : (a.reads++)); a.affected += s[5] || 0; } }
+      if (s[0] === 'error') { agent.failure_count++; snap.recent_failures++; areas.find(x => x.area === s[2]).failures++; }
+      if (s[0] === 'deferred') areas.find(x => x.area === s[2]).deferred++;
+      snap.stats.events_processed += 1 + Math.floor(rnd() * 3); snap.stats.steps_emitted++; snap.stats.last_sequence = snap.stats.events_processed;
+      snap.current_steps = s[0] === 'move' ? [{ agent: 'claude-code', label: stp.label, open: true }] : [];
+      applySnapshot(snap, false); onStep(stp);
+      setTimeout(tick, (s[0] === 'move' ? 2600 : 1800) / V.speed);
+    };
+    setTimeout(tick, 800);
+  }
+
+  if (DEMO) runDemo(); else connect();
+})();
+</script>
+</body>
+</html>

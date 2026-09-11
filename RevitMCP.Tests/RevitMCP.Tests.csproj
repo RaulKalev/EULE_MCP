@@ -25,9 +25,10 @@
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
   </ItemGroup>
 
-  <!-- RevitMCP.Core has no Revit dependency — safe to reference directly -->
+  <!-- RevitMCP.Core and RevitMCP.Village have no Revit dependency — safe to reference directly -->
   <ItemGroup>
     <ProjectReference Include="..\RevitMCP.Core\RevitMCP.Core.csproj" />
+    <ProjectReference Include="..\RevitMCP.Village\RevitMCP.Village.csproj" />
   </ItemGroup>
 
   <!-- Reference only the pure-logic types; no Revit API dependency -->
@@ -116,5 +117,7 @@
     <Compile Include="..\RevitMCP.Addin\Graph\GraphPathResolver.cs" Link="Graph\GraphPathResolver.cs" />
     <Compile Include="..\RevitMCP.Addin\Graph\GraphStore.cs" Link="Graph\GraphStore.cs" />
     <Compile Include="..\RevitMCP.Addin\Graph\GraphFreshness.cs" Link="Graph\GraphFreshness.cs" />
+    <!-- Project Village: only the add-in-side graph reader is linked here; the rest of the module comes from the RevitMCP.Village project reference above. -->
+    <Compile Include="..\RevitMCP.Addin\Village\VillageGraphReader.cs" Link="Village\VillageGraphReader.cs" />
   </ItemGroup>
 </Project>

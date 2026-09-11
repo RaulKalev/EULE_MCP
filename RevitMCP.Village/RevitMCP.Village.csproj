@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Project Village: passive, read-only visualization of connector activity.
+       Pure logic only (event schema, classification, aggregation, theme scoring, loopback SSE
+       server). No Revit API, no reference to the add-in. Hosting lives in
+       RevitMCP.Addin\Village\Hosting; see docs/project-village.md. -->
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <AssemblyName>RevitMCP.Village</AssemblyName>
+    <RootNamespace>RevitMCP.Village</RootNamespace>
+    <LangVersion>12.0</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" />
+  </ItemGroup>
+
+  <!-- netstandard2.0 (consumed by the Revit 2024 / net48 add-in): polyfills and System.Text.Json. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <PackageReference Include="PolySharp" PrivateAssets="all" />
+    <PackageReference Include="System.Text.Json" />
+  </ItemGroup>
+
+</Project>
