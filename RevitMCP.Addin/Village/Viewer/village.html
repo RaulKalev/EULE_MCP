@@ -142,7 +142,8 @@
   // Optional glTF scene state. Declared here because resize() consults it during setup.
   const GL = {
     on: false, ready: false, lib: null, renderer: null, scene: null, camera: null,
-    root: null, island: null, sun: null, models: new Map(), nodes: new Map(), index: null
+    root: null, island: null, sun: null, static: null, staticKey: null, lookup: null,
+    models: new Map(), nodes: new Map(), index: null
   };
   const GRADS = new Map();
   const THEME_CACHE = { key: null, value: null };
@@ -660,6 +661,18 @@
   /// into the cached layer and costs nothing per frame. Anything too close to a building, to the
   /// centre or to the slab edge is skipped, which is what keeps the village readable.
   function scatterScenery(g, T) {
+    for (const it of sceneryPlan()) {
+      const p = iso(it.x, it.y);
+      if (it.rock) gRock(g, p.x, p.y, TILE * 0.12 * it.s);
+      else gTree(g, p.x, p.y, TILE * it.s, it.tint);
+    }
+  }
+
+  /// Deterministic scenery positions, shared by both renderers. Anything too close to a building,
+  /// to the centre or to a lane is skipped, which is what keeps the village readable.
+  function sceneryPlan() {
+    const key = GRID_W + "x" + GRID_H + ":" + V.buildings.length + ":" + V.warehouses.length;
+    if (SCENERY.key === key) return SCENERY.items;
     const blocked = [];
     for (const b of V.buildings) blocked.push({ x: b.tile_x + 0.5, y: b.tile_y + 0.5, r: 1.5 + (b.size || 1) * 0.34 });
     for (const wh of V.warehouses) blocked.push({ x: wh.tile_x + 0.5, y: wh.tile_y + 0.5, r: 1.4 + (wh.footprint || 1) * 0.5 });
@@ -686,15 +699,33 @@
           if (distToSegment(x, y, SQUARE.x, SQUARE.y, b.tile_x + 0.5, b.tile_y + 1.0) < 0.85) { onPath = true; break; }
         }
         if (onPath) continue;
-        items.push({ x, y, rock: roll > 0.47, s: 0.7 + rnd() * 0.6, tint: rnd() });
+        items.push({ x, y, rock: roll > 0.47, s: 0.7 + rnd() * 0.6, tint: rnd(), pick: rnd() });
       }
     }
     items.sort((a, b) => (a.x + a.y) - (b.x + b.y));
-    for (const it of items) {
-      const p = iso(it.x, it.y);
-      if (it.rock) gRock(g, p.x, p.y, TILE * 0.12 * it.s);
-      else gTree(g, p.x, p.y, TILE * it.s, it.tint);
+    SCENERY.key = key; SCENERY.items = items;
+    return items;
+  }
+  const SCENERY = { key: null, items: [] };
+
+  /// The lanes the village draws, as tile-space segments. One source for the drawn roads, the
+  /// scenery exclusion test and the glTF path tiles.
+  function laneSegments() {
+    const lanes = [];
+    for (const b of V.buildings) {
+      if (b.id === 'warning_area' || b.id === 'park') continue;
+      lanes.push([SQUARE.x, SQUARE.y, b.tile_x + 0.5, b.tile_y + 1.0]);
     }
+    if (V.warehouses.length) {
+      const rows = yardRows();
+      lanes.push([SQUARE.x, SQUARE.y, rows[0].x0 - 0.4, rows[0].y + 1.5]);
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        lanes.push([r.x0 - 0.4, r.y + 1.5, r.x1 + 0.9, r.y + 1.5]);
+        if (i > 0) lanes.push([rows[i - 1].x0 - 0.4, rows[i - 1].y + 1.5, r.x0 - 0.4, r.y + 1.5]);
+      }
+    }
+    return lanes;
   }
 
   function distToSegment(px, py, ax, ay, bx, by) {
@@ -1500,7 +1531,14 @@
     tree: ['tree_green', 'tree_pine', 'tree_maple'],
     tree_2: ['tree_pine', 'tree_maple', 'tree_green'],
     tree_3: ['tree_maple', 'tree_green', 'tree_pine'],
-    lamp: ['path_lamp', 'stone_lantern'],
+    lamp: ['path_lamp', 'street_lamp'],
+    path_straight: ['path_straight', 'path'],
+    stone_lantern: ['stone_lantern', 'lantern'],
+    terrain: ['terrain', 'ground', 'island'],
+    shrub: ['shrub', 'bush'],
+    rock: ['rock', 'boulder', 'stone'],
+    bench: ['bench'],
+    crate: ['crate', 'box'],
     agent: ['character', 'villager']
   };
 
@@ -1565,17 +1603,131 @@
     return g;
   }
 
+  /// Ground, lanes and scenery: everything that only changes when the layout does. Built into one
+  /// group and rebuilt wholesale on a layout change, so the per-frame cost stays a single render.
+  async function buildStatic() {
+    const T3 = GL.lib;
+    const key = GRID_W + 'x' + GRID_H + ':' + V.buildings.length + ':' + V.warehouses.length + ':' + (GL.lookup ? GL.lookup.size : 0);
+    if (GL.staticKey === key) return;
+    GL.staticKey = key;
+    if (GL.static) { GL.root.remove(GL.static); disposeTree(GL.static); }
+    const group = new T3.Group();
+    GL.static = group; GL.root.add(group);
+
+    const islandW = GRID_W * SPREAD + 2, islandH = GRID_H * SPREAD + 2;
+
+    // Ground: the supplied terrain slab stretched to the island, or a plain box.
+    const terrain = await loadModel(modelPath('scenery', 'terrain'));
+    if (terrain) {
+      const slab = terrain.clone(true);
+      // The slab is authored 36 x 29 with its top face at y = 0, which is where buildings stand.
+      slab.scale.set(islandW / 36, 1.6, islandH / 29);
+      slab.traverse(o => { if (o.isMesh) o.receiveShadow = true; });
+      group.add(slab);
+    } else {
+      const box = new T3.Mesh(new T3.BoxGeometry(islandW, 0.9, islandH),
+        new T3.MeshStandardMaterial({ color: new T3.Color('#4f9c33'), roughness: 1 }));
+      box.position.y = -0.45; box.receiveShadow = true;
+      group.add(box);
+    }
+
+    // Lanes: repeat the straight path tile along each route. The tile is 2 units long in Z, so it
+    // is rotated to face the run and stepped by its own length.
+    const tile = await loadModel(modelPath('scenery', 'path_straight'));
+    const lamp = await loadModel(modelPath('scenery', 'lamp'));
+    if (tile) {
+      const step = 2.0 * MODEL_SCALE;
+      let lampCountdown = 3;
+      for (const [ax, ay, bx, by] of laneSegments()) {
+        const a = world(ax, ay), b = world(bx, by);
+        const dx = b.x - a.x, dz = b.z - a.z;
+        const len = Math.hypot(dx, dz);
+        if (len < 0.01) continue;
+        const angle = Math.atan2(dx, dz);
+        const n = Math.max(1, Math.round(len / step));
+        for (let i = 0; i <= n; i++) {
+          const t = i / n;
+          const piece = tile.clone(true);
+          piece.position.set(a.x + dx * t, 0, a.z + dz * t);
+          piece.rotation.y = angle;
+          piece.scale.setScalar(MODEL_SCALE);
+          group.add(piece);
+          if (lamp && --lampCountdown <= 0) {
+            lampCountdown = 9;
+            const post = lamp.clone(true);
+            post.position.set(a.x + dx * t - dz / len * 0.55, 0, a.z + dz * t + dx / len * 0.55);
+            post.scale.setScalar(MODEL_SCALE);
+            post.traverse(o => { if (o.isMesh) o.castShadow = true; });
+            group.add(post);
+          }
+        }
+      }
+    }
+
+    // Trees, shrubs and boulders on the open grass, in the same spots the drawn view plants them.
+    const props = {
+      tree: await loadModel(modelPath('scenery', 'tree')),
+      tree2: await loadModel(modelPath('scenery', 'tree_2')),
+      tree3: await loadModel(modelPath('scenery', 'tree_3')),
+      shrub: await loadModel(modelPath('scenery', 'shrub')),
+      rock: await loadModel(modelPath('scenery', 'rock'))
+    };
+    const trees = [props.tree, props.tree2, props.tree3].filter(Boolean);
+    for (const it of sceneryPlan()) {
+      const source = it.rock ? (props.rock || props.shrub)
+                             : (trees.length ? trees[Math.floor(it.pick * trees.length) % trees.length] : null);
+      if (!source) continue;
+      const prop = source.clone(true);
+      const p = world(it.x, it.y);
+      prop.position.set(p.x, 0, p.z);
+      prop.rotation.y = it.tint * Math.PI * 2;
+      prop.scale.setScalar(MODEL_SCALE * (it.rock ? 0.9 + it.s * 0.4 : 0.75 + it.s * 0.45));
+      prop.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      group.add(prop);
+    }
+
+    // A bench and a lantern either side of the park, and a crate beside each warehouse.
+    const park = V.buildings.find(b => b.id === 'park');
+    const bench = await loadModel(modelPath('scenery', 'bench'));
+    const lantern = await loadModel(modelPath('scenery', 'stone_lantern'));
+    if (park) {
+      const c = world(park.tile_x + 0.5, park.tile_y + 0.5);
+      for (const [src, ox, oz, rot] of [[bench, -1.1, 0.6, 0.4], [bench, 1.1, -0.5, 3.5], [lantern, 0.2, 1.35, 0], [lantern, -1.0, -1.1, 0]]) {
+        if (!src) continue;
+        const o = src.clone(true);
+        o.position.set(c.x + ox, 0, c.z + oz);
+        o.rotation.y = rot; o.scale.setScalar(MODEL_SCALE);
+        o.traverse(m => { if (m.isMesh) m.castShadow = true; });
+        group.add(o);
+      }
+    }
+    const crate = await loadModel(modelPath('scenery', 'crate'));
+    if (crate) {
+      for (const wh of V.warehouses) {
+        const c = world(wh.tile_x + 0.5, wh.tile_y + 0.5);
+        const o = crate.clone(true);
+        o.position.set(c.x - 0.85, 0, c.z + 0.75);
+        o.rotation.y = (wh.rank || 0) * 0.7;
+        o.scale.setScalar(MODEL_SCALE);
+        o.traverse(m => { if (m.isMesh) m.castShadow = true; });
+        group.add(o);
+      }
+    }
+  }
+
+  /// three.js does not free GPU memory on remove, so a rebuilt layer releases its own buffers.
+  function disposeTree(obj) {
+    obj.traverse(o => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose && m.dispose());
+    });
+  }
+
   async function syncScene() {
     if (!GL.on || !GL.ready) return;
     const T3 = GL.lib;
 
-    if (!GL.island) {
-      const island = new T3.Mesh(
-        new T3.BoxGeometry(GRID_W * SPREAD + 2, 0.9, GRID_H * SPREAD + 2),
-        new T3.MeshStandardMaterial({ color: new T3.Color('#4f9c33'), roughness: 1 }));
-      island.position.y = -0.45; island.receiveShadow = true;
-      GL.root.add(island); GL.island = island;
-    }
+    await buildStatic();
 
     const wanted = new Set();
     const place = async (kind, item, size, roofHex) => {

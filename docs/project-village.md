@@ -461,6 +461,27 @@ underscore.
 | Budget | ≤5k triangles per landmark, ≤500 for scenery, textures ≤512px |
 | Omit | cameras and lights — the scene is lit for you |
 
+### Ground, lanes and scenery
+
+Beyond the buildings the scene uses, when present:
+
+| Model | Used for |
+|---|---|
+| `terrain` | The island slab, stretched to the current grid. Authored with its top face at `y = 0` |
+| `path-straight` | Repeated along every lane the drawn view draws, rotated to face the run |
+| `path-lamp` | Every ninth path tile |
+| `tree`, `tree_2`, `tree_3`, `shrub`, `rock` | Scattered on the open grass, in exactly the spots the drawn view plants them |
+| `bench`, `stone-lantern` | Around the park |
+| `crate` | Beside each warehouse |
+
+`path-network` is deliberately **not** used: it encodes one fixed layout, while the village's own
+lanes move with the warehouse count. Lanes come from `laneSegments()`, the same source the drawn
+roads and the scenery exclusion test use.
+
+All of it lives in one group rebuilt only when the layout changes, so the per-frame cost is a
+single render. Measured at **2.1 ms/frame** (p95 2.5 ms) with thirteen landmarks, eight warehouses
+and the full scenery set on a 1260 px canvas.
+
 ### How it is served
 
 `GET /models/index.json` lists what exists; `GET /models/<kind>/<name>.glb` returns one file.
