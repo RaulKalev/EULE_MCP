@@ -61,14 +61,21 @@ public sealed class VillageSseServer : IDisposable
         Func<string> snapshotJsonProvider,
         Func<string> htmlProvider,
         Func<string>? instancesJsonProvider = null,
-        Action<string>? log = null)
+        Action<string>? log = null,
+        Func<VillageModelLibrary?>? modelLibraryProvider = null,
+        Func<string, byte[]?>? vendorProvider = null)
     {
         _options = options;
         _snapshotJson = snapshotJsonProvider;
         _html = htmlProvider;
         _instancesJson = instancesJsonProvider ?? (() => "[]");
         _log = log;
+        _modelLibrary = modelLibraryProvider ?? (() => null);
+        _vendor = vendorProvider ?? (_ => null);
     }
+
+    private readonly Func<VillageModelLibrary?> _modelLibrary;
+    private readonly Func<string, byte[]?> _vendor;
 
     public int Port { get; private set; }
     public bool IsListening => _listener != null && _cts != null && !_cts.IsCancellationRequested;
@@ -260,6 +267,15 @@ public sealed class VillageSseServer : IDisposable
                 case "/health":
                     await WriteSimpleAsync(stream, 200, "OK", "application/json; charset=utf-8", HealthJson(), ct, headOnly: request.Method == "HEAD").ConfigureAwait(false);
                     return;
+                case "/models/index.json":
+                {
+                    var library = SafeLibrary();
+                    var json = JsonConvert.SerializeObject(library == null
+                        ? new VillageModelIndex()
+                        : library.Index(_options.ModelsFolder != null));
+                    await WriteSimpleAsync(stream, 200, "OK", "application/json; charset=utf-8", json, ct, headOnly: request.Method == "HEAD").ConfigureAwait(false);
+                    return;
+                }
                 case "/events":
                     if (request.Method == "HEAD")
                     {
@@ -268,9 +284,38 @@ public sealed class VillageSseServer : IDisposable
                     }
                     break;
                 default:
+                {
+                    // Two read-only static areas: the vendored viewer script, and the optional
+                    // glTF model folder. Both validate the path before touching the disk, and
+                    // anything that does not resolve falls through to the same 404 as before —
+                    // only "/events" may ever reach the stream handler below.
+                    byte[]? payload = null;
+                    string? type = null;
+                    if (request.Path.StartsWith("/vendor/", StringComparison.Ordinal))
+                    {
+                        payload = SafeVendor(request.Path.Substring("/vendor/".Length));
+                        type = "application/javascript; charset=utf-8";
+                    }
+                    else if (request.Path.StartsWith("/models/", StringComparison.Ordinal))
+                    {
+                        var file = SafeResolveModel(request.Path.Substring("/models/".Length));
+                        if (file != null)
+                        {
+                            try { payload = File.ReadAllBytes(file); } catch { payload = null; }
+                            type = "model/gltf-binary";
+                        }
+                    }
+
+                    if (payload != null && type != null)
+                    {
+                        await WriteBytesAsync(stream, type, payload, ct, request.Method == "HEAD").ConfigureAwait(false);
+                        return;
+                    }
+
                     lock (_gate) _stats.BadRequests++;
                     await WriteSimpleAsync(stream, 404, "Not Found", "text/plain", "not found", ct).ConfigureAwait(false);
                     return;
+                }
             }
 
             // SSE stream
@@ -421,6 +466,51 @@ public sealed class VillageSseServer : IDisposable
 
     // ─── Responses ──────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// One policy for every response. <c>script-src 'self'</c> is what lets the page load the
+    /// vendored three.js bundle from this same loopback listener; no other origin is reachable,
+    /// and <c>default-src 'none'</c> still blocks everything that is not named here.
+    /// </summary>
+    internal const string CspHeader =
+        "Content-Security-Policy: default-src 'none'; script-src 'self' 'unsafe-inline'; " +
+        "style-src 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src data:\r\n";
+
+    private VillageModelLibrary? SafeLibrary()
+    {
+        try { return _modelLibrary(); } catch { return null; }
+    }
+
+    private string? SafeResolveModel(string relative)
+    {
+        try { return SafeLibrary()?.Resolve(relative); } catch { return null; }
+    }
+
+    private byte[]? SafeVendor(string name)
+    {
+        try { return VillageModelLibrary.IsSafeName(System.IO.Path.GetFileNameWithoutExtension(name)) ? _vendor(name) : null; }
+        catch { return null; }
+    }
+
+    /// <summary>Binary response for the two static areas. Cached hard: these change only on redeploy.</summary>
+    private static async Task WriteBytesAsync(NetworkStream stream, string contentType, byte[] body, CancellationToken ct, bool headOnly)
+    {
+        var head = new StringBuilder();
+        head.Append("HTTP/1.1 200 OK\r\n");
+        head.Append("Content-Type: ").Append(contentType).Append("\r\n");
+        head.Append("Content-Length: ").Append(body.Length.ToString(CultureInfo.InvariantCulture)).Append("\r\n");
+        head.Append("Cache-Control: no-cache\r\n");
+        head.Append("X-Content-Type-Options: nosniff\r\n");
+        head.Append("X-Frame-Options: DENY\r\n");
+        head.Append("Referrer-Policy: no-referrer\r\n");
+        head.Append("X-Village-Read-Only: true\r\n");
+        head.Append(CspHeader);
+        head.Append("Connection: close\r\n\r\n");
+        var headBytes = Encoding.ASCII.GetBytes(head.ToString());
+        await stream.WriteAsync(headBytes, 0, headBytes.Length, ct).ConfigureAwait(false);
+        if (!headOnly) await stream.WriteAsync(body, 0, body.Length, ct).ConfigureAwait(false);
+        await stream.FlushAsync(ct).ConfigureAwait(false);
+    }
+
     private static async Task WriteSimpleAsync(NetworkStream stream, int status, string reason, string contentType, string body,
         CancellationToken ct, string? extraHeader = null, bool headOnly = false)
     {
@@ -443,7 +533,7 @@ public sealed class VillageSseServer : IDisposable
         sb.Append("X-Frame-Options: DENY\r\n");
         sb.Append("Referrer-Policy: no-referrer\r\n");
         sb.Append("X-Village-Read-Only: true\r\n");
-        sb.Append("Content-Security-Policy: default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'self'; font-src data:\r\n");
+        sb.Append(CspHeader);
         foreach (var h in extraHeaders)
             if (!string.IsNullOrEmpty(h)) sb.Append(h).Append("\r\n");
         sb.Append("\r\n");

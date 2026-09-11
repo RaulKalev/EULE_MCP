@@ -35,6 +35,9 @@
   main { display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
   #stage { position: relative; min-width: 0; min-height: 0; }
   canvas { display: block; width: 100%; height: 100%; cursor: pointer; }
+  #village3d, #overlay { position: absolute; inset: 0; }
+  #overlay { pointer-events: none; }
+  #modeBtn[hidden] { display: none; }
   #hint { position: absolute; left: 12px; bottom: 10px; font-size: 11px; color: var(--muted); pointer-events: none; }
   #catchup { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); padding: 4px 12px; border-radius: 8px; background: rgba(208,127,240,.18); border: 1px solid var(--catch); color: var(--catch); font-size: 12px; font-weight: 600; }
   aside { border-left: 1px solid var(--line); background: var(--panel); overflow-y: auto; display: flex; flex-direction: column; }
@@ -78,6 +81,8 @@
 <main>
   <div id="stage">
     <canvas id="village"></canvas>
+    <canvas id="village3d" hidden></canvas>
+    <canvas id="overlay" hidden></canvas>
     <div id="catchup" hidden>Catching up…</div>
     <div id="hint">Click a building for its counters. Nothing on this page can change the model.</div>
   </div>
@@ -88,6 +93,7 @@
     <section id="controls">
       <button id="pauseBtn" type="button">Pause animation</button>
       <label>Speed <input id="speed" type="range" min="0.25" max="3" step="0.25" value="1"> <span id="speedLabel">1×</span></label>
+      <button id="modeBtn" type="button" hidden>3D view</button>
       <button id="diagBtn" type="button">Diagnostics</button>
     </section>
     <section id="diag" hidden><h2>Diagnostics</h2><div id="diagBody"></div></section>
@@ -133,11 +139,17 @@
   // path; only buildings, characters and effects are redrawn. Declared here because resize()
   // marks the cache dirty and runs during setup.
   const GROUND = { canvas: null, ctx: null, dirty: true, key: '' };
+  // Optional glTF scene state. Declared here because resize() consults it during setup.
+  const GL = {
+    on: false, ready: false, lib: null, renderer: null, scene: null, camera: null,
+    root: null, island: null, sun: null, models: new Map(), nodes: new Map(), index: null
+  };
   const GRADS = new Map();
   const THEME_CACHE = { key: null, value: null };
 
   const $ = id => document.getElementById(id);
-  const canvas = $('village'), ctx = canvas.getContext('2d');
+  const canvas = $('village');
+  let ctx = canvas.getContext('2d');
   let W = 0, H = 0, DPR = 1, TILE = 56, ORIGIN = { x: 0, y: 0 };
 
   function badge(el, cls, text) { el.className = 'badge' + (cls ? ' ' + cls : ''); el.lastElementChild.textContent = text; }
@@ -176,6 +188,7 @@
     const mapH = span * TILE / 4 + TILE * 1.8;
     ORIGIN = { x: W / 2 + (GRID_H - GRID_W) * SPREAD * TILE / 4, y: (H - mapH) / 2 + TILE * 1.6 };
     GROUND.dirty = true;
+    if (GL.on) fit3D();
   }
   // Tile coordinates are spread apart without growing the buildings, which is what actually puts
   // air between them: gaps scale with SPREAD, footprints stay a fixed multiple of TILE.
@@ -246,6 +259,7 @@
     if (V.selected && !V.byId.has(V.selected) && !V.whById.has(V.selected)) V.selected = null;
     if (V.selectedAgent && !V.agents.has(V.selectedAgent)) V.selectedAgent = null;
     renderHeader(); renderAgents(); renderFeed(); renderSelected(); renderInstances();
+    if (GL.on) syncScene();
     if (!$('diag').hidden) renderDiagnostics();
   }
 
@@ -357,6 +371,7 @@
       for (const k of gk) if (counts[k] != null) html += kv('Graph: ' + k, counts[k].toLocaleString());
       if (b.id === 'town_hall' && g && g.built_at) html += kv('Graph built', g.built_at.replace('T', ' ').replace('Z', ' UTC'));
     }
+    html += modelHint('landmarks', b.id);
     html += '</div>';
     body.innerHTML = html;
   }
@@ -395,6 +410,14 @@
     body.innerHTML = html;
   }
 
+  /// The .glb the viewer looks for, and whether it is there. Saves deriving slugs by hand.
+  function modelHint(kind, id) {
+    if (!GL.index) return '';
+    const path = modelPath(kind, id);
+    const found = hasModel(path);
+    return kv('3D model', (found ? '✓ ' : '— ') + path);
+  }
+
   function renderWarehouse(body, wh) {
     const g = (V.snapshot || {}).graph;
     let html = '<strong>' + esc(wh.label) + '</strong><div class="desc">Warehouse for the ' +
@@ -404,6 +427,7 @@
     html += kv('System', SYSTEM_LABELS[wh.system] || wh.system);
     html += kv('Warehouse size', (SIZE_WORDS[wh.size] || wh.size) + ' (' + wh.size + ' of 6)');
     html += kv('Rank by count', '#' + ((wh.rank || 0) + 1));
+    html += modelHint('warehouses', wh.id);
     if (g && g.built_at) html += kv('Counted at', g.built_at.replace('T', ' ').replace('Z', ' UTC'));
     html += '</div><div class="desc">Graph counts are captured when the graph is built, not live Revit values.</div>';
     body.innerHTML = html;
@@ -1166,7 +1190,7 @@
     V.time += dt;
     if (!V.paused) step(dt);
     const t0 = performance.now();
-    draw();
+    if (GL.on) draw3D(); else draw();
     // Cost of one frame of drawing, independent of how often the browser schedules us — a hidden
     // tab throttles the callback but not the work, so this stays meaningful either way.
     PERF.push(performance.now() - t0);
@@ -1347,7 +1371,301 @@
     setTimeout(tick, 800);
   }
 
+  // ─── Optional glTF scene ────────────────────────────────────────────────
+  // The village can render as real geometry when a model folder is present. The camera stays
+  // orthographic at the same isometric angle, so it reads like the drawn view; swapping in a free
+  // camera later is then a small change. Everything here is additive: with no models, or with no
+  // WebGL, the 2D renderer above is untouched and remains the default.
+
+  /// Isometric direction: the same 2:1 projection the 2D view uses, so nothing jumps when switching.
+  const ISO_DIR = { x: 1, y: 0.85, z: 1 };
+
+  async function initModels() {
+    let index = null;
+    try {
+      const res = await fetch('/models/index.json', { cache: 'no-store' });
+      if (res.ok) index = await res.json();
+    } catch (e) { /* no connector, or an older one without the route */ }
+    GL.index = index;
+    const has = index && Array.isArray(index.models) && index.models.length > 0;
+    $('modeBtn').hidden = !has && !DEMO;
+    if (!has) return;
+    if (localStorage.getItem('village.mode') !== '2d') enable3D();
+  }
+
+  async function enable3D() {
+    if (GL.on) return;
+    if (!GL.lib) {
+      try {
+        await loadScript('/vendor/village-three.min.js');
+        GL.lib = window.VillageGL;
+      } catch (e) { note3D('3D viewer script could not be loaded.'); return; }
+    }
+    if (!GL.lib) { note3D('3D viewer script is unavailable.'); return; }
+    try { buildScene(); } catch (e) { note3D('WebGL is unavailable: ' + e.message); return; }
+    GL.on = true;
+    canvas.hidden = true; $('village3d').hidden = false; $('overlay').hidden = false;
+    $('modeBtn').textContent = 'Drawn view';
+    try { localStorage.setItem('village.mode', '3d'); } catch (e) { }
+    resize();
+  }
+
+  function disable3D() {
+    if (!GL.on) return;
+    GL.on = false;
+    canvas.hidden = false; $('village3d').hidden = true; $('overlay').hidden = true;
+    $('modeBtn').textContent = '3D view';
+    try { localStorage.setItem('village.mode', '2d'); } catch (e) { }
+    GROUND.dirty = true; resize();
+  }
+
+  function note3D(message) {
+    const el = $('catchup');
+    el.hidden = false; el.textContent = message;
+    setTimeout(() => { el.hidden = true; renderHeader(); }, 6000);
+  }
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const el = document.createElement('script');
+      el.src = src; el.onload = () => resolve(); el.onerror = () => reject(new Error(src));
+      document.head.appendChild(el);
+    });
+  }
+
+  function buildScene() {
+    const T3 = GL.lib;
+    const gl = new T3.WebGLRenderer({ canvas: $('village3d'), antialias: true, alpha: false });
+    gl.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    gl.shadowMap.enabled = true; gl.shadowMap.type = T3.PCFSoftShadowMap;
+    gl.outputColorSpace = T3.SRGBColorSpace;
+    const scene = new T3.Scene();
+    scene.background = new T3.Color('#0a1428');
+
+    // The same one-key lighting the drawn view uses: warm sun, cool sky fill, gentle ambient.
+    const sun = new T3.DirectionalLight(0xfff0cf, 2.1);
+    sun.position.set(-8, 14, 6);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    const d = 24;
+    sun.shadow.camera.left = -d; sun.shadow.camera.right = d;
+    sun.shadow.camera.top = d; sun.shadow.camera.bottom = -d;
+    sun.shadow.camera.far = 80; sun.shadow.bias = -0.0012;
+    scene.add(sun);
+    scene.add(new T3.HemisphereLight(0xbcd4ff, 0x25451f, 1.0));
+    scene.add(new T3.AmbientLight(0xffffff, 0.35));
+
+    const root = new T3.Group();
+    scene.add(root);
+
+    const camera = new T3.OrthographicCamera(-10, 10, 10, -10, -200, 400);
+    camera.position.set(ISO_DIR.x * 60, ISO_DIR.y * 60, ISO_DIR.z * 60);
+    camera.lookAt(0, 0, 0);
+
+    GL.renderer = gl; GL.scene = scene; GL.camera = camera; GL.root = root; GL.sun = sun; GL.ready = true;
+  }
+
+  /// Asset packs are authored in metres, and a village tile is not a metre. One factor for the whole
+  /// set — never per-asset normalisation, which would flatten a tower to the height of a hut.
+  const MODEL_SCALE = 0.60;
+
+  /// Tile space to world space. The island is centred on the origin so the camera never has to move.
+  function world(tx, ty) { return { x: (tx - GRID_W / 2) * SPREAD, z: (ty - GRID_H / 2) * SPREAD }; }
+
+  function fit3D() {
+    if (!GL.ready) return;
+    const gl = GL.renderer, cam = GL.camera;
+    gl.setSize(W, H, false);
+    // Frame the island with a margin, matching how the 2D view fits the grid.
+    const span = Math.max(GRID_W, GRID_H) * SPREAD * 0.55;
+    const aspect = W / H;
+    cam.left = -span * aspect; cam.right = span * aspect;
+    cam.top = span; cam.bottom = -span;
+    cam.updateProjectionMatrix();
+  }
+
+  /// Asset packs are rarely named exactly like our ids: they use hyphens, and a few buildings have
+  /// their own vocabulary. Matching is therefore on a normalised name, with a small alias table for
+  /// the genuinely different words. Nothing here requires anyone to rename a file.
+  const MODEL_ALIASES = {
+    archive: ['library'],
+    lookout: ['logistics_tower', 'tower'],
+    market: ['market_hall'],
+    records_office: ['residence', 'records'],
+    overlook: ['overflow_shed', 'overflow'],
+    park: ['central_park'],
+    warning_area: ['warning_sign', 'warning'],
+    utility_district: ['utility', 'substation'],
+    houses: ['house'],
+    tree: ['tree_green', 'tree_pine', 'tree_maple'],
+    tree_2: ['tree_pine', 'tree_maple', 'tree_green'],
+    tree_3: ['tree_maple', 'tree_green', 'tree_pine'],
+    lamp: ['path_lamp', 'stone_lantern'],
+    agent: ['character', 'villager']
+  };
+
+  function normName(v) { return String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''); }
+
+  /// name -> served path, built once per index. Sub-folder files win over loose ones.
+  function modelLookup() {
+    if (GL.lookup) return GL.lookup;
+    const map = new Map();
+    for (const m of ((GL.index && GL.index.models) || [])) {
+      const key = normName(m.name);
+      if (!map.has(key) || m.kind !== 'root') map.set(key, m.path);
+    }
+    GL.lookup = map;
+    return map;
+  }
+
+  /// The served path for a landmark/warehouse/scenery id, or null when nothing matches.
+  function modelPath(kind, id) {
+    const map = modelLookup();
+    const base = kind === 'warehouses' && id.startsWith('wh_') ? id.slice(3) : id;
+    for (const candidate of [base].concat(MODEL_ALIASES[normName(base)] || [])) {
+      const hit = map.get(normName(candidate));
+      if (hit) return hit;
+    }
+    return kind === 'warehouses' ? (map.get('_default') || null) : null;
+  }
+
+  function hasModel(path) { return !!path; }
+
+  /// Loads a model once and clones it per use. Missing models resolve to null, and the caller
+  /// falls back to a primitive, so a half-finished model folder still renders a whole village.
+  function loadModel(path) {
+    if (!path) return Promise.resolve(null);
+    if (GL.models.has(path)) return GL.models.get(path);
+    const T3 = GL.lib;
+    const promise = new Promise(resolve => {
+      new T3.GLTFLoader().load('/models/' + path,
+        gltf => resolve(gltf.scene),
+        undefined,
+        () => resolve(null));
+    });
+    GL.models.set(path, promise);
+    return promise;
+  }
+
+  /// A stand-in cottage for anything without a model yet: same proportions and colours as the
+  /// drawn view, so the village is complete from the first run.
+  function placeholder(size, roofHex, wallHex) {
+    const T3 = GL.lib;
+    const g = new T3.Group();
+    const w = 0.8 + size * 0.30, h = 0.5 + size * 0.28;
+    const wall = new T3.Mesh(new T3.BoxGeometry(w, h, w), new T3.MeshStandardMaterial({ color: new T3.Color(wallHex || '#e4ded3'), roughness: 0.85 }));
+    wall.position.y = h / 2; wall.castShadow = true; wall.receiveShadow = true;
+    g.add(wall);
+    const roof = new T3.Mesh(new T3.BoxGeometry(w * 1.18, 0.06, w * 1.18), new T3.MeshStandardMaterial({ color: new T3.Color(roofHex), roughness: 0.7 }));
+    roof.position.y = h + 0.03; roof.castShadow = true;
+    g.add(roof);
+    const cap = new T3.Mesh(new T3.BoxGeometry(w * 0.72, w * 0.5, w * 0.72), new T3.MeshStandardMaterial({ color: new T3.Color(roofHex), roughness: 0.7, flatShading: true }));
+    cap.position.y = h + w * 0.26; cap.rotation.y = Math.PI / 4; cap.castShadow = true;
+    g.add(cap);
+    return g;
+  }
+
+  async function syncScene() {
+    if (!GL.on || !GL.ready) return;
+    const T3 = GL.lib;
+
+    if (!GL.island) {
+      const island = new T3.Mesh(
+        new T3.BoxGeometry(GRID_W * SPREAD + 2, 0.9, GRID_H * SPREAD + 2),
+        new T3.MeshStandardMaterial({ color: new T3.Color('#4f9c33'), roughness: 1 }));
+      island.position.y = -0.45; island.receiveShadow = true;
+      GL.root.add(island); GL.island = island;
+    }
+
+    const wanted = new Set();
+    const place = async (kind, item, size, roofHex) => {
+      const key = kind + ':' + item.id;
+      wanted.add(key);
+      const p = world(item.tile_x + 0.5, item.tile_y + 0.5);
+      let node = GL.nodes.get(key);
+      if (!node) {
+        const model = await loadModel(modelPath(kind, item.id));
+        const obj = model ? model.clone(true) : placeholder(size, roofHex, null);
+        if (model) {
+          obj.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+          obj.scale.setScalar(MODEL_SCALE);
+        }
+        obj.userData.modelled = !!model;
+        GL.root.add(obj);
+        node = obj; GL.nodes.set(key, obj);
+      }
+      node.position.set(p.x, 0, p.z);
+      node.visible = true;
+    };
+
+    for (const b of V.buildings) await place('landmarks', b, b.size || b.base_size || 1, ROOFS[(b.tile_x * 7 + b.tile_y * 5) % ROOFS.length]);
+    for (const wh of V.warehouses) {
+      await place('warehouses', wh, Math.round((wh.footprint || 1.2) * 2), wh.primary || '#8ea6c4');
+      // Element count still drives size, on top of whatever scale the model needed.
+      const node = GL.nodes.get('warehouses:' + wh.id);
+      if (node) {
+        const base = node.userData.modelled ? MODEL_SCALE : 1;
+        const s = base * (0.82 + (wh.footprint || 1.2) * 0.20);
+        node.scale.setScalar(s);
+      }
+    }
+    for (const [key, node] of GL.nodes) if (!wanted.has(key)) node.visible = false;
+  }
+
+  function draw3D() {
+    if (!GL.on || !GL.ready) return;
+    // Characters ride along the same tile positions the 2D view animates.
+    const T3 = GL.lib;
+    for (const ag of V.agents.values()) {
+      let node = GL.nodes.get('agent:' + ag.id);
+      if (!node) {
+        node = placeholder(0.2, ag.color, ag.color);
+        node.scale.set(0.42, 0.7, 0.42);
+        GL.root.add(node); GL.nodes.set('agent:' + ag.id, node);
+      }
+      const p = world(ag.x, ag.y);
+      node.position.set(p.x, 0, p.z);
+      node.rotation.y = V.time * 0.6;
+      node.visible = ag.state !== 'disconnected';
+    }
+    GL.renderer.render(GL.scene, GL.camera);
+    drawOverlay();
+  }
+
+  /// Labels stay 2D and are projected on top: far cheaper and far more legible than 3D text.
+  function drawOverlay() {
+    const o = $('overlay'); const octx = o.getContext('2d');
+    if (o.width !== Math.round(W * DPR) || o.height !== Math.round(H * DPR)) {
+      o.width = Math.round(W * DPR); o.height = Math.round(H * DPR);
+    }
+    octx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    octx.clearRect(0, 0, W, H);
+    for (const b of V.buildings.concat(V.warehouses)) {
+      const p = project(b.tile_x + 0.5, b.tile_y + 0.5);
+      if (!p) continue;
+      b._screen = { x: p.x, y: p.y, hw: TILE * 0.5, top: p.y - TILE * 0.9, bottom: p.y + TILE * 0.2, labelY: p.y };
+    }
+    withCtx(octx, () => {
+      for (const b of V.buildings) drawLabel(b);
+      for (const wh of V.warehouses) drawLabel(wh, wh.count.toLocaleString());
+    });
+  }
+
+  /// drawLabel draws through the module-level ctx; this lends it the overlay for one call.
+  function withCtx(target, fn) { const prev = ctx; ctx = target; try { fn(); } finally { ctx = prev; } }
+
+  function project(tx, ty) {
+    if (!GL.ready) return null;
+    const w = world(tx, ty);
+    // Project the footprint, not the roof, so labels sit under the building rather than across it.
+    const v = new GL.lib.Vector3(w.x, 0, w.z).project(GL.camera);
+    return { x: (v.x * 0.5 + 0.5) * W, y: (-v.y * 0.5 + 0.5) * H + TILE * 0.28 };
+  }
+
+  $('modeBtn').addEventListener('click', () => { GL.on ? disable3D() : enable3D(); });
+
   if (DEMO) runDemo(); else connect();
+  initModels();
 })();
 </script>
 </body>

@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json.Nodes;
@@ -17,6 +18,7 @@ namespace RevitMCP.Addin.Village.Hosting;
 public sealed class VillageService : IDisposable
 {
     private const string ViewerResourceName = "RevitMCP.Addin.Village.Viewer.village.html";
+    private const string VendorResourcePrefix = "RevitMCP.Addin.Village.Viewer.vendor.";
     private const string FallbackHtml =
         "<!doctype html><meta charset=\"utf-8\"><title>Project Village</title>" +
         "<p>The Project Village viewer resource is missing from this build. The read-only feed is still available at <code>/events</code> and <code>/snapshot</code>.</p>";
@@ -105,7 +107,8 @@ public sealed class VillageService : IDisposable
             if (_server != null && _server.IsListening) return true;
             try
             {
-                var server = new VillageSseServer(Options, () => Hub.SnapshotJson, LoadViewerHtml, () => Hub.InstancesJson, Log);
+                var server = new VillageSseServer(Options, () => Hub.SnapshotJson, LoadViewerHtml, () => Hub.InstancesJson, Log,
+                    ModelLibrary, LoadVendorAsset);
                 if (!server.Start())
                 {
                     LastError = $"No free loopback port between {Options.Port} and {Options.Port + VillageOptions.PortFallbackAttempts - 1}.";
@@ -215,6 +218,7 @@ public sealed class VillageService : IDisposable
     {
         var cached = _html;
         if (cached != null) return cached;
+        EnsureModelLibrary();
         try
         {
             using var stream = typeof(VillageService).Assembly.GetManifestResourceStream(ViewerResourceName);
@@ -230,6 +234,87 @@ public sealed class VillageService : IDisposable
         }
         _html = cached ?? FallbackHtml;
         return _html;
+    }
+
+    private VillageModelLibrary? _models;
+    private bool _modelsResolved;
+    private readonly Dictionary<string, byte[]> _vendorCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The optional glTF folder, resolved once. The configured path wins; otherwise the package's
+    /// own <c>Village\Models</c> folder is used, which is what the Dropbox deploy ships. Resolving
+    /// lazily keeps startup free of disk work when nobody opens the viewer.
+    /// </summary>
+    public VillageModelLibrary? ModelLibrary()
+    {
+        EnsureModelLibrary();
+        return _models;
+    }
+
+    private void EnsureModelLibrary()
+    {
+        if (_modelsResolved) return;
+        _modelsResolved = true;
+        try
+        {
+            var folder = VillageModelLibrary.FirstExisting(new[] { Options.ModelsFolder }.Concat(PackageModelsFolders()).ToArray());
+            _models = new VillageModelLibrary(folder);
+            if (folder != null) Log("models folder: " + folder);
+        }
+        catch (Exception ex)
+        {
+            Log("models folder resolve failed: " + ex.Message);
+            _models = new VillageModelLibrary(null);
+        }
+    }
+
+    /// <summary>
+    /// Where a deployed package keeps its models, tried in order. The package lays the add-in out
+    /// as <c>Addin\2026\RevitMCP.Addin.dll</c>, so the shared folder is two levels up — one set of
+    /// models for both Revit versions rather than a copy per year. A dev loader that copies the
+    /// DLL to a temp folder matches neither, which is what <c>village.modelsFolder</c> is for.
+    /// </summary>
+    private static IEnumerable<string?> PackageModelsFolders()
+    {
+        string? dir;
+        try
+        {
+            var dll = typeof(VillageService).Assembly.Location;
+            dir = string.IsNullOrEmpty(dll) ? null : Path.GetDirectoryName(dll);
+        }
+        catch
+        {
+            dir = null;
+        }
+        if (dir == null) yield break;
+
+        yield return Path.Combine(dir, "..", "..", "Village", "Models");   // <package>\Village\Models
+        yield return Path.Combine(dir, "Village", "Models");               // beside the DLL
+    }
+
+    /// <summary>Vendored viewer asset by file name, cached after the first read.</summary>
+    public byte[]? LoadVendorAsset(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+        lock (_vendorCache)
+        {
+            if (_vendorCache.TryGetValue(name, out var cached)) return cached;
+            try
+            {
+                using var stream = typeof(VillageService).Assembly.GetManifestResourceStream(VendorResourcePrefix + name);
+                if (stream == null) return null;
+                using var ms = new MemoryStream();
+                stream.CopyTo(ms);
+                var bytes = ms.ToArray();
+                _vendorCache[name] = bytes;
+                return bytes;
+            }
+            catch (Exception ex)
+            {
+                Log("vendor asset load failed (" + name + "): " + ex.Message);
+                return null;
+            }
+        }
     }
 
     // ─── Configuration ──────────────────────────────────────────────────────

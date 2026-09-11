@@ -91,6 +91,26 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 
+echo === Ensuring the village model folder ===
+:: One shared folder for both Revit versions. Drop .glb files in here and the village renders them
+:: instead of the drawn sprites; anything missing falls back, so it is safe to leave empty.
+for %%K in (landmarks warehouses scenery characters) do (
+    if not exist "%TARGET%\Village\Models\%%K" mkdir "%TARGET%\Village\Models\%%K"
+)
+if not exist "%TARGET%\Village\Models\README.txt" (
+    > "%TARGET%\Village\Models\README.txt" echo Project Village 3D models. Drop glTF binaries ^(.glb^) into the sub-folders.
+    >> "%TARGET%\Village\Models\README.txt" echo.
+    >> "%TARGET%\Village\Models\README.txt" echo   landmarks\^<landmark id^>.glb        e.g. town_hall.glb, archive.glb, park.glb
+    >> "%TARGET%\Village\Models\README.txt" echo   warehouses\^<category slug^>.glb     e.g. fire_alarm_devices.glb, _default.glb
+    >> "%TARGET%\Village\Models\README.txt" echo   scenery\tree.glb, rock.glb, lamp.glb
+    >> "%TARGET%\Village\Models\README.txt" echo   characters\agent.glb
+    >> "%TARGET%\Village\Models\README.txt" echo.
+    >> "%TARGET%\Village\Models\README.txt" echo Export: glTF 2.0 binary, +Y up, -Z front, origin at the footprint centre on y=0,
+    >> "%TARGET%\Village\Models\README.txt" echo 1 unit = 1 village tile, no cameras or lights. See docs/project-village.md.
+    >> "%TARGET%\Village\Models\README.txt" echo.
+    >> "%TARGET%\Village\Models\README.txt" echo Click a landmark or warehouse in the viewer to see the exact file name it wants.
+)
+
 echo === Writing version.txt ===
 for /f "usebackq delims=" %%h in (`git -C "%REPO_ABS%" rev-parse --short HEAD 2^>nul`) do set "GITHASH=%%h"
 if "%GITHASH%"=="" set "GITHASH=unknown"
