@@ -54,6 +54,13 @@ public sealed class VillageOptions
 
     public int MaxViewers { get; set; } = 8;
     public int MaxBuildings { get; set; } = 12;
+
+    /// <summary>
+    /// Category warehouses drawn in the yard, largest categories first. Zero hides the yard; the
+    /// map grows taller with every extra row of five, so the default stays modest.
+    /// </summary>
+    public int MaxWarehouses { get; set; } = VillageWarehouseYard.DefaultMax;
+
     public int MaxEffects { get; set; } = 6;
     public int ReconnectBackoffMs { get; set; } = 1000;
     public int ReconnectBackoffMaxMs { get; set; } = 15000;
@@ -98,6 +105,7 @@ public sealed class VillageOptions
         o.AnimationSpeed = Dbl(user, company, "animationSpeed", o.AnimationSpeed, 0.1, 5.0);
         o.MaxViewers = Int(user, company, "maxViewers", o.MaxViewers, 1, 32);
         o.MaxBuildings = Int(user, company, "maxBuildings", o.MaxBuildings, 6, 12);
+        o.MaxWarehouses = Int(user, company, "maxWarehouses", o.MaxWarehouses, 0, 20);
         o.MaxEffects = Int(user, company, "maxEffects", o.MaxEffects, 1, 24);
         o.ReconnectBackoffMs = Int(user, company, "reconnectBackoffMs", o.ReconnectBackoffMs, 250, 60000);
         o.ReconnectBackoffMaxMs = Int(user, company, "reconnectBackoffMaxMs", o.ReconnectBackoffMaxMs, o.ReconnectBackoffMs, 300000);

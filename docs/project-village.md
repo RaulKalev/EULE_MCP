@@ -6,8 +6,9 @@
 
 Each open Revit project becomes a small isometric village. Buildings stand for broad work areas
 (sheets, views, schedules, families, tags, elements, systems, coordination, office work); one
-character per connected MCP client walks between them as tools run. Nothing in the village shows
-model geometry or individual elements.
+character per connected MCP client walks between them as tools run. Below the village a
+**warehouse yard** stores the model's inventory: one warehouse per Revit category, as big as that
+category's element count. Nothing in the village shows model geometry or individual elements.
 
 To see it without Revit, open the page with `?demo=1` (for example
 `http://127.0.0.1:47800/?demo=1`, or the `village.html` file directly): a built-in deterministic
@@ -173,6 +174,7 @@ key. Values are clamped into the ranges shown.
 | `animationSpeed` | `1.0` | 0.1–5 | Viewer default (the page has a slider) |
 | `maxViewers` | `8` | 1–32 | Simultaneous streams |
 | `maxBuildings` | `12` | 6–12 | Landmarks drawn |
+| `maxWarehouses` | `10` | 0–20 | Category warehouses drawn (`0` hides the yard) |
 | `maxEffects` | `6` | 1–24 | Simultaneous visual effects |
 | `reconnectBackoffMs` / `reconnectBackoffMaxMs` | `1000` / `15000` | | Viewer reconnect backoff |
 | `diagnosticLogging` | `false` | | Village diagnostics in `%LOCALAPPDATA%\RevitMCP_startup.log` |
@@ -214,6 +216,41 @@ Example:
 | Survey post | `coordination` | fixed |
 | Records office | `office` (files, Excel, reports, delivery, config, standards, skills) | fixed |
 | Warning area | — | recent failures, stale graph, orphan circuits |
+
+## Warehouse yard (category → warehouse)
+
+The landmarks above are fixed: the village always has an archive, whether or not the project has
+sheets. The yard is the opposite — it is built from the model. `VillageWarehouseYard.Plan` takes
+the graph snapshot's `elementsByCategory` counts and gives **one warehouse to every Revit category
+that has at least one element**. A category with no elements gets no warehouse, so a project
+without security devices simply has no security warehouse.
+
+| Property | Derived from |
+|---|---|
+| Which warehouses exist | Categories with `count > 0`, largest first, capped at `maxWarehouses` |
+| Footprint (1.05–2.10 tiles) | `log10(1 + count) / log10(1 + 5000)`, clamped |
+| Height | Follows the footprint |
+| Size bucket 1–6 and loading bays 2–6 | `< 10`, `< 50`, `< 200`, `< 1000`, `< 5000`, above |
+| Pallets stacked outside | Size bucket above 2 |
+| Roof and sign colour | The theme system that lists the category (`village.themes`), else a hue hashed from the category name |
+| Position | Row-major, five per row, starting at tile (1.0, 13.4) below the village |
+
+The scale is **absolute, not relative**: a warehouse is sized by its own count alone, so it never
+changes when a different category grows, and 5 000 elements or more is always the largest building.
+It is logarithmic because category counts span several orders of magnitude — 4 mechanical
+equipment next to 40 000 conduit fittings would otherwise make everything but one building
+invisible.
+
+The yard grows the isometric grid downwards, and the viewer refits the tile size to whatever the
+grid needs, so more categories mean a slightly smaller village rather than a clipped one. Set
+`village.maxWarehouses` to `0` to get the village exactly as it was before the yard existed.
+
+Warehouses are **inventory, not activity**: characters never walk to them (agents are routed by
+area, and an area covers many categories), and no story step targets one. Clicking a warehouse
+shows its element count, its share of all counted elements, its system and its rank.
+
+Without a graph the yard is empty — like the rest of the graph-derived display, it runs in limited
+mode. The counts come from the graph file and are as old as the last build; the inspector says so.
 
 Classification (`VillageToolClassifier`): explicit overrides → namespace prefixes (`config_`,
 `file_`, `excel_`, `standards_`, `delivery_` → office) → ordered keyword rules matched at token
@@ -308,7 +345,7 @@ Graph values are routing and visualization metadata captured at build time, not 
 | Event queue | `queueSize` (2000), `maxEventsPerSecond` (200) |
 | Consumer | one background task, 500 events per pass, state pushed at most every 250 ms |
 | Recent feed / history | 200 / 500 steps |
-| Buildings / effects | ≤ 12 / ≤ 6 |
+| Buildings / warehouses / effects | ≤ 12 / ≤ 20 / ≤ 6 |
 | Graph reads | on graph tools, after writes (cache hit), and every `graphRefreshSeconds`; ≤ 2000 types and ≤ 5000 views examined |
 | Viewers | ≤ 8, 256 queued messages each, 15 s heartbeat |
 | Reconnect | browser retry, then exponential backoff 1 s → 15 s |

@@ -144,6 +144,8 @@ public sealed class VillageStateSnapshot
     [JsonProperty("recent_steps")] public List<VillageStoryStep> RecentSteps { get; set; } = new();
     [JsonProperty("recent_failures")] public int RecentFailures { get; set; }
     [JsonProperty("buildings")] public List<VillageBuilding> Buildings { get; set; } = new();
+    /// <summary>One warehouse per Revit category that has elements in the graph; empty in limited mode.</summary>
+    [JsonProperty("warehouses")] public List<VillageWarehouse> Warehouses { get; set; } = new();
     /// <summary>Graph snapshot object (see VillageGraphSnapshot) or null in limited mode.</summary>
     [JsonProperty("graph")] public JToken? Graph { get; set; }
     /// <summary>Theme result object (see VillageThemeResult) or null when no graph is available.</summary>
@@ -159,6 +161,7 @@ public sealed class VillageViewerOptions
 {
     [JsonProperty("animation_speed")] public double AnimationSpeed { get; set; } = 1.0;
     [JsonProperty("max_buildings")] public int MaxBuildings { get; set; } = 12;
+    [JsonProperty("max_warehouses")] public int MaxWarehouses { get; set; } = VillageWarehouseYard.DefaultMax;
     [JsonProperty("max_effects")] public int MaxEffects { get; set; } = 6;
     [JsonProperty("recent_activity_limit")] public int RecentActivityLimit { get; set; } = 200;
     [JsonProperty("reconnect_backoff_ms")] public int ReconnectBackoffMs { get; set; } = 1000;

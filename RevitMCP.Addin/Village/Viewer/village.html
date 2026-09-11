@@ -82,7 +82,7 @@
   <aside>
     <section id="activity"><h2>Current activity</h2><div id="agents">No agent connected yet.</div></section>
     <section id="feed"><h2>Recent activity</h2><ul id="feedList"></ul></section>
-    <section id="selected"><h2>Selected building</h2><div id="selectedBody">Click a landmark in the village.</div></section>
+    <section id="selected"><h2>Selected building</h2><div id="selectedBody">Click a landmark or a warehouse in the village.</div></section>
     <section id="controls">
       <button id="pauseBtn" type="button">Pause animation</button>
       <label>Speed <input id="speed" type="range" min="0.25" max="3" step="0.25" value="1"> <span id="speedLabel">1×</span></label>
@@ -98,7 +98,8 @@
   'use strict';
 
   // ─── Constants and limits ───────────────────────────────────────────────
-  const GRID_W = 12, GRID_H = 14;               // isometric tile grid
+  const GRID_MIN_W = 12, GRID_MIN_H = 14;       // isometric tile grid of the village proper
+  let GRID_W = GRID_MIN_W, GRID_H = GRID_MIN_H; // grown to fit the warehouse yard
   const FEED_LIMIT_DEFAULT = 200;
   const MOVE_QUEUE_LIMIT = 8;                   // pending moves per agent before catch-up (teleport)
   const EFFECT_LIMIT_DEFAULT = 6;
@@ -117,7 +118,8 @@
 
   // ─── Viewer state (derived only; nothing here is ever sent anywhere) ────
   const V = {
-    snapshot: null, buildings: [], byId: new Map(), agents: new Map(), feed: [], effects: [],
+    snapshot: null, buildings: [], byId: new Map(), warehouses: [], whById: new Map(),
+    agents: new Map(), feed: [], effects: [],
     feedLimit: FEED_LIMIT_DEFAULT, effectLimit: EFFECT_LIMIT_DEFAULT, selected: null,
     paused: false, speed: 1, connection: 'connecting', skipped: 0, lastStepId: 0, time: 0
   };
@@ -167,6 +169,20 @@
   window.addEventListener('resize', resize);
   resize();
 
+  // The village proper is a fixed 12 × 14 grid; the warehouse yard below it is as tall as the
+  // number of categories demands, so the grid (and therefore the tile size) follows the content.
+  function fitGrid() {
+    let w = GRID_MIN_W, h = GRID_MIN_H;
+    for (const b of V.buildings) { w = Math.max(w, b.tile_x + 2); h = Math.max(h, b.tile_y + 2); }
+    for (const wh of V.warehouses) {
+      const reach = (wh.footprint || 1.2) / 2 + 1.4;   // half the footprint plus the apron and label
+      w = Math.max(w, wh.tile_x + reach); h = Math.max(h, wh.tile_y + reach);
+    }
+    w = Math.ceil(w); h = Math.ceil(h);
+    if (w === GRID_W && h === GRID_H) return;
+    GRID_W = w; GRID_H = h; resize();
+  }
+
   // ─── Snapshot handling ──────────────────────────────────────────────────
   function applySnapshot(s, initial) {
     if (!s || typeof s !== 'object') return;
@@ -177,6 +193,15 @@
     const maxBuildings = (s.viewer_options && s.viewer_options.max_buildings) || 12;
     V.buildings = (Array.isArray(s.buildings) ? s.buildings : []).slice(0, maxBuildings);
     V.byId = new Map(V.buildings.map(b => [b.id, b]));
+
+    // Warehouses: one per Revit category that has elements. The connector already dropped empty
+    // categories and sized each one; the viewer only caps the count and lays out the yard.
+    const maxWarehouses = (s.viewer_options && s.viewer_options.max_warehouses != null) ? s.viewer_options.max_warehouses : 10;
+    V.warehouses = (Array.isArray(s.warehouses) ? s.warehouses : [])
+      .filter(w => w && w.count > 0)
+      .slice(0, Math.max(0, maxWarehouses));
+    V.whById = new Map(V.warehouses.map(w => [w.id, w]));
+    fitGrid();
 
     const seen = new Set();
     (s.agents || []).forEach((a, i) => {
@@ -201,7 +226,7 @@
       V.feed = (s.recent_steps || []).slice(-V.feedLimit).reverse();
       V.lastStepId = V.feed.length ? V.feed[0].id : 0;
     }
-    if (V.selected && !V.byId.has(V.selected)) V.selected = null;
+    if (V.selected && !V.byId.has(V.selected) && !V.whById.has(V.selected)) V.selected = null;
     renderHeader(); renderAgents(); renderFeed(); renderSelected(); renderInstances();
     if (!$('diag').hidden) renderDiagnostics();
   }
@@ -293,8 +318,10 @@
 
   function renderSelected() {
     const body = $('selectedBody');
+    const wh = V.selected ? V.whById.get(V.selected) : null;
+    if (wh) { renderWarehouse(body, wh); return; }
     const b = V.selected ? V.byId.get(V.selected) : null;
-    if (!b) { body.textContent = 'Click a landmark in the village.'; return; }
+    if (!b) { body.textContent = 'Click a landmark or a warehouse in the village.'; return; }
     const s = V.snapshot || {}; const areas = s.areas || []; const g = s.graph; const counts = (g && g.counts) || {};
     let html = '<strong>' + esc(b.label) + '</strong><div class="desc">' + esc(b.description || '') + '</div><div class="kv">';
     let reads = 0, writes = 0, exports = 0, failures = 0, deferred = 0, affected = 0, lastTool = null;
@@ -313,6 +340,26 @@
     html += '</div>';
     body.innerHTML = html;
   }
+  const SYSTEM_LABELS = {
+    fire_alarm: 'Fire alarm', security: 'Security / access control', lighting: 'Lighting / DALI',
+    it_av: 'IT / AV / data', electrical: 'General electrical', other: 'Not mapped to a system'
+  };
+  const SIZE_WORDS = ['empty', 'shed', 'small', 'medium', 'large', 'big', 'huge'];
+
+  function renderWarehouse(body, wh) {
+    const g = (V.snapshot || {}).graph;
+    let html = '<strong>' + esc(wh.label) + '</strong><div class="desc">Warehouse for the ' +
+      esc(wh.label) + ' category. Its size follows the element count in the model graph.</div><div class="kv">';
+    html += kv('Elements', wh.count.toLocaleString());
+    html += kv('Share of stored elements', Math.round((wh.share || 0) * 1000) / 10 + '%');
+    html += kv('System', SYSTEM_LABELS[wh.system] || wh.system);
+    html += kv('Warehouse size', (SIZE_WORDS[wh.size] || wh.size) + ' (' + wh.size + ' of 6)');
+    html += kv('Rank by count', '#' + ((wh.rank || 0) + 1));
+    if (g && g.built_at) html += kv('Counted at', g.built_at.replace('T', ' ').replace('Z', ' UTC'));
+    html += '</div><div class="desc">Graph counts are captured when the graph is built, not live Revit values.</div>';
+    body.innerHTML = html;
+  }
+
   function kv(k, v) { return '<span>' + esc(String(k)) + '</span><span>' + esc(String(v)) + '</span>'; }
   function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
@@ -391,6 +438,27 @@
         const mx = (a.x + c.x) / 2, my = (a.y + c.y) / 2; lantern(mx, my, 0.35 + 0.15 * Math.sin(V.time * 2 + b.tile_x));
       }
     }
+    // Warehouse yard: one access road from the square, a lane per row and a concrete apron each.
+    // Roads are drawn per row rather than per warehouse so a busy yard does not turn into a web.
+    if (V.warehouses.length) {
+      const rows = yardRows();
+      const gate = iso(rows[0].x0 - 0.4, rows[0].y + 1.5);
+      const a = iso(SQUARE.x, SQUARE.y);
+      ctx.strokeStyle = T.road; ctx.lineWidth = TILE * 0.18;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(gate.x, gate.y); ctx.stroke();
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        const l = iso(r.x0 - 0.4, r.y + 1.5), e = iso(r.x1 + 0.9, r.y + 1.5);
+        ctx.lineWidth = TILE * 0.15; ctx.beginPath(); ctx.moveTo(l.x, l.y); ctx.lineTo(e.x, e.y); ctx.stroke();
+        if (i > 0) { const up = iso(rows[i - 1].x0 - 0.4, rows[i - 1].y + 1.5); ctx.beginPath(); ctx.moveTo(up.x, up.y); ctx.lineTo(l.x, l.y); ctx.stroke(); }
+      }
+      for (const wh of V.warehouses) {
+        const c = iso(wh.tile_x + 0.5, wh.tile_y + 0.5);
+        const fp = (wh.footprint || 1.2) * 1.3;
+        diamond(c.x, c.y, fp * TILE / 2, fp * TILE / 4, 'rgba(86,96,110,.55)');
+      }
+    }
+
     // Village square
     const sq = iso(SQUARE.x, SQUARE.y);
     diamond(sq.x, sq.y, TILE * 0.9, TILE * 0.45, '#56606e');
@@ -399,17 +467,32 @@
     // Depth-sorted drawables
     const items = [];
     for (const b of V.buildings) items.push({ d: b.tile_x + b.tile_y + 1, draw: () => drawBuilding(b, T) });
+    for (const wh of V.warehouses) items.push({ d: wh.tile_x + wh.tile_y + 1, draw: () => drawWarehouse(wh, T) });
     for (const ag of V.agents.values()) items.push({ d: ag.x + ag.y + 0.2, draw: () => drawAgent(ag) });
     for (const e of V.effects) { const p = posOf(e.building); items.push({ d: p.x + p.y + 3, draw: () => drawEffect(e) }); }
     items.sort((a, b) => a.d - b.d);
     for (const it of items) it.draw();
     // Labels last so a taller neighbour never hides them.
     for (const b of V.buildings) drawLabel(b);
+    for (const wh of V.warehouses) drawLabel(wh, wh.count.toLocaleString());
 
     // Legend
     ctx.fillStyle = 'rgba(230,235,242,.75)'; ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'right';
-    ctx.fillText('theme: ' + T.name.replace('_', ' ') + (T.visible.length ? ' · districts: ' + T.visible.map(v => v.replace('_', ' ')).join(', ') : ''), W - 12, H - 12);
+    ctx.fillText('theme: ' + T.name.replace('_', ' ') + (T.visible.length ? ' · districts: ' + T.visible.map(v => v.replace('_', ' ')).join(', ') : '') +
+      (V.warehouses.length ? ' · warehouses: ' + V.warehouses.length : ''), W - 12, H - 12);
     ctx.textAlign = 'left';
+  }
+
+  /// Yard rows grouped by tile_y, each with its left and right extent in tiles.
+  function yardRows() {
+    const map = new Map();
+    for (const wh of V.warehouses) {
+      const key = Math.round(wh.tile_y * 100);
+      const row = map.get(key) || { y: wh.tile_y, x0: wh.tile_x, x1: wh.tile_x };
+      row.x0 = Math.min(row.x0, wh.tile_x); row.x1 = Math.max(row.x1, wh.tile_x);
+      map.set(key, row);
+    }
+    return Array.from(map.values()).sort((a, b) => a.y - b.y);
   }
 
   function diamond(x, y, hw, hh, fill) { ctx.fillStyle = fill; ctx.beginPath(); ctx.moveTo(x, y - hh); ctx.lineTo(x + hw, y); ctx.lineTo(x, y + hh); ctx.lineTo(x - hw, y); ctx.closePath(); ctx.fill(); }
@@ -454,13 +537,69 @@
     b._screen = { x: c.x, y: c.y - hgt / 2, hw: hw * 1.05, top: c.y - hgt * (b.sprite === 'tower' ? 1.9 : 1.15) - hh, bottom: c.y + hh + TILE * 0.3, labelY: c.y + hh + 4 };
   }
 
-  function drawLabel(b) {
+  // A warehouse is a flat-roofed shed with a corrugated roof, loading bays along the front wall and
+  // a coloured sign band. Footprint, height, bay count and the pallets outside all come from the
+  // connector's count-derived sizing, so a big category is unmistakably a big building.
+  function drawWarehouse(wh, T) {
+    const fp = Math.max(0.8, Math.min(3, wh.footprint || 1.2));
+    const hgt = TILE * (0.22 + 0.20 * fp);
+    const c = iso(wh.tile_x + 0.5, wh.tile_y + 0.5);
+    const hw = fp * TILE / 2, hh = fp * TILE / 4;
+    const selected = V.selected === wh.id;
+    const roof = wh.primary || T.primary;
+    const tint = wh.hue != null ? wh.hue : 210;
+    const wallL = 'hsl(' + tint + ', 8%, 62%)', wallR = 'hsl(' + tint + ', 8%, 48%)';
+
+    box(c.x, c.y, hw, hh, hgt, roof, wallL, wallR);
+    const top = c.y - hgt;
+
+    // Corrugated roof ribs: lines from the north-west edge across to the south-east one.
+    ctx.strokeStyle = 'rgba(0,0,0,.16)'; ctx.lineWidth = Math.max(1, TILE * 0.02);
+    for (let i = 1; i <= 4; i++) {
+      const t = i / 5;
+      ctx.beginPath();
+      ctx.moveTo(c.x - hw + t * hw, top - t * hh);
+      ctx.lineTo(c.x + t * hw, top + hh - t * hh);
+      ctx.stroke();
+    }
+    // Sign band under the eaves on the right wall, in the category colour.
+    ctx.fillStyle = wh.accent || T.accent;
+    ctx.beginPath();
+    ctx.moveTo(c.x + hw, top + 1); ctx.lineTo(c.x, top + hh + 1);
+    ctx.lineTo(c.x, top + hh + 1 + hgt * 0.12); ctx.lineTo(c.x + hw, top + 1 + hgt * 0.12);
+    ctx.closePath(); ctx.fill();
+
+    // Loading bays along the right wall, evenly spaced; more bays for a bigger category.
+    const bays = Math.max(1, Math.min(6, wh.bays || 2));
+    const doorH = hgt * 0.52;
+    for (let i = 0; i < bays; i++) {
+      const u = (i + 0.19) / bays, span = 0.62 / bays;
+      const px = c.x + hw - u * hw, py = c.y + u * hh;
+      ctx.fillStyle = 'rgba(24,28,35,.72)';
+      ctx.beginPath();
+      ctx.moveTo(px, py); ctx.lineTo(px - span * hw, py + span * hh);
+      ctx.lineTo(px - span * hw, py + span * hh - doorH); ctx.lineTo(px, py - doorH);
+      ctx.closePath(); ctx.fill();
+    }
+    // Pallets stacked in the yard once the category is large enough to need them.
+    const pallets = Math.max(0, (wh.size || 1) - 2);
+    for (let i = 0; i < pallets; i++) {
+      const px = c.x - hw - TILE * 0.16 - i * TILE * 0.13, py = c.y + hh * 0.25 + i * TILE * 0.07;
+      box(px, py, TILE * 0.09, TILE * 0.045, TILE * 0.1, wh.accent || T.accent, '#7c7f88', '#5f626b');
+    }
+
+    if (selected) { ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(c.x, c.y - hh); ctx.lineTo(c.x + hw, c.y); ctx.lineTo(c.x, c.y + hh); ctx.lineTo(c.x - hw, c.y); ctx.closePath(); ctx.stroke(); }
+    wh._screen = { x: c.x, y: c.y - hgt / 2, hw: hw * 1.05, top: top - hh, bottom: c.y + hh + TILE * 0.25, labelY: c.y + hh + 3 };
+  }
+
+  function drawLabel(b, suffix) {
     if (!b._screen) return;
     const selected = V.selected === b.id;
-    ctx.font = (selected ? 'bold ' : '') + Math.max(10, TILE * 0.2) + 'px system-ui, sans-serif'; ctx.textAlign = 'center';
-    const lw = ctx.measureText(b.label).width + 10; const y = b._screen.labelY;
+    const text = suffix ? b.label + ' · ' + suffix : b.label;
+    ctx.font = (selected ? 'bold ' : '') + Math.max(9, TILE * (suffix ? 0.17 : 0.2)) + 'px system-ui, sans-serif'; ctx.textAlign = 'center';
+    const lw = ctx.measureText(text).width + 10; const y = b._screen.labelY;
     ctx.fillStyle = 'rgba(20,24,31,.78)'; ctx.fillRect(b._screen.x - lw / 2, y, lw, TILE * 0.24 + 4);
-    ctx.fillStyle = selected ? '#ffe08a' : '#e6ebf2'; ctx.fillText(b.label, b._screen.x, y + TILE * 0.2 - 2);
+    ctx.fillStyle = selected ? '#ffe08a' : '#e6ebf2'; ctx.fillText(text, b._screen.x, y + TILE * 0.2 - 2);
     ctx.textAlign = 'left';
   }
 
@@ -575,7 +714,7 @@
   canvas.addEventListener('click', ev => {
     const rect = canvas.getBoundingClientRect(); const x = ev.clientX - rect.left, y = ev.clientY - rect.top;
     let best = null, bestD = Infinity;
-    for (const b of V.buildings) {
+    for (const b of V.buildings.concat(V.warehouses)) {
       const s = b._screen; if (!s) continue;
       if (Math.abs(x - s.x) > s.hw || y < s.top || y > s.bottom) continue;
       const d = Math.hypot(s.x - x, s.y - y); if (d < bestD) { best = b.id; bestD = d; }
@@ -622,15 +761,37 @@
       ['warning_area', 'Warning area', [], 10, 11, 1, 'warning']
     ].map(x => ({ id: x[0], label: x[1], areas: x[2], tile_x: x[3], tile_y: x[4], base_size: x[5], size: x[5] + (x[5] < 3 ? 1 : 0), sprite: x[6], description: 'Demo landmark for ' + x[1].toLowerCase() + '.' }));
     const areas = Object.keys(AREA_LABELS).map(a => ({ area: a, reads: 0, writes: 0, exports: 0, failures: 0, deferred: 0, affected: 0 }));
+    // Warehouses mirror what the connector sends: category, count, and count-derived sizing.
+    const WH = [
+      ['Fire Alarm Devices', 412, 'fire_alarm', '#b8432f', '#ff8a75', 14],
+      ['Lighting Fixtures', 268, 'lighting', '#c99a1e', '#ffe08a', 44],
+      ['Data Devices', 154, 'it_av', '#2e86c1', '#7fc8ff', 204],
+      ['Electrical Equipment', 62, 'electrical', '#8e6b3e', '#e0b070', 32],
+      ['Security Devices', 38, 'security', '#5d6d7e', '#aab7b8', 210],
+      ['Electrical Fixtures', 21, 'electrical', '#8e6b3e', '#e0b070', 32],
+      ['Conduits', 9, 'electrical', '#8e6b3e', '#e0b070', 32],
+      ['Mechanical Equipment', 4, 'other', '#5a7a6a', '#9dc4b2', 155]
+    ];
+    const whTotal = WH.reduce((n, x) => n + x[1], 0);
+    const warehouses = WH.map((x, i) => {
+      const ratio = Math.min(1, Math.log10(1 + x[1]) / Math.log10(1 + 5000));
+      const size = x[1] < 10 ? 1 : x[1] < 50 ? 2 : x[1] < 200 ? 3 : x[1] < 1000 ? 4 : x[1] < 5000 ? 5 : 6;
+      return {
+        id: 'wh_' + x[0].toLowerCase().replace(/[^a-z0-9]+/g, '_'), category: x[0], label: x[0], count: x[1],
+        share: Math.round(x[1] / whTotal * 10000) / 10000, system: x[2], primary: x[3], accent: x[4], hue: x[5],
+        tile_x: Math.round((1 + (i % 5) * 2.6) * 1000) / 1000, tile_y: Math.round((13.4 + Math.floor(i / 5) * 2.8) * 1000) / 1000,
+        footprint: Math.round((1.05 + 1.05 * ratio) * 1000) / 1000, size, bays: Math.max(2, Math.min(6, size)), rank: i
+      };
+    });
     const snap = {
       schema_version: 1, read_only: true, project_name: '1626_PP_EN (demo)', session_id: 'demo', mode: 'live', updated_at: new Date().toISOString(),
       agents: [{ id: 'claude-code', name: 'Claude Code', state: 'idle', area: 'unknown', building: 'square', activity: 'unknown', in_progress: 0, tool_count: 0, failure_count: 0 }],
-      areas, current_steps: [], recent_steps: [], recent_failures: 0, buildings: B,
+      areas, current_steps: [], recent_steps: [], recent_failures: 0, buildings: B, warehouses,
       graph: { exists: true, file_name: '1626_PP_EN.graph.db', root_source: 'demo', built_at: new Date(Date.now() - 42 * 60000).toISOString(), freshness: { status: 'fresh', reason: 'Demo graph.', age_seconds: 2520 }, counts: { nodes: 2110, edges: 5300, elements: 1900, types: 140, sheets: 34, views: 212, schedules: 8, levels: 3, spaces: 120, worksets: 6, panels: 6, circuits: 40, tags: 420 }, health: { circuits_without_panel: 1, circuits_without_elements: 3, elements_without_location: 40, issues: 4 } },
       theme: { theme: 'fire_alarm', label: 'Fire alarm', dominant: 'fire_alarm', visible_systems: ['fire_alarm', 'lighting'], primary: '#b8432f', accent: '#ff8a75', reason: 'Fire alarm holds 69% of the evidence (420 by category, 380 by name) — dominant.', identity: { hue: 14, pattern: 1, seed: 1 }, config_source: 'default', thresholds: { min_sample_count: 20, min_system_count: 10, dominant_share: 0.45, visible_share: 0.1, category_weight: 1, name_weight: 0.5 },
         scores: [{ system: 'fire_alarm', label: 'Fire alarm', category_score: 420, name_score: 380, name_contribution: 190, score: 610, share: 0.69, visible: true, dominant: true }, { system: 'lighting', label: 'Lighting / DALI', category_score: 90, name_score: 30, name_contribution: 15, score: 105, share: 0.12, visible: true, dominant: false }, { system: 'it_av', label: 'IT / AV / data', category_score: 60, name_score: 0, name_contribution: 0, score: 60, share: 0.07, visible: false, dominant: false }, { system: 'security', label: 'Security / access control', category_score: 40, name_score: 80, name_contribution: 40, score: 80, share: 0.09, visible: false, dominant: false }, { system: 'electrical', label: 'General electrical', category_score: 30, name_score: 0, name_contribution: 0, score: 30, share: 0.03, visible: false, dominant: false }] },
       stats: { events_processed: 0, steps_emitted: 0, unknown_tools: 0, unknown_events: 0, catch_up_entries: 0, last_sequence: 0 }, queue: { enqueued: 0, depth: 0, capacity: 2000, high_water: 0 },
-      viewer_options: { animation_speed: 1, max_buildings: 12, max_effects: 6, recent_activity_limit: 200, reconnect_backoff_ms: 1000, reconnect_backoff_max_ms: 15000, aggregation_window_ms: 1500 },
+      viewer_options: { animation_speed: 1, max_buildings: 12, max_warehouses: 10, max_effects: 6, recent_activity_limit: 200, reconnect_backoff_ms: 1000, reconnect_backoff_max_ms: 15000, aggregation_window_ms: 1500 },
       instances: [{ process_id: 1, revit_version: '2026', project_name: '1626_PP_EN (demo)', url: location.href, is_current: true }]
     };
     applySnapshot(snap, true);

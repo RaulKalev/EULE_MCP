@@ -42,6 +42,8 @@ public sealed class VillageStateHub : IDisposable
     private readonly IVillageGraphReader? _graphReader;
     private readonly Action<string>? _log;
     private readonly int _catchUpEnterDepth;
+    /// <summary>Same rules the graph reader's scorer uses; only the category lists matter here.</summary>
+    private readonly VillageThemeConfig _themes;
 
     private CancellationTokenSource? _cts;
     private Task? _consumer;
@@ -79,6 +81,7 @@ public sealed class VillageStateHub : IDisposable
         _instancesProvider = instancesProvider;
         _log = log;
         _catchUpEnterDepth = Math.Max(50, _options.QueueSize / 10);
+        _themes = VillageThemeConfig.FromJson(_options.ThemesJson);
 
         Aggregator.StepEmitted += OnStepEmitted;
         Aggregator.StateChanged += () => _stateDirty = true;
@@ -366,6 +369,8 @@ public sealed class VillageStateHub : IDisposable
             Aggregator.Graph = graphToken;
             Aggregator.Theme = themeToken;
             Aggregator.Buildings = VillageLayoutSizer.Apply(VillageLayout.Default, result.Snapshot, theme);
+            // One warehouse per category with elements; none at all when the graph is missing.
+            Aggregator.Warehouses = VillageWarehouseYard.Plan(result.Snapshot.Categories, _themes, _options.MaxWarehouses);
             if (result.Changed)
                 Aggregator.Process(Factory.GraphRefreshed(context, result.Snapshot.Exists && result.Snapshot.Error == null, result.Snapshot.Counts.Nodes));
             _stateDirty = true;
