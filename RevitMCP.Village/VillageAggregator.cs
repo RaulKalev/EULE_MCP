@@ -89,6 +89,9 @@ public sealed class VillageAggregator
     /// <summary>Layout with graph-derived sizes; replaced by the hub when the graph changes.</summary>
     public List<VillageBuilding> Buildings { get; set; }
 
+    /// <summary>Category warehouses; replaced by the hub when the graph changes. Empty without a graph.</summary>
+    public List<VillageWarehouse> Warehouses { get; set; } = new();
+
     public JToken? Graph { get; set; }
     public JToken? Theme { get; set; }
     public VillageQueueStats? QueueStats { get; set; }
@@ -276,6 +279,7 @@ public sealed class VillageAggregator
             UpdatedAt = VillageEventSerializer.FormatTimestamp(now),
             Mode = CatchUp ? "catch_up" : "live",
             Buildings = VillageLayout.Clone(Buildings),
+            Warehouses = VillageWarehouseYard.Clone(Warehouses),
             Graph = Graph?.DeepClone(),
             Theme = Theme?.DeepClone(),
             Stats = new VillageAggregateStats
@@ -294,6 +298,7 @@ public sealed class VillageAggregator
             {
                 AnimationSpeed = _options.AnimationSpeed,
                 MaxBuildings = _options.MaxBuildings,
+                MaxWarehouses = _options.MaxWarehouses,
                 MaxEffects = _options.MaxEffects,
                 RecentActivityLimit = _options.RecentActivityLimit,
                 ReconnectBackoffMs = _options.ReconnectBackoffMs,
