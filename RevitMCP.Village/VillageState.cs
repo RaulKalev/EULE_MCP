@@ -167,7 +167,7 @@ public sealed class VillageStateSnapshot
 public sealed class VillageViewerOptions
 {
     [JsonProperty("animation_speed")] public double AnimationSpeed { get; set; } = 1.0;
-    [JsonProperty("max_buildings")] public int MaxBuildings { get; set; } = 12;
+    [JsonProperty("max_buildings")] public int MaxBuildings { get; set; } = 14;
     [JsonProperty("max_warehouses")] public int MaxWarehouses { get; set; } = VillageWarehouseYard.DefaultMax;
     [JsonProperty("max_effects")] public int MaxEffects { get; set; } = 6;
     [JsonProperty("recent_activity_limit")] public int RecentActivityLimit { get; set; } = 200;

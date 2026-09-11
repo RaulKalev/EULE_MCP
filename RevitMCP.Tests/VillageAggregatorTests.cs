@@ -324,7 +324,7 @@ public class VillageAggregatorTests
         h.Advance(5000);
         h.Aggregator.Tick();
         var work = h.Steps.Where(s => s.Kind == VillageStepKinds.Work).ToList();
-        Assert.Equal("Worked in the village square (2 tools)", work[0].Label);
+        Assert.Equal("Worked in the park (2 tools)", work[0].Label);
         var snapshot = h.Aggregator.Snapshot();
         Assert.DoesNotContain(snapshot.Areas, a => a.Area == "moon_base"); // foreign vocabulary folds into "unknown"
         Assert.Contains(snapshot.Areas, a => a.Area == VillageAreas.Unknown && a.Reads == 2);
@@ -421,7 +421,7 @@ public class VillageAggregatorTests
         Assert.Equal("1626_PP_EN", obj.Value<string>("project_name"));
         Assert.Equal("live", obj.Value<string>("mode"));
         Assert.Equal("session-1", obj.Value<string>("session_id"));
-        Assert.Equal(11, obj["buildings"]!.Count());
+        Assert.Equal(VillageLayout.Default.Count, obj["buildings"]!.Count());
         Assert.Equal("claude-code", obj["agents"]![0]!.Value<string>("id"));
         Assert.Equal("sign_workshop", obj["agents"]![0]!.Value<string>("building"));
         Assert.Equal(24, obj["current_steps"]![0]!.Value<long>("affected"));
@@ -460,7 +460,7 @@ public class VillageAggregatorTests
     [Fact]
     public void Layout_MapsEveryAreaToABuildingOrTheSquare()
     {
-        Assert.Equal(11, VillageLayout.Default.Count);
+        Assert.Equal(13, VillageLayout.Default.Count);
         Assert.Equal("town_hall", VillageLayout.BuildingFor("graph"));
         Assert.Equal("utility_district", VillageLayout.BuildingFor("fire_alarm"));
         Assert.Equal("square", VillageLayout.BuildingFor("unknown"));

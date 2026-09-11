@@ -92,6 +92,17 @@ public static class VillageWarehouseYard
     /// <summary>Element count at which a warehouse reaches its maximum footprint.</summary>
     public const long FullSizeCount = 5000;
 
+    /// <summary>
+    /// Categories that never get a warehouse. They do have graph elements, but none of them is
+    /// stock a yard would hold: materials and material assets are definitions, legend components
+    /// are drawing symbols, RVT links are other models, and cameras are views. Replace the list
+    /// through <c>village.warehouseExcludeCategories</c>.
+    /// </summary>
+    public static readonly string[] DefaultExcludedCategories =
+    {
+        "Materials", "Legend Components", "Material Assets", "RVT Links", "Cameras"
+    };
+
     public const double MinFootprint = 1.05;
     public const double MaxFootprint = 2.10;
 
@@ -102,13 +113,19 @@ public static class VillageWarehouseYard
     public static List<VillageWarehouse> Plan(
         IReadOnlyList<VillageThemeEvidence>? categories,
         VillageThemeConfig? themes = null,
-        int max = DefaultMax)
+        int max = DefaultMax,
+        IReadOnlyCollection<string>? excludedCategories = null)
     {
         var yard = new List<VillageWarehouse>();
         if (categories == null || categories.Count == 0 || max <= 0) return yard;
 
+        var excluded = new HashSet<string>(
+            (excludedCategories ?? DefaultExcludedCategories).Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()),
+            StringComparer.OrdinalIgnoreCase);
+
         var ordered = categories
             .Where(c => c != null && c.Count > 0 && !string.IsNullOrWhiteSpace(c.Name))
+            .Where(c => !excluded.Contains(c.Name.Trim()))
             .OrderByDescending(c => c.Count)
             .ThenBy(c => c.Name, StringComparer.Ordinal)
             .ToList();

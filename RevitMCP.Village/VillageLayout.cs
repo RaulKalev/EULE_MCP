@@ -30,7 +30,7 @@ public sealed class VillageBuilding
     [JsonProperty("size")]
     public int Size { get; set; } = 1;
 
-    /// <summary>Hint for the viewer's procedural sprite: town_hall, archive, tower, market, workshop, sign, houses, substation, survey, office, warning.</summary>
+    /// <summary>Hint for the viewer's procedural sprite: town_hall, archive, tower, market, workshop, sign, houses, substation, survey, office, warning, overlook, park.</summary>
     [JsonProperty("sprite")]
     public string Sprite { get; set; } = "house";
 
@@ -44,7 +44,7 @@ public sealed class VillageBuilding
 }
 
 /// <summary>
-/// The default village: eleven persistent landmarks. Districts for the ELV systems (fire alarm,
+/// The default village: thirteen persistent landmarks. Districts for the ELV systems (fire alarm,
 /// security, lighting, IT/AV) live around the utility district; the theme decides how prominent
 /// they look. Configurable through <c>village.buildings</c> in a later version; the mapping is
 /// documented in docs/project-village.md.
@@ -62,7 +62,14 @@ public static class VillageLayout
     public const string Survey     = "survey_post";
     public const string Office     = "records_office";
     public const string Warning    = "warning_area";
-    /// <summary>Where the agent waits when it is idle or the area is unknown. Not a building.</summary>
+    /// <summary>Right edge of town: where a character goes when it has finished a task.</summary>
+    public const string Overlook   = "overlook";
+    /// <summary>Village centre: where characters gather once they have been idle a while.</summary>
+    public const string Park       = "park";
+    /// <summary>
+    /// Fallback destination for an unknown area. It shares the park's tile, so a character with
+    /// nowhere in particular to be stands in the park rather than on an empty square.
+    /// </summary>
     public const string Square     = "square";
 
     public static IReadOnlyList<VillageBuilding> Default { get; } = new[]
@@ -132,6 +139,18 @@ public static class VillageLayout
             Id = Warning, Label = "Warning area", Sprite = "warning", TileX = 10, TileY = 11, BaseSize = 1,
             Areas = Array.Empty<string>(),
             Description = "Recent failures, stale graph data and reported model-health issues."
+        },
+        new VillageBuilding
+        {
+            Id = Overlook, Label = "Overlook", Sprite = "overlook", TileX = 11, TileY = 2, BaseSize = 1,
+            Areas = Array.Empty<string>(),
+            Description = "Where a character goes when it has finished a task and has nothing queued."
+        },
+        new VillageBuilding
+        {
+            Id = Park, Label = "Park", Sprite = "park", TileX = 5, TileY = 7, BaseSize = 2,
+            Areas = Array.Empty<string>(),
+            Description = "The village centre. Characters gather here once they have been idle for a while."
         }
     };
 
@@ -168,7 +187,7 @@ public static class VillageLayout
         [VillageAreas.Electrical]      = "electrical systems",
         [VillageAreas.Coordination]    = "coordination",
         [VillageAreas.Office]          = "the records office",
-        [VillageAreas.Unknown]         = "the village square"
+        [VillageAreas.Unknown]         = "the park"
     };
 
     public static string AreaLabel(string? area) =>

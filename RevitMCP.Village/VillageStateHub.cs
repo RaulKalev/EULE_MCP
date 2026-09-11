@@ -388,7 +388,7 @@ public sealed class VillageStateHub : IDisposable
             Aggregator.Theme = themeToken;
             Aggregator.Buildings = VillageLayoutSizer.Apply(VillageLayout.Default, result.Snapshot, theme);
             // One warehouse per category with elements; none at all when the graph is missing.
-            Aggregator.SetWarehouses(VillageWarehouseYard.Plan(result.Snapshot.Categories, _themes, _options.MaxWarehouses));
+            Aggregator.SetWarehouses(VillageWarehouseYard.Plan(result.Snapshot.Categories, _themes, _options.MaxWarehouses, _options.WarehouseExcludeCategories));
             var lookup = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var warehouse in Aggregator.Warehouses) lookup[warehouse.Category] = warehouse.Id;
             _warehouseByCategory = lookup;

@@ -21,7 +21,7 @@ public class VillageOptionsTests
         Assert.Equal(60, o.GraphRefreshSeconds);
         Assert.Equal(300, o.AgentIdleSeconds);
         Assert.Equal(1.0, o.AnimationSpeed);
-        Assert.Equal(12, o.MaxBuildings);
+        Assert.Equal(14, o.MaxBuildings);
         Assert.Equal(6, o.MaxEffects);
         Assert.False(o.DiagnosticLogging);
         Assert.Empty(o.ToolAreas);
@@ -61,7 +61,7 @@ public class VillageOptionsTests
         Assert.False(o.Enabled);
         Assert.Equal("127.0.0.1", o.Host);
         Assert.Equal(30, o.AgentIdleSeconds);
-        Assert.Equal(12, o.MaxBuildings);
+        Assert.Equal(16, o.MaxBuildings);
         Assert.Empty(o.ToolAreas);
     }
 

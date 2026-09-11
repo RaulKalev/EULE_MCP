@@ -68,6 +68,8 @@ never throw.
   deterministic application code (`VillageToolClassifier`, `VillageAggregator`,
   `VillageThemeScorer`). No LLM or external service is called anywhere in the module, and the
   viewer page loads nothing from the network except its own `/events` stream and `/snapshot`.
+- Clicking a character or a warehouse only reads the snapshot the page already holds; nothing is
+  requested and nothing is generated.
 
 ## Enabling it
 
@@ -183,8 +185,10 @@ key. Values are clamped into the ranges shown.
 | `agentIdleSeconds` | `300` | 30–3600 | Silent agents become "disconnected" |
 | `animationSpeed` | `1.0` | 0.1–5 | Viewer default (the page has a slider) |
 | `maxViewers` | `8` | 1–32 | Simultaneous streams |
-| `maxBuildings` | `12` | 6–12 | Landmarks drawn |
+| `maxBuildings` | `14` | 8–16 | Landmarks drawn (there are 13, so the default shows them all) |
 | `maxWarehouses` | `10` | 0–20 | Category warehouses drawn (`0` hides the yard) |
+| `warehouseExcludeCategories` | see below | | Categories that never get a warehouse; a configured list **replaces** the defaults |
+| `parkAfterSeconds` | `120` | 15–3600 | Idle time before a character walks to the park |
 | `maxEffects` | `6` | 1–24 | Simultaneous visual effects |
 | `reconnectBackoffMs` / `reconnectBackoffMaxMs` | `1000` / `15000` | | Viewer reconnect backoff |
 | `diagnosticLogging` | `false` | | Village diagnostics in `%LOCALAPPDATA%\RevitMCP_startup.log` |
@@ -226,6 +230,8 @@ Example:
 | Survey post | `coordination` | fixed |
 | Records office | `office` (files, Excel, reports, delivery, config, standards, skills) | fixed |
 | Warning area | — | recent failures, stale graph, orphan circuits |
+| Overlook | — | fixed; right edge of town, where a character waits after finishing a task |
+| Park | — | fixed; village centre, where characters gather after `parkAfterSeconds` of idling |
 
 ## Warehouse yard (category → warehouse)
 
@@ -255,6 +261,22 @@ The yard grows the isometric grid downwards, and the viewer refits the tile size
 grid needs, so more categories mean a slightly smaller village rather than a clipped one. Set
 `village.maxWarehouses` to `0` to get the village exactly as it was before the yard existed.
 
+### Categories that never get a warehouse
+
+`village.warehouseExcludeCategories` defaults to:
+
+```
+Materials · Legend Components · Material Assets · RVT Links · Cameras
+```
+
+They all have graph elements, but none of them is stock a yard would hold: materials and material
+assets are definitions, legend components are drawing symbols, RVT links are other models, and
+cameras are views. Excluded categories are also left out of the share denominator, so a model with
+9 000 materials does not make every real warehouse look like a rounding error.
+
+A configured list **replaces** the defaults, so copy the line above before adding to it. Matching
+ignores case and surrounding spaces.
+
 ### Walking to a warehouse
 
 When a tool names a Revit category that has a warehouse, the character works **at that warehouse**
@@ -267,6 +289,7 @@ The rules, all of them deterministic:
 - Only areas that hold model elements redirect: `elements`, `fire_alarm`, `security`,
   `lighting`, `it_av`, `electrical` (`VillageLayout.StorableAreas`). A sheet or graph tool that
   happens to take a category keeps its landmark.
+- Excluded categories never get one at all (see below).
 - Only a category that currently has a warehouse redirects. Everything else — an unknown category,
   a request spanning several categories, a category whose warehouse fell outside `maxWarehouses` —
   leaves the character at the landmark.
@@ -318,6 +341,36 @@ graph data and reported orphan circuits — never for "many fire-alarm devices".
 The **Diagnostics** panel in the page shows the full breakdown: category and name evidence per
 system, the capped contribution, share, thresholds and whether the mapping came from the default
 table or the config.
+
+## Where characters wait
+
+Two landmarks belong to no area, so no tool can ever route work to them. They exist purely to show
+what a character is doing when it is **not** working:
+
+| Place | When | Where |
+|---|---|---|
+| **Overlook** | Work finished, nothing queued, quiet for 8 s | Right edge of town |
+| **Park** | Still quiet after `parkAfterSeconds` (default 120) | Village centre |
+
+The progression is one-way per idle spell: a character steps out to the overlook, and if nothing
+else arrives it wanders on to the park and stays there. New activity pulls it straight back to the
+work destination. `Tick` emits at most one move step per place no matter how often it runs, so a
+long quiet period does not fill the feed.
+
+The park sits on the tile the village square used to occupy, and `square` — the fallback
+destination for an unknown area — now resolves there, so a character with nowhere in particular to
+be stands in the park instead of on an empty plaza.
+
+## Clicking a character
+
+Clicking a character opens its card in the side panel: what it is doing now, the label and item
+count of its last finished step, the tools that step used, its session totals and its failure
+count. Characters are hit-tested before landmarks, so a character standing in front of a building
+takes the click.
+
+**This costs nothing.** The card is assembled in the viewer from the snapshot that is already on
+the page — the same deterministic story steps the feed shows. No request is made, no model is
+consulted, and no text is generated.
 
 ## Aggregation behaviour
 
@@ -374,7 +427,7 @@ Graph values are routing and visualization metadata captured at build time, not 
 | Event queue | `queueSize` (2000), `maxEventsPerSecond` (200) |
 | Consumer | one background task, 500 events per pass, state pushed at most every 250 ms |
 | Recent feed / history | 200 / 500 steps |
-| Buildings / warehouses / effects | ≤ 12 / ≤ 20 / ≤ 6 |
+| Buildings / warehouses / effects | ≤ 16 / ≤ 20 / ≤ 6 |
 | Graph reads | on graph tools, after writes (cache hit), and every `graphRefreshSeconds`; ≤ 2000 types and ≤ 5000 views examined |
 | Viewers | ≤ 8, 256 queued messages each, 15 s heartbeat |
 | Reconnect | browser retry, then exponential backoff 1 s → 15 s |

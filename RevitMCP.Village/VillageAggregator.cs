@@ -251,6 +251,21 @@ public sealed class VillageAggregator
                 changed = true;
             }
 
+            // Finished work with nothing queued: step outside to the overlook on the edge of town.
+            // Still nothing after parkAfterSeconds: wander to the park in the middle of the village.
+            if (agent.State == VillageAgentStates.Idle && agent.InProgress == 0 && !_openSteps.ContainsKey(agent.Id))
+            {
+                if (silentMs > _options.ParkAfterSeconds * 1000.0)
+                {
+                    if (SendAgentTo(agent, VillageLayout.Park, "Heads to the park", now)) changed = true;
+                }
+                else if (silentMs > IdleAfterMs &&
+                         !string.Equals(agent.Building, VillageLayout.Park, StringComparison.Ordinal))
+                {
+                    if (SendAgentTo(agent, VillageLayout.Overlook, "Heads to the overlook", now)) changed = true;
+                }
+            }
+
             if (agent.State == VillageAgentStates.Idle && silentMs > _options.AgentIdleSeconds * 1000.0)
             {
                 agent.State = VillageAgentStates.Disconnected;
@@ -500,6 +515,29 @@ public sealed class VillageAggregator
         if (!string.Equals(agent.Area, e.Area, StringComparison.Ordinal)) return true;
         var warehouse = WarehouseFor(e);
         return warehouse != null && !string.Equals(agent.Building, warehouse.Id, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Walks a character to a landmark that belongs to no area (the overlook, the park). Returns
+    /// false when it is already there, so Tick can call this every few hundred milliseconds
+    /// without emitting a step each time. The area becomes unknown, so the next tool moves it back
+    /// to wherever that tool's work belongs.
+    /// </summary>
+    private bool SendAgentTo(VillageAgent agent, string buildingId, string label, DateTimeOffset now)
+    {
+        if (string.Equals(agent.Building, buildingId, StringComparison.Ordinal)) return false;
+
+        var from = agent.Area;
+        agent.Area = VillageAreas.Unknown;
+        agent.Warehouse = null;
+        agent.Building = buildingId;
+        agent.Activity = VillageActivities.Unknown;
+
+        var move = SimpleStep(VillageStepKinds.Move, agent.Id, VillageAreas.Unknown, label, null, now);
+        move.Building = buildingId;
+        move.FromArea = from;
+        Emit(move);
+        return true;
     }
 
     private void MoveAgent(VillageAgent agent, string toArea, VillageEvent e, DateTimeOffset now)
