@@ -372,6 +372,28 @@ takes the click.
 the page — the same deterministic story steps the feed shows. No request is made, no model is
 consulted, and no text is generated.
 
+## How the scene is drawn
+
+One light direction governs the whole village: a warm key from the upper left, a cool sky fill
+opposite. Every block is shaded from it — lit face, shaded face, ambient occlusion at the base, a
+contact shadow on the ground and a rim highlight along the roof edges — which is what gives the
+fixed isometric view its depth. The town sits on an extruded slab rather than a tiled floor.
+
+Tile coordinates are spread apart by `SPREAD` (1.34) while footprints stay a fixed multiple of
+`TILE`, so the gaps between buildings grow without the buildings growing with them.
+
+Labels are small letter-spaced text with a dark halo instead of filled boxes. The one under the
+pointer, the current selection, and any landmark a character is standing at brighten and gain a
+pill; everything else stays quiet.
+
+**Performance.** The sky, the ground slab, the grid and the roads never animate, so they are
+painted once into an offscreen canvas and blitted each frame; wall gradients are cached by colour
+and size. Only buildings, characters and effects are redrawn. Diagnostics reports the cost as
+`Renderer: N ms/frame` — about **0.9 ms** (p95 1.4 ms) for thirteen landmarks, eight warehouses
+and one character on a 1260 px canvas, against a 16.7 ms budget at 60 fps. That figure measures
+the drawing work itself, so it stays meaningful even when a hidden tab throttles the frame
+callback.
+
 ## Aggregation behaviour
 
 Raw events are folded by `VillageAggregator` into *story steps*:
