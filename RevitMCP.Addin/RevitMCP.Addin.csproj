@@ -82,6 +82,8 @@
   <!-- Project Village viewer: one self-contained HTML page served from the loopback listener. -->
   <ItemGroup>
     <EmbeddedResource Include="Village\Viewer\village.html" LogicalName="RevitMCP.Addin.Village.Viewer.village.html" />
+    <!-- Vendored three.js bundle, served at /vendor/ so the viewer still loads nothing from the network. -->
+    <EmbeddedResource Include="Village\Viewer\vendor\village-three.min.js" LogicalName="RevitMCP.Addin.Village.Viewer.vendor.village-three.min.js" />
   </ItemGroup>
 
   <!-- Assets (WPF Resource items) — ribbon icons and window branding, needed by both TFMs. -->

@@ -1,0 +1,2 @@
+# The vendored three.js bundle is a build artefact: keep it byte-for-byte and out of diffs.
+RevitMCP.Addin/Village/Viewer/vendor/village-three.min.js -text -diff linguist-vendored

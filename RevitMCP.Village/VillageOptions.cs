@@ -83,6 +83,13 @@ public sealed class VillageOptions
     /// <summary>Per-tool activity overrides (<c>village.toolActivities</c>).</summary>
     public Dictionary<string, string> ToolActivities { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Folder of optional glTF models (<c>village.modelsFolder</c>). Null means "look next to the
+    /// add-in", which is where the deployed package puts them. Anything without a model falls back
+    /// to the drawn sprite, so this is always optional.
+    /// </summary>
+    public string? ModelsFolder { get; set; }
+
     /// <summary>Raw <c>village.themes</c> object, parsed by <c>VillageThemeConfig</c>. Null = built-in mappings.</summary>
     public string? ThemesJson { get; set; }
 
@@ -125,6 +132,9 @@ public sealed class VillageOptions
         CopyMap(user, "toolAreas", o.ToolAreas);
         CopyMap(company, "toolActivities", o.ToolActivities);
         CopyMap(user, "toolActivities", o.ToolActivities);
+
+        var models = Str(user, company, "modelsFolder", string.Empty);
+        o.ModelsFolder = string.IsNullOrWhiteSpace(models) ? null : models.Trim();
 
         var exclude = Strings(user, company, "warehouseExcludeCategories");
         if (exclude != null) o.WarehouseExcludeCategories = exclude;

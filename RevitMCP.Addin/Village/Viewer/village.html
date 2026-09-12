@@ -12,37 +12,43 @@
 -->
 <style>
   :root {
-    --bg: #14181f; --panel: #1c2129; --panel-2: #232a34; --line: #2f3844; --text: #e6ebf2; --muted: #93a0b2;
-    --accent: #7fc8ff; --ok: #4fbf7a; --warn: #e3b341; --err: #ff6b6b; --catch: #d07ff0;
+    /* A sunlit island on deep navy, warm light in the windows. */
+    --bg: #0a1428; --panel: #101c33; --panel-2: #17253f; --line: #24354f; --text: #eaf1fb; --muted: #94a6c2;
+    --accent: #5ec8f0; --ok: #6fd48f; --warn: #ffc76b; --err: #ff8a86; --catch: #c79bff;
+    --r: 12px; --r-sm: 8px;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, "Segoe UI", sans-serif; }
   body { display: grid; grid-template-rows: auto 1fr auto; height: 100vh; overflow: hidden; }
-  header { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel); }
-  header h1 { font-size: 15px; margin: 0 6px 0 0; letter-spacing: .3px; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 14px; margin: 0 6px 0 0; letter-spacing: .2px; font-weight: 650; }
   header .project { font-weight: 600; color: var(--accent); max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: .4px; text-transform: uppercase; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); }
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 10.5px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); }
   .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
   .badge.ok { color: var(--ok); } .badge.ok .dot { background: var(--ok); }
   .badge.warn { color: var(--warn); } .badge.warn .dot { background: var(--warn); }
   .badge.err { color: var(--err); } .badge.err .dot { background: var(--err); }
   .badge.catch { color: var(--catch); } .badge.catch .dot { background: var(--catch); }
-  .badge.readonly { color: #fff; background: #3a4a5c; border-color: #56708d; }
-  header select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font-size: 12px; }
+  .badge.readonly { color: #0a1428; background: var(--accent); border-color: transparent; }
+  header select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 4px 8px; font-size: 12px; }
   header .spacer { flex: 1; }
   main { display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
   #stage { position: relative; min-width: 0; min-height: 0; }
   canvas { display: block; width: 100%; height: 100%; cursor: pointer; }
+  #village3d, #overlay { position: absolute; inset: 0; }
+  canvas[hidden] { display: none; }
+  #overlay { pointer-events: none; }
+  #modeBtn[hidden] { display: none; }
   #hint { position: absolute; left: 12px; bottom: 10px; font-size: 11px; color: var(--muted); pointer-events: none; }
   #catchup { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); padding: 4px 12px; border-radius: 8px; background: rgba(208,127,240,.18); border: 1px solid var(--catch); color: var(--catch); font-size: 12px; font-weight: 600; }
   aside { border-left: 1px solid var(--line); background: var(--panel); overflow-y: auto; display: flex; flex-direction: column; }
-  aside section { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  aside section { padding: 12px 14px; border-bottom: 1px solid var(--line); }
   aside h2 { margin: 0 0 6px; font-size: 11px; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); }
   #activity .agent { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
-  #activity .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  #activity .swatch { width: 10px; height: 10px; border-radius: 50%; flex: none; box-shadow: 0 0 0 3px rgba(255,255,255,.06); }
   #activity .what { color: var(--muted); font-size: 12px; }
   #feed ul { list-style: none; margin: 0; padding: 0; max-height: 34vh; overflow-y: auto; }
-  #feed li { display: grid; grid-template-columns: 44px 1fr; gap: 8px; padding: 3px 0; border-bottom: 1px dashed #262e39; font-size: 12px; }
+  #feed li { display: grid; grid-template-columns: 44px 1fr; gap: 8px; padding: 4px 0; border-bottom: 1px solid rgba(36,53,79,.7); font-size: 12px; }
   #feed li time { color: var(--muted); font-variant-numeric: tabular-nums; }
   #feed li.error { color: var(--err); } #feed li.deferred { color: var(--warn); } #feed li.move { color: var(--muted); }
   #feed li.project, #feed li.session, #feed li.graph, #feed li.bridge { color: var(--accent); }
@@ -50,12 +56,12 @@
   #selected .kv span:nth-child(2n) { text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
   #selected .desc { color: var(--muted); font-size: 12px; margin: 4px 0 8px; }
   #controls { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
-  button { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
-  button:hover { border-color: var(--accent); }
+  button { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 999px; padding: 5px 13px; font-size: 12px; cursor: pointer; transition: border-color .15s, background .15s; }
+  button:hover { border-color: var(--accent); background: #1e3050; }
   input[type=range] { width: 110px; }
   #diag { font-size: 11px; color: var(--muted); }
   #diag table { border-collapse: collapse; width: 100%; margin: 4px 0 8px; }
-  #diag th, #diag td { text-align: left; padding: 2px 4px; border-bottom: 1px solid #262e39; font-weight: normal; }
+  #diag th, #diag td { text-align: left; padding: 3px 4px; border-bottom: 1px solid rgba(36,53,79,.7); font-weight: normal; }
   #diag td.num { text-align: right; font-variant-numeric: tabular-nums; }
   #diag .reason { color: var(--text); margin: 4px 0; }
   footer { padding: 6px 14px; border-top: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: 11px; }
@@ -76,6 +82,8 @@
 <main>
   <div id="stage">
     <canvas id="village"></canvas>
+    <canvas id="village3d" hidden></canvas>
+    <canvas id="overlay" hidden></canvas>
     <div id="catchup" hidden>Catching up…</div>
     <div id="hint">Click a building for its counters. Nothing on this page can change the model.</div>
   </div>
@@ -86,6 +94,7 @@
     <section id="controls">
       <button id="pauseBtn" type="button">Pause animation</button>
       <label>Speed <input id="speed" type="range" min="0.25" max="3" step="0.25" value="1"> <span id="speedLabel">1×</span></label>
+      <button id="modeBtn" type="button" hidden>3D view</button>
       <button id="diagBtn" type="button">Diagnostics</button>
     </section>
     <section id="diag" hidden><h2>Diagnostics</h2><div id="diagBody"></div></section>
@@ -120,13 +129,29 @@
   const V = {
     snapshot: null, buildings: [], byId: new Map(), warehouses: [], whById: new Map(),
     agents: new Map(), feed: [], effects: [],
-    feedLimit: FEED_LIMIT_DEFAULT, effectLimit: EFFECT_LIMIT_DEFAULT, selected: null, selectedAgent: null,
+    feedLimit: FEED_LIMIT_DEFAULT, effectLimit: EFFECT_LIMIT_DEFAULT, selected: null, selectedAgent: null, hover: null,
     paused: false, speed: 1, connection: 'connecting', skipped: 0, lastStepId: 0, time: 0
   };
 
   // ─── DOM ────────────────────────────────────────────────────────────────
+  // ─── Cached scenery ─────────────────────────────────────────────────────
+  // The sky, the ground slab and the roads never animate, so they are painted once into an
+  // offscreen canvas and blitted each frame. That removes the whole per-tile loop from the hot
+  // path; only buildings, characters and effects are redrawn. Declared here because resize()
+  // marks the cache dirty and runs during setup.
+  const GROUND = { canvas: null, ctx: null, dirty: true, key: '' };
+  // Optional glTF scene state. Declared here because resize() consults it during setup.
+  const GL = {
+    on: false, ready: false, lib: null, renderer: null, scene: null, camera: null,
+    root: null, island: null, sun: null, static: null, staticKey: null, lookup: null,
+    models: new Map(), nodes: new Map(), index: null
+  };
+  const GRADS = new Map();
+  const THEME_CACHE = { key: null, value: null };
+
   const $ = id => document.getElementById(id);
-  const canvas = $('village'), ctx = canvas.getContext('2d');
+  const canvas = $('village');
+  let ctx = canvas.getContext('2d');
   let W = 0, H = 0, DPR = 1, TILE = 56, ORIGIN = { x: 0, y: 0 };
 
   function badge(el, cls, text) { el.className = 'badge' + (cls ? ' ' + cls : ''); el.lastElementChild.textContent = text; }
@@ -160,12 +185,17 @@
     W = Math.max(200, rect.width); H = Math.max(200, rect.height);
     canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
     // The diamond is span*TILE/2 wide and span*TILE/4 tall; leave headroom for the tallest landmark.
-    const span = GRID_W + GRID_H;
-    TILE = Math.max(24, Math.min((W - 40) / (span / 2), (H - 70) / (span / 4 + 1.6)));
-    const mapH = span * TILE / 4 + TILE * 1.6;
-    ORIGIN = { x: W / 2 + (GRID_H - GRID_W) * TILE / 4, y: (H - mapH) / 2 + TILE * 1.4 };
+    const span = (GRID_W + GRID_H) * SPREAD;
+    TILE = Math.max(18, Math.min((W - 56) / (span / 2), (H - 96) / (span / 4 + 1.8)));
+    const mapH = span * TILE / 4 + TILE * 1.8;
+    ORIGIN = { x: W / 2 + (GRID_H - GRID_W) * SPREAD * TILE / 4, y: (H - mapH) / 2 + TILE * 1.6 };
+    GROUND.dirty = true;
+    if (GL.on) fit3D();
   }
-  function iso(tx, ty) { return { x: ORIGIN.x + (tx - ty) * TILE / 2, y: ORIGIN.y + (tx + ty) * TILE / 4 }; }
+  // Tile coordinates are spread apart without growing the buildings, which is what actually puts
+  // air between them: gaps scale with SPREAD, footprints stay a fixed multiple of TILE.
+  const SPREAD = 1.34;
+  function iso(tx, ty) { return { x: ORIGIN.x + (tx - ty) * SPREAD * TILE / 2, y: ORIGIN.y + (tx + ty) * SPREAD * TILE / 4 }; }
   window.addEventListener('resize', resize);
   resize();
 
@@ -231,6 +261,7 @@
     if (V.selected && !V.byId.has(V.selected) && !V.whById.has(V.selected)) V.selected = null;
     if (V.selectedAgent && !V.agents.has(V.selectedAgent)) V.selectedAgent = null;
     renderHeader(); renderAgents(); renderFeed(); renderSelected(); renderInstances();
+    if (GL.on) syncScene();
     if (!$('diag').hidden) renderDiagnostics();
   }
 
@@ -342,6 +373,7 @@
       for (const k of gk) if (counts[k] != null) html += kv('Graph: ' + k, counts[k].toLocaleString());
       if (b.id === 'town_hall' && g && g.built_at) html += kv('Graph built', g.built_at.replace('T', ' ').replace('Z', ' UTC'));
     }
+    html += modelHint('landmarks', b.id);
     html += '</div>';
     body.innerHTML = html;
   }
@@ -380,6 +412,14 @@
     body.innerHTML = html;
   }
 
+  /// The .glb the viewer looks for, and whether it is there. Saves deriving slugs by hand.
+  function modelHint(kind, id) {
+    if (!GL.index) return '';
+    const path = modelPath(kind, id);
+    const found = hasModel(path);
+    return kv('3D model', (found ? '✓ ' : '— ') + path);
+  }
+
   function renderWarehouse(body, wh) {
     const g = (V.snapshot || {}).graph;
     let html = '<strong>' + esc(wh.label) + '</strong><div class="desc">Warehouse for the ' +
@@ -389,6 +429,7 @@
     html += kv('System', SYSTEM_LABELS[wh.system] || wh.system);
     html += kv('Warehouse size', (SIZE_WORDS[wh.size] || wh.size) + ' (' + wh.size + ' of 6)');
     html += kv('Rank by count', '#' + ((wh.rank || 0) + 1));
+    html += modelHint('warehouses', wh.id);
     if (g && g.built_at) html += kv('Counted at', g.built_at.replace('T', ' ').replace('Z', ' UTC'));
     html += '</div><div class="desc">Graph counts are captured when the graph is built, not live Revit values.</div>';
     body.innerHTML = html;
@@ -419,6 +460,9 @@
       const t = th.thresholds || {};
       html += '<div>Thresholds: min sample ' + t.min_sample_count + ', min system ' + t.min_system_count + ', dominant ≥ ' + Math.round((t.dominant_share || 0) * 100) + '%, visible ≥ ' + Math.round((t.visible_share || 0) * 100) + '%, category weight ' + t.category_weight + ', name weight ' + t.name_weight + ' (' + esc(th.config_source) + '). Identity hue ' + (th.identity || {}).hue + ', pattern ' + (th.identity || {}).pattern + '.</div>';
     } else html += '<div class="reason">No theme: no graph snapshot (limited mode).</div>';
+    const r = renderMs();
+    if (r) html += '<div>Renderer: ' + r.median.toFixed(2) + ' ms/frame (p95 ' + r.p95.toFixed(2) + ' ms) · ' +
+      V.buildings.length + ' landmarks, ' + V.warehouses.length + ' warehouses, ' + V.agents.size + ' characters · ground cached.</div>';
     const q = s.queue || {}; const st = s.stats || {};
     html += '<table><tr><th>Queue</th><td class="num">' + (q.depth || 0) + ' / ' + (q.capacity || '?') + '</td><th>High water</th><td class="num">' + (q.high_water || 0) + '</td></tr>';
     html += '<tr><th>Enqueued</th><td class="num">' + (q.enqueued || 0) + '</td><th>Dropped / evicted / rate-limited</th><td class="num">' + (q.dropped || 0) + ' / ' + (q.evicted || 0) + ' / ' + (q.rate_limited || 0) + '</td></tr>';
@@ -442,15 +486,333 @@
     return { x: b.tile_x + 0.5, y: b.tile_y + (V.whById.has(buildingId) ? 1.0 : 1.1) };
   }
 
+  // One light direction for the whole scene: a warm key from the upper left, a cool sky fill on the
+  // other face. Everything else (shadows, rim lights, ambient occlusion) follows from it.
+  const LIGHT = { warm: '#fff0cf', cool: '#8ea6d8' };
+  /// Screen offset of a cast shadow per unit of building height. The sun sits low to the upper
+  /// left, so shadows stretch down and to the right — the signature of this hour.
+  const SUN = { dx: 0.78, dy: 0.40 };
+
   function theme() {
     const th = (V.snapshot && V.snapshot.theme) || null;
-    const hue = th && th.identity ? th.identity.hue : 200;
+    const hue = th && th.identity ? th.identity.hue : 205;
     const pattern = th && th.identity ? th.identity.pattern : 0;
-    return {
-      primary: (th && th.primary) || '#7a8b99', accent: (th && th.accent) || '#c9d3dc', name: th ? th.theme : 'neutral',
-      visible: (th && th.visible_systems) || [], hue, pattern,
-      ground: 'hsl(' + hue + ', 22%, 27%)', groundAlt: 'hsl(' + hue + ', 24%, 24%)', road: (th && th.theme === 'lighting') ? '#5a5240' : '#4a5563'
+    // 88-124 degrees: lush grass. Narrow on purpose - every project should read as the same place.
+    const gh = 88 + (hue % 36);
+    const key = (th ? th.theme : 'neutral') + ':' + hue + ':' + pattern;
+    if (THEME_CACHE.key === key) return THEME_CACHE.value;
+    const value = {
+      primary: (th && th.primary) || '#8ea6c4', accent: (th && th.accent) || '#bfe4ff', name: th ? th.theme : 'neutral',
+      visible: (th && th.visible_systems) || [], hue, pattern, key,
+      // A soft meadow rather than a dark checkerboard. The identity hue only nudges it inside a
+      // narrow green band, so a fire-alarm project is not a field of mud.
+      ground: 'hsl(' + gh + ', 62%, 46%)',
+      groundAlt: 'hsl(' + (gh + 4) + ', 58%, 39%)',
+      groundEdge: 'hsl(' + (gh + 2) + ', 46%, 26%)',
+      road: 'hsl(38, 42%, 68%)'
     };
+    THEME_CACHE.key = key; THEME_CACHE.value = value;
+    return value;
+  }
+
+  /// Cached vertical gradient; building walls would otherwise rebuild one per frame.
+  function vgrad(x, y0, y1, top, bottom) {
+    const k = Math.round(y0) + ':' + Math.round(y1) + ':' + top + ':' + bottom;
+    let g = GRADS.get(k);
+    if (!g) {
+      if (GRADS.size > 400) GRADS.clear();
+      g = ctx.createLinearGradient(0, y0, 0, y1);
+      g.addColorStop(0, top); g.addColorStop(1, bottom);
+      GRADS.set(k, g);
+    }
+    return g;
+  }
+
+  function groundKey(T) {
+    return T.key + '|' + Math.round(TILE * 10) + '|' + Math.round(ORIGIN.x) + ',' + Math.round(ORIGIN.y) +
+      '|' + GRID_W + 'x' + GRID_H + '|' + V.buildings.length + ':' + V.warehouses.length;
+  }
+
+  function paintGround(T) {
+    const key = groundKey(T);
+    if (!GROUND.dirty && GROUND.key === key && GROUND.canvas) return;
+    if (!GROUND.canvas) { GROUND.canvas = document.createElement('canvas'); GROUND.ctx = GROUND.canvas.getContext('2d'); }
+    GROUND.canvas.width = canvas.width; GROUND.canvas.height = canvas.height;
+    const g = GROUND.ctx;
+    g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    g.clearRect(0, 0, W, H);
+
+    // Deep navy surroundings with a soft vignette, so the lit island reads as the only thing here.
+    const c0 = iso(GRID_W / 2, GRID_H / 2);
+    g.fillStyle = '#0a1428'; g.fillRect(0, 0, W, H);
+    const halo = g.createRadialGradient(c0.x, c0.y, TILE, c0.x, c0.y, Math.max(W, H) * 0.62);
+    halo.addColorStop(0, 'rgba(40,80,130,.30)');
+    halo.addColorStop(0.55, 'rgba(18,40,72,.16)');
+    halo.addColorStop(1, 'rgba(6,12,26,0)');
+    g.fillStyle = halo; g.fillRect(0, 0, W, H);
+
+    // The island the town sits on: a rounded diamond with a thin extruded side, so the village
+    // reads as a solid slab rather than a flat pattern.
+    const pad = 0.55;
+    const n = iso(-pad, -pad), e = iso(GRID_W + pad, -pad), s2 = iso(GRID_W + pad, GRID_H + pad), w = iso(-pad, GRID_H + pad);
+    const depth = TILE * 0.95;
+
+    g.save();
+    g.filter = 'blur(' + Math.round(TILE * 0.5) + 'px)';
+    g.fillStyle = 'rgba(0,0,0,.55)';
+    slab(g, n, e, s2, w, depth * 1.6, TILE * 0.5);
+    g.restore();
+
+    // Extruded side.
+    g.fillStyle = T.groundEdge;
+    g.beginPath();
+    g.moveTo(w.x, w.y); g.lineTo(s2.x, s2.y); g.lineTo(e.x, e.y);
+    g.lineTo(e.x, e.y + depth); g.lineTo(s2.x, s2.y + depth); g.lineTo(w.x, w.y + depth);
+    g.closePath(); g.fill();
+
+    // Top face.
+    const top = g.createLinearGradient(n.x, n.y, s2.x, s2.y);
+    top.addColorStop(0, T.ground); top.addColorStop(1, T.groundAlt);
+    g.fillStyle = top;
+    g.beginPath(); g.moveTo(n.x, n.y); g.lineTo(e.x, e.y); g.lineTo(s2.x, s2.y); g.lineTo(w.x, w.y); g.closePath(); g.fill();
+
+    // Soil under the turf, and a bright lip where the sunlit top rolls over the edge.
+    const soil = g.createLinearGradient(0, s2.y - depth, 0, s2.y + depth);
+    soil.addColorStop(0, T.groundEdge);
+    soil.addColorStop(1, 'hsl(28, 30%, 16%)');
+    g.fillStyle = soil;
+    g.beginPath();
+    g.moveTo(w.x, w.y); g.lineTo(s2.x, s2.y); g.lineTo(e.x, e.y);
+    g.lineTo(e.x, e.y + depth); g.lineTo(s2.x, s2.y + depth); g.lineTo(w.x, w.y + depth);
+    g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(190,255,170,.28)'; g.lineWidth = Math.max(1.5, TILE * 0.035);
+    g.beginPath(); g.moveTo(w.x, w.y); g.lineTo(s2.x, s2.y); g.lineTo(e.x, e.y); g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,.12)'; g.lineWidth = 1.5;
+    g.beginPath(); g.moveTo(w.x, w.y); g.lineTo(n.x, n.y); g.lineTo(e.x, e.y); g.stroke();
+
+    // Large soft patches so the field is not one flat colour. Deterministic, drawn once.
+    g.save();
+    g.beginPath(); g.moveTo(n.x, n.y); g.lineTo(e.x, e.y); g.lineTo(s2.x, s2.y); g.lineTo(w.x, w.y); g.closePath(); g.clip();
+    const patches = [[0.28, 0.30, 1.5], [0.72, 0.22, 1.1], [0.18, 0.74, 1.3], [0.62, 0.80, 1.6], [0.46, 0.52, 1.2]];
+    for (let i = 0; i < patches.length; i++) {
+      const [fx, fy, fr] = patches[i];
+      const c = iso(GRID_W * fx, GRID_H * fy);
+      const rad = TILE * 3.2 * fr;
+      const pg = g.createRadialGradient(c.x, c.y, 1, c.x, c.y, rad);
+      const light = i % 2 === 0;
+      pg.addColorStop(0, light ? 'rgba(255,255,255,.045)' : 'rgba(0,20,10,.055)');
+      pg.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = pg;
+      g.beginPath(); g.ellipse(c.x, c.y, rad, rad / 2, 0, 0, Math.PI * 2); g.fill();
+    }
+    // Warm light pooling on the side facing the key light, cool shade opposite.
+    const wash = g.createLinearGradient(w.x, n.y, e.x, s2.y);
+    wash.addColorStop(0, 'rgba(255,214,160,.10)');
+    wash.addColorStop(0.55, 'rgba(255,214,160,0)');
+    wash.addColorStop(1, 'rgba(30,50,90,.16)');
+    g.fillStyle = wash;
+    g.beginPath(); g.moveTo(n.x, n.y); g.lineTo(e.x, e.y); g.lineTo(s2.x, s2.y); g.lineTo(w.x, w.y); g.closePath(); g.fill();
+    g.restore();
+
+    // A whisper of a grid so the isometry reads, far softer than the old checkerboard.
+    g.save();
+    g.beginPath(); g.moveTo(n.x, n.y); g.lineTo(e.x, e.y); g.lineTo(s2.x, s2.y); g.lineTo(w.x, w.y); g.closePath(); g.clip();
+    g.strokeStyle = 'rgba(255,255,255,.035)'; g.lineWidth = 1;
+    for (let i = 0; i <= GRID_W; i += 2) { const a = iso(i, -pad), b = iso(i, GRID_H + pad); g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke(); }
+    for (let j = 0; j <= GRID_H; j += 2) { const a = iso(-pad, j), b = iso(GRID_W + pad, j); g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke(); }
+
+    // Roads: the shared lane polylines, a soft shoulder under a sand track.
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    for (const pass of [0, 1]) {
+      g.strokeStyle = pass === 0 ? 'hsl(36, 30%, 40%)' : T.road;
+      g.lineWidth = TILE * (pass === 0 ? 0.30 : 0.22);
+      for (const path of lanePaths()) {
+        g.beginPath();
+        for (let k = 0; k < path.length; k++) {
+          const q = iso(path[k][0], path[k][1]);
+          if (k === 0) g.moveTo(q.x, q.y); else g.lineTo(q.x, q.y);
+        }
+        g.stroke();
+      }
+    }
+
+    for (const wh of V.warehouses) {
+      const c = iso(wh.tile_x + 0.5, wh.tile_y + 0.5);
+      const fp = (wh.footprint || 1.2) * 1.3 * SPREAD;
+      gdiamond(g, c.x, c.y, fp * TILE / 2, fp * TILE / 4, 'rgba(150,165,190,.22)');
+    }
+    g.restore();
+
+    scatterScenery(g, T);
+
+    GROUND.dirty = false; GROUND.key = key;
+  }
+
+  /// Deterministic trees and boulders over the open grass. Scenery never animates, so it is baked
+  /// into the cached layer and costs nothing per frame. Anything too close to a building, to the
+  /// centre or to the slab edge is skipped, which is what keeps the village readable.
+  function scatterScenery(g, T) {
+    for (const it of sceneryPlan()) {
+      const p = iso(it.x, it.y);
+      if (it.rock) gRock(g, p.x, p.y, TILE * 0.12 * it.s);
+      else gTree(g, p.x, p.y, TILE * it.s, it.tint);
+    }
+  }
+
+  /// Deterministic scenery positions, shared by both renderers. Anything too close to a building,
+  /// to the centre or to a lane is skipped, which is what keeps the village readable.
+  function sceneryPlan() {
+    const key = GRID_W + "x" + GRID_H + ":" + V.buildings.length + ":" + V.warehouses.length;
+    if (SCENERY.key === key) return SCENERY.items;
+    const blocked = [];
+    for (const b of V.buildings) blocked.push({ x: b.tile_x + 0.5, y: b.tile_y + 0.5, r: 1.5 + (b.size || 1) * 0.34 });
+    for (const wh of V.warehouses) blocked.push({ x: wh.tile_x + 0.5, y: wh.tile_y + 0.5, r: 1.4 + (wh.footprint || 1) * 0.5 });
+    blocked.push({ x: SQUARE.x, y: SQUARE.y, r: 2.2 });
+
+    let seed = 1337;
+    const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    const items = [];
+    for (let ty = -0.2; ty < GRID_H + 0.2; ty += 0.62) {
+      for (let tx = -0.2; tx < GRID_W + 0.2; tx += 0.62) {
+        const x = tx + (rnd() - 0.5) * 0.7, y = ty + (rnd() - 0.5) * 0.7;
+        const roll = rnd();
+        if (roll > 0.55) continue;
+        let clear = true;
+        for (const b of blocked) {
+          const dx = x - b.x, dy = y - b.y;
+          if (dx * dx + dy * dy < b.r * b.r) { clear = false; break; }
+        }
+        if (!clear) continue;
+        // Keep lanes free: skip anything sitting on the line from the centre to a landmark.
+        let onPath = false;
+        for (const b of V.buildings) {
+          if (b.id === 'warning_area' || b.id === 'park') continue;
+          if (distToSegment(x, y, SQUARE.x, SQUARE.y, b.tile_x + 0.5, b.tile_y + 1.0) < 0.85) { onPath = true; break; }
+        }
+        if (onPath) continue;
+        items.push({ x, y, rock: roll > 0.47, s: 0.7 + rnd() * 0.6, tint: rnd(), pick: rnd() });
+      }
+    }
+    items.sort((a, b) => (a.x + a.y) - (b.x + b.y));
+    SCENERY.key = key; SCENERY.items = items;
+    return items;
+  }
+  const SCENERY = { key: null, items: [] };
+
+  /// The lanes the village draws, as tile-space segments. One source for the drawn roads, the
+  /// scenery exclusion test and the glTF path tiles.
+  /// Lanes as polylines in tile space: a ring around the park, then a bowed branch from the ring
+  /// out to each landmark. Spokes radiating from a single point read as a star; a ring with
+  /// branches reads as a village that grew. One source for the drawn roads, the glTF path tiles
+  /// and the scenery exclusion test, so the three can never disagree about where a road is.
+  const RING_R = 2.15;
+
+  function lanePaths() {
+    const key = GRID_W + 'x' + GRID_H + ':' + V.buildings.length + ':' + V.warehouses.length;
+    if (LANES.key === key) return LANES.paths;
+    const paths = [];
+
+    // The ring itself, as a closed loop of points.
+    const ring = [];
+    for (let i = 0; i <= 24; i++) {
+      const a = (i / 24) * Math.PI * 2;
+      ring.push([SQUARE.x + Math.cos(a) * RING_R * 1.15, SQUARE.y + Math.sin(a) * RING_R * 0.95]);
+    }
+    paths.push(ring);
+
+    // Where a branch leaves the ring: the point nearest its destination.
+    const fromRing = (tx, ty) => {
+      const a = Math.atan2(ty - SQUARE.y, tx - SQUARE.x);
+      return [SQUARE.x + Math.cos(a) * RING_R * 1.15, SQUARE.y + Math.sin(a) * RING_R * 0.95];
+    };
+
+    for (const b of V.buildings) {
+      if (b.id === 'warning_area' || b.id === 'park') continue;
+      const to = [b.tile_x + 0.5, b.tile_y + 1.0];
+      paths.push(bow(fromRing(to[0], to[1]), to, 0.16));
+    }
+
+    if (V.warehouses.length) {
+      const rows = yardRows();
+      const gate = [rows[0].x0 - 0.4, rows[0].y + 1.5];
+      paths.push(bow(fromRing(gate[0], gate[1]), gate, 0.12));
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        paths.push([[r.x0 - 0.4, r.y + 1.5], [r.x1 + 0.9, r.y + 1.5]]);
+        if (i > 0) paths.push([[rows[i - 1].x0 - 0.4, rows[i - 1].y + 1.5], [r.x0 - 0.4, r.y + 1.5]]);
+      }
+    }
+
+    LANES.key = key; LANES.paths = paths;
+    return paths;
+  }
+  const LANES = { key: null, paths: [] };
+
+  /// A quadratic bow between two tile-space points, sampled into a polyline.
+  function bow(from, to, amount) {
+    const dx = to[0] - from[0], dy = to[1] - from[1];
+    const cx = (from[0] + to[0]) / 2 - dy * amount, cy = (from[1] + to[1]) / 2 + dx * amount;
+    const pts = [];
+    for (let i = 0; i <= 10; i++) {
+      const t = i / 10, u = 1 - t;
+      pts.push([u * u * from[0] + 2 * u * t * cx + t * t * to[0],
+                u * u * from[1] + 2 * u * t * cy + t * t * to[1]]);
+    }
+    return pts;
+  }
+
+  /// Straight pieces of every lane, for hit tests that only need segments.
+  function laneSegments() {
+    const out = [];
+    for (const path of lanePaths())
+      for (let i = 1; i < path.length; i++)
+        out.push([path[i - 1][0], path[i - 1][1], path[i][0], path[i][1]]);
+    return out;
+  }
+
+  function distToSegment(px, py, ax, ay, bx, by) {
+    const dx = bx - ax, dy = by - ay;
+    const len = dx * dx + dy * dy;
+    let t = len ? ((px - ax) * dx + (py - ay) * dy) / len : 0;
+    t = Math.max(0, Math.min(1, t));
+    const cx = ax + t * dx, cy = ay + t * dy;
+    return Math.hypot(px - cx, py - cy);
+  }
+
+  /// A low-poly conifer: two stacked shells with a lit left face, matching the key light.
+  function gTree(g, x, y, h, tint) {
+    const green = 96 + Math.round(tint * 34);
+    const trunkH = h * 0.20, r = h * 0.30;
+    g.fillStyle = 'rgba(6,18,10,.30)';
+    g.beginPath(); g.ellipse(x + r * 0.22, y + r * 0.12, r * 0.95, r * 0.42, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#5a4028';
+    g.fillRect(x - h * 0.028, y - trunkH, h * 0.056, trunkH);
+    for (let i = 0; i < 2; i++) {
+      const cy = y - trunkH - i * h * 0.26, rr = r * (1 - i * 0.26), hh = h * 0.40;
+      g.fillStyle = 'hsl(' + green + ', 46%, ' + (30 - i * 2) + '%)';
+      g.beginPath(); g.moveTo(x, cy - hh); g.lineTo(x + rr, cy); g.lineTo(x, cy + rr * 0.42); g.lineTo(x - rr, cy); g.closePath(); g.fill();
+      g.fillStyle = 'hsl(' + green + ', 50%, ' + (43 - i * 2) + '%)';
+      g.beginPath(); g.moveTo(x, cy - hh); g.lineTo(x - rr, cy); g.lineTo(x, cy + rr * 0.42); g.closePath(); g.fill();
+    }
+  }
+
+  function gRock(g, x, y, r) {
+    g.fillStyle = 'rgba(6,18,10,.28)';
+    g.beginPath(); g.ellipse(x + r * 0.2, y + r * 0.28, r * 1.15, r * 0.5, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#8b93a2';
+    g.beginPath(); g.moveTo(x - r, y); g.lineTo(x - r * 0.4, y - r * 0.95); g.lineTo(x + r * 0.6, y - r * 0.8); g.lineTo(x + r, y + r * 0.1); g.lineTo(x, y + r * 0.45); g.closePath(); g.fill();
+    g.fillStyle = '#aeb6c4';
+    g.beginPath(); g.moveTo(x - r, y); g.lineTo(x - r * 0.4, y - r * 0.95); g.lineTo(x + r * 0.1, y - r * 0.35); g.lineTo(x, y + r * 0.45); g.closePath(); g.fill();
+  }
+
+  function slab(g, n, e, s2, w, depth, r) {
+    g.beginPath();
+    g.moveTo(n.x, n.y); g.lineTo(e.x, e.y); g.lineTo(e.x, e.y + depth);
+    g.lineTo(s2.x, s2.y + depth); g.lineTo(w.x, w.y + depth); g.lineTo(w.x, w.y);
+    g.closePath(); g.fill();
+  }
+  function gdiamond(g, x, y, hw, hh, fill) {
+    g.fillStyle = fill; g.beginPath(); g.moveTo(x, y - hh); g.lineTo(x + hw, y); g.lineTo(x, y + hh); g.lineTo(x - hw, y); g.closePath(); g.fill();
   }
 
   function draw() {
@@ -458,43 +820,17 @@
     ctx.clearRect(0, 0, W, H);
     const T = theme();
 
-    // Ground tiles
-    for (let ty = 0; ty < GRID_H; ty++) for (let tx = 0; tx < GRID_W; tx++) {
-      const p = iso(tx, ty);
-      diamond(p.x, p.y + TILE / 4, TILE / 2, TILE / 4, ((tx + ty) % 2 === 0) ? T.ground : T.groundAlt);
-      if (T.pattern === 1 && (tx * 7 + ty * 3) % 5 === 0) dot(p.x, p.y + TILE / 4, TILE * 0.03, 'rgba(255,255,255,.08)');
-      if (T.pattern === 2 && (tx + ty) % 3 === 0) dot(p.x + TILE * 0.1, p.y + TILE * 0.2, TILE * 0.025, 'rgba(0,0,0,.18)');
-      if (T.pattern === 3 && tx % 3 === 1 && ty % 3 === 1) tuft(p.x, p.y + TILE / 4);
-    }
+    // Sky, ground slab and roads come from the cached layer; only the living scene is redrawn.
+    paintGround(T);
+    ctx.drawImage(GROUND.canvas, 0, 0, GROUND.canvas.width, GROUND.canvas.height, 0, 0, W, H);
 
-    // Roads from the square to each landmark
-    ctx.lineCap = 'round';
-    for (const b of V.buildings) {
-      if (b.id === 'warning_area' || b.id === 'park') continue;
-      const a = iso(SQUARE.x, SQUARE.y), c = iso(b.tile_x + 0.5, b.tile_y + 1.05);
-      ctx.strokeStyle = T.road; ctx.lineWidth = TILE * 0.16; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(c.x, c.y); ctx.stroke();
-      if (T.name === 'lighting' || T.visible.includes('lighting')) {
-        const mx = (a.x + c.x) / 2, my = (a.y + c.y) / 2; lantern(mx, my, 0.35 + 0.15 * Math.sin(V.time * 2 + b.tile_x));
-      }
-    }
-    // Warehouse yard: one access road from the square, a lane per row and a concrete apron each.
-    // Roads are drawn per row rather than per warehouse so a busy yard does not turn into a web.
-    if (V.warehouses.length) {
-      const rows = yardRows();
-      const gate = iso(rows[0].x0 - 0.4, rows[0].y + 1.5);
-      const a = iso(SQUARE.x, SQUARE.y);
-      ctx.strokeStyle = T.road; ctx.lineWidth = TILE * 0.18;
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(gate.x, gate.y); ctx.stroke();
-      for (let i = 0; i < rows.length; i++) {
-        const r = rows[i];
-        const l = iso(r.x0 - 0.4, r.y + 1.5), e = iso(r.x1 + 0.9, r.y + 1.5);
-        ctx.lineWidth = TILE * 0.15; ctx.beginPath(); ctx.moveTo(l.x, l.y); ctx.lineTo(e.x, e.y); ctx.stroke();
-        if (i > 0) { const up = iso(rows[i - 1].x0 - 0.4, rows[i - 1].y + 1.5); ctx.beginPath(); ctx.moveTo(up.x, up.y); ctx.lineTo(l.x, l.y); ctx.stroke(); }
-      }
-      for (const wh of V.warehouses) {
-        const c = iso(wh.tile_x + 0.5, wh.tile_y + 0.5);
-        const fp = (wh.footprint || 1.2) * 1.3;
-        diamond(c.x, c.y, fp * TILE / 2, fp * TILE / 4, 'rgba(86,96,110,.55)');
+    // Street lamps still animate, so they stay on the live layer.
+    if (T.name === 'lighting' || T.visible.includes('lighting')) {
+      const hub = iso(SQUARE.x, SQUARE.y);
+      for (const b of V.buildings) {
+        if (b.id === 'warning_area' || b.id === 'park') continue;
+        const c = iso(b.tile_x + 0.5, b.tile_y + 1.0);
+        lantern((hub.x + c.x) / 2, (hub.y + c.y) / 2, 0.35 + 0.15 * Math.sin(V.time * 2 + b.tile_x));
       }
     }
 
@@ -542,15 +878,21 @@
     dot(x, y - TILE * 0.5, 2.5, '#ffe08a');
   }
 
+  // Cottage roofs: clay, slate, teal, ochre, plum, moss. Varied like the reference, all muted
+  // enough that the warehouses' system colours still stand out.
+  const ROOFS = ['#b6553f', '#5a6a86', '#3f7d75', '#c08a3e', '#8a5570', '#5d7a48', '#a34b45'];
+
   function drawBuilding(b, T) {
     const size = Math.max(1, Math.min(4, b.size || b.base_size || 1));
     const fp = 0.7 + size * 0.28;                      // footprint in tiles
-    const hgt = TILE * (0.35 + size * 0.22);           // wall height
+    const hgt = TILE * (0.26 + size * 0.15);           // wall height
     const c = iso(b.tile_x + 0.5, b.tile_y + 0.5);
     const hw = fp * TILE / 2, hh = fp * TILE / 4;
     const selected = V.selected === b.id;
-    const roof = b.id === 'warning_area' ? '#5b4a2a' : (b.id === 'utility_district' ? T.primary : shade(T.primary, b.tile_x * 3 - 10));
-    const wallL = '#8d8f99', wallR = '#6f7280';
+    const roof = b.id === 'warning_area' ? '#6b5733'
+      : b.id === 'utility_district' ? T.primary
+      : ROOFS[(b.tile_x * 7 + b.tile_y * 5) % ROOFS.length];
+    const wallL = '#e4ded3', wallR = '#a2abc4';
 
     if (b.sprite === 'houses') { cluster(c, hw, hh, hgt, roof, wallL, wallR, size); }
     else if (b.sprite === 'tower') { box(c.x, c.y, hw * 0.55, hh * 0.55, hgt * 1.8, roof, wallL, wallR); pole(c.x, c.y - hgt * 1.8 - hh * 0.25, TILE * 0.25, T.accent); }
@@ -629,14 +971,14 @@
   // a coloured sign band. Footprint, height, bay count and the pallets outside all come from the
   // connector's count-derived sizing, so a big category is unmistakably a big building.
   function drawWarehouse(wh, T) {
-    const fp = Math.max(0.8, Math.min(3, wh.footprint || 1.2));
+    const fp = Math.max(0.8, Math.min(3, wh.footprint || 1.2)) * 0.92;
     const hgt = TILE * (0.22 + 0.20 * fp);
     const c = iso(wh.tile_x + 0.5, wh.tile_y + 0.5);
     const hw = fp * TILE / 2, hh = fp * TILE / 4;
     const selected = V.selected === wh.id;
     const roof = wh.primary || T.primary;
     const tint = wh.hue != null ? wh.hue : 210;
-    const wallL = 'hsl(' + tint + ', 8%, 62%)', wallR = 'hsl(' + tint + ', 8%, 48%)';
+    const wallL = 'hsl(' + tint + ', 12%, 76%)', wallR = 'hsl(' + tint + ', 14%, 58%)';
 
     box(c.x, c.y, hw, hh, hgt, roof, wallL, wallR);
     const top = c.y - hgt;
@@ -680,22 +1022,155 @@
     wh._screen = { x: c.x, y: c.y - hgt / 2, hw: hw * 1.05, top: top - hh, bottom: c.y + hh + TILE * 0.25, labelY: c.y + hh + 3 };
   }
 
+  /// Labels sit light on the scene: small letter-spaced caps with a soft halo instead of a filled
+  /// slab, so thirteen of them no longer crowd the village. The one under the pointer, the
+  /// selection and anywhere a character is standing brighten and gain a pill.
   function drawLabel(b, suffix) {
     if (!b._screen) return;
     const selected = V.selected === b.id;
-    const text = suffix ? b.label + ' · ' + suffix : b.label;
-    ctx.font = (selected ? 'bold ' : '') + Math.max(9, TILE * (suffix ? 0.17 : 0.2)) + 'px system-ui, sans-serif'; ctx.textAlign = 'center';
-    const lw = ctx.measureText(text).width + 10; const y = b._screen.labelY;
-    ctx.fillStyle = 'rgba(20,24,31,.78)'; ctx.fillRect(b._screen.x - lw / 2, y, lw, TILE * 0.24 + 4);
-    ctx.fillStyle = selected ? '#ffe08a' : '#e6ebf2'; ctx.fillText(text, b._screen.x, y + TILE * 0.2 - 2);
+    const hovered = V.hover === b.id;
+    let busy = false;
+    for (const ag of V.agents.values()) if (ag.at === b.id || ag.target === b.id) { busy = true; break; }
+
+    const size = Math.max(10.5, TILE * 0.18);
+    const prominent = selected || hovered;
+    ctx.font = (prominent ? '650 ' : '560 ') + size + 'px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    const x = b._screen.x, y = b._screen.labelY + size * 1.05;
+
+    const text = suffix ? b.label : b.label;
+    const w = ctx.measureText(text).width;
+    const padX = size * 0.62, h = size * 1.62;
+    roundRect(x - w / 2 - padX, y - h * 0.76, w + padX * 2, h, h / 2,
+      prominent ? 'rgba(24,58,86,.94)' : (busy ? 'rgba(16,32,56,.92)' : 'rgba(10,20,40,.82)'),
+      prominent ? 'rgba(94,200,240,.85)' : 'rgba(255,255,255,.10)');
+    ctx.fillStyle = prominent ? '#eaf7ff' : '#e7eefb';
+    ctx.fillText(text, x, y);
+
+    if (suffix) {
+      const sub = Math.max(9, size * 0.78);
+      ctx.font = '600 ' + sub + 'px system-ui, sans-serif';
+      const sy = y + h * 0.92;
+      const sw = ctx.measureText(suffix).width, sp = sub * 0.55, sh = sub * 1.5;
+      roundRect(x - sw / 2 - sp, sy - sh * 0.76, sw + sp * 2, sh, sh / 2, 'rgba(10,20,40,.72)', null);
+      ctx.fillStyle = prominent ? 'rgba(126,224,255,.98)' : 'rgba(176,198,226,.92)';
+      ctx.fillText(suffix, x, sy);
+    }
     ctx.textAlign = 'left';
   }
 
+  function roundRect(x, y, w, h, r, fill, stroke) {
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+    else {
+      ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
+    }
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+  }
+
+  /// A hipped roof with overhanging eaves — the silhouette that makes these read as cottages
+  /// rather than capped boxes. Four faces, shaded from the one key light: up-left is brightest,
+  /// down-right darkest, and a shadowed soffit under the overhang.
+  function hipRoof(x, top, hw, hh, roof) {
+    const ow = hw * 1.22, oh = hh * 1.22;             // eaves reach past the walls
+    const apex = top - oh * 1.9;                      // well clear of the eave corners, or it inverts
+    const faces = [
+      [[-ow, 0], [0, -oh], 26],   // north-west, into the light
+      [[0, -oh], [ow, 0], 4],     // north-east
+      [[-ow, 0], [0, oh], -20],   // south-west
+      [[0, oh], [ow, 0], -40]     // south-east, deepest shade
+    ];
+    // Soffit: the underside of the overhang, always dark.
+    ctx.fillStyle = shade(roof, -62);
+    ctx.beginPath();
+    ctx.moveTo(x - ow, top); ctx.lineTo(x, top + oh); ctx.lineTo(x + ow, top);
+    ctx.lineTo(x + ow, top + oh * 0.22); ctx.lineTo(x, top + oh * 1.22); ctx.lineTo(x - ow, top + oh * 0.22);
+    ctx.closePath(); ctx.fill();
+
+    for (const [a, b, d] of faces) {
+      ctx.fillStyle = shade(roof, d);
+      ctx.beginPath();
+      ctx.moveTo(x + a[0], top + a[1]); ctx.lineTo(x + b[0], top + b[1]); ctx.lineTo(x, apex);
+      ctx.closePath(); ctx.fill();
+    }
+    // Highlight along the two hips that catch the light.
+    ctx.strokeStyle = 'rgba(255,246,224,.45)'; ctx.lineWidth = Math.max(1, TILE * 0.016);
+    ctx.beginPath();
+    ctx.moveTo(x - ow, top); ctx.lineTo(x, apex); ctx.lineTo(x, top - oh);
+    ctx.stroke();
+    // Eave line so the overhang reads against the wall below.
+    ctx.strokeStyle = 'rgba(20,14,10,.35)'; ctx.lineWidth = Math.max(1, TILE * 0.014);
+    ctx.beginPath(); ctx.moveTo(x - ow, top); ctx.lineTo(x, top + oh); ctx.lineTo(x + ow, top); ctx.stroke();
+  }
+
+  /// Soft contact shadow on the ground, offset away from the key light.
+  function contact(x, y, hw, hh, strength) {
+    const r = ctx.createRadialGradient(x + hw * 0.12, y + hh * 0.35, 1, x + hw * 0.12, y + hh * 0.35, hw * 1.35);
+    r.addColorStop(0, 'rgba(4,8,18,' + (0.42 * (strength || 1)) + ')');
+    r.addColorStop(0.6, 'rgba(4,8,18,' + (0.18 * (strength || 1)) + ')');
+    r.addColorStop(1, 'rgba(4,8,18,0)');
+    ctx.fillStyle = r;
+    ctx.beginPath(); ctx.ellipse(x + hw * 0.12, y + hh * 0.35, hw * 1.3, hh * 1.25, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  /// A block lit by one key light: warm left face, cool right face, ambient occlusion at the base
+  /// and a thin rim highlight along the roof edges. Gradients are cached, so this stays cheap.
   function box(x, y, hw, hh, h, roof, wallL, wallR) {
-    ctx.fillStyle = wallL; ctx.beginPath(); ctx.moveTo(x - hw, y); ctx.lineTo(x, y + hh); ctx.lineTo(x, y + hh - h); ctx.lineTo(x - hw, y - h); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = wallR; ctx.beginPath(); ctx.moveTo(x + hw, y); ctx.lineTo(x, y + hh); ctx.lineTo(x, y + hh - h); ctx.lineTo(x + hw, y - h); ctx.closePath(); ctx.fill();
-    diamond(x, y - h, hw, hh, roof);
-    ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, y + hh); ctx.lineTo(x, y + hh - h); ctx.stroke();
+    const top = y - h;
+    contact(x, y, hw, hh, 1);
+
+    // Left face — the lit one.
+    ctx.fillStyle = vgrad(x, top - hh, y + hh, wallL, shade(wallL, -26));
+    ctx.beginPath(); ctx.moveTo(x - hw, y); ctx.lineTo(x, y + hh); ctx.lineTo(x, y + hh - h); ctx.lineTo(x - hw, y - h); ctx.closePath(); ctx.fill();
+
+    // Right face — in shade, slightly cooler.
+    ctx.fillStyle = vgrad(x, top - hh, y + hh, wallR, shade(wallR, -30));
+    ctx.beginPath(); ctx.moveTo(x + hw, y); ctx.lineTo(x, y + hh); ctx.lineTo(x, y + hh - h); ctx.lineTo(x + hw, y - h); ctx.closePath(); ctx.fill();
+
+    hipRoof(x, top, hw, hh, roof);
+
+    // Soft vertical crease where the two faces meet, instead of the old hard black line.
+    ctx.strokeStyle = 'rgba(10,14,26,.28)'; ctx.lineWidth = Math.max(1, TILE * 0.014);
+    ctx.beginPath(); ctx.moveTo(x, y + hh); ctx.lineTo(x, top + hh); ctx.stroke();
+
+    windows(x, y, hw, hh, h);
+  }
+
+  /// Lamplit windows on both faces, with a little spill onto the wall. Deterministic per position
+  /// so they never flicker between frames.
+  function windows(x, y, hw, hh, h) {
+    if (h < TILE * 0.3) return;
+    const rows = h > TILE * 0.95 ? 2 : 1;
+    const cols = hw > TILE * 0.5 ? 2 : 1;
+    const ww = hw * 0.2, wh2 = h * (rows > 1 ? 0.17 : 0.22);
+    for (let face = 0; face < 2; face++) {
+      const dir = face === 0 ? -1 : 1;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const u = (c + 1) / (cols + 1);
+          const bx = x + dir * u * hw, by = y + u * hh;
+          const ty2 = by - h + (r + 0.62) * (h / (rows + 0.7));
+          const lit = ((Math.round(x * 7 + y * 3) + r * 5 + c * 11 + face * 3) % 7) !== 0;
+          ctx.fillStyle = lit ? (face === 0 ? 'rgba(255,214,130,.92)' : 'rgba(255,198,112,.78)') : 'rgba(40,52,74,.75)';
+          ctx.beginPath();
+          ctx.moveTo(bx - dir * ww, ty2 - ww * 0.5);
+          ctx.lineTo(bx, ty2);
+          ctx.lineTo(bx, ty2 + wh2);
+          ctx.lineTo(bx - dir * ww, ty2 + wh2 - ww * 0.5);
+          ctx.closePath(); ctx.fill();
+          if (lit) {
+            const gl = ctx.createRadialGradient(bx - dir * ww * 0.5, ty2 + wh2 * 0.4, 1, bx - dir * ww * 0.5, ty2 + wh2 * 0.4, ww * 3.2);
+            gl.addColorStop(0, 'rgba(255,196,110,.20)'); gl.addColorStop(1, 'rgba(255,196,110,0)');
+            ctx.fillStyle = gl;
+            ctx.beginPath(); ctx.arc(bx - dir * ww * 0.5, ty2 + wh2 * 0.4, ww * 3.2, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+      }
+    }
   }
   function cluster(c, hw, hh, hgt, roof, wallL, wallR, size) {
     const n = Math.min(4, 1 + size); const offs = [[0, 0], [-0.5, 0.3], [0.5, 0.3], [0, 0.6]];
@@ -754,10 +1229,15 @@
   function drawEffect(e) {
     const pos = posOf(e.building); const p = iso(pos.x, pos.y); const k = e.t / e.life;
     if (e.kind === 'label') {
-      ctx.globalAlpha = 1 - Math.max(0, k - 0.6) / 0.4; ctx.font = 'bold ' + Math.max(11, TILE * 0.2) + 'px system-ui, sans-serif'; ctx.textAlign = 'center';
-      const y = p.y - TILE * 0.9 - k * TILE * 0.6; const lw = ctx.measureText(e.text).width + 12;
-      ctx.fillStyle = 'rgba(20,24,31,.8)'; ctx.fillRect(p.x - lw / 2, y - TILE * 0.2, lw, TILE * 0.26);
-      ctx.fillStyle = e.color; ctx.fillText(e.text, p.x, y); ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+      // A soft floating pill rather than a hard black slab, matching the landmark labels.
+      ctx.globalAlpha = (1 - Math.max(0, k - 0.6) / 0.4) * Math.min(1, k * 8);
+      const size = Math.max(10, TILE * 0.185);
+      ctx.font = '600 ' + size + 'px system-ui, sans-serif'; ctx.textAlign = 'center';
+      const y = p.y - TILE * 1.0 - k * TILE * 0.7;
+      const w = ctx.measureText(e.text).width, padX = size * 0.8, h = size * 1.8;
+      roundRect(p.x - w / 2 - padX, y - h * 0.72, w + padX * 2, h, h / 2, 'rgba(14,18,32,.72)', 'rgba(255,255,255,.10)');
+      ctx.fillStyle = e.color; ctx.fillText(e.text, p.x, y);
+      ctx.textAlign = 'left'; ctx.globalAlpha = 1;
     } else if (e.kind === 'sparkle') {
       for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3 + k * 2; const d = TILE * (0.2 + k * 0.5); dot(p.x + Math.cos(a) * d, p.y - TILE * 0.5 + Math.sin(a) * d * 0.5, 2.5 * (1 - k), e.color); }
     } else if (e.kind === 'flash') {
@@ -766,6 +1246,11 @@
   }
 
   function shade(hex, delta) {
+    const h = /^hsl(s*([d.]+)s*,s*([d.]+)%s*,s*([d.]+)%s*)$/i.exec(hex || '');
+    if (h) {
+      const l = Math.max(0, Math.min(100, parseFloat(h[3]) + delta * 100 / 255));
+      return 'hsl(' + h[1] + ', ' + h[2] + '%, ' + l.toFixed(1) + '%)';
+    }
     const m = /^#([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return hex || '#7a8b99';
     const n = parseInt(m[1], 16); const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => Math.max(0, Math.min(255, v + delta)));
     return '#' + c.map(v => v.toString(16).padStart(2, '0')).join('');
@@ -777,8 +1262,19 @@
     const dt = Math.min(0.1, (now - last) / 1000) * (V.paused ? 0 : V.speed); last = now;
     V.time += dt;
     if (!V.paused) step(dt);
-    draw();
+    const t0 = performance.now();
+    if (GL.on) draw3D(); else draw();
+    // Cost of one frame of drawing, independent of how often the browser schedules us — a hidden
+    // tab throttles the callback but not the work, so this stays meaningful either way.
+    PERF.push(performance.now() - t0);
+    if (PERF.length > 120) PERF.shift();
     requestAnimationFrame(frame);
+  }
+  const PERF = [];
+  function renderMs() {
+    if (PERF.length < 8) return null;
+    const a = PERF.slice().sort((x, y) => x - y);
+    return { median: a[a.length >> 1], p95: a[Math.floor(a.length * 0.95)] };
   }
   function step(dt) {
     for (const ag of V.agents.values()) {
@@ -801,26 +1297,41 @@
   }
   requestAnimationFrame(frame);
 
-  canvas.addEventListener('click', ev => {
-    const rect = canvas.getBoundingClientRect(); const x = ev.clientX - rect.left, y = ev.clientY - rect.top;
-    // Characters stand in front of the landmarks, so they win a click on the same spot.
+  /// Topmost thing under the pointer: characters first, then landmarks and warehouses.
+  function pick(x, y) {
     let agent = null, agentD = Infinity;
     for (const ag of V.agents.values()) {
       const s = ag._screen; if (!s) continue;
       if (Math.abs(x - s.x) > s.hw || y < s.top || y > s.bottom) continue;
       const d = Math.hypot(s.x - x, s.y - y); if (d < agentD) { agent = ag.id; agentD = d; }
     }
-    if (agent) {
-      V.selectedAgent = agent === V.selectedAgent ? null : agent;
-      V.selected = null; renderSelected(); return;
-    }
-
+    if (agent) return { agent };
     let best = null, bestD = Infinity;
     for (const b of V.buildings.concat(V.warehouses)) {
       const s = b._screen; if (!s) continue;
       if (Math.abs(x - s.x) > s.hw || y < s.top || y > s.bottom) continue;
       const d = Math.hypot(s.x - x, s.y - y); if (d < bestD) { best = b.id; bestD = d; }
     }
+    return best ? { building: best } : null;
+  }
+
+  canvas.addEventListener('pointermove', ev => {
+    const rect = canvas.getBoundingClientRect();
+    const hit = pick(ev.clientX - rect.left, ev.clientY - rect.top);
+    const id = hit ? (hit.building || hit.agent) : null;
+    if (id !== V.hover) { V.hover = id; canvas.style.cursor = id ? 'pointer' : 'default'; }
+  });
+  canvas.addEventListener('pointerleave', () => { V.hover = null; canvas.style.cursor = 'default'; });
+
+  canvas.addEventListener('click', ev => {
+    const rect = canvas.getBoundingClientRect(); const x = ev.clientX - rect.left, y = ev.clientY - rect.top;
+    // Characters stand in front of the landmarks, so they win a click on the same spot.
+    const hit = pick(x, y);
+    if (hit && hit.agent) {
+      V.selectedAgent = hit.agent === V.selectedAgent ? null : hit.agent;
+      V.selected = null; renderSelected(); return;
+    }
+    const best = hit ? hit.building : null;
     V.selected = best === V.selected ? null : best;
     V.selectedAgent = null; renderSelected();
   });
@@ -933,7 +1444,432 @@
     setTimeout(tick, 800);
   }
 
+  // ─── Optional glTF scene ────────────────────────────────────────────────
+  // The village can render as real geometry when a model folder is present. The camera stays
+  // orthographic at the same isometric angle, so it reads like the drawn view; swapping in a free
+  // camera later is then a small change. Everything here is additive: with no models, or with no
+  // WebGL, the 2D renderer above is untouched and remains the default.
+
+  /// Isometric direction: the same 2:1 projection the 2D view uses, so nothing jumps when switching.
+  const ISO_DIR = { x: 1, y: 0.85, z: 1 };
+
+  async function initModels() {
+    let index = null;
+    try {
+      const res = await fetch('/models/index.json', { cache: 'no-store' });
+      if (res.ok) index = await res.json();
+    } catch (e) { /* no connector, or an older one without the route */ }
+    GL.index = index;
+    const has = index && Array.isArray(index.models) && index.models.length > 0;
+    $('modeBtn').hidden = !has && !DEMO;
+    if (!has) return;
+    if (localStorage.getItem('village.mode') !== '2d') enable3D();
+  }
+
+  async function enable3D() {
+    if (GL.on) return;
+    if (!GL.lib) {
+      try {
+        await loadScript('/vendor/village-three.min.js');
+        GL.lib = window.VillageGL;
+      } catch (e) { note3D('3D viewer script could not be loaded.'); return; }
+    }
+    if (!GL.lib) { note3D('3D viewer script is unavailable.'); return; }
+    try { buildScene(); } catch (e) { note3D('WebGL is unavailable: ' + e.message); return; }
+    GL.on = true;
+    canvas.hidden = true; $('village3d').hidden = false; $('overlay').hidden = false;
+    $('modeBtn').textContent = 'Drawn view';
+    try { localStorage.setItem('village.mode', '3d'); } catch (e) { }
+    resize();
+  }
+
+  function disable3D() {
+    if (!GL.on) return;
+    GL.on = false;
+    canvas.hidden = false; $('village3d').hidden = true; $('overlay').hidden = true;
+    $('modeBtn').textContent = '3D view';
+    try { localStorage.setItem('village.mode', '2d'); } catch (e) { }
+    GROUND.dirty = true; resize();
+  }
+
+  function note3D(message) {
+    const el = $('catchup');
+    el.hidden = false; el.textContent = message;
+    setTimeout(() => { el.hidden = true; renderHeader(); }, 6000);
+  }
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const el = document.createElement('script');
+      el.src = src; el.onload = () => resolve(); el.onerror = () => reject(new Error(src));
+      document.head.appendChild(el);
+    });
+  }
+
+  function buildScene() {
+    const T3 = GL.lib;
+    const gl = new T3.WebGLRenderer({ canvas: $('village3d'), antialias: true, alpha: false });
+    gl.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    gl.shadowMap.enabled = true; gl.shadowMap.type = T3.PCFSoftShadowMap;
+    gl.outputColorSpace = T3.SRGBColorSpace;
+    const scene = new T3.Scene();
+    scene.background = new T3.Color('#0a1428');
+
+    // The same one-key lighting the drawn view uses: warm sun, cool sky fill, gentle ambient.
+    const sun = new T3.DirectionalLight(0xfff0cf, 2.1);
+    sun.position.set(-8, 14, 6);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    const d = 24;
+    sun.shadow.camera.left = -d; sun.shadow.camera.right = d;
+    sun.shadow.camera.top = d; sun.shadow.camera.bottom = -d;
+    sun.shadow.camera.far = 80; sun.shadow.bias = -0.0012;
+    scene.add(sun);
+    scene.add(new T3.HemisphereLight(0xbcd4ff, 0x25451f, 1.0));
+    scene.add(new T3.AmbientLight(0xffffff, 0.35));
+
+    const root = new T3.Group();
+    scene.add(root);
+
+    const camera = new T3.OrthographicCamera(-10, 10, 10, -10, -200, 400);
+    camera.position.set(ISO_DIR.x * 60, ISO_DIR.y * 60, ISO_DIR.z * 60);
+    camera.lookAt(0, 0, 0);
+
+    GL.renderer = gl; GL.scene = scene; GL.camera = camera; GL.root = root; GL.sun = sun; GL.ready = true;
+  }
+
+  /// Asset packs are authored in metres, and a village tile is not a metre. One factor for the whole
+  /// set — never per-asset normalisation, which would flatten a tower to the height of a hut.
+  const MODEL_SCALE = 0.60;
+
+  /// The pack is authored facing -Z with every scene rotation at zero, which puts the fronts away
+  /// from an isometric camera sitting on +X/+Z. Half a turn brings them round.
+  const MODEL_FACING = Math.PI;
+
+  /// Tile space to world space. The island is centred on the origin so the camera never has to move.
+  function world(tx, ty) { return { x: (tx - GRID_W / 2) * SPREAD, z: (ty - GRID_H / 2) * SPREAD }; }
+
+  function fit3D() {
+    if (!GL.ready) return;
+    const gl = GL.renderer, cam = GL.camera;
+    gl.setSize(W, H, false);
+    // Frame the island with a margin, matching how the 2D view fits the grid.
+    const span = Math.max(GRID_W, GRID_H) * SPREAD * 0.55;
+    const aspect = W / H;
+    cam.left = -span * aspect; cam.right = span * aspect;
+    cam.top = span; cam.bottom = -span;
+    cam.updateProjectionMatrix();
+  }
+
+  /// Asset packs are rarely named exactly like our ids: they use hyphens, and a few buildings have
+  /// their own vocabulary. Matching is therefore on a normalised name, with a small alias table for
+  /// the genuinely different words. Nothing here requires anyone to rename a file.
+  const MODEL_ALIASES = {
+    archive: ['library'],
+    lookout: ['logistics_tower', 'tower'],
+    market: ['market_hall'],
+    records_office: ['residence', 'records'],
+    overlook: ['overflow_shed', 'overflow'],
+    park: ['central_park'],
+    warning_area: ['warning_sign', 'warning'],
+    utility_district: ['utility', 'substation'],
+    houses: ['house'],
+    tree: ['tree_green', 'tree_pine', 'tree_maple'],
+    tree_2: ['tree_pine', 'tree_maple', 'tree_green'],
+    tree_3: ['tree_maple', 'tree_green', 'tree_pine'],
+    lamp: ['path_lamp', 'street_lamp'],
+    path_straight: ['path_straight', 'path'],
+    stone_lantern: ['stone_lantern', 'lantern'],
+    terrain: ['terrain', 'ground', 'island'],
+    shrub: ['shrub', 'bush'],
+    rock: ['rock', 'boulder', 'stone'],
+    bench: ['bench'],
+    crate: ['crate', 'box'],
+    agent: ['character', 'villager']
+  };
+
+  function normName(v) { return String(v || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, ''); }
+
+  /// name -> served path, built once per index. Sub-folder files win over loose ones.
+  function modelLookup() {
+    if (GL.lookup) return GL.lookup;
+    const map = new Map();
+    for (const m of ((GL.index && GL.index.models) || [])) {
+      const key = normName(m.name);
+      if (!map.has(key) || m.kind !== 'root') map.set(key, m.path);
+    }
+    GL.lookup = map;
+    return map;
+  }
+
+  /// The served path for a landmark/warehouse/scenery id, or null when nothing matches.
+  function modelPath(kind, id) {
+    const map = modelLookup();
+    const base = kind === 'warehouses' && id.startsWith('wh_') ? id.slice(3) : id;
+    for (const candidate of [base].concat(MODEL_ALIASES[normName(base)] || [])) {
+      const hit = map.get(normName(candidate));
+      if (hit) return hit;
+    }
+    return kind === 'warehouses' ? (map.get('_default') || null) : null;
+  }
+
+  function hasModel(path) { return !!path; }
+
+  /// Loads a model once and clones it per use. Missing models resolve to null, and the caller
+  /// falls back to a primitive, so a half-finished model folder still renders a whole village.
+  function loadModel(path) {
+    if (!path) return Promise.resolve(null);
+    if (GL.models.has(path)) return GL.models.get(path);
+    const T3 = GL.lib;
+    const promise = new Promise(resolve => {
+      new T3.GLTFLoader().load('/models/' + path,
+        gltf => resolve(gltf.scene),
+        undefined,
+        () => resolve(null));
+    });
+    GL.models.set(path, promise);
+    return promise;
+  }
+
+  /// A stand-in cottage for anything without a model yet: same proportions and colours as the
+  /// drawn view, so the village is complete from the first run.
+  function placeholder(size, roofHex, wallHex) {
+    const T3 = GL.lib;
+    const g = new T3.Group();
+    const w = 0.8 + size * 0.30, h = 0.5 + size * 0.28;
+    const wall = new T3.Mesh(new T3.BoxGeometry(w, h, w), new T3.MeshStandardMaterial({ color: new T3.Color(wallHex || '#e4ded3'), roughness: 0.85 }));
+    wall.position.y = h / 2; wall.castShadow = true; wall.receiveShadow = true;
+    g.add(wall);
+    const roof = new T3.Mesh(new T3.BoxGeometry(w * 1.18, 0.06, w * 1.18), new T3.MeshStandardMaterial({ color: new T3.Color(roofHex), roughness: 0.7 }));
+    roof.position.y = h + 0.03; roof.castShadow = true;
+    g.add(roof);
+    const cap = new T3.Mesh(new T3.BoxGeometry(w * 0.72, w * 0.5, w * 0.72), new T3.MeshStandardMaterial({ color: new T3.Color(roofHex), roughness: 0.7, flatShading: true }));
+    cap.position.y = h + w * 0.26; cap.rotation.y = Math.PI / 4; cap.castShadow = true;
+    g.add(cap);
+    return g;
+  }
+
+  /// Ground, lanes and scenery: everything that only changes when the layout does. Built into one
+  /// group and rebuilt wholesale on a layout change, so the per-frame cost stays a single render.
+  async function buildStatic() {
+    const T3 = GL.lib;
+    const key = GRID_W + 'x' + GRID_H + ':' + V.buildings.length + ':' + V.warehouses.length + ':' + (GL.lookup ? GL.lookup.size : 0);
+    if (GL.staticKey === key) return;
+    GL.staticKey = key;
+    if (GL.static) { GL.root.remove(GL.static); disposeTree(GL.static); }
+    const group = new T3.Group();
+    GL.static = group; GL.root.add(group);
+
+    const islandW = GRID_W * SPREAD + 2, islandH = GRID_H * SPREAD + 2;
+
+    // Ground: the supplied terrain slab stretched to the island, or a plain box.
+    const terrain = await loadModel(modelPath('scenery', 'terrain'));
+    if (terrain) {
+      const slab = terrain.clone(true);
+      // The slab is authored 36 x 29 with its top face at y = 0, which is where buildings stand.
+      slab.scale.set(islandW / 36, 1.6, islandH / 29);
+      slab.traverse(o => { if (o.isMesh) o.receiveShadow = true; });
+      group.add(slab);
+    } else {
+      const box = new T3.Mesh(new T3.BoxGeometry(islandW, 0.9, islandH),
+        new T3.MeshStandardMaterial({ color: new T3.Color('#4f9c33'), roughness: 1 }));
+      box.position.y = -0.45; box.receiveShadow = true;
+      group.add(box);
+    }
+
+    // Lanes: repeat the straight path tile along each route. The tile is 2 units long in Z, so it
+    // is rotated to face the run and stepped by its own length.
+    const tile = await loadModel(modelPath('scenery', 'path_straight'));
+    const lamp = await loadModel(modelPath('scenery', 'lamp'));
+    if (tile) {
+      // The tile is 2 units long in Z, so it is stepped by its own length and turned to face the
+      // run. Walking the polyline rather than the straight chord is what makes the lanes curve.
+      const step = 2.0 * MODEL_SCALE * 0.94;   // a whisker of overlap hides the seams
+      let lampCountdown = 4;
+      for (const path of lanePaths()) {
+        for (let seg = 1; seg < path.length; seg++) {
+          const a = world(path[seg - 1][0], path[seg - 1][1]);
+          const b = world(path[seg][0], path[seg][1]);
+          const dx = b.x - a.x, dz = b.z - a.z;
+          const len = Math.hypot(dx, dz);
+          if (len < 0.001) continue;
+          const angle = Math.atan2(dx, dz);
+          const n = Math.max(1, Math.ceil(len / step));
+          for (let i = 0; i < n; i++) {
+            const t = (i + 0.5) / n;
+            const piece = tile.clone(true);
+            piece.position.set(a.x + dx * t, 0, a.z + dz * t);
+            piece.rotation.y = angle;
+            piece.scale.set(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE * (len / n) / (2.0 * MODEL_SCALE));
+            group.add(piece);
+            if (lamp && --lampCountdown <= 0) {
+              lampCountdown = 26;
+              const post = lamp.clone(true);
+              post.position.set(a.x + dx * t - dz / len * 0.6, 0, a.z + dz * t + dx / len * 0.6);
+              post.scale.setScalar(MODEL_SCALE);
+              post.traverse(o => { if (o.isMesh) o.castShadow = true; });
+              group.add(post);
+            }
+          }
+        }
+      }
+    }
+
+    // Trees, shrubs and boulders on the open grass, in the same spots the drawn view plants them.
+    const props = {
+      tree: await loadModel(modelPath('scenery', 'tree')),
+      tree2: await loadModel(modelPath('scenery', 'tree_2')),
+      tree3: await loadModel(modelPath('scenery', 'tree_3')),
+      shrub: await loadModel(modelPath('scenery', 'shrub')),
+      rock: await loadModel(modelPath('scenery', 'rock'))
+    };
+    const trees = [props.tree, props.tree2, props.tree3].filter(Boolean);
+    for (const it of sceneryPlan()) {
+      const source = it.rock ? (props.rock || props.shrub)
+                             : (trees.length ? trees[Math.floor(it.pick * trees.length) % trees.length] : null);
+      if (!source) continue;
+      const prop = source.clone(true);
+      const p = world(it.x, it.y);
+      prop.position.set(p.x, 0, p.z);
+      prop.rotation.y = it.tint * Math.PI * 2;
+      prop.scale.setScalar(MODEL_SCALE * (it.rock ? 0.9 + it.s * 0.4 : 0.75 + it.s * 0.45));
+      prop.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      group.add(prop);
+    }
+
+    // A bench and a lantern either side of the park, and a crate beside each warehouse.
+    const park = V.buildings.find(b => b.id === 'park');
+    const bench = await loadModel(modelPath('scenery', 'bench'));
+    const lantern = await loadModel(modelPath('scenery', 'stone_lantern'));
+    if (park) {
+      const c = world(park.tile_x + 0.5, park.tile_y + 0.5);
+      for (const [src, ox, oz, rot] of [[bench, -1.1, 0.6, 0.4], [bench, 1.1, -0.5, 3.5], [lantern, 0.2, 1.35, 0], [lantern, -1.0, -1.1, 0]]) {
+        if (!src) continue;
+        const o = src.clone(true);
+        o.position.set(c.x + ox, 0, c.z + oz);
+        o.rotation.y = rot; o.scale.setScalar(MODEL_SCALE);
+        o.traverse(m => { if (m.isMesh) m.castShadow = true; });
+        group.add(o);
+      }
+    }
+    const crate = await loadModel(modelPath('scenery', 'crate'));
+    if (crate) {
+      for (const wh of V.warehouses) {
+        const c = world(wh.tile_x + 0.5, wh.tile_y + 0.5);
+        const o = crate.clone(true);
+        o.position.set(c.x - 0.85, 0, c.z + 0.75);
+        o.rotation.y = (wh.rank || 0) * 0.7;
+        o.scale.setScalar(MODEL_SCALE);
+        o.traverse(m => { if (m.isMesh) m.castShadow = true; });
+        group.add(o);
+      }
+    }
+  }
+
+  /// three.js does not free GPU memory on remove, so a rebuilt layer releases its own buffers.
+  function disposeTree(obj) {
+    obj.traverse(o => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose && m.dispose());
+    });
+  }
+
+  async function syncScene() {
+    if (!GL.on || !GL.ready) return;
+    const T3 = GL.lib;
+
+    await buildStatic();
+
+    const wanted = new Set();
+    const place = async (kind, item, size, roofHex) => {
+      const key = kind + ':' + item.id;
+      wanted.add(key);
+      const p = world(item.tile_x + 0.5, item.tile_y + 0.5);
+      let node = GL.nodes.get(key);
+      if (!node) {
+        const model = await loadModel(modelPath(kind, item.id));
+        const obj = model ? model.clone(true) : placeholder(size, roofHex, null);
+        if (model) {
+          obj.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+          obj.scale.setScalar(MODEL_SCALE);
+          obj.rotation.y = MODEL_FACING;
+        }
+        obj.userData.modelled = !!model;
+        GL.root.add(obj);
+        node = obj; GL.nodes.set(key, obj);
+      }
+      node.position.set(p.x, 0, p.z);
+      node.visible = true;
+    };
+
+    for (const b of V.buildings) await place('landmarks', b, b.size || b.base_size || 1, ROOFS[(b.tile_x * 7 + b.tile_y * 5) % ROOFS.length]);
+    for (const wh of V.warehouses) {
+      await place('warehouses', wh, Math.round((wh.footprint || 1.2) * 2), wh.primary || '#8ea6c4');
+      // Element count still drives size, on top of whatever scale the model needed.
+      const node = GL.nodes.get('warehouses:' + wh.id);
+      if (node) {
+        const base = node.userData.modelled ? MODEL_SCALE : 1;
+        const s = base * (0.82 + (wh.footprint || 1.2) * 0.20);
+        node.scale.setScalar(s);
+      }
+    }
+    for (const [key, node] of GL.nodes) if (!wanted.has(key)) node.visible = false;
+  }
+
+  function draw3D() {
+    if (!GL.on || !GL.ready) return;
+    // Characters ride along the same tile positions the 2D view animates.
+    const T3 = GL.lib;
+    for (const ag of V.agents.values()) {
+      let node = GL.nodes.get('agent:' + ag.id);
+      if (!node) {
+        node = placeholder(0.2, ag.color, ag.color);
+        node.scale.set(0.42, 0.7, 0.42);
+        GL.root.add(node); GL.nodes.set('agent:' + ag.id, node);
+      }
+      const p = world(ag.x, ag.y);
+      node.position.set(p.x, 0, p.z);
+      node.rotation.y = V.time * 0.6;
+      node.visible = ag.state !== 'disconnected';
+    }
+    GL.renderer.render(GL.scene, GL.camera);
+    drawOverlay();
+  }
+
+  /// Labels stay 2D and are projected on top: far cheaper and far more legible than 3D text.
+  function drawOverlay() {
+    const o = $('overlay'); const octx = o.getContext('2d');
+    if (o.width !== Math.round(W * DPR) || o.height !== Math.round(H * DPR)) {
+      o.width = Math.round(W * DPR); o.height = Math.round(H * DPR);
+    }
+    octx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    octx.clearRect(0, 0, W, H);
+    for (const b of V.buildings.concat(V.warehouses)) {
+      const p = project(b.tile_x + 0.5, b.tile_y + 0.5);
+      if (!p) continue;
+      b._screen = { x: p.x, y: p.y, hw: TILE * 0.5, top: p.y - TILE * 0.9, bottom: p.y + TILE * 0.2, labelY: p.y };
+    }
+    withCtx(octx, () => {
+      for (const b of V.buildings) drawLabel(b);
+      for (const wh of V.warehouses) drawLabel(wh, wh.count.toLocaleString());
+    });
+  }
+
+  /// drawLabel draws through the module-level ctx; this lends it the overlay for one call.
+  function withCtx(target, fn) { const prev = ctx; ctx = target; try { fn(); } finally { ctx = prev; } }
+
+  function project(tx, ty) {
+    if (!GL.ready) return null;
+    const w = world(tx, ty);
+    // Project the footprint, not the roof, so labels sit under the building rather than across it.
+    const v = new GL.lib.Vector3(w.x, 0, w.z).project(GL.camera);
+    return { x: (v.x * 0.5 + 0.5) * W, y: (-v.y * 0.5 + 0.5) * H + TILE * 0.28 };
+  }
+
+  $('modeBtn').addEventListener('click', () => { GL.on ? disable3D() : enable3D(); });
+
   if (DEMO) runDemo(); else connect();
+  initModels();
 })();
 </script>
 </body>

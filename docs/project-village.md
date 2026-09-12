@@ -188,6 +188,7 @@ key. Values are clamped into the ranges shown.
 | `maxBuildings` | `14` | 8–16 | Landmarks drawn (there are 13, so the default shows them all) |
 | `maxWarehouses` | `10` | 0–20 | Category warehouses drawn (`0` hides the yard) |
 | `warehouseExcludeCategories` | see below | | Categories that never get a warehouse; a configured list **replaces** the defaults |
+| `modelsFolder` | next to the add-in | | Folder of optional glTF models; see the 3D models section |
 | `parkAfterSeconds` | `120` | 15–3600 | Idle time before a character walks to the park |
 | `maxEffects` | `6` | 1–24 | Simultaneous visual effects |
 | `reconnectBackoffMs` / `reconnectBackoffMaxMs` | `1000` / `15000` | | Viewer reconnect backoff |
@@ -371,6 +372,125 @@ takes the click.
 **This costs nothing.** The card is assembled in the viewer from the snapshot that is already on
 the page — the same deterministic story steps the feed shows. No request is made, no model is
 consulted, and no text is generated.
+
+## How the scene is drawn
+
+A sunlit island on deep navy. One light direction governs everything: a warm key from the upper
+left, a cool sky fill opposite. Every block is shaded from it — lit face, shaded face, ambient
+occlusion at the base, a contact shadow on the ground — and wears a hipped roof with overhanging
+eaves and a shadowed soffit, which is what makes the buildings read as cottages rather than capped
+boxes. Windows are lit from within. The town sits on a thick extruded slab of turf, and trees and
+boulders are scattered over the open grass, deterministically and always clear of the buildings
+and the lanes.
+
+Landmark roofs use a fixed palette of muted cottage colours rather than the theme colour, so the
+warehouses system colours stay the thing that carries meaning.
+
+Tile coordinates are spread apart by `SPREAD` (1.34) while footprints stay a fixed multiple of
+`TILE`, so the gaps between buildings grow without the buildings growing with them.
+
+Labels are small letter-spaced text with a dark halo instead of filled boxes. The one under the
+pointer, the current selection, and any landmark a character is standing at brighten and gain a
+pill; everything else stays quiet.
+
+**Performance.** The sky, the ground slab, the grid and the roads never animate, so they are
+painted once into an offscreen canvas and blitted each frame; wall gradients are cached by colour
+and size. Only buildings, characters and effects are redrawn. Diagnostics reports the cost as
+`Renderer: N ms/frame` — about **0.9 ms** (p95 1.4 ms) for thirteen landmarks, eight warehouses
+and one character on a 1260 px canvas, against a 16.7 ms budget at 60 fps. Scenery is part of the cached layer, so a fully planted island costs nothing per frame. That figure measures
+the drawing work itself, so it stays meaningful even when a hidden tab throttles the frame
+callback.
+
+## 3D models (optional)
+
+The village can render as real geometry instead of drawn sprites. Drop glTF binaries into the
+model folder and the viewer switches to a WebGL scene; the camera stays orthographic at the same
+isometric angle, so it reads like the drawn view. Anything without a model gets a placeholder of
+the same size and colour, so a half-finished folder still renders a whole village, and with no
+folder at all nothing changes.
+
+### Folder and names
+
+The folder is `Village/Models` beside the add-in — which is what the Dropbox package ships —
+or wherever `village.modelsFolder` points. Every file name is an id the viewer already uses:
+
+```
+Models/
+  landmarks/     town_hall.glb  archive.glb  lookout.glb  market.glb  workshop.glb
+                 sign_workshop.glb  houses.glb  utility_district.glb  survey_post.glb
+                 records_office.glb  warning_area.glb  overlook.glb  park.glb
+  warehouses/    fire_alarm_devices.glb  data_devices.glb  …  _default.glb
+  scenery/       tree.glb  tree_2.glb  rock.glb  lamp.glb
+  characters/    agent.glb
+```
+
+Files may also sit **loose in the folder root** — an exported asset pack is usually one flat
+directory, and sorting thirty files into sub-folders before seeing anything is a poor first five
+minutes. Sub-folder files win when a name appears in both.
+
+Matching normalises the name: case, hyphens and underscores are equivalent, so `town-hall.glb`,
+`town_hall.glb` and `Town Hall.glb` all match the `town_hall` landmark. A short alias table in the
+viewer covers the buildings an artist is likely to name differently:
+
+| Landmark | also matches |
+|---|---|
+| `archive` | `library` |
+| `lookout` | `logistics-tower`, `tower` |
+| `market` | `market-hall` |
+| `records_office` | `residence`, `records` |
+| `overlook` | `overflow-shed`, `overflow` |
+| `park` | `central-park` |
+| `warning_area` | `warning-sign`, `warning` |
+| `utility_district` | `utility`, `substation` |
+| `tree`, `tree_2`, `tree_3` | `tree-green`, `tree-pine`, `tree-maple` |
+| `lamp` | `path-lamp`, `stone-lantern` |
+
+A warehouse file is named after the **category**, not the warehouse id: the id
+`wh_fire_alarm_devices` looks for `warehouses/fire_alarm_devices.glb`. That is the same slug
+`VillageWarehouseYard.Slug` produces — lower case, every run of non-alphanumerics collapsed to one
+underscore.
+
+### Export settings
+
+| | |
+|---|---|
+| Format | glTF 2.0 binary (`.glb`), textures embedded |
+| Up / front | +Y up, −Z front |
+| Origin | centre of the footprint, sitting on `y = 0` |
+| Scale | Any consistent scale. The whole set is multiplied by one factor (`MODEL_SCALE`), never normalised per asset, so a tower stays taller than a hut. A metre-based pack with buildings 2–4 units wide works as-is. Warehouses are then scaled further by element count |
+| Budget | ≤5k triangles per landmark, ≤500 for scenery, textures ≤512px |
+| Omit | cameras and lights — the scene is lit for you |
+
+### Ground, lanes and scenery
+
+Beyond the buildings the scene uses, when present:
+
+| Model | Used for |
+|---|---|
+| `terrain` | The island slab, stretched to the current grid. Authored with its top face at `y = 0` |
+| `path-straight` | Repeated along every lane the drawn view draws, rotated to face the run |
+| `path-lamp` | Every ninth path tile |
+| `tree`, `tree_2`, `tree_3`, `shrub`, `rock` | Scattered on the open grass, in exactly the spots the drawn view plants them |
+| `bench`, `stone-lantern` | Around the park |
+| `crate` | Beside each warehouse |
+
+`path-network` is deliberately **not** used: it encodes one fixed layout, while the village's own
+lanes move with the warehouse count. Lanes come from `laneSegments()`, the same source the drawn
+roads and the scenery exclusion test use.
+
+All of it lives in one group rebuilt only when the layout changes, so the per-frame cost is a
+single render. Measured at **2.1 ms/frame** (p95 2.5 ms) with thirteen landmarks, eight warehouses
+and the full scenery set on a 1260 px canvas.
+
+### How it is served
+
+`GET /models/index.json` lists what exists; `GET /models/<kind>/<name>.glb` returns one file.
+Both are read-only and validated by `VillageModelLibrary`: a path must be exactly
+`<known kind>/<safe name>.glb`, names are letters, digits, underscore and hyphen only, files are
+capped at 32 MB, and the resolved path is re-checked against the root. `VillageModelLibraryTests`
+pins the traversal cases. The three.js bundle is vendored and served from `/vendor/`, so the page
+still loads nothing from the network — that is the one reason the CSP carries
+`script-src self` alongside `unsafe-inline`.
 
 ## Aggregation behaviour
 
