@@ -482,6 +482,28 @@ All of it lives in one group rebuilt only when the layout changes, so the per-fr
 single render. Measured at **2.1 ms/frame** (p95 2.5 ms) with thirteen landmarks, eight warehouses
 and the full scenery set on a 1260 px canvas.
 
+### Characters
+
+Ten characters are supported, one per agent, chosen by hashing the agent id so a given MCP client
+always gets the same one. Files may be numbered as packs usually are — `01-caretaker.glb` is found
+as `caretaker`.
+
+They are animated **procedurally**, not from clips. The pack ships no animation clips and no
+skeletons; what it ships is a named rigid joint hierarchy with pivots at the joints, which is the
+right shape for being driven from state. The viewer rotates `torso`, `head`, `upper_arm`,
+`forearm`, `thigh` and `shin` per frame, and the walk cadence comes from how far the character
+actually moved that frame, so the legs match the pace rather than looping at a fixed speed. Idle
+breathes and shifts weight; working raises an arm and works it; inspecting looks about with a hand
+near the chin; a failure slumps; a success throws both arms up. Characters turn to face the way
+they are walking and keep that heading once they stop.
+
+Two naming details are worth knowing if you author your own. GLTFLoader rewrites node names
+because a dot is reserved in three.js property paths: `upper_arm.L` arrives as `upper_armL`, with
+the dot **dropped rather than replaced**. Joint matching therefore strips separators on both sides
+instead of substituting them. And characters are drawn at `CHARACTER_SCALE`, deliberately larger
+than true human scale — at this zoom a 1.4 m figure against a 3.5 m building is a few pixels, and
+the character is the thing the village is about.
+
 ### How it is served
 
 `GET /models/index.json` lists what exists; `GET /models/<kind>/<name>.glb` returns one file.

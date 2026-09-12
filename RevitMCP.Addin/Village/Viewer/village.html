@@ -1546,6 +1546,11 @@
   /// from an isometric camera sitting on +X/+Z. Half a turn brings them round.
   const MODEL_FACING = Math.PI;
 
+  /// Characters are authored at human scale, which at this zoom makes them a few pixels against a
+  /// 3.5 m building. They are drawn deliberately oversized so the thing the village is actually
+  /// about stays the thing you can see.
+  const CHARACTER_SCALE = MODEL_SCALE * 1.9;
+
   /// Tile space to world space. The island is centred on the origin so the camera never has to move.
   function world(tx, ty) { return { x: (tx - GRID_W / 2) * SPREAD, z: (ty - GRID_H / 2) * SPREAD }; }
 
@@ -1597,6 +1602,9 @@
     for (const m of ((GL.index && GL.index.models) || [])) {
       const key = normName(m.name);
       if (!map.has(key) || m.kind !== 'root') map.set(key, m.path);
+      // Packs number their files; also register the name without its ordinal prefix.
+      const bare = key.replace(/^[0-9]+_/, '');
+      if (bare !== key && (!map.has(bare) || m.kind !== 'root')) map.set(bare, m.path);
     }
     GL.lookup = map;
     return map;
@@ -1816,21 +1824,148 @@
     for (const [key, node] of GL.nodes) if (!wanted.has(key)) node.visible = false;
   }
 
+  /// The character pack, in a fixed order so a given agent always gets the same one.
+  const CHARACTERS = [
+    'caretaker', 'technician', 'messenger', 'librarian', 'baker',
+    'gardener', 'architect', 'courier', 'shopkeeper', 'elder'
+  ];
+
+  /// Joint nodes the pack names, cached per instance so the animation is a few property writes.
+  /// Matched through jointKey because GLTFLoader rewrites node names: a dot is reserved in
+  /// three.js property paths, so the pack's "upper_arm.L" arrives as "upper_armL" — the dot is
+  /// dropped, not replaced. Separators are stripped on both sides rather than substituted, or
+  /// "upper_arm_l" would never meet "upper_arml".
+  const JOINTS = ['torso', 'head', 'upper_arm.L', 'forearm.L', 'upper_arm.R', 'forearm.R',
+                  'thigh.L', 'shin.L', 'thigh.R', 'shin.R'];
+  function jointKey(name) { return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); }
+  const JOINT_KEYS = new Set(JOINTS.map(jointKey));
+
+  function characterFor(id) {
+    let h = 2166136261;
+    for (const c of String(id)) { h ^= c.charCodeAt(0); h = (h * 16777619) >>> 0; }
+    return CHARACTERS[h % CHARACTERS.length];
+  }
+
+  async function agentNode(ag) {
+    const key = 'agent:' + ag.id;
+    let node = GL.nodes.get(key);
+    if (node) return node;
+
+    // Claim the slot before awaiting, or a second frame starts a second load for the same agent.
+    GL.nodes.set(key, null);
+    const path = modelPath('characters', characterFor(ag.id));
+    const model = await loadModel(path);
+    if (model) {
+      node = model.clone(true);
+      node.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      node.scale.setScalar(CHARACTER_SCALE);
+      node.userData.joints = {};
+      node.traverse(o => {
+        // Keep the authored rest pose: every offset below is relative to it.
+        const key = jointKey(o.name);
+        if (JOINT_KEYS.has(key)) node.userData.joints[key] = { node: o, rest: o.rotation.clone() };
+      });
+      node.userData.modelled = true;
+    } else {
+      node = placeholder(0.2, ag.color, ag.color);
+      node.scale.set(0.42, 0.7, 0.42);
+    }
+    GL.root.add(node);
+    GL.nodes.set(key, node);
+    return node;
+  }
+
+  /// The pack ships no animation clips — it ships a named joint hierarchy with pivots at the
+  /// joints, which is what the README asks to be driven procedurally. Walk speed comes from how
+  /// far the character actually moved, so the legs match the pace rather than a fixed loop.
+  function poseAgent(node, ag, speed) {
+    const j = node.userData.joints;
+    if (!j) return;
+    const t = V.time;
+    const walking = speed > 0.05;
+    const set = (name, x, z) => {
+      const it = j[jointKey(name)]; if (!it) return;
+      it.node.rotation.x = (it.rest ? it.rest.x : 0) + (x || 0);
+      it.node.rotation.z = (it.rest ? it.rest.z : 0) + (z || 0);
+    };
+
+    if (walking) {
+      const w = t * Math.min(14, 5 + speed * 7);
+      const swing = Math.min(0.75, 0.28 + speed * 0.5);
+      set('thigh.L', Math.sin(w) * swing);
+      set('thigh.R', Math.sin(w + Math.PI) * swing);
+      set('shin.L', Math.max(0, -Math.sin(w - 0.6)) * swing * 0.9);
+      set('shin.R', Math.max(0, -Math.sin(w + Math.PI - 0.6)) * swing * 0.9);
+      set('upper_arm.L', Math.sin(w + Math.PI) * swing * 0.7);
+      set('upper_arm.R', Math.sin(w) * swing * 0.7);
+      set('forearm.L', -Math.abs(Math.sin(w)) * 0.25);
+      set('forearm.R', -Math.abs(Math.sin(w + Math.PI)) * 0.25);
+      set('torso', Math.sin(w * 2) * 0.03);
+      set('head', Math.sin(w * 2 + 1) * 0.02);
+      node.position.y = Math.abs(Math.sin(w)) * 0.05 * CHARACTER_SCALE;
+      return;
+    }
+
+    node.position.y = 0;
+    const breathe = Math.sin(t * 1.6 + node.id) * 0.02;
+
+    if (ag.state === 'working') {
+      // One arm up and busy, the other steady.
+      const beat = Math.sin(t * 7);
+      set('upper_arm.R', -1.0 + beat * 0.25);
+      set('forearm.R', -0.6 - Math.abs(beat) * 0.4);
+      set('upper_arm.L', 0.1, 0.08);
+      set('torso', breathe);
+      set('head', -0.12);
+    } else if (ag.state === 'inspecting') {
+      // Looking about, one hand near the chin.
+      set('head', -0.08, Math.sin(t * 0.9) * 0.22);
+      set('upper_arm.R', -0.75);
+      set('forearm.R', -1.1);
+      set('upper_arm.L', 0.05, 0.06);
+      set('torso', breathe);
+    } else if (ag.state === 'error') {
+      set('torso', 0.16);
+      set('head', 0.22);
+      set('upper_arm.L', 0.15, 0.22);
+      set('upper_arm.R', 0.15, -0.22);
+    } else if (ag.state === 'success') {
+      const pop = Math.max(0, 1 - (t - ag.stateSince) / 0.9);
+      set('upper_arm.L', -2.2 * pop, 0.3 * pop);
+      set('upper_arm.R', -2.2 * pop, -0.3 * pop);
+      set('torso', breathe);
+      node.position.y = Math.abs(Math.sin(t * 9)) * 0.06 * pop * CHARACTER_SCALE;
+    } else {
+      // Idle: breathing, a slow weight shift, arms hanging.
+      set('torso', breathe, Math.sin(t * 0.7) * 0.02);
+      set('head', Math.sin(t * 0.5) * 0.04, Math.sin(t * 0.33) * 0.1);
+      set('upper_arm.L', 0, 0.05 + Math.sin(t * 1.2) * 0.02);
+      set('upper_arm.R', 0, -0.05 - Math.sin(t * 1.2 + 1) * 0.02);
+      set('thigh.L', 0); set('thigh.R', 0); set('shin.L', 0); set('shin.R', 0);
+      set('forearm.L', 0); set('forearm.R', 0);
+    }
+  }
+
   function draw3D() {
     if (!GL.on || !GL.ready) return;
     // Characters ride along the same tile positions the 2D view animates.
-    const T3 = GL.lib;
     for (const ag of V.agents.values()) {
-      let node = GL.nodes.get('agent:' + ag.id);
-      if (!node) {
-        node = placeholder(0.2, ag.color, ag.color);
-        node.scale.set(0.42, 0.7, 0.42);
-        GL.root.add(node); GL.nodes.set('agent:' + ag.id, node);
-      }
+      const node = GL.nodes.get('agent:' + ag.id);
+      if (node === undefined) { agentNode(ag); continue; }   // loading on a later frame
+      if (!node) continue;                                    // load in flight
+
       const p = world(ag.x, ag.y);
-      node.position.set(p.x, 0, p.z);
-      node.rotation.y = V.time * 0.6;
+      const prev = ag._w3;
+      const dx = prev ? p.x - prev.x : 0, dz = prev ? p.z - prev.z : 0;
+      const moved = Math.hypot(dx, dz);
+      ag._w3 = p;
+
+      node.position.x = p.x; node.position.z = p.z;
+      // Face the way it is going, and keep that heading once it stops.
+      if (moved > 0.0015) ag._heading = Math.atan2(dx, dz);
+      node.rotation.y = (ag._heading !== undefined ? ag._heading : 0) + MODEL_FACING;
       node.visible = ag.state !== 'disconnected';
+      poseAgent(node, ag, moved / Math.max(0.0001, 1 / 60));
     }
     GL.renderer.render(GL.scene, GL.camera);
     drawOverlay();
