@@ -36,6 +36,7 @@
   #stage { position: relative; min-width: 0; min-height: 0; }
   canvas { display: block; width: 100%; height: 100%; cursor: pointer; }
   #village3d, #overlay { position: absolute; inset: 0; }
+  canvas[hidden] { display: none; }
   #overlay { pointer-events: none; }
   #modeBtn[hidden] { display: none; }
   #hint { position: absolute; left: 12px; bottom: 10px; font-size: 11px; color: var(--muted); pointer-events: none; }
@@ -620,35 +621,25 @@
     for (let i = 0; i <= GRID_W; i += 2) { const a = iso(i, -pad), b = iso(i, GRID_H + pad); g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke(); }
     for (let j = 0; j <= GRID_H; j += 2) { const a = iso(-pad, j), b = iso(GRID_W + pad, j); g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke(); }
 
-    // Roads: soft rounded paths from the centre out to each landmark.
+    // Roads: the shared lane polylines, a soft shoulder under a sand track.
     g.lineCap = 'round'; g.lineJoin = 'round';
-    const hub = iso(SQUARE.x, SQUARE.y);
-    for (const b of V.buildings) {
-      if (b.id === 'warning_area' || b.id === 'park') continue;
-      const c = iso(b.tile_x + 0.5, b.tile_y + 1.0);
-      // A gentle bow so the lanes wander rather than radiate.
-      const mx = (hub.x + c.x) / 2 + (c.y - hub.y) * 0.12, my = (hub.y + c.y) / 2 - (c.x - hub.x) * 0.06;
-      g.strokeStyle = 'hsl(36, 30%, 44%)'; g.lineWidth = TILE * 0.30;
-      g.beginPath(); g.moveTo(hub.x, hub.y); g.quadraticCurveTo(mx, my, c.x, c.y); g.stroke();
-      g.strokeStyle = T.road; g.lineWidth = TILE * 0.22;
-      g.beginPath(); g.moveTo(hub.x, hub.y); g.quadraticCurveTo(mx, my, c.x, c.y); g.stroke();
+    for (const pass of [0, 1]) {
+      g.strokeStyle = pass === 0 ? 'hsl(36, 30%, 40%)' : T.road;
+      g.lineWidth = TILE * (pass === 0 ? 0.30 : 0.22);
+      for (const path of lanePaths()) {
+        g.beginPath();
+        for (let k = 0; k < path.length; k++) {
+          const q = iso(path[k][0], path[k][1]);
+          if (k === 0) g.moveTo(q.x, q.y); else g.lineTo(q.x, q.y);
+        }
+        g.stroke();
+      }
     }
-    if (V.warehouses.length) {
-      const rows = yardRows();
-      const gate = iso(rows[0].x0 - 0.4, rows[0].y + 1.5);
-      g.strokeStyle = T.road; g.lineWidth = TILE * 0.13;
-      g.beginPath(); g.moveTo(hub.x, hub.y); g.lineTo(gate.x, gate.y); g.stroke();
-      for (let i = 0; i < rows.length; i++) {
-        const r = rows[i];
-        const l = iso(r.x0 - 0.4, r.y + 1.5), en = iso(r.x1 + 0.9, r.y + 1.5);
-        g.beginPath(); g.moveTo(l.x, l.y); g.lineTo(en.x, en.y); g.stroke();
-        if (i > 0) { const up = iso(rows[i - 1].x0 - 0.4, rows[i - 1].y + 1.5); g.beginPath(); g.moveTo(up.x, up.y); g.lineTo(l.x, l.y); g.stroke(); }
-      }
-      for (const wh of V.warehouses) {
-        const c = iso(wh.tile_x + 0.5, wh.tile_y + 0.5);
-        const fp = (wh.footprint || 1.2) * 1.3 * SPREAD;
-        gdiamond(g, c.x, c.y, fp * TILE / 2, fp * TILE / 4, 'rgba(150,165,190,.22)');
-      }
+
+    for (const wh of V.warehouses) {
+      const c = iso(wh.tile_x + 0.5, wh.tile_y + 0.5);
+      const fp = (wh.footprint || 1.2) * 1.3 * SPREAD;
+      gdiamond(g, c.x, c.y, fp * TILE / 2, fp * TILE / 4, 'rgba(150,165,190,.22)');
     }
     g.restore();
 
@@ -710,22 +701,73 @@
 
   /// The lanes the village draws, as tile-space segments. One source for the drawn roads, the
   /// scenery exclusion test and the glTF path tiles.
-  function laneSegments() {
-    const lanes = [];
+  /// Lanes as polylines in tile space: a ring around the park, then a bowed branch from the ring
+  /// out to each landmark. Spokes radiating from a single point read as a star; a ring with
+  /// branches reads as a village that grew. One source for the drawn roads, the glTF path tiles
+  /// and the scenery exclusion test, so the three can never disagree about where a road is.
+  const RING_R = 2.15;
+
+  function lanePaths() {
+    const key = GRID_W + 'x' + GRID_H + ':' + V.buildings.length + ':' + V.warehouses.length;
+    if (LANES.key === key) return LANES.paths;
+    const paths = [];
+
+    // The ring itself, as a closed loop of points.
+    const ring = [];
+    for (let i = 0; i <= 24; i++) {
+      const a = (i / 24) * Math.PI * 2;
+      ring.push([SQUARE.x + Math.cos(a) * RING_R * 1.15, SQUARE.y + Math.sin(a) * RING_R * 0.95]);
+    }
+    paths.push(ring);
+
+    // Where a branch leaves the ring: the point nearest its destination.
+    const fromRing = (tx, ty) => {
+      const a = Math.atan2(ty - SQUARE.y, tx - SQUARE.x);
+      return [SQUARE.x + Math.cos(a) * RING_R * 1.15, SQUARE.y + Math.sin(a) * RING_R * 0.95];
+    };
+
     for (const b of V.buildings) {
       if (b.id === 'warning_area' || b.id === 'park') continue;
-      lanes.push([SQUARE.x, SQUARE.y, b.tile_x + 0.5, b.tile_y + 1.0]);
+      const to = [b.tile_x + 0.5, b.tile_y + 1.0];
+      paths.push(bow(fromRing(to[0], to[1]), to, 0.16));
     }
+
     if (V.warehouses.length) {
       const rows = yardRows();
-      lanes.push([SQUARE.x, SQUARE.y, rows[0].x0 - 0.4, rows[0].y + 1.5]);
+      const gate = [rows[0].x0 - 0.4, rows[0].y + 1.5];
+      paths.push(bow(fromRing(gate[0], gate[1]), gate, 0.12));
       for (let i = 0; i < rows.length; i++) {
         const r = rows[i];
-        lanes.push([r.x0 - 0.4, r.y + 1.5, r.x1 + 0.9, r.y + 1.5]);
-        if (i > 0) lanes.push([rows[i - 1].x0 - 0.4, rows[i - 1].y + 1.5, r.x0 - 0.4, r.y + 1.5]);
+        paths.push([[r.x0 - 0.4, r.y + 1.5], [r.x1 + 0.9, r.y + 1.5]]);
+        if (i > 0) paths.push([[rows[i - 1].x0 - 0.4, rows[i - 1].y + 1.5], [r.x0 - 0.4, r.y + 1.5]]);
       }
     }
-    return lanes;
+
+    LANES.key = key; LANES.paths = paths;
+    return paths;
+  }
+  const LANES = { key: null, paths: [] };
+
+  /// A quadratic bow between two tile-space points, sampled into a polyline.
+  function bow(from, to, amount) {
+    const dx = to[0] - from[0], dy = to[1] - from[1];
+    const cx = (from[0] + to[0]) / 2 - dy * amount, cy = (from[1] + to[1]) / 2 + dx * amount;
+    const pts = [];
+    for (let i = 0; i <= 10; i++) {
+      const t = i / 10, u = 1 - t;
+      pts.push([u * u * from[0] + 2 * u * t * cx + t * t * to[0],
+                u * u * from[1] + 2 * u * t * cy + t * t * to[1]]);
+    }
+    return pts;
+  }
+
+  /// Straight pieces of every lane, for hit tests that only need segments.
+  function laneSegments() {
+    const out = [];
+    for (const path of lanePaths())
+      for (let i = 1; i < path.length; i++)
+        out.push([path[i - 1][0], path[i - 1][1], path[i][0], path[i][1]]);
+    return out;
   }
 
   function distToSegment(px, py, ax, ay, bx, by) {
@@ -1500,6 +1542,10 @@
   /// set — never per-asset normalisation, which would flatten a tower to the height of a hut.
   const MODEL_SCALE = 0.60;
 
+  /// The pack is authored facing -Z with every scene rotation at zero, which puts the fronts away
+  /// from an isometric camera sitting on +X/+Z. Half a turn brings them round.
+  const MODEL_FACING = Math.PI;
+
   /// Tile space to world space. The island is centred on the origin so the camera never has to move.
   function world(tx, ty) { return { x: (tx - GRID_W / 2) * SPREAD, z: (ty - GRID_H / 2) * SPREAD }; }
 
@@ -1636,29 +1682,34 @@
     const tile = await loadModel(modelPath('scenery', 'path_straight'));
     const lamp = await loadModel(modelPath('scenery', 'lamp'));
     if (tile) {
-      const step = 2.0 * MODEL_SCALE;
-      let lampCountdown = 3;
-      for (const [ax, ay, bx, by] of laneSegments()) {
-        const a = world(ax, ay), b = world(bx, by);
-        const dx = b.x - a.x, dz = b.z - a.z;
-        const len = Math.hypot(dx, dz);
-        if (len < 0.01) continue;
-        const angle = Math.atan2(dx, dz);
-        const n = Math.max(1, Math.round(len / step));
-        for (let i = 0; i <= n; i++) {
-          const t = i / n;
-          const piece = tile.clone(true);
-          piece.position.set(a.x + dx * t, 0, a.z + dz * t);
-          piece.rotation.y = angle;
-          piece.scale.setScalar(MODEL_SCALE);
-          group.add(piece);
-          if (lamp && --lampCountdown <= 0) {
-            lampCountdown = 9;
-            const post = lamp.clone(true);
-            post.position.set(a.x + dx * t - dz / len * 0.55, 0, a.z + dz * t + dx / len * 0.55);
-            post.scale.setScalar(MODEL_SCALE);
-            post.traverse(o => { if (o.isMesh) o.castShadow = true; });
-            group.add(post);
+      // The tile is 2 units long in Z, so it is stepped by its own length and turned to face the
+      // run. Walking the polyline rather than the straight chord is what makes the lanes curve.
+      const step = 2.0 * MODEL_SCALE * 0.94;   // a whisker of overlap hides the seams
+      let lampCountdown = 4;
+      for (const path of lanePaths()) {
+        for (let seg = 1; seg < path.length; seg++) {
+          const a = world(path[seg - 1][0], path[seg - 1][1]);
+          const b = world(path[seg][0], path[seg][1]);
+          const dx = b.x - a.x, dz = b.z - a.z;
+          const len = Math.hypot(dx, dz);
+          if (len < 0.001) continue;
+          const angle = Math.atan2(dx, dz);
+          const n = Math.max(1, Math.ceil(len / step));
+          for (let i = 0; i < n; i++) {
+            const t = (i + 0.5) / n;
+            const piece = tile.clone(true);
+            piece.position.set(a.x + dx * t, 0, a.z + dz * t);
+            piece.rotation.y = angle;
+            piece.scale.set(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE * (len / n) / (2.0 * MODEL_SCALE));
+            group.add(piece);
+            if (lamp && --lampCountdown <= 0) {
+              lampCountdown = 26;
+              const post = lamp.clone(true);
+              post.position.set(a.x + dx * t - dz / len * 0.6, 0, a.z + dz * t + dx / len * 0.6);
+              post.scale.setScalar(MODEL_SCALE);
+              post.traverse(o => { if (o.isMesh) o.castShadow = true; });
+              group.add(post);
+            }
           }
         }
       }
@@ -1741,6 +1792,7 @@
         if (model) {
           obj.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
           obj.scale.setScalar(MODEL_SCALE);
+          obj.rotation.y = MODEL_FACING;
         }
         obj.userData.modelled = !!model;
         GL.root.add(obj);
