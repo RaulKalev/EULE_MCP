@@ -238,6 +238,7 @@ public sealed class VillageService : IDisposable
 
     private VillageModelLibrary? _models;
     private bool _modelsResolved;
+    private DateTime _modelsRetryAfterUtc;
     private readonly Dictionary<string, byte[]> _vendorCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -253,18 +254,31 @@ public sealed class VillageService : IDisposable
 
     private void EnsureModelLibrary()
     {
+        // A found folder is kept for the session. A miss is retried (at most every 30 s), so a
+        // Dropbox folder that finishes syncing after Revit started is picked up without a restart.
         if (_modelsResolved) return;
-        _modelsResolved = true;
+        if (_models != null && DateTime.UtcNow < _modelsRetryAfterUtc) return;
         try
         {
-            var folder = VillageModelLibrary.FirstExisting(new[] { Options.ModelsFolder }.Concat(PackageModelsFolders()).ToArray());
+            var candidates = new[] { Options.ModelsFolder }.Concat(PackageModelsFolders()).ToArray();
+            var folder = VillageModelLibrary.FirstExisting(candidates);
             _models = new VillageModelLibrary(folder);
-            if (folder != null) Log("models folder: " + folder);
+            if (folder != null)
+            {
+                _modelsResolved = true;
+                Log("models folder: " + folder);
+            }
+            else
+            {
+                _modelsRetryAfterUtc = DateTime.UtcNow.AddSeconds(30);
+                Log("no models folder found; looked in: " + string.Join(" | ", candidates.Where(c => !string.IsNullOrWhiteSpace(c))));
+            }
         }
         catch (Exception ex)
         {
             Log("models folder resolve failed: " + ex.Message);
             _models = new VillageModelLibrary(null);
+            _modelsRetryAfterUtc = DateTime.UtcNow.AddSeconds(30);
         }
     }
 

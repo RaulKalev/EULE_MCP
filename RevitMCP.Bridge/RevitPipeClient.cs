@@ -53,9 +53,10 @@ public class RevitPipeClient
             ClientName = _clientName
         };
 
-        using var pipe = await ConnectAsync(cancellationToken);
-        if (pipe == null)
-            return NotConnected(request.RequestId);
+        var (connected, accessDenied) = await ConnectAsync(cancellationToken);
+        if (connected == null)
+            return accessDenied ? AccessDenied(request.RequestId) : NotConnected(request.RequestId);
+        using var pipe = connected;
 
         using var reader = new StreamReader(pipe, leaveOpen: true);
         using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
@@ -92,11 +93,14 @@ public class RevitPipeClient
 
     /// <summary>
     /// Connects to the preferred Revit instance, trying candidate pipes in order.
-    /// Returns null when no instance could be reached.
+    /// Returns a null pipe when no instance could be reached; <c>accessDenied</c> is true when at
+    /// least one pipe existed but refused us (typically Revit running as administrator while the
+    /// agent is not).
     /// </summary>
-    private async Task<NamedPipeClientStream?> ConnectAsync(CancellationToken cancellationToken)
+    private async Task<(NamedPipeClientStream? Pipe, bool AccessDenied)> ConnectAsync(CancellationToken cancellationToken)
     {
         var candidates = ResolveCandidatePipeNames();
+        var accessDenied = false;
 
         for (var i = 0; i < candidates.Count; i++)
         {
@@ -110,7 +114,12 @@ public class RevitPipeClient
             try
             {
                 await pipe.ConnectAsync(timeoutMs, cancellationToken);
-                return pipe;
+                return (pipe, false);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                pipe.Dispose();
+                accessDenied = true;
             }
             catch (Exception ex) when (ex is TimeoutException or IOException or OperationCanceledException)
             {
@@ -120,7 +129,7 @@ public class RevitPipeClient
             }
         }
 
-        return null;
+        return (null, accessDenied);
     }
 
     /// <summary>
@@ -200,6 +209,15 @@ public class RevitPipeClient
         Message = "Revit is not connected. Open Revit (2024 or 2026), open a model, and start the Revit MCP Connector. " +
                   "If several Revit instances are running, use revit_list_instances to see them and " +
                   "revit_select_instance (or the 'Make This Project Active' button in the plugin) to pick one."
+    };
+
+    private static McpToolResult AccessDenied(string requestId) => new()
+    {
+        RequestId = requestId,
+        Success = false,
+        Message = "Revit refused the connection (access denied). This usually means Revit is running as administrator " +
+                  "while the AI agent is not. Start Revit and the agent at the same privilege level (normally both " +
+                  "without 'Run as administrator')."
     };
 
     private static McpToolResult Error(string requestId, string message) => new()

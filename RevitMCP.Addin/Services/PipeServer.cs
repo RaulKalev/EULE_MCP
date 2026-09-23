@@ -77,12 +77,7 @@ public class PipeServer
         {
             try
             {
-                var pipe = new NamedPipeServerStream(
-                    _pipeName,
-                    PipeDirection.InOut,
-                    NamedPipeServerStream.MaxAllowedServerInstances,
-                    PipeTransmissionMode.Byte,
-                    PipeOptions.Asynchronous);
+                var pipe = CreatePipe(_pipeName);
 
                 await pipe.WaitForConnectionAsync(ct);
 
@@ -101,6 +96,44 @@ public class PipeServer
                 try { await Task.Delay(500, ct); } catch (OperationCanceledException) { break; }
             }
         }
+    }
+
+    /// <summary>
+    /// Creates one pipe instance whose ACL grants the Windows user running Revit read/write.
+    /// The default ACL of a pipe made by an elevated ("Run as administrator") Revit only lets
+    /// elevated administrators write to it, so a normal, non-elevated agent under the same
+    /// account (e.g. Codex) was refused with access denied. Granting the user SID works for
+    /// both elevation levels and is narrower than the default, which also gives Everyone read.
+    /// </summary>
+    private static NamedPipeServerStream CreatePipe(string pipeName)
+    {
+        var security = new PipeSecurity();
+        var user = System.Security.Principal.WindowsIdentity.GetCurrent().User;
+        if (user != null)
+            security.AddAccessRule(new PipeAccessRule(user, PipeAccessRights.ReadWrite | PipeAccessRights.CreateNewInstance, System.Security.AccessControl.AccessControlType.Allow));
+        security.AddAccessRule(new PipeAccessRule(
+            new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.LocalSystemSid, null),
+            PipeAccessRights.FullControl, System.Security.AccessControl.AccessControlType.Allow));
+
+#if REVIT2024
+        return new NamedPipeServerStream(
+            pipeName,
+            PipeDirection.InOut,
+            NamedPipeServerStream.MaxAllowedServerInstances,
+            PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous,
+            0, 0,
+            security);
+#else
+        return NamedPipeServerStreamAcl.Create(
+            pipeName,
+            PipeDirection.InOut,
+            NamedPipeServerStream.MaxAllowedServerInstances,
+            PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous,
+            0, 0,
+            security);
+#endif
     }
 
     private async Task HandleClientAsync(NamedPipeServerStream pipe, CancellationToken ct)
