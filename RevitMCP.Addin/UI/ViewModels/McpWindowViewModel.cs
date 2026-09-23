@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using RevitMCP.Addin.Approval;
 using RevitMCP.Addin.Logging;
 using RevitMCP.Addin.Services;
@@ -15,6 +16,12 @@ public class McpWindowViewModel : BaseViewModel
     private readonly ConnectorService _connector;
     private readonly ActivityLogger _logger;
     private readonly ApprovalService? _approvalService;
+
+    // Captured on the Revit UI thread at construction. Revit 2024 hosts WPF without a
+    // System.Windows.Application, so Application.Current is null there and updates routed
+    // through it were silently dropped (status chip stuck on "Stopped", empty Activity and
+    // Pending tabs, stale "Active" flag).
+    private readonly Dispatcher _dispatcher;
 
     private bool _isRunning;
     private string _statusText = "Stopped";
@@ -35,6 +42,7 @@ public class McpWindowViewModel : BaseViewModel
         _connector = connector;
         _logger = logger;
         _approvalService = approvalService;
+        _dispatcher = Dispatcher.CurrentDispatcher;
 
         _connector.StatusChanged += OnConnectorStatusChanged;
         _logger.EntryLogged += OnEntryLogged;
@@ -112,7 +120,7 @@ public class McpWindowViewModel : BaseViewModel
     // ── Handlers ──────────────────────────────────────────────────────────────
     private void OnConnectorStatusChanged(bool running)
     {
-        Application.Current?.Dispatcher.Invoke(() =>
+        RunOnUi(() =>
         {
             IsRunning = running;
             StatusText = running ? "Running" : "Stopped";
@@ -120,9 +128,18 @@ public class McpWindowViewModel : BaseViewModel
         });
     }
 
+    /// <summary>Runs inline on the UI thread; from pipe/worker threads, queues without blocking.</summary>
+    private void RunOnUi(Action action)
+    {
+        if (_dispatcher.CheckAccess())
+            action();
+        else
+            _dispatcher.BeginInvoke(action);
+    }
+
     private void OnEntryLogged(LogEntry entry)
     {
-        Application.Current?.Dispatcher.Invoke(() =>
+        RunOnUi(() =>
         {
             ActivityLog.Insert(0, new ActivityLogItem
             {
@@ -144,7 +161,7 @@ public class McpWindowViewModel : BaseViewModel
     // ── Pending approval handlers ────────────────────────────────────────────
     private void OnPendingChanged()
     {
-        Application.Current?.Dispatcher.Invoke(() =>
+        RunOnUi(() =>
         {
             var previousCount = PendingApprovals.Count;
             PendingApprovals.Clear();
@@ -235,7 +252,7 @@ public class McpWindowViewModel : BaseViewModel
 
     public void UpdateFromRevitContext(string modelTitle, string activeView, bool isWorkshared, string username, int selectedCount)
     {
-        Application.Current?.Dispatcher.Invoke(() =>
+        RunOnUi(() =>
         {
             ModelTitle = modelTitle;
             ActiveView = activeView;
