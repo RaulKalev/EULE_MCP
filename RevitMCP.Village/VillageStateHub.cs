@@ -39,6 +39,9 @@ public sealed class VillageStateHub : IDisposable
     private readonly Func<DateTimeOffset> _clock;
     private readonly Func<VillageProjectContext, VillageGraphHint?, VillageGraphSource>? _graphSourceProvider;
     private readonly Func<List<VillageInstanceLink>>? _instancesProvider;
+    /// <summary>Keys of the warehouse models available (see VillageModelLibrary.ModelKey), or null.</summary>
+    private readonly Func<ISet<string>?>? _warehouseModelKeys;
+    private string _warehouseModelStamp = string.Empty;
     private readonly IVillageGraphReader? _graphReader;
     private readonly Action<string>? _log;
     private readonly int _catchUpEnterDepth;
@@ -76,7 +79,8 @@ public sealed class VillageStateHub : IDisposable
         Func<VillageProjectContext, VillageGraphHint?, VillageGraphSource>? graphSourceProvider = null,
         Func<List<VillageInstanceLink>>? instancesProvider = null,
         Func<DateTimeOffset>? clock = null,
-        Action<string>? log = null)
+        Action<string>? log = null,
+        Func<ISet<string>?>? warehouseModelKeys = null)
     {
         _options = options ?? VillageOptions.Default;
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
@@ -87,6 +91,7 @@ public sealed class VillageStateHub : IDisposable
         _graphReader = graphReader;
         _graphSourceProvider = graphSourceProvider;
         _instancesProvider = instancesProvider;
+        _warehouseModelKeys = warehouseModelKeys;
         _log = log;
         _catchUpEnterDepth = Math.Max(50, _options.QueueSize / 10);
         _themes = VillageThemeConfig.FromJson(_options.ThemesJson);
@@ -95,6 +100,24 @@ public sealed class VillageStateHub : IDisposable
         Aggregator.StateChanged += () => _stateDirty = true;
         Aggregator.SetProject(_context, Factory.SessionId);
         _snapshotJson = JsonConvert.SerializeObject(Aggregator.Snapshot());
+    }
+
+    /// <summary>
+    /// The "has a warehouse model" test for the yard, or null to admit every category: when the
+    /// option is off, or no warehouse models are available. The stamp changes whenever the set
+    /// of models does.
+    /// </summary>
+    private Func<string, bool>? WarehouseModelFilter(out string stamp)
+    {
+        stamp = string.Empty;
+        if (!_options.WarehouseModelsOnly || _warehouseModelKeys == null) return null;
+        ISet<string>? keys;
+        try { keys = _warehouseModelKeys(); }
+        catch { keys = null; }
+        if (keys == null || keys.Count == 0) return null;
+        stamp = string.Join("|", keys.OrderBy(k => k, StringComparer.Ordinal));
+        var set = keys;
+        return category => set.Contains(VillageModelLibrary.ModelKey(category));
     }
 
     public VillageEventFactory Factory { get; }
@@ -381,14 +404,18 @@ public sealed class VillageStateHub : IDisposable
 
             var graphToken = JToken.FromObject(result.Snapshot);
             var themeToken = theme == null ? null : JToken.FromObject(theme);
-            var changed = result.Changed || !JToken.DeepEquals(Aggregator.Graph, graphToken);
+            // The yard also depends on which warehouse models exist; a model folder that finishes
+            // syncing after the first read has to rebuild it even though the graph did not change.
+            var modelFilter = WarehouseModelFilter(out var modelStamp);
+            var changed = result.Changed || !JToken.DeepEquals(Aggregator.Graph, graphToken) || modelStamp != _warehouseModelStamp;
             if (!changed) return;
+            _warehouseModelStamp = modelStamp;
 
             Aggregator.Graph = graphToken;
             Aggregator.Theme = themeToken;
             Aggregator.Buildings = VillageLayoutSizer.Apply(VillageLayout.Default, result.Snapshot, theme);
             // One warehouse per category with elements; none at all when the graph is missing.
-            Aggregator.SetWarehouses(VillageWarehouseYard.Plan(result.Snapshot.Categories, _themes, _options.MaxWarehouses, _options.WarehouseExcludeCategories));
+            Aggregator.SetWarehouses(VillageWarehouseYard.Plan(result.Snapshot.Categories, _themes, _options.MaxWarehouses, _options.WarehouseExcludeCategories, modelFilter));
             var lookup = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var warehouse in Aggregator.Warehouses) lookup[warehouse.Category] = warehouse.Id;
             _warehouseByCategory = lookup;

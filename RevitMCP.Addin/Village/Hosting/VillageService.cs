@@ -53,7 +53,8 @@ public sealed class VillageService : IDisposable
             graphReader: reader,
             graphSourceProvider: BuildGraphSource,
             instancesProvider: ListInstances,
-            log: Log);
+            log: Log,
+            warehouseModelKeys: () => ModelLibrary()?.WarehouseModelKeys());
         Hub.MessagePublished += OnMessage;
     }
 

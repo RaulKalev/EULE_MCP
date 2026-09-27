@@ -166,6 +166,56 @@ public sealed class VillageModelLibrary
         }
     }
 
+    /// <summary>
+    /// The name a model is matched on, exactly as the viewer matches it: lower case, every run of
+    /// anything but letters and digits collapsed to one underscore, no leading or trailing
+    /// underscore, and a pack's ordinal prefix dropped — <c>07-Fire-Alarm Devices</c> and the
+    /// category <c>Fire Alarm Devices</c> both become <c>fire_alarm_devices</c>.
+    /// </summary>
+    public static string ModelKey(string? name)
+    {
+        var sb = new System.Text.StringBuilder();
+        var pendingSeparator = false;
+        foreach (var raw in name ?? string.Empty)
+        {
+            var c = char.ToLowerInvariant(raw);
+            if (c is >= 'a' and <= 'z' or >= '0' and <= '9')
+            {
+                if (pendingSeparator && sb.Length > 0) sb.Append('_');
+                sb.Append(c);
+                pendingSeparator = false;
+            }
+            else pendingSeparator = true;
+        }
+        var key = sb.ToString();
+        var cut = 0;
+        while (cut < key.Length && key[cut] >= '0' && key[cut] <= '9') cut++;
+        if (cut > 0 && cut < key.Length && key[cut] == '_') key = key.Substring(cut + 1);
+        return key;
+    }
+
+    /// <summary>File name of the catch-all warehouse model, used for any category without its own.</summary>
+    public const string DefaultWarehouseName = "_default";
+
+    /// <summary>
+    /// Keys (see <see cref="ModelKey"/>) of every warehouse that has a model of its own — files in
+    /// <c>warehouses/</c> or loose in the root, not counting the catch-all <c>_default</c>. Empty
+    /// when there is no folder. Never throws.
+    /// </summary>
+    public HashSet<string> WarehouseModelKeys()
+    {
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        var index = Index(folderConfigured: false);
+        foreach (var model in index.Models)
+        {
+            if (model.Kind != "warehouses" && model.Kind != RootKind) continue;
+            if (string.Equals(model.Name, DefaultWarehouseName, StringComparison.OrdinalIgnoreCase)) continue;
+            var key = ModelKey(model.Name);
+            if (key.Length > 0) keys.Add(key);
+        }
+        return keys;
+    }
+
     /// <summary>Letters, digits, underscore and hyphen only — the slug shape warehouse ids already use.</summary>
     public static bool IsSafeName(string name)
     {

@@ -116,12 +116,16 @@ public static class VillageWarehouseYard
     /// <summary>
     /// Builds the yard from the graph's category counts, largest first. Categories with no
     /// elements are skipped entirely; at most <paramref name="max"/> warehouses are returned.
+    /// When <paramref name="hasModel"/> is given, only categories it accepts get a warehouse, so the
+    /// yard fills with categories that have a building of their own; the share is still of every
+    /// category that was not excluded.
     /// </summary>
     public static List<VillageWarehouse> Plan(
         IReadOnlyList<VillageThemeEvidence>? categories,
         VillageThemeConfig? themes = null,
         int max = DefaultMax,
-        IReadOnlyCollection<string>? excludedCategories = null)
+        IReadOnlyCollection<string>? excludedCategories = null,
+        Func<string, bool>? hasModel = null)
     {
         var yard = new List<VillageWarehouse>();
         if (categories == null || categories.Count == 0 || max <= 0) return yard;
@@ -149,6 +153,7 @@ public static class VillageWarehouseYard
         {
             if (yard.Count >= max) break;
             var name = category.Name.Trim();
+            if (hasModel != null && !hasModel(name)) continue;
             var warehouse = new VillageWarehouse
             {
                 Id = UniqueId(name, ids),

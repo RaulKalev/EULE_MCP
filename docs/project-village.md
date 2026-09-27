@@ -188,6 +188,7 @@ key. Values are clamped into the ranges shown.
 | `maxBuildings` | `14` | 8–16 | Landmarks drawn (there are 13, so the default shows them all) |
 | `maxWarehouses` | `10` | 0–20 | Category warehouses drawn (`0` hides the yard) |
 | `warehouseExcludeCategories` | see below | | Categories that never get a warehouse; a configured list **replaces** the defaults |
+| `warehouseModelsOnly` | `true` | | Only categories with a warehouse model of their own get a warehouse (see below) |
 | `modelsFolder` | next to the add-in | | Folder of optional glTF models; see the 3D models section |
 | `parkAfterSeconds` | `120` | 15–3600 | Idle time before a character walks to the park |
 | `maxEffects` | `6` | 1–24 | Simultaneous visual effects |
@@ -280,6 +281,20 @@ are datums and analytical objects that nearly every model carries a handful of. 
 
 A configured list **replaces** the defaults, so copy the line above before adding to it. Matching
 ignores case and surrounding spaces.
+
+### Only categories with a model
+
+With `village.warehouseModelsOnly` on (the default), a category gets a warehouse only when the
+models folder has a warehouse model **of its own** for it — `warehouses/cable_trays.glb` for Cable
+Trays, matched on the same normalised name the viewer uses. The catch-all `_default.glb` does not
+count. Center lines, conduit and cable tray runs, `<Sketch>` and every other bookkeeping category
+therefore stay out of the yard without being listed, and the `maxWarehouses` places fill with
+categories that have a building. Shares are still of every non-excluded category.
+
+When there is no models folder, or it holds no warehouse models, every category is admitted as
+before, so a village without models still shows its yard. Adding a model to the folder rebuilds
+the yard on the next graph refresh; no restart is needed. Set the option to `false` to show every
+category again, with `_default.glb` standing in for the ones without a model.
 
 ### Walking to a warehouse
 

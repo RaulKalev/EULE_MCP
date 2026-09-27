@@ -222,3 +222,74 @@ public class VillageVendorNameTests
     [InlineData("file%2e.js")]
     public void RejectsAnythingThatIsNotAPlainFileName(string? name) => Assert.False(VillageSseServer.IsSafeVendorName(name));
 }
+
+/// <summary>The yard can be limited to categories that have a warehouse model of their own.</summary>
+public class VillageWarehouseModelsOnlyTests : IDisposable
+{
+    private readonly string _root;
+
+    public VillageWarehouseModelsOnlyTests()
+    {
+        _root = Path.Combine(Path.GetTempPath(), "village-wh-models-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(_root, "warehouses"));
+        Directory.CreateDirectory(Path.Combine(_root, "landmarks"));
+        foreach (var name in new[] { "fire-alarm-devices", "cable_trays", "_default" })
+            File.WriteAllBytes(Path.Combine(_root, "warehouses", name + ".glb"), new byte[] { 1 });
+        File.WriteAllBytes(Path.Combine(_root, "07-data-devices.glb"), new byte[] { 1 });      // loose, numbered
+        File.WriteAllBytes(Path.Combine(_root, "landmarks", "center_line.glb"), new byte[] { 1 }); // not a warehouse
+    }
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_root, true); } catch { }
+    }
+
+    private static List<VillageThemeEvidence> Categories(params (string Name, long Count)[] rows) =>
+        rows.Select(r => new VillageThemeEvidence { Name = r.Name, Count = r.Count }).ToList();
+
+    [Theory]
+    [InlineData("Fire Alarm Devices", "fire_alarm_devices")]
+    [InlineData("fire-alarm-devices", "fire_alarm_devices")]
+    [InlineData("07-Data Devices", "data_devices")]
+    [InlineData("<Sketch>", "sketch")]
+    [InlineData("Center line", "center_line")]
+    [InlineData("  ", "")]
+    public void ModelKeyMatchesTheViewer(string name, string key) => Assert.Equal(key, VillageModelLibrary.ModelKey(name));
+
+    [Fact]
+    public void OnlyDedicatedWarehouseModelsCount()
+    {
+        var keys = new VillageModelLibrary(_root).WarehouseModelKeys();
+
+        Assert.Contains("fire_alarm_devices", keys);
+        Assert.Contains("cable_trays", keys);
+        Assert.Contains("data_devices", keys);          // loose files match, ordinal prefix dropped
+        Assert.DoesNotContain("default", keys);          // the catch-all never counts
+        Assert.DoesNotContain("center_line", keys);      // landmarks are not warehouses
+        Assert.Empty(new VillageModelLibrary(null).WarehouseModelKeys());
+    }
+
+    [Fact]
+    public void TheYardHoldsOnlyModelledCategoriesAndFillsUpFromThem()
+    {
+        var keys = new VillageModelLibrary(_root).WarehouseModelKeys();
+        var yard = VillageWarehouseYard.Plan(
+            Categories(("Center line", 9000), ("Conduit Runs", 5000), ("<Sketch>", 4000),
+                       ("Fire Alarm Devices", 300), ("Cable Trays", 120), ("Data Devices", 80), ("Walls", 60)),
+            max: 10,
+            hasModel: c => keys.Contains(VillageModelLibrary.ModelKey(c)));
+
+        Assert.Equal(new[] { "Fire Alarm Devices", "Cable Trays", "Data Devices" }, yard.Select(w => w.Category));
+        Assert.Equal(new[] { 0, 1, 2 }, yard.Select(w => w.Rank));
+        // Shares stay honest: they are of every category that was not excluded, not only the yard.
+        Assert.True(yard[0].Share < 0.02);
+    }
+
+    [Fact]
+    public void ModelsOnlyIsOnByDefaultAndCanBeTurnedOff()
+    {
+        Assert.True(VillageOptions.Default.WarehouseModelsOnly);
+        var user = VillageOptions.ParseConfig("{\"village\":{\"warehouseModelsOnly\":false}}");
+        Assert.False(VillageOptions.FromConfig(user, null).WarehouseModelsOnly);
+    }
+}

@@ -77,6 +77,14 @@ public sealed class VillageOptions
     /// </summary>
     public List<string> WarehouseExcludeCategories { get; set; } = new(VillageWarehouseYard.DefaultExcludedCategories);
 
+    /// <summary>
+    /// Only categories with a warehouse model of their own get a warehouse
+    /// (<c>village.warehouseModelsOnly</c>, default on). Keeps run, sketch and centre-line
+    /// categories out of the yard without listing them. Ignored when the models folder has no
+    /// warehouse models, so a village without models still shows its yard.
+    /// </summary>
+    public bool WarehouseModelsOnly { get; set; } = true;
+
     /// <summary>Per-tool area overrides (<c>village.toolAreas</c>).</summary>
     public Dictionary<string, string> ToolAreas { get; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -138,6 +146,7 @@ public sealed class VillageOptions
 
         var exclude = Strings(user, company, "warehouseExcludeCategories");
         if (exclude != null) o.WarehouseExcludeCategories = exclude;
+        o.WarehouseModelsOnly = Bool(user, company, "warehouseModelsOnly", o.WarehouseModelsOnly);
 
         var themes = user?["themes"] as JsonObject ?? company?["themes"] as JsonObject;
         o.ThemesJson = themes?.ToJsonString();
