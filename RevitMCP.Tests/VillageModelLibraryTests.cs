@@ -197,3 +197,28 @@ public class VillageModelLibraryTests : IDisposable
         Assert.Null(VillageOptions.FromConfig(null, null).ModelsFolder);
     }
 }
+
+/// <summary>The vendored viewer script is served by name; the name check must admit it and nothing else.</summary>
+public class VillageVendorNameTests
+{
+    [Theory]
+    [InlineData("village-three.min.js")]
+    [InlineData("three.js")]
+    [InlineData("a_b-c.d.e.js")]
+    public void AcceptsDottedFileNames(string name) => Assert.True(VillageSseServer.IsSafeVendorName(name));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("noextension")]
+    [InlineData("../secret.js")]
+    [InlineData("..js")]
+    [InlineData("a..js")]
+    [InlineData("sub/file.js")]
+    [InlineData("sub\file.js")]
+    [InlineData(".hidden")]
+    [InlineData("file.js.")]
+    [InlineData("c:file.js")]
+    [InlineData("file%2e.js")]
+    public void RejectsAnythingThatIsNotAPlainFileName(string? name) => Assert.False(VillageSseServer.IsSafeVendorName(name));
+}

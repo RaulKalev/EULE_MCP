@@ -487,8 +487,24 @@ public sealed class VillageSseServer : IDisposable
 
     private byte[]? SafeVendor(string name)
     {
-        try { return VillageModelLibrary.IsSafeName(System.IO.Path.GetFileNameWithoutExtension(name)) ? _vendor(name) : null; }
+        try { return IsSafeVendorName(name) ? _vendor(name) : null; }
         catch { return null; }
+    }
+
+    /// <summary>
+    /// A vendored file name: one or more dot-separated parts, each letters, digits, underscore or
+    /// hyphen — so <c>village-three.min.js</c> passes, while any path separator, empty part or
+    /// <c>..</c> does not. The old check looked at the name minus only its last extension, which
+    /// left the dot in <c>village-three.min</c> and turned the viewer script away.
+    /// </summary>
+    public static bool IsSafeVendorName(string? name)
+    {
+        if (string.IsNullOrEmpty(name) || name!.Length > 120) return false;
+        var parts = name.Split('.');
+        if (parts.Length < 2) return false;
+        foreach (var part in parts)
+            if (!VillageModelLibrary.IsSafeName(part)) return false;
+        return true;
     }
 
     /// <summary>Binary response for the two static areas. Cached hard: these change only on redeploy.</summary>
