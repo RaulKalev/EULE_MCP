@@ -15,12 +15,16 @@ public sealed class VillageBuilding
     [JsonProperty("areas")]
     public string[] Areas { get; set; } = Array.Empty<string>();
 
-    /// <summary>Isometric tile coordinates on a fixed grid; the viewer scales them.</summary>
+    /// <summary>
+    /// Isometric tile coordinates of the building's tile corner (its centre is +0.5); the viewer
+    /// scales them. Fractional, so the village can be laid out like one that grew rather than on
+    /// a grid.
+    /// </summary>
     [JsonProperty("tile_x")]
-    public int TileX { get; set; }
+    public double TileX { get; set; }
 
     [JsonProperty("tile_y")]
-    public int TileY { get; set; }
+    public double TileY { get; set; }
 
     /// <summary>Base footprint (1 = small house, 3 = town hall). Graph counts adjust <see cref="Size"/>.</summary>
     [JsonProperty("base_size")]
@@ -76,79 +80,79 @@ public static class VillageLayout
     {
         new VillageBuilding
         {
-            Id = TownHall, Label = "Town hall", Sprite = "town_hall", TileX = 5, TileY = 2, BaseSize = 3,
+            Id = TownHall, Label = "Town hall", Sprite = "town_hall", TileX = 6.7, TileY = 1.3, BaseSize = 3,
             Areas = new[] { VillageAreas.Project, VillageAreas.Graph },
             Description = "Project overview, connection status and the model graph."
         },
         new VillageBuilding
         {
-            Id = Archive, Label = "Archive", Sprite = "archive", TileX = 2, TileY = 3, BaseSize = 2,
+            Id = Archive, Label = "Archive", Sprite = "archive", TileX = 3.4, TileY = 2.1, BaseSize = 2,
             Areas = new[] { VillageAreas.Sheets },
             Description = "Sheets, title blocks and revisions."
         },
         new VillageBuilding
         {
-            Id = Lookout, Label = "Lookout tower", Sprite = "tower", TileX = 8, TileY = 3, BaseSize = 2,
+            Id = Lookout, Label = "Lookout tower", Sprite = "tower", TileX = 11.1, TileY = 5.9, BaseSize = 2,
             Areas = new[] { VillageAreas.Views },
             Description = "Views, view templates and CAD graphics."
         },
         new VillageBuilding
         {
-            Id = Market, Label = "Market hall", Sprite = "market", TileX = 3, TileY = 6, BaseSize = 2,
+            Id = Market, Label = "Market hall", Sprite = "market", TileX = 1.4, TileY = 7.1, BaseSize = 2,
             Areas = new[] { VillageAreas.Schedules },
             Description = "Schedules."
         },
         new VillageBuilding
         {
-            Id = Workshop, Label = "Workshop", Sprite = "workshop", TileX = 6, TileY = 6, BaseSize = 2,
+            Id = Workshop, Label = "Workshop", Sprite = "workshop", TileX = 9.9, TileY = 2.4, BaseSize = 2,
             Areas = new[] { VillageAreas.FamiliesTypes },
             Description = "Families and types."
         },
         new VillageBuilding
         {
-            Id = SignShop, Label = "Sign workshop", Sprite = "sign", TileX = 10, TileY = 8, BaseSize = 2,
+            Id = SignShop, Label = "Sign workshop", Sprite = "sign", TileX = 2.5, TileY = 9.9, BaseSize = 2,
             Areas = new[] { VillageAreas.TagsAnnotations },
             Description = "Tags, dimensions, text and detail lines."
         },
         new VillageBuilding
         {
-            Id = Houses, Label = "Houses", Sprite = "houses", TileX = 1, TileY = 9, BaseSize = 2,
+            Id = Houses, Label = "Houses", Sprite = "houses", TileX = 0.4, TileY = 11.4, BaseSize = 2,
             Areas = new[] { VillageAreas.Elements },
             Description = "Model elements, parameters, rooms and spaces."
         },
         new VillageBuilding
         {
-            Id = Utility, Label = "Utility district", Sprite = "substation", TileX = 5, TileY = 11, BaseSize = 2,
+            Id = Utility, Label = "Utility district", Sprite = "substation", TileX = 5.8, TileY = 10.8, BaseSize = 2,
             Areas = new[] { VillageAreas.Electrical, VillageAreas.FireAlarm, VillageAreas.Security, VillageAreas.Lighting, VillageAreas.ItAv },
             Description = "Electrical circuits and panels plus the ELV districts: fire alarm, security, lighting, IT/AV."
         },
         new VillageBuilding
         {
-            Id = Survey, Label = "Survey post", Sprite = "survey", TileX = 11, TileY = 5, BaseSize = 1,
+            Id = Survey, Label = "Survey post", Sprite = "survey", TileX = 10.3, TileY = 9.4, BaseSize = 1,
             Areas = new[] { VillageAreas.Coordination },
             Description = "Clash detection and coordination reviews."
         },
         new VillageBuilding
         {
-            Id = Office, Label = "Records office", Sprite = "office", TileX = 1, TileY = 5, BaseSize = 1,
+            Id = Office, Label = "Records office", Sprite = "office", TileX = 1.1, TileY = 4.1, BaseSize = 1,
             Areas = new[] { VillageAreas.Office },
             Description = "Files, Excel, reports, delivery checks, configuration, standards and skills."
         },
         new VillageBuilding
         {
-            Id = Warning, Label = "Warning area", Sprite = "warning", TileX = 10, TileY = 11, BaseSize = 1,
+            Id = Warning, Label = "Warning area", Sprite = "warning", TileX = 8.4, TileY = 11.7, BaseSize = 1,
             Areas = Array.Empty<string>(),
             Description = "Recent failures, stale graph data and reported model-health issues."
         },
         new VillageBuilding
         {
-            Id = Overlook, Label = "Overlook", Sprite = "overlook", TileX = 11, TileY = 2, BaseSize = 1,
+            Id = Overlook, Label = "Overlook", Sprite = "overlook", TileX = 12.8, TileY = 1.4, BaseSize = 1,
             Areas = Array.Empty<string>(),
             Description = "Where a character goes when it has finished a task and has nothing queued."
         },
         new VillageBuilding
         {
-            Id = Park, Label = "Park", Sprite = "park", TileX = 5, TileY = 7, BaseSize = 2,
+            Id = Park, Label = "Park", Sprite = "park", TileX = 6, TileY = 6, BaseSize = 2,
             Areas = Array.Empty<string>(),
             Description = "The village centre. Characters gather here once they have been idle for a while."
         }

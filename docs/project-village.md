@@ -250,7 +250,7 @@ without security devices simply has no security warehouse.
 | Size bucket 1–6 and loading bays 2–6 | `< 10`, `< 50`, `< 200`, `< 1000`, `< 5000`, above |
 | Pallets stacked outside | Size bucket above 2 |
 | Roof and sign colour | The theme system that lists the category (`village.themes`), else a hue hashed from the category name |
-| Position | Row-major, five per row, starting at tile (1.0, 13.4) below the village |
+| Position | Rows of five starting at tile (1.6, 14.0) below the village; odd rows staggered, each warehouse nudged up to 0.22 tiles |
 
 The scale is **absolute, not relative**: a warehouse is sized by its own count alone, so it never
 changes when a different category grows, and 5 000 elements or more is always the largest building.
@@ -267,12 +267,15 @@ grid needs, so more categories mean a slightly smaller village rather than a cli
 `village.warehouseExcludeCategories` defaults to:
 
 ```
-Materials · Legend Components · Material Assets · RVT Links · Cameras
+Materials · Legend Components · Material Assets · RVT Links · Cameras ·
+Sun Path · Internal Origin · Project Base Point · Survey Point ·
+Primary Contours · Secondary Contours · HVAC Zones
 ```
 
 They all have graph elements, but none of them is stock a yard would hold: materials and material
 assets are definitions, legend components are drawing symbols, RVT links are other models, and
-cameras are views. Excluded categories are also left out of the share denominator, so a model with
+cameras are views. The sun path, the origin and base points, topography contours and HVAC zones
+are datums and analytical objects that nearly every model carries a handful of. Excluded categories are also left out of the share denominator, so a model with
 9 000 materials does not make every real warehouse look like a rounding error.
 
 A configured list **replaces** the defaults, so copy the line above before adding to it. Matching
@@ -386,12 +389,54 @@ and the lanes.
 Landmark roofs use a fixed palette of muted cottage colours rather than the theme colour, so the
 warehouses system colours stay the thing that carries meaning.
 
-Tile coordinates are spread apart by `SPREAD` (1.34) while footprints stay a fixed multiple of
-`TILE`, so the gaps between buildings grow without the buildings growing with them.
+Tile coordinates are spread apart by `SPREAD` (1.45) while footprints stay a fixed multiple of
+`TILE`, so the gaps between buildings grow without the buildings growing with them. The village
+proper is a 14 × 13 tile grid with the park at its centre. Landmark positions are fractional and
+hand-placed at uneven distances and angles round the park, so the village reads as one that grew
+rather than a grid; every landmark still sits well outside the park's ring lane (a unit test holds
+that).
 
-Labels are small letter-spaced text with a dark halo instead of filled boxes. The one under the
-pointer, the current selection, and any landmark a character is standing at brighten and gain a
-pill; everything else stays quiet.
+### Lanes
+
+The ring round the park is uneven: two slow ripples on its radius. Every landmark then gets a lane
+that branches off the **nearest road already built** — the ring, or a neighbour's lane — whose
+straight run is clear of other buildings. Landmarks are connected nearest-first, so the outer ones
+often share a road with an inner one. Each lane's shape is fixed by the landmark id: straight, a
+gentle bow, or a lazy S; the town hall always keeps a straight avenue. A curve that would clip
+another building falls back to straight. The yard has one street per row that passes exactly over
+every warehouse door and curves gently between them, joined to the village where it is nearest.
+
+### Facing, doorsteps and walking
+
+Every landmark turns its front toward the park in 15° steps. The default layout puts the civic
+buildings on the far and left edges, where that front faces the camera; the overlook, lookout,
+survey post, utility district and warning area sit on the right and near sides and show their
+backs. Warehouses face the street along their row, each a few degrees off true. In the yard, odd
+rows are staggered by half a pitch and every warehouse is nudged by a small fixed offset
+(`VillageWarehouseYard.Wobble`); the connector sends each warehouse's `row` so the viewer can run
+the streets.
+
+Each place has a **doorstep**: a point just in front of the model, outside its walls. A landmark's
+lane ends there, arriving head-on, and that is where a character stands while it works.
+The distance comes from `FRONT_DEPTH` — how far each pack model reaches toward its front — plus a
+little clear ground; a landmark with no entry (a model you add later) gets the largest value.
+
+Characters walk the lanes, not a straight line: the lanes become a graph and a move follows the
+shortest path through it, doorstep to doorstep. The park has a walk-only link from the ring to its
+doorstep, so no path tiles cross its lawn.
+
+No two characters share a spot. Each one claims the lowest free **slot** at the place it is heading
+for. At a building, slot 0 is the doorstep and the rest line up side by side along it. The park
+is drawn 1.45× the pack's size (`PARK_SCALE`) with a wider ring lane round it, and its slots are
+patches of open lawn inside it (`PARK_SPOTS`), clear of the trees, benches and lanterns. The first
+spots are on the camera side. On arrival a character turns to face the building it works at, or
+roughly toward the middle of the park, each at a slightly different angle.
+
+### Labels and navigation
+
+Buildings carry no permanent labels. The name (and, for a warehouse, its element count) appears
+for the building under the pointer and for the selected one. In the 3D view the wheel zooms at the
+pointer, a drag pans, and a double-click returns to the whole village; the angle never changes.
 
 **Performance.** The sky, the ground slab, the grid and the roads never animate, so they are
 painted once into an offscreen canvas and blitted each frame; wall gradients are cached by colour

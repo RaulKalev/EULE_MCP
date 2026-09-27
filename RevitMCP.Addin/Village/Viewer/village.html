@@ -85,7 +85,7 @@
     <canvas id="village3d" hidden></canvas>
     <canvas id="overlay" hidden></canvas>
     <div id="catchup" hidden>Catching up…</div>
-    <div id="hint">Click a building for its counters. Nothing on this page can change the model.</div>
+    <div id="hint">Point at a building for its name, click it for its counters. Nothing on this page can change the model.</div>
   </div>
   <aside>
     <section id="activity"><h2>Current activity</h2><div id="agents">No agent connected yet.</div></section>
@@ -107,13 +107,13 @@
   'use strict';
 
   // ─── Constants and limits ───────────────────────────────────────────────
-  const GRID_MIN_W = 12, GRID_MIN_H = 14;       // isometric tile grid of the village proper
+  const GRID_MIN_W = 14, GRID_MIN_H = 13;       // isometric tile grid of the village proper
   let GRID_W = GRID_MIN_W, GRID_H = GRID_MIN_H; // grown to fit the warehouse yard
   const FEED_LIMIT_DEFAULT = 200;
   const MOVE_QUEUE_LIMIT = 8;                   // pending moves per agent before catch-up (teleport)
   const EFFECT_LIMIT_DEFAULT = 6;
   const AGENT_COLORS = ['#7fc8ff', '#ffb86b', '#b8ff8a', '#ff8ad4', '#f6f07b', '#9ea8ff'];
-  let SQUARE = { x: 5.5, y: 7.5 };              // village centre; re-derived from the park landmark
+  let SQUARE = { x: 6.5, y: 6.5 };              // village centre; re-derived from the park landmark
   const AREA_LABELS = {
     project: 'the project', graph: 'the model graph', sheets: 'sheets', schedules: 'schedules', views: 'views',
     families_types: 'families and types', tags_annotations: 'tags and annotations', elements: 'model elements',
@@ -194,12 +194,12 @@
   }
   // Tile coordinates are spread apart without growing the buildings, which is what actually puts
   // air between them: gaps scale with SPREAD, footprints stay a fixed multiple of TILE.
-  const SPREAD = 1.34;
+  const SPREAD = 1.45;
   function iso(tx, ty) { return { x: ORIGIN.x + (tx - ty) * SPREAD * TILE / 2, y: ORIGIN.y + (tx + ty) * SPREAD * TILE / 4 }; }
   window.addEventListener('resize', resize);
   resize();
 
-  // The village proper is a fixed 12 × 14 grid; the warehouse yard below it is as tall as the
+  // The village proper is a fixed 14 × 13 grid; the warehouse yard below it is as tall as the
   // number of categories demands, so the grid (and therefore the tile size) follows the content.
   function fitGrid() {
     let w = GRID_MIN_W, h = GRID_MIN_H;
@@ -241,8 +241,10 @@
       let ag = V.agents.get(a.id);
       const target = a.building && placeOf(a.building) ? a.building : 'square';
       if (!ag) {
-        const p = posOf(target);
-        ag = { id: a.id, name: a.name, x: p.x, y: p.y, at: target, target, queue: [], color: AGENT_COLORS[V.agents.size % AGENT_COLORS.length], bob: Math.random() * 6, stateSince: V.time };
+        ag = { id: a.id, name: a.name, x: 0, y: 0, at: target, target, routeFor: target, queue: [], color: AGENT_COLORS[V.agents.size % AGENT_COLORS.length], bob: Math.random() * 6, stateSince: V.time };
+        ag.slot = claimSlot(ag, target);
+        const p = standPos(ag, target);
+        ag.x = p.x; ag.y = p.y; faceArrival(ag);
         V.agents.set(a.id, ag);
       }
       if (ag.state !== a.state) ag.stateSince = V.time;
@@ -480,10 +482,111 @@
   function placeOf(id) { return (id && (V.byId.get(id) || V.whById.get(id))) || null; }
   function placeLabel(id) { const p = placeOf(id) || (id === 'square' ? V.byId.get('park') : null); return p ? p.label : id; }
 
+  /// Where a character stands for a place: on the doorstep, never inside the walls. Unknown
+  /// destinations resolve to the park's doorstep.
   function posOf(buildingId) {
-    const b = placeOf(buildingId);
+    const b = placeOf(buildingId) || V.byId.get('park');
     if (!b) return SQUARE;
-    return { x: b.tile_x + 0.5, y: b.tile_y + (V.whById.has(buildingId) ? 1.0 : 1.1) };
+    return doorOf(b);
+  }
+
+  /// Which way a place's front door faces, as a unit vector in tile space. Landmarks turn toward
+  /// the park in 15° steps — square to nothing in particular, like a village that grew; warehouses
+  /// face the street that runs along their row, each a few degrees off true; the park faces the
+  /// viewer.
+  function facingOf(place) {
+    if (!place || place.id === 'park') return [0, 1];
+    if (V.whById.has(place.id)) {
+      const a = Math.PI / 2 + (hashOf(place.id) - 0.5) * 0.24;
+      return [Math.cos(a), Math.sin(a)];
+    }
+    const step = Math.PI / 12;
+    const a = Math.round(Math.atan2(SQUARE.y - (place.tile_y + 0.5), SQUARE.x - (place.tile_x + 0.5)) / step) * step;
+    return [Math.cos(a), Math.sin(a)];
+  }
+
+  /// How far each landmark's model reaches from its centre toward its front (the pack's -Z), in
+  /// model units, porches and awnings included. Anything not listed — a model someone adds later,
+  /// or the stand-in cottage — gets the largest value, so a character is never placed inside it.
+  const FRONT_DEPTH = {
+    town_hall: 1.8, archive: 1.75, records_office: 1.76, workshop: 1.5, overlook: 1.5, houses: 1.2,
+    market: 1.05, lookout: 1.1, sign_workshop: 1.35, survey_post: 1.2, warning_area: 0.45, park: 1.55
+  };
+  const FRONT_DEPTH_DEFAULT = 1.8;
+  /// The park is drawn larger than the pack authors it: it is the village centre and where every
+  /// idle character gathers, so it needs room for a crowd.
+  const PARK_SCALE = 1.45;
+  /// Open ground inside the park model, in its own units (x right, z toward its back), clear of
+  /// the maple, the two pines, the benches, lanterns, shrub and rock. The first few sit on the
+  /// camera side, so the first characters to arrive are the easiest to see.
+  const PARK_SPOTS = [
+    [0.45, -0.9], [-0.9, -1.95], [1.45, -2.15], [-2.5, -1.5], [2.6, -1.1], [-3.1, 0.3],
+    [3.2, 0.4], [-0.6, 1.7], [0.9, 1.75], [-2.0, 1.5], [2.4, 1.6]
+  ];
+
+  function scaleOf(place) { return place && place.id === 'park' ? MODEL_SCALE * PARK_SCALE : MODEL_SCALE; }
+
+  /// A standing spot in the park, in tile space. The park model is turned half round (it faces
+  /// the viewer), which flips its local x and z.
+  function parkSpot(slot) {
+    const park = V.byId.get('park');
+    const c = park ? { x: park.tile_x + 0.5, y: park.tile_y + 0.5 } : SQUARE;
+    const q = PARK_SPOTS[slot % PARK_SPOTS.length];
+    const lap = Math.floor(slot / PARK_SPOTS.length);   // a bigger crowd than spots: step aside
+    const k = scaleOf(park) / SPREAD;
+    return { x: c.x - q[0] * k + lap * 0.25, y: c.y - q[1] * k + lap * 0.2 };
+  }
+
+  /// Where this character stands at a place. Several characters at one place never share a
+  /// spot: in the park each takes its own patch of lawn, and at a building they line up side by
+  /// side along the doorstep.
+  function standPos(ag, id) {
+    const place = placeOf(id) || V.byId.get('park');
+    if (!place) return SQUARE;
+    const slot = ag.slot || 0;
+    if (place.id === 'park') return parkSpot(slot);
+    const door = doorOf(place);
+    if (!slot) return door;
+    const f = facingOf(place), side = slot % 2 ? 1 : -1, step = Math.ceil(slot / 2) * 0.42;
+    return { x: door.x - f[1] * side * step, y: door.y + f[0] * side * step };
+  }
+
+  /// On arrival a character turns to what it came for: the building it works at, or — in the
+  /// park — roughly toward the middle, each at a slightly different angle so a crowd looks loose.
+  /// The 3D view reads the heading in world terms, where tile x/y are world x/z.
+  function faceArrival(ag) {
+    const place = placeOf(ag.at) || V.byId.get('park');
+    if (!place) return;
+    const cx = place.tile_x + 0.5, cy = place.tile_y + 0.5;
+    const jitter = place.id === 'park' ? (((ag.slot || 0) * 0.618) % 1 - 0.5) * 1.1 : 0;
+    ag._heading = Math.atan2(cx - ag.x, cy - ag.y) + jitter;
+  }
+
+  /// The lowest slot at a place that no other character heading there or standing there holds.
+  function claimSlot(ag, id) {
+    // 'square' and any unknown place are the park, so they share its spots.
+    const key = x => (placeOf(x) ? x : 'park');
+    const want = key(id), taken = new Set();
+    for (const other of V.agents.values()) {
+      if (other === ag) continue;
+      const there = key(other.target) === want || (key(other.at) === want && other.target === other.at);
+      if (there && other.slot != null) taken.add(other.slot);
+    }
+    let slot = 0;
+    while (taken.has(slot)) slot++;
+    return slot;
+  }
+  /// Clear ground between a wall and the spot a character stands on, in world units.
+  const DOORSTEP = 0.35;
+
+  function doorOf(place) {
+    const cx = place.tile_x + 0.5, cy = place.tile_y + 0.5;
+    // Warehouses stand on their row's lane, which already runs clear of the largest shed.
+    if (V.whById.has(place.id)) return { x: cx, y: place.tile_y + YARD_LANE };
+    const f = facingOf(place);
+    const depth = FRONT_DEPTH[place.id] !== undefined ? FRONT_DEPTH[place.id] : FRONT_DEPTH_DEFAULT;
+    const d = (depth * scaleOf(place) + DOORSTEP) / SPREAD;
+    return { x: cx + f[0] * d, y: cy + f[1] * d };
   }
 
   // One light direction for the whole scene: a warm key from the upper left, a cool sky fill on the
@@ -667,7 +770,8 @@
     const blocked = [];
     for (const b of V.buildings) blocked.push({ x: b.tile_x + 0.5, y: b.tile_y + 0.5, r: 1.5 + (b.size || 1) * 0.34 });
     for (const wh of V.warehouses) blocked.push({ x: wh.tile_x + 0.5, y: wh.tile_y + 0.5, r: 1.4 + (wh.footprint || 1) * 0.5 });
-    blocked.push({ x: SQUARE.x, y: SQUARE.y, r: 2.2 });
+    blocked.push({ x: SQUARE.x, y: SQUARE.y, r: RING_R * 1.2 });
+    const segments = laneSegments();
 
     let seed = 1337;
     const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
@@ -683,11 +787,10 @@
           if (dx * dx + dy * dy < b.r * b.r) { clear = false; break; }
         }
         if (!clear) continue;
-        // Keep lanes free: skip anything sitting on the line from the centre to a landmark.
+        // Keep lanes free: skip anything close to a lane someone walks.
         let onPath = false;
-        for (const b of V.buildings) {
-          if (b.id === 'warning_area' || b.id === 'park') continue;
-          if (distToSegment(x, y, SQUARE.x, SQUARE.y, b.tile_x + 0.5, b.tile_y + 1.0) < 0.85) { onPath = true; break; }
+        for (const s of segments) {
+          if (distToSegment(x, y, s[0], s[1], s[2], s[3]) < 0.6) { onPath = true; break; }
         }
         if (onPath) continue;
         items.push({ x, y, rock: roll > 0.47, s: 0.7 + rnd() * 0.6, tint: rnd(), pick: rnd() });
@@ -699,66 +802,241 @@
   }
   const SCENERY = { key: null, items: [] };
 
-  /// The lanes the village draws, as tile-space segments. One source for the drawn roads, the
-  /// scenery exclusion test and the glTF path tiles.
-  /// Lanes as polylines in tile space: a ring around the park, then a bowed branch from the ring
-  /// out to each landmark. Spokes radiating from a single point read as a star; a ring with
-  /// branches reads as a village that grew. One source for the drawn roads, the glTF path tiles
-  /// and the scenery exclusion test, so the three can never disagree about where a road is.
-  const RING_R = 2.15;
+  /// Lanes as polylines in tile space: an uneven ring round the park, then a lane per landmark
+  /// that branches off the nearest road already built — the ring, or a neighbour's lane — so
+  /// nearby buildings share a road the way a village that grew does. Lane shapes vary per
+  /// landmark (straight, a gentle bow, or a winding S) and are fixed by its id. One source for
+  /// the drawn roads, the glTF path tiles, the walking routes and the scenery exclusion test, so
+  /// none of them can disagree about where a road is.
+  const RING_R = 2.4;
+
+  /// Deterministic 0..1 from a string, so a landmark keeps the same lane shape across reloads.
+  function hashOf(s) {
+    let h = 2166136261;
+    for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+    return h / 4294967296;
+  }
+
+  /// A point on the ring. Two slow ripples on the radius make it read as trodden, not compassed.
+  function ringPoint(a) {
+    const r = RING_R * (1 + 0.09 * Math.sin(3 * a + 0.7) + 0.05 * Math.sin(5 * a + 2.1));
+    return [SQUARE.x + Math.cos(a) * r * 1.15, SQUARE.y + Math.sin(a) * r * 0.95];
+  }
+
+  /// What a lane must not run through: every building except the one it serves, and the park.
+  function laneObstacles() {
+    const out = [];
+    const park = V.byId.get('park');
+    if (park) out.push({ id: 'park', x: SQUARE.x, y: SQUARE.y, r: RING_R * 0.85 });
+    for (const b of V.buildings) {
+      if (b.id === 'park') continue;
+      out.push({ id: b.id, x: b.tile_x + 0.5, y: b.tile_y + 0.5, r: FRONT_DEPTH_DEFAULT * MODEL_SCALE / SPREAD + 0.05 });
+    }
+    for (const wh of V.warehouses) {
+      const s = MODEL_SCALE * (0.82 + (wh.footprint || 1.2) * 0.20);
+      out.push({ id: wh.id, x: wh.tile_x + 0.5, y: wh.tile_y + 0.5, r: 1.3 * s / SPREAD + 0.05 });
+    }
+    return out;
+  }
+
+  function laneIsClear(lane, obstacles, own) {
+    for (let i = 1; i < lane.length; i++) {
+      for (const o of obstacles) {
+        if (o.id === own) continue;
+        if (distToSegment(o.x, o.y, lane[i - 1][0], lane[i - 1][1], lane[i][0], lane[i][1]) < o.r) return false;
+      }
+    }
+    return true;
+  }
+
+  /// A lane from one point to another in the given style, sampled about every half tile so other
+  /// lanes can branch off anywhere along it.
+  function shapeLane(from, to, style, amount) {
+    const dx = to[0] - from[0], dy = to[1] - from[1];
+    const len = Math.hypot(dx, dy);
+    const n = Math.max(3, Math.ceil(len / 0.45));
+    const px = -dy, py = dx;                       // perpendicular, scaled by the length
+    const pts = [];
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, u = 1 - t;
+      if (style === 'straight') { pts.push([from[0] + dx * t, from[1] + dy * t]); continue; }
+      if (style === 'bow') {
+        const cx = (from[0] + to[0]) / 2 + px * amount, cy = (from[1] + to[1]) / 2 + py * amount;
+        pts.push([u * u * from[0] + 2 * u * t * cx + t * t * to[0], u * u * from[1] + 2 * u * t * cy + t * t * to[1]]);
+        continue;
+      }
+      // 'wind': a cubic that leans one way and then the other — a lazy S.
+      const c1 = [from[0] + dx / 3 + px * amount, from[1] + dy / 3 + py * amount];
+      const c2 = [from[0] + dx * 2 / 3 - px * amount, from[1] + dy * 2 / 3 - py * amount];
+      const b0 = u * u * u, b1 = 3 * u * u * t, b2 = 3 * u * t * t, b3 = t * t * t;
+      pts.push([b0 * from[0] + b1 * c1[0] + b2 * c2[0] + b3 * to[0], b0 * from[1] + b1 * c1[1] + b2 * c2[1] + b3 * to[1]]);
+    }
+    return pts;
+  }
+
+  /// A smooth curve through every point (Catmull-Rom), so a lane can pass exactly over each door.
+  function smoothThrough(points, perSegment) {
+    if (points.length < 3) return points.slice();
+    const out = [];
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[Math.max(0, i - 1)], p1 = points[i], p2 = points[i + 1], p3 = points[Math.min(points.length - 1, i + 2)];
+      for (let k = 0; k < perSegment; k++) {
+        const t = k / perSegment, t2 = t * t, t3 = t2 * t;
+        const f = (a, b, c, d) => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+        out.push([f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1])]);
+      }
+    }
+    out.push(points[points.length - 1].slice());
+    return out;
+  }
 
   function lanePaths() {
     const key = GRID_W + 'x' + GRID_H + ':' + V.buildings.length + ':' + V.warehouses.length;
     if (LANES.key === key) return LANES.paths;
     const paths = [];
+    const obstacles = laneObstacles();
 
-    // The ring itself, as a closed loop of points.
     const ring = [];
-    for (let i = 0; i <= 24; i++) {
-      const a = (i / 24) * Math.PI * 2;
-      ring.push([SQUARE.x + Math.cos(a) * RING_R * 1.15, SQUARE.y + Math.sin(a) * RING_R * 0.95]);
-    }
+    const RING_STEPS = 36;
+    for (let i = 0; i < RING_STEPS; i++) ring.push(ringPoint((i / RING_STEPS) * Math.PI * 2));
+    ring.push(ring[0].slice());                    // closed: the last point is the first
     paths.push(ring);
+    LANES.ring = ring;
 
-    // Where a branch leaves the ring: the point nearest its destination.
-    const fromRing = (tx, ty) => {
-      const a = Math.atan2(ty - SQUARE.y, tx - SQUARE.x);
-      return [SQUARE.x + Math.cos(a) * RING_R * 1.15, SQUARE.y + Math.sin(a) * RING_R * 0.95];
+    // Points a new lane may branch from. A landmark's own approach and doorstep are left out, so
+    // nobody else's road runs across a front step.
+    const network = ring.slice(0, -1);
+
+    /// A lane from the best branch point to `target`: the nearest one whose straight run is clear
+    /// of other buildings, shaped in `style`, falling back to straight if the curve would clip one.
+    const branch = (own, target, style, amount) => {
+      const byDistance = network
+        .map(p => ({ p, d: Math.hypot(p[0] - target[0], p[1] - target[1]) }))
+        .sort((a, b) => a.d - b.d);
+      let from = byDistance[0].p;
+      for (const c of byDistance.slice(0, 40)) {
+        if (laneIsClear([c.p, target], obstacles, own)) { from = c.p; break; }
+      }
+      let lane = shapeLane(from, target, style, amount);
+      if (style !== 'straight' && !laneIsClear(lane, obstacles, own)) lane = shapeLane(from, target, 'straight', 0);
+      lane[0] = from;                              // the exact network point: a junction
+      return lane;
     };
 
-    for (const b of V.buildings) {
-      if (b.id === 'warning_area' || b.id === 'park') continue;
-      const to = [b.tile_x + 0.5, b.tile_y + 1.0];
-      paths.push(bow(fromRing(to[0], to[1]), to, 0.16));
+    // Nearest landmarks first, so the outer ones can branch off the inner ones' lanes.
+    const order = V.buildings.filter(b => b.id !== 'park')
+      .sort((a, b) => Math.hypot(a.tile_x + 0.5 - SQUARE.x, a.tile_y + 0.5 - SQUARE.y) - Math.hypot(b.tile_x + 0.5 - SQUARE.x, b.tile_y + 0.5 - SQUARE.y));
+    for (const b of order) {
+      const door = doorOf(b), f = facingOf(b);
+      const approach = [door.x + f[0] * APPROACH, door.y + f[1] * APPROACH];
+      // The town hall keeps a straight avenue; everyone else gets a shape from their id.
+      const h = hashOf(b.id), side = hashOf(b.id + ':side') < 0.5 ? -1 : 1;
+      const style = b.id === 'town_hall' || h < 0.3 ? 'straight' : h < 0.65 ? 'bow' : 'wind';
+      const amount = side * (style === 'bow' ? 0.12 + h * 0.12 : 0.10 + (h - 0.65) * 0.25);
+      const lane = branch(b.id, approach, style, amount);
+      for (let i = 1; i < lane.length - 1; i++) network.push(lane[i]);
+      lane.push([door.x, door.y]);                 // head-on into the doorstep
+      paths.push(lane);
     }
 
-    if (V.warehouses.length) {
-      const rows = yardRows();
-      const gate = [rows[0].x0 - 0.4, rows[0].y + 1.5];
-      paths.push(bow(fromRing(gate[0], gate[1]), gate, 0.12));
-      for (let i = 0; i < rows.length; i++) {
-        const r = rows[i];
-        paths.push([[r.x0 - 0.4, r.y + 1.5], [r.x1 + 0.9, r.y + 1.5]]);
-        if (i > 0) paths.push([[rows[i - 1].x0 - 0.4, rows[i - 1].y + 1.5], [r.x0 - 0.4, r.y + 1.5]]);
-      }
+    // The yard: one lane per row, running exactly over every warehouse door and curving gently
+    // between them, joined to the village where it is nearest.
+    for (const r of yardRows()) {
+      const doors = r.whs.map(wh => [wh.tile_x + 0.5, wh.tile_y + YARD_LANE]);
+      const first = doors[0], last = doors[doors.length - 1];
+      const street = smoothThrough([[first[0] - 1.1, first[1] + 0.15]].concat(doors, [[last[0] + 1.1, last[1] - 0.15]]), 4);
+      const link = branch('yard', street[0], 'bow', 0.14);
+      for (let i = 1; i < link.length - 1; i++) network.push(link[i]);
+      paths.push(link);
+      for (const p of street) network.push(p);
+      paths.push(street);
     }
 
     LANES.key = key; LANES.paths = paths;
     return paths;
   }
-  const LANES = { key: null, paths: [] };
+  const LANES = { key: null, paths: [], ring: [] };
+  /// Straight run into a doorstep, in tiles.
+  const APPROACH = 0.7;
+  /// The yard lane runs this far below a warehouse row's tile_y: clear of the largest shed.
+  const YARD_LANE = 1.5;
 
-  /// A quadratic bow between two tile-space points, sampled into a polyline.
-  function bow(from, to, amount) {
-    const dx = to[0] - from[0], dy = to[1] - from[1];
-    const cx = (from[0] + to[0]) / 2 - dy * amount, cy = (from[1] + to[1]) / 2 + dx * amount;
-    const pts = [];
-    for (let i = 0; i <= 10; i++) {
-      const t = i / 10, u = 1 - t;
-      pts.push([u * u * from[0] + 2 * u * t * cx + t * t * to[0],
-                u * u * from[1] + 2 * u * t * cy + t * t * to[1]]);
+  // ─── Walking routes ─────────────────────────────────────────────────────
+  // Characters walk the lanes rather than a straight line, which is what keeps them out of the
+  // buildings between two destinations. The lanes become a graph (every polyline point a node,
+  // consecutive points an edge, lane ends tied to the lane they meet), and a move is the shortest
+  // path through it from doorstep to doorstep.
+  const ROUTES = { key: null, nodes: [], adj: [] };
+  /// Two lane points closer than this are the same junction.
+  const JUNCTION = 0.4;
+
+  function routeGraph() {
+    const paths = lanePaths();
+    if (ROUTES.key === LANES.key) return ROUTES;
+    const nodes = [], adj = [];
+    const add = p => { nodes.push(p); adj.push([]); return nodes.length - 1; };
+    const dist = (a, b) => Math.hypot(nodes[a][0] - nodes[b][0], nodes[a][1] - nodes[b][1]);
+    const link = (a, b) => { const d = dist(a, b); adj[a].push([b, d]); adj[b].push([a, d]); };
+
+    // The park has no drawn lane — a path tile across its lawn would cover the benches — but a
+    // character still has to reach it, so it gets a walk-only link from the ring to its doorstep.
+    const walk = paths.slice();
+    const park = V.byId.get('park');
+    if (park) {
+      const door = doorOf(park);
+      let near = LANES.ring[0];
+      for (const q of LANES.ring) if (Math.hypot(q[0] - door.x, q[1] - door.y) < Math.hypot(near[0] - door.x, near[1] - door.y)) near = q;
+      walk.push([near, [door.x, door.y]]);
     }
-    return pts;
+
+    const ids = walk.map(path => path.map(add));
+    for (const list of ids) {
+      for (let i = 1; i < list.length; i++) link(list[i - 1], list[i]);
+      if (list.length > 2 && dist(list[0], list[list.length - 1]) < 1e-6) link(list[0], list[list.length - 1]);
+    }
+    ids.forEach((list, k) => {
+      for (const end of [list[0], list[list.length - 1]]) {
+        let best = -1, bestD = JUNCTION;
+        ids.forEach((other, j) => {
+          if (j === k) return;
+          for (const n of other) { const d = dist(end, n); if (d < bestD) { bestD = d; best = n; } }
+        });
+        if (best >= 0) link(end, best);
+      }
+    });
+    ROUTES.key = LANES.key; ROUTES.nodes = nodes; ROUTES.adj = adj;
+    return ROUTES;
+  }
+
+  /// Waypoints from one tile position to another along the lanes, ending exactly on `to`.
+  function findRoute(from, to) {
+    const g = routeGraph();
+    if (!g.nodes.length) return [[to.x, to.y]];
+    const nearest = p => {
+      let best = 0, bestD = Infinity;
+      for (let i = 0; i < g.nodes.length; i++) {
+        const d = Math.hypot(g.nodes[i][0] - p.x, g.nodes[i][1] - p.y);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+      return best;
+    };
+    const a = nearest(from), b = nearest(to);
+    // Dijkstra over a few hundred nodes: cheap enough to run per move without a heap.
+    const n = g.nodes.length, cost = new Float64Array(n).fill(Infinity), prev = new Int32Array(n).fill(-1), done = new Uint8Array(n);
+    cost[a] = 0;
+    for (;;) {
+      let u = -1;
+      for (let i = 0; i < n; i++) if (!done[i] && cost[i] < Infinity && (u < 0 || cost[i] < cost[u])) u = i;
+      if (u < 0 || u === b) break;
+      done[u] = 1;
+      for (const [v, w] of g.adj[u]) if (cost[u] + w < cost[v]) { cost[v] = cost[u] + w; prev[v] = u; }
+    }
+    if (cost[b] === Infinity) return [[to.x, to.y]];
+    const out = [];
+    for (let u = b; u >= 0; u = prev[u]) out.push(g.nodes[u]);
+    out.reverse();
+    out.push([to.x, to.y]);
+    return out;
   }
 
   /// Straight pieces of every lane, for hit tests that only need segments.
@@ -829,7 +1107,7 @@
       const hub = iso(SQUARE.x, SQUARE.y);
       for (const b of V.buildings) {
         if (b.id === 'warning_area' || b.id === 'park') continue;
-        const c = iso(b.tile_x + 0.5, b.tile_y + 1.0);
+        const d = doorOf(b), c = iso(d.x, d.y);
         lantern((hub.x + c.x) / 2, (hub.y + c.y) / 2, 0.35 + 0.15 * Math.sin(V.time * 2 + b.tile_x));
       }
     }
@@ -845,8 +1123,7 @@
     items.sort((a, b) => a.d - b.d);
     for (const it of items) it.draw();
     // Labels last so a taller neighbour never hides them.
-    for (const b of V.buildings) drawLabel(b);
-    for (const wh of V.warehouses) drawLabel(wh, wh.count.toLocaleString());
+    drawLabels();
 
     // Legend
     ctx.fillStyle = 'rgba(230,235,242,.75)'; ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'right';
@@ -855,16 +1132,18 @@
     ctx.textAlign = 'left';
   }
 
-  /// Yard rows grouped by tile_y, each with its left and right extent in tiles.
+  /// Yard rows, village side first, each holding its warehouses in x order. Grouped by the
+  /// connector's row number (older connectors send none, so fall back to rows of five by rank).
   function yardRows() {
     const map = new Map();
     for (const wh of V.warehouses) {
-      const key = Math.round(wh.tile_y * 100);
-      const row = map.get(key) || { y: wh.tile_y, x0: wh.tile_x, x1: wh.tile_x };
-      row.x0 = Math.min(row.x0, wh.tile_x); row.x1 = Math.max(row.x1, wh.tile_x);
-      map.set(key, row);
+      const key = wh.row != null ? wh.row : Math.floor((wh.rank || 0) / 5);
+      if (!map.has(key)) map.set(key, { row: key, whs: [] });
+      map.get(key).whs.push(wh);
     }
-    return Array.from(map.values()).sort((a, b) => a.y - b.y);
+    const rows = Array.from(map.values()).sort((a, b) => a.row - b.row);
+    for (const r of rows) r.whs.sort((a, b) => a.tile_x - b.tile_x);
+    return rows;
   }
 
   function diamond(x, y, hw, hh, fill) { ctx.fillStyle = fill; ctx.beginPath(); ctx.moveTo(x, y - hh); ctx.lineTo(x + hw, y); ctx.lineTo(x, y + hh); ctx.lineTo(x - hw, y); ctx.closePath(); ctx.fill(); }
@@ -881,6 +1160,8 @@
   // Cottage roofs: clay, slate, teal, ochre, plum, moss. Varied like the reference, all muted
   // enough that the warehouses' system colours still stand out.
   const ROOFS = ['#b6553f', '#5a6a86', '#3f7d75', '#c08a3e', '#8a5570', '#5d7a48', '#a34b45'];
+  /// Landmark positions are fractional, so the palette is indexed on whole tiles.
+  function roofOf(b) { return ROOFS[(Math.floor(b.tile_x) * 7 + Math.floor(b.tile_y) * 5) % ROOFS.length]; }
 
   function drawBuilding(b, T) {
     const size = Math.max(1, Math.min(4, b.size || b.base_size || 1));
@@ -891,7 +1172,7 @@
     const selected = V.selected === b.id;
     const roof = b.id === 'warning_area' ? '#6b5733'
       : b.id === 'utility_district' ? T.primary
-      : ROOFS[(b.tile_x * 7 + b.tile_y * 5) % ROOFS.length];
+      : roofOf(b);
     const wallL = '#e4ded3', wallR = '#a2abc4';
 
     if (b.sprite === 'houses') { cluster(c, hw, hh, hgt, roof, wallL, wallR, size); }
@@ -1025,6 +1306,13 @@
   /// Labels sit light on the scene: small letter-spaced caps with a soft halo instead of a filled
   /// slab, so thirteen of them no longer crowd the village. The one under the pointer, the
   /// selection and anywhere a character is standing brighten and gain a pill.
+  /// The buildings are recognisable on their own, so a name only appears for the place under the
+  /// pointer and the selected one. A permanent label on every building crowded the village.
+  function drawLabels() {
+    for (const b of V.buildings) if (V.hover === b.id || V.selected === b.id) drawLabel(b);
+    for (const wh of V.warehouses) if (V.hover === wh.id || V.selected === wh.id) drawLabel(wh, wh.count.toLocaleString());
+  }
+
   function drawLabel(b, suffix) {
     if (!b._screen) return;
     const selected = V.selected === b.id;
@@ -1280,12 +1568,18 @@
     for (const ag of V.agents.values()) {
       if (ag.queue.length > 0 && ag.target === ag.at) { ag.target = ag.queue.shift(); }
       if (ag.target !== ag.at) {
-        const p = posOf(ag.target);
-        if (ag.teleport) { ag.x = p.x; ag.y = p.y; ag.at = ag.target; ag.teleport = false; continue; }
+        if (ag.routeFor !== ag.target) ag.slot = claimSlot(ag, ag.target);
+        const p = standPos(ag, ag.target);
+        if (ag.teleport) { ag.x = p.x; ag.y = p.y; ag.at = ag.target; ag.teleport = false; ag.route = null; ag.routeFor = ag.target; faceArrival(ag); continue; }
+        if (!ag.route || ag.routeFor !== ag.target) { ag.route = findRoute(ag, p); ag.routeFor = ag.target; }
         // Walk faster the further behind the story the character is; only a long backlog teleports.
-        const dx = p.x - ag.x, dy = p.y - ag.y; const dist = Math.hypot(dx, dy); const spd = 2.2 * (1 + 0.8 * ag.queue.length) * dt;
-        if (dist <= spd) { ag.x = p.x; ag.y = p.y; ag.at = ag.target; }
-        else { ag.x += dx / dist * spd; ag.y += dy / dist * spd; }
+        let budget = 2.2 * (1 + 0.8 * ag.queue.length) * dt;
+        while (budget > 0 && ag.route.length) {
+          const w = ag.route[0], dx = w[0] - ag.x, dy = w[1] - ag.y, d = Math.hypot(dx, dy);
+          if (d <= budget) { ag.x = w[0]; ag.y = w[1]; budget -= d; ag.route.shift(); }
+          else { ag.x += dx / d * budget; ag.y += dy / d * budget; budget = 0; }
+        }
+        if (!ag.route.length) { ag.x = p.x; ag.y = p.y; ag.at = ag.target; ag.route = null; faceArrival(ag); }
       }
     }
     for (const e of V.effects) e.t += dt;
@@ -1315,26 +1609,29 @@
     return best ? { building: best } : null;
   }
 
-  canvas.addEventListener('pointermove', ev => {
-    const rect = canvas.getBoundingClientRect();
-    const hit = pick(ev.clientX - rect.left, ev.clientY - rect.top);
-    const id = hit ? (hit.building || hit.agent) : null;
-    if (id !== V.hover) { V.hover = id; canvas.style.cursor = id ? 'pointer' : 'default'; }
-  });
-  canvas.addEventListener('pointerleave', () => { V.hover = null; canvas.style.cursor = 'default'; });
+  // Both the drawn canvas and the 3D canvas take the pointer; whichever is showing gets the events.
+  for (const surface of [canvas, $('village3d')]) {
+    surface.addEventListener('pointermove', ev => {
+      const rect = surface.getBoundingClientRect();
+      const hit = pick(ev.clientX - rect.left, ev.clientY - rect.top);
+      const id = hit ? (hit.building || hit.agent) : null;
+      if (id !== V.hover) { V.hover = id; surface.style.cursor = id ? 'pointer' : 'default'; }
+    });
+    surface.addEventListener('pointerleave', () => { V.hover = null; surface.style.cursor = 'default'; });
 
-  canvas.addEventListener('click', ev => {
-    const rect = canvas.getBoundingClientRect(); const x = ev.clientX - rect.left, y = ev.clientY - rect.top;
-    // Characters stand in front of the landmarks, so they win a click on the same spot.
-    const hit = pick(x, y);
-    if (hit && hit.agent) {
-      V.selectedAgent = hit.agent === V.selectedAgent ? null : hit.agent;
-      V.selected = null; renderSelected(); return;
-    }
-    const best = hit ? hit.building : null;
-    V.selected = best === V.selected ? null : best;
-    V.selectedAgent = null; renderSelected();
-  });
+    surface.addEventListener('click', ev => {
+      const rect = surface.getBoundingClientRect(); const x = ev.clientX - rect.left, y = ev.clientY - rect.top;
+      // Characters stand in front of the landmarks, so they win a click on the same spot.
+      const hit = pick(x, y);
+      if (hit && hit.agent) {
+        V.selectedAgent = hit.agent === V.selectedAgent ? null : hit.agent;
+        V.selected = null; renderSelected(); return;
+      }
+      const best = hit ? hit.building : null;
+      V.selected = best === V.selected ? null : best;
+      V.selectedAgent = null; renderSelected();
+    });
+  }
 
   // ─── Connection: EventSource with bounded backoff (GET only; nothing is sent) ──
   let es = null, failures = 0, backoffTimer = null;
@@ -1367,13 +1664,13 @@
     V.connection = 'demo';
     let seed = 7; const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
     const B = [
-      ['town_hall', 'Town hall', ['project', 'graph'], 5, 2, 3, 'town_hall'], ['archive', 'Archive', ['sheets'], 2, 3, 2, 'archive'],
-      ['lookout', 'Lookout tower', ['views'], 8, 3, 2, 'tower'], ['market', 'Market hall', ['schedules'], 3, 6, 2, 'market'],
-      ['workshop', 'Workshop', ['families_types'], 6, 6, 2, 'workshop'], ['sign_workshop', 'Sign workshop', ['tags_annotations'], 10, 8, 2, 'sign'],
-      ['houses', 'Houses', ['elements'], 1, 9, 2, 'houses'], ['utility_district', 'Utility district', ['electrical', 'fire_alarm', 'security', 'lighting', 'it_av'], 5, 11, 2, 'substation'],
-      ['survey_post', 'Survey post', ['coordination'], 11, 5, 1, 'survey'], ['records_office', 'Records office', ['office'], 1, 5, 1, 'office'],
-      ['warning_area', 'Warning area', [], 10, 11, 1, 'warning'],
-      ['overlook', 'Overlook', [], 11, 2, 1, 'overlook'], ['park', 'Park', [], 5, 7, 2, 'park']
+      ['town_hall', 'Town hall', ['project', 'graph'], 6.7, 1.3, 3, 'town_hall'], ['archive', 'Archive', ['sheets'], 3.4, 2.1, 2, 'archive'],
+      ['lookout', 'Lookout tower', ['views'], 11.1, 5.9, 2, 'tower'], ['market', 'Market hall', ['schedules'], 1.4, 7.1, 2, 'market'],
+      ['workshop', 'Workshop', ['families_types'], 9.9, 2.4, 2, 'workshop'], ['sign_workshop', 'Sign workshop', ['tags_annotations'], 2.5, 9.9, 2, 'sign'],
+      ['houses', 'Houses', ['elements'], 0.4, 11.4, 2, 'houses'], ['utility_district', 'Utility district', ['electrical', 'fire_alarm', 'security', 'lighting', 'it_av'], 5.8, 10.8, 2, 'substation'],
+      ['survey_post', 'Survey post', ['coordination'], 10.3, 9.4, 1, 'survey'], ['records_office', 'Records office', ['office'], 1.1, 4.1, 1, 'office'],
+      ['warning_area', 'Warning area', [], 8.4, 11.7, 1, 'warning'],
+      ['overlook', 'Overlook', [], 12.8, 1.4, 1, 'overlook'], ['park', 'Park', [], 6, 6, 2, 'park']
     ].map(x => ({ id: x[0], label: x[1], areas: x[2], tile_x: x[3], tile_y: x[4], base_size: x[5], size: x[5] + (x[5] < 3 ? 1 : 0), sprite: x[6], description: 'Demo landmark for ' + x[1].toLowerCase() + '.' }));
     const areas = Object.keys(AREA_LABELS).map(a => ({ area: a, reads: 0, writes: 0, exports: 0, failures: 0, deferred: 0, affected: 0 }));
     // Warehouses mirror what the connector sends: category, count, and count-derived sizing.
@@ -1388,13 +1685,16 @@
       ['Mechanical Equipment', 4, 'other', '#5a7a6a', '#9dc4b2', 155]
     ];
     const whTotal = WH.reduce((n, x) => n + x[1], 0);
+    // Same fixed nudge as VillageWarehouseYard.Place.
+    const nudge = (i, period) => (((i * 37 + period * 11) % period) / (period - 1)) * 2 - 1;
     const warehouses = WH.map((x, i) => {
       const ratio = Math.min(1, Math.log10(1 + x[1]) / Math.log10(1 + 5000));
       const size = x[1] < 10 ? 1 : x[1] < 50 ? 2 : x[1] < 200 ? 3 : x[1] < 1000 ? 4 : x[1] < 5000 ? 5 : 6;
       return {
         id: 'wh_' + x[0].toLowerCase().replace(/[^a-z0-9]+/g, '_'), category: x[0], label: x[0], count: x[1],
         share: Math.round(x[1] / whTotal * 10000) / 10000, system: x[2], primary: x[3], accent: x[4], hue: x[5],
-        tile_x: Math.round((1 + (i % 5) * 2.6) * 1000) / 1000, tile_y: Math.round((13.4 + Math.floor(i / 5) * 2.8) * 1000) / 1000,
+        tile_x: Math.round((1.6 + (i % 5) * 2.6 + (Math.floor(i / 5) % 2 ? 1.3 : 0) + nudge(i, 7) * 0.22) * 1000) / 1000,
+        tile_y: Math.round((14 + Math.floor(i / 5) * 2.8 + nudge(i, 5) * 0.22) * 1000) / 1000, row: Math.floor(i / 5),
         footprint: Math.round((1.05 + 1.05 * ratio) * 1000) / 1000, size, bays: Math.max(2, Math.min(6, size)), rank: i
       };
     });
@@ -1475,7 +1775,11 @@
       } catch (e) { note3D('3D viewer script could not be loaded.'); return; }
     }
     if (!GL.lib) { note3D('3D viewer script is unavailable.'); return; }
-    try { buildScene(); } catch (e) { note3D('WebGL is unavailable: ' + e.message); return; }
+    // Built once: the loaded models, scenery and characters hang off this scene, so switching
+    // back from the drawn view reuses it rather than starting an empty one.
+    if (!GL.ready) {
+      try { buildScene(); } catch (e) { note3D('WebGL is unavailable: ' + e.message); return; }
+    }
     GL.on = true;
     canvas.hidden = true; $('village3d').hidden = false; $('overlay').hidden = false;
     $('modeBtn').textContent = 'Drawn view';
@@ -1551,6 +1855,13 @@
   /// about stays the thing you can see.
   const CHARACTER_SCALE = MODEL_SCALE * 1.9;
 
+  /// Y rotation that turns a model's authored front (-Z) toward the place's facing. Tile x/y map to
+  /// world x/z, so facing (0, 1) — toward the viewer — is MODEL_FACING, half a turn.
+  function rotationFor(place) {
+    const f = facingOf(place);
+    return Math.atan2(-f[0], -f[1]);
+  }
+
   /// Tile space to world space. The island is centred on the origin so the camera never has to move.
   function world(tx, ty) { return { x: (tx - GRID_W / 2) * SPREAD, z: (ty - GRID_H / 2) * SPREAD }; }
 
@@ -1565,6 +1876,58 @@
     cam.top = span; cam.bottom = -span;
     cam.updateProjectionMatrix();
   }
+
+  // ─── 3D navigation: wheel to zoom at the pointer, drag to pan, double-click to reset ──
+  // The angle never changes, so the view always reads as the same isometric village.
+  const NAV = { down: null, dragged: false, home: null };
+  const ZOOM_MIN = 1, ZOOM_MAX = 6;
+
+  /// Camera right and up vectors in world space, and world units per CSS pixel at this zoom.
+  function camAxes() {
+    const T3 = GL.lib, cam = GL.camera;
+    cam.updateMatrixWorld();
+    const e = cam.matrixWorld.elements;
+    return {
+      right: new T3.Vector3(e[0], e[1], e[2]), up: new T3.Vector3(e[4], e[5], e[6]),
+      perPx: (cam.right - cam.left) / cam.zoom / W
+    };
+  }
+
+  $('village3d').addEventListener('wheel', ev => {
+    if (!GL.ready) return;
+    ev.preventDefault();
+    const cam = GL.camera;
+    if (!NAV.home) NAV.home = cam.position.clone();
+    const rect = ev.currentTarget.getBoundingClientRect();
+    const px = ev.clientX - rect.left - W / 2, py = ev.clientY - rect.top - H / 2;
+    const before = camAxes().perPx;
+    cam.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, cam.zoom * Math.exp(-ev.deltaY * 0.0015)));
+    cam.updateProjectionMatrix();
+    // Keep the spot under the pointer where it was.
+    const a = camAxes(), k = before - a.perPx;
+    cam.position.addScaledVector(a.right, px * k).addScaledVector(a.up, -py * k);
+  }, { passive: false });
+
+  $('village3d').addEventListener('pointerdown', ev => {
+    NAV.down = { x: ev.clientX, y: ev.clientY }; NAV.dragged = false;
+  });
+  window.addEventListener('pointermove', ev => {
+    if (!NAV.down || !GL.ready) return;
+    const dx = ev.clientX - NAV.down.x, dy = ev.clientY - NAV.down.y;
+    if (!NAV.dragged && Math.hypot(dx, dy) < 4) return;
+    if (!NAV.home) NAV.home = GL.camera.position.clone();
+    NAV.dragged = true;
+    const a = camAxes();
+    GL.camera.position.addScaledVector(a.right, -dx * a.perPx).addScaledVector(a.up, dy * a.perPx);
+    NAV.down = { x: ev.clientX, y: ev.clientY };
+  });
+  window.addEventListener('pointerup', () => { NAV.down = null; });
+  // A drag ends in a click; swallow it so panning never changes the selection.
+  $('village3d').addEventListener('click', ev => { if (NAV.dragged) { ev.stopImmediatePropagation(); NAV.dragged = false; } }, true);
+  $('village3d').addEventListener('dblclick', () => {
+    if (!GL.ready || !NAV.home) return;
+    GL.camera.position.copy(NAV.home); GL.camera.zoom = 1; GL.camera.updateProjectionMatrix();
+  });
 
   /// Asset packs are rarely named exactly like our ids: they use hyphens, and a few buildings have
   /// their own vocabulary. Matching is therefore on a normalised name, with a small alias table for
@@ -1745,8 +2108,9 @@
       group.add(prop);
     }
 
-    // A bench and a lantern either side of the park, and a crate beside each warehouse.
-    const park = V.buildings.find(b => b.id === 'park');
+    // A bench and a lantern either side of a park drawn without its model (the pack's park brings
+    // its own), and a crate beside each warehouse.
+    const park = modelPath('landmarks', 'park') ? null : V.buildings.find(b => b.id === 'park');
     const bench = await loadModel(modelPath('scenery', 'bench'));
     const lantern = await loadModel(modelPath('scenery', 'stone_lantern'));
     if (park) {
@@ -1799,18 +2163,18 @@
         const obj = model ? model.clone(true) : placeholder(size, roofHex, null);
         if (model) {
           obj.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-          obj.scale.setScalar(MODEL_SCALE);
-          obj.rotation.y = MODEL_FACING;
+          obj.scale.setScalar(scaleOf(item));
         }
         obj.userData.modelled = !!model;
         GL.root.add(obj);
         node = obj; GL.nodes.set(key, obj);
       }
       node.position.set(p.x, 0, p.z);
+      node.rotation.y = rotationFor(item);
       node.visible = true;
     };
 
-    for (const b of V.buildings) await place('landmarks', b, b.size || b.base_size || 1, ROOFS[(b.tile_x * 7 + b.tile_y * 5) % ROOFS.length]);
+    for (const b of V.buildings) await place('landmarks', b, b.size || b.base_size || 1, roofOf(b));
     for (const wh of V.warehouses) {
       await place('warehouses', wh, Math.round((wh.footprint || 1.2) * 2), wh.primary || '#8ea6c4');
       // Element count still drives size, on top of whatever scale the model needed.
@@ -1821,7 +2185,8 @@
         node.scale.setScalar(s);
       }
     }
-    for (const [key, node] of GL.nodes) if (!wanted.has(key)) node.visible = false;
+    // Agent slots hold null while their model loads, and agents are shown by draw3D anyway.
+    for (const [key, node] of GL.nodes) if (node && !key.startsWith('agent:') && !wanted.has(key)) node.visible = false;
   }
 
   /// The character pack, in a fixed order so a given agent always gets the same one.
@@ -1984,10 +2349,13 @@
       if (!p) continue;
       b._screen = { x: p.x, y: p.y, hw: TILE * 0.5, top: p.y - TILE * 0.9, bottom: p.y + TILE * 0.2, labelY: p.y };
     }
-    withCtx(octx, () => {
-      for (const b of V.buildings) drawLabel(b);
-      for (const wh of V.warehouses) drawLabel(wh, wh.count.toLocaleString());
-    });
+    // Characters get a hit box too, so they can be clicked in this view as in the drawn one.
+    for (const ag of V.agents.values()) {
+      const p = project(ag.x, ag.y);
+      if (!p) continue;
+      ag._screen = { x: p.x, y: p.y - TILE * 0.5, hw: TILE * 0.25, top: p.y - TILE * 1.1, bottom: p.y };
+    }
+    withCtx(octx, drawLabels);
   }
 
   /// drawLabel draws through the module-level ctx; this lends it the overlay for one call.

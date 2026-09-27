@@ -331,8 +331,26 @@ public class VillageLayoutGeometryTests
         var workshop = VillageLayout.Default.Single(b => b.Id == VillageLayout.Workshop);
         var sign = VillageLayout.Default.Single(b => b.Id == VillageLayout.SignShop);
 
-        Assert.True(Math.Abs(ScreenX(workshop) - ScreenX(sign)) >= 0.9, "they must not share a screen column");
-        Assert.True(Math.Abs(ScreenY(workshop) - ScreenY(sign)) >= 1.4, "and must be a building's height apart");
+        var dx = Math.Abs(ScreenX(workshop) - ScreenX(sign));
+        var dy = Math.Abs(ScreenY(workshop) - ScreenY(sign));
+        Assert.True(dx >= 0.9, "they must not share a screen column");
+        // Neighbouring columns need a building's height between them; far-apart ones do not.
+        Assert.True(dx >= 3 || dy >= 1.4, "and must be a building's height apart");
+    }
+
+    [Fact]
+    public void NoLandmarkSitsOnTheParkRing()
+    {
+        // The viewer lays a ring lane round the park (radii about 2.76 x 2.28 tiles, give or take
+        // its wobble) and walks characters on it; a landmark inside or on it is walked through.
+        // Keep every centre well outside.
+        var park = VillageLayout.Default.Single(b => b.Id == VillageLayout.Park);
+        foreach (var b in VillageLayout.Default.Where(b => b.Id != VillageLayout.Park))
+        {
+            var dx = (b.TileX - park.TileX) / 2.76;
+            var dy = (b.TileY - park.TileY) / 2.28;
+            Assert.True(dx * dx + dy * dy > 2.25, b.Id + " sits too close to the park ring");
+        }
     }
 
     [Fact]
@@ -340,8 +358,8 @@ public class VillageLayoutGeometryTests
     {
         Assert.All(VillageLayout.Default, b =>
         {
-            Assert.InRange(b.TileX, 0, 11);
-            Assert.InRange(b.TileY, 0, 11);
+            Assert.InRange(b.TileX, 0, 15);
+            Assert.InRange(b.TileY, 0, 14);
         });
     }
 

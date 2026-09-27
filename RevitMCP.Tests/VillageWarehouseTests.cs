@@ -152,14 +152,18 @@ public class VillageWarehouseTests
         var yard = VillageWarehouseYard.Plan(Categories(rows), max: 12);
 
         Assert.Equal(12, yard.Count);
-        Assert.Equal(VillageWarehouseYard.OriginX, yard[0].TileX, 3);
-        Assert.Equal(VillageWarehouseYard.OriginY, yard[0].TileY, 3);
-        Assert.Equal(yard[0].TileY, yard[4].TileY, 3);
-        Assert.True(yard[5].TileY > yard[0].TileY, "the sixth warehouse starts a new row");
-        Assert.Equal(3, yard.Select(w => w.TileY).Distinct().Count());
+        var wobble = VillageWarehouseYard.Wobble + 1e-9;
+        Assert.InRange(yard[0].TileX, VillageWarehouseYard.OriginX - wobble, VillageWarehouseYard.OriginX + wobble);
+        Assert.InRange(yard[0].TileY, VillageWarehouseYard.OriginY - wobble, VillageWarehouseYard.OriginY + wobble);
+        Assert.Equal(0, yard[0].Row);
+        Assert.Equal(0, yard[4].Row);
+        Assert.Equal(1, yard[5].Row);
+        Assert.True(yard[5].TileY > yard[4].TileY, "the sixth warehouse starts a new row");
+        Assert.Equal(3, yard.Select(w => w.Row).Distinct().Count());
 
-        // Every warehouse fits inside its pitch, so no two buildings can touch.
-        Assert.All(yard, w => Assert.True(w.Footprint < VillageWarehouseYard.ColumnPitch && w.Footprint < VillageWarehouseYard.RowPitch));
+        // Every warehouse fits inside its pitch even after the nudge, so no two buildings can touch.
+        Assert.All(yard, w => Assert.True(w.Footprint + 2 * VillageWarehouseYard.Wobble < VillageWarehouseYard.ColumnPitch
+                                          && w.Footprint + 2 * VillageWarehouseYard.Wobble < VillageWarehouseYard.RowPitch));
         Assert.Equal(12, yard.Select(w => (w.TileX, w.TileY)).Distinct().Count());
     }
 

@@ -53,11 +53,14 @@ public sealed class VillageWarehouse
     /// <summary>Position in the count-descending order, starting at zero.</summary>
     [JsonProperty("rank")] public int Rank { get; set; }
 
+    /// <summary>Yard row, counted from the village side. The viewer runs one lane along each row.</summary>
+    [JsonProperty("row")] public int Row { get; set; }
+
     public VillageWarehouse Clone() => new()
     {
         Id = Id, Category = Category, Label = Label, Count = Count, Share = Share, System = System,
         TileX = TileX, TileY = TileY, Footprint = Footprint, Size = Size, Bays = Bays,
-        Primary = Primary, Accent = Accent, Hue = Hue, Rank = Rank
+        Primary = Primary, Accent = Accent, Hue = Hue, Rank = Rank, Row = Row
     };
 }
 
@@ -84,10 +87,10 @@ public static class VillageWarehouseYard
     /// <summary>
     /// Yard origin. X keeps the widest warehouse clear of the ground grid's left edge (the map is
     /// an isometric diamond, so tile x below zero has no ground under it); Y clears the lowest
-    /// landmark, the utility district at tile y 11.
+    /// landmarks, the utility district and warning area at tile y 11-12.
     /// </summary>
-    public const double OriginX = 1.0;
-    public const double OriginY = 13.4;
+    public const double OriginX = 1.6;
+    public const double OriginY = 14.0;
 
     /// <summary>Element count at which a warehouse reaches its maximum footprint.</summary>
     public const long FullSizeCount = 5000;
@@ -95,12 +98,16 @@ public static class VillageWarehouseYard
     /// <summary>
     /// Categories that never get a warehouse. They do have graph elements, but none of them is
     /// stock a yard would hold: materials and material assets are definitions, legend components
-    /// are drawing symbols, RVT links are other models, and cameras are views. Replace the list
-    /// through <c>village.warehouseExcludeCategories</c>.
+    /// are drawing symbols, RVT links are other models, and cameras are views. The sun path,
+    /// origin and base points, topography contours and HVAC zones are datums and analytical
+    /// objects that every model carries a handful of. Replace the list through
+    /// <c>village.warehouseExcludeCategories</c>.
     /// </summary>
     public static readonly string[] DefaultExcludedCategories =
     {
-        "Materials", "Legend Components", "Material Assets", "RVT Links", "Cameras"
+        "Materials", "Legend Components", "Material Assets", "RVT Links", "Cameras",
+        "Sun Path", "Internal Origin", "Project Base Point", "Survey Point",
+        "Primary Contours", "Secondary Contours", "HVAC Zones"
     };
 
     public const double MinFootprint = 1.05;
@@ -178,13 +185,30 @@ public static class VillageWarehouseYard
         return yard;
     }
 
-    /// <summary>Row-major placement, five per row, below the village.</summary>
+    /// <summary>
+    /// Row-major placement, five per row, below the village. Odd rows are staggered by half a
+    /// pitch and every warehouse is nudged by a small fixed offset, so the yard reads as a street
+    /// of sheds rather than a grid. The nudge is at most <see cref="Wobble"/> each way, which the
+    /// pitch leaves room for even between two of the largest warehouses.
+    /// </summary>
     public static void Place(VillageWarehouse warehouse, int index)
     {
         var column = index % Columns;
         var row = index / Columns;
-        warehouse.TileX = Math.Round(OriginX + column * ColumnPitch, 3);
-        warehouse.TileY = Math.Round(OriginY + row * RowPitch, 3);
+        var stagger = row % 2 == 1 ? ColumnPitch / 2 : 0;
+        warehouse.Row = row;
+        warehouse.TileX = Math.Round(OriginX + column * ColumnPitch + stagger + Nudge(index, 7) * Wobble, 3);
+        warehouse.TileY = Math.Round(OriginY + row * RowPitch + Nudge(index, 5) * Wobble, 3);
+    }
+
+    /// <summary>Largest per-warehouse offset from the yard grid, in tiles.</summary>
+    public const double Wobble = 0.22;
+
+    /// <summary>A fixed value in [-1, 1] per index: deterministic, so the yard never shuffles.</summary>
+    private static double Nudge(int index, int period)
+    {
+        var step = (index * 37 + period * 11) % period;
+        return period <= 1 ? 0 : (step / (double)(period - 1)) * 2 - 1;
     }
 
     /// <summary>
