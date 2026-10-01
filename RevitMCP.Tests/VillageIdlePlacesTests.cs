@@ -85,6 +85,35 @@ public class VillageIdlePlacesTests
     }
 
     [Fact]
+    public void TheCharacterWaitsWhereItWorkedBeforeLeavingForTheOverlook()
+    {
+        var (aggregator, clock) = Build(new VillageOptions { OverlookAfterSeconds = 15, ParkAfterSeconds = 120, AgentIdleSeconds = 3600 });
+        aggregator.Process(Completed());
+
+        clock.Advance(12);            // past the 8 s idle pose, still inside the overlook delay
+        aggregator.Tick();
+        Assert.Equal(VillageLayout.Houses, aggregator.Agents.Values.Single().Building);
+
+        // A follow-up command inside the window restarts the wait: no trip to the overlook.
+        aggregator.Process(Completed());
+        clock.Advance(12);
+        aggregator.Tick();
+        Assert.Equal(VillageLayout.Houses, aggregator.Agents.Values.Single().Building);
+
+        clock.Advance(5);
+        aggregator.Tick();
+        Assert.Equal(VillageLayout.Overlook, aggregator.Agents.Values.Single().Building);
+    }
+
+    [Fact]
+    public void OverlookDelayIsClampedAndConfigurable()
+    {
+        Assert.Equal(15, VillageOptions.Default.OverlookAfterSeconds);
+        var json = System.Text.Json.Nodes.JsonNode.Parse("{\"village\":{\"overlookAfterSeconds\":1}}")!.AsObject();
+        Assert.Equal(2, VillageOptions.FromConfig(json, null).OverlookAfterSeconds);
+    }
+
+    [Fact]
     public void StillIdleAfterTheParkDelay_TheCharacterMovesOnToThePark()
     {
         var (aggregator, clock) = Build(new VillageOptions { ParkAfterSeconds = 120, AgentIdleSeconds = 3600 });

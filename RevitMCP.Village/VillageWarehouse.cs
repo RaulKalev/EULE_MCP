@@ -56,8 +56,12 @@ public sealed class VillageWarehouse
     /// <summary>Yard row, counted from the village side. The viewer runs one lane along each row.</summary>
     [JsonProperty("row")] public int Row { get; set; }
 
+    /// <summary>Change in <see cref="Count"/> since the previous graph build seen this session; null when there is none.</summary>
+    [JsonProperty("delta")] public long? Delta { get; set; }
+
     public VillageWarehouse Clone() => new()
     {
+        Delta = Delta,
         Id = Id, Category = Category, Label = Label, Count = Count, Share = Share, System = System,
         TileX = TileX, TileY = TileY, Footprint = Footprint, Size = Size, Bays = Bays,
         Primary = Primary, Accent = Accent, Hue = Hue, Rank = Rank, Row = Row

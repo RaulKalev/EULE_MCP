@@ -24,6 +24,15 @@ public sealed class VillageGraphReadResult
     /// <summary>False when the file was unchanged and the cached result was returned.</summary>
     public bool Changed { get; set; }
     public string? DatabasePath { get; set; }
+
+    /// <summary>
+    /// What each category holds, keyed by the category name the graph reported (case-insensitive).
+    /// Empty when the graph is missing or unreadable. Aggregate counts only.
+    /// </summary>
+    public Dictionary<string, VillageWarehouseContents> Contents { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>What each landmark stands for (sheets, views, panels, health issues…), keyed by landmark id.</summary>
+    public Dictionary<string, VillageWarehouseContents> LandmarkContents { get; set; } = new(StringComparer.Ordinal);
 }
 
 /// <summary>

@@ -120,6 +120,14 @@ public sealed class VillageGraphHealth
     [JsonProperty("issues")] public long Issues => CircuitsWithoutPanel + CircuitsWithoutElements;
 }
 
+/// <summary>One electrical panel as the village shows it: how loaded it is, never its name or id.</summary>
+public sealed class VillagePanelSummary
+{
+    [JsonProperty("level")] public string Level { get; set; } = string.Empty;
+    [JsonProperty("circuits")] public long Circuits { get; set; }
+    [JsonProperty("fed_elements")] public long FedElements { get; set; }
+}
+
 /// <summary>
 /// Read-only, aggregate view of one model graph for the village. Contains counts, category
 /// and level distributions, health indicators and freshness — never node ids, names of
@@ -137,6 +145,14 @@ public sealed class VillageGraphSnapshot
     [JsonProperty("freshness")] public VillageGraphFreshness Freshness { get; set; } = new();
     [JsonProperty("counts")] public VillageGraphCounts Counts { get; set; } = new();
     [JsonProperty("health")] public VillageGraphHealth Health { get; set; } = new();
+    /// <summary>The most loaded panels (at most 12), for the utility district.</summary>
+    [JsonProperty("panels")] public List<VillagePanelSummary> Panels { get; set; } = new();
+    /// <summary>
+    /// Change in the counts since the previous graph build seen this session; null until a second
+    /// build arrives. Memory only: a restart forgets the baseline.
+    /// </summary>
+    [JsonProperty("delta")] public VillageGraphCounts? Delta { get; set; }
+    [JsonProperty("previous_built_at")] public string? PreviousBuiltAt { get; set; }
     [JsonProperty("categories")] public List<VillageThemeEvidence> Categories { get; set; } = new();
     [JsonProperty("levels")] public List<VillageThemeEvidence> Levels { get; set; } = new();
     [JsonProperty("read_ms")] public long ReadMs { get; set; }

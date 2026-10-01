@@ -2668,6 +2668,33 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    [McpServerTool(Name = "revit_move_elements_between_circuits"),
+     Description("Moves elements off the circuit(s) they are on and onto another existing circuit. Requires approval. Provide targetCircuitId and source: useSelection, elementIds, or category+filters. A source circuit left with no elements is removed by Revit (reported as a warning).")]
+    public async Task<string> MoveElementsBetweenCircuits(
+        [Description("Target circuit element ID")] long targetCircuitId,
+        [Description("If true, use current Revit selection")] bool useSelection = false,
+        [Description("Explicit element IDs to move")] long[]? elementIds = null,
+        [Description("Category name for query")] string? category = null,
+        [Description("JSON array of parameter filters")] string? filters = null,
+        [Description("Max elements (default 500)")] int limit = 500,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
+            return FormatBridgeError(filtersError!);
+
+        var args = new Dictionary<string, object?>
+        {
+            ["targetCircuitId"] = targetCircuitId,
+            ["useSelection"] = useSelection,
+            ["elementIds"] = elementIds ?? [],
+            ["category"] = category ?? string.Empty,
+            ["filters"] = parsedFilters,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_move_elements_between_circuits", args, cancellationToken);
+        return FormatResult(result);
+    }
+
     [McpServerTool(Name = "revit_reassign_circuit_panel"),
      Description("Reassigns an electrical circuit to another panel. Requires approval. Provide circuitId and targetPanelElementId (preferred) or targetPanelName.")]
     public async Task<string> ReassignCircuitPanel(

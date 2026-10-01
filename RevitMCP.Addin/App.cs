@@ -91,6 +91,7 @@ public class App : IExternalApplication
             handler.RegisterTool(new GetCircuitCompatibleElementsTool());
             handler.RegisterTool(new CreateElectricalCircuitTool());
             handler.RegisterTool(new AddElementsToCircuitTool());
+            handler.RegisterTool(new MoveElementsBetweenCircuitsTool());
             handler.RegisterTool(new ReassignCircuitPanelTool());
             handler.RegisterTool(new ChangeCircuitCableOrWireTypeTool());
             handler.RegisterTool(new SetCircuitPathModeTool());

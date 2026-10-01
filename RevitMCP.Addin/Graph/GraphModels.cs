@@ -136,6 +136,16 @@ public sealed class GraphPanelSummary
     public long FedElementCount { get; set; }
 }
 
+/// <summary>Elements of one category that share a type, a level and a workset.</summary>
+public sealed class GraphContentRow
+{
+    public string Category { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string Level { get; set; } = string.Empty;
+    public string Workset { get; set; } = string.Empty;
+    public long Count { get; set; }
+}
+
 public sealed class GraphSummaryResult
 {
     public List<GraphCount> NodesByKind { get; set; } = new();

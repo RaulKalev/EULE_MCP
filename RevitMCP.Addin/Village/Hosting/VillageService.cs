@@ -109,7 +109,7 @@ public sealed class VillageService : IDisposable
             try
             {
                 var server = new VillageSseServer(Options, () => Hub.SnapshotJson, LoadViewerHtml, () => Hub.InstancesJson, Log,
-                    ModelLibrary, LoadVendorAsset);
+                    ModelLibrary, LoadVendorAsset, () => Hub.ContentsJson);
                 if (!server.Start())
                 {
                     LastError = $"No free loopback port between {Options.Port} and {Options.Port + VillageOptions.PortFallbackAttempts - 1}.";
