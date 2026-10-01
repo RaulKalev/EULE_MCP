@@ -1,14 +1,17 @@
-# Project Village (read-only activity visualizer)
+# Project Village (activity visualizer and flyer board)
 
-> **The Project Village is a passive visualization. It does not make AI calls, add content to the
-> agent context, execute MCP tools, or write to Revit. It displays deterministic summaries of
-> connector activity and read-only graph snapshots.**
+> **The Project Village does not make AI calls, add content to the agent context, execute MCP
+> tools, or change the model. It displays deterministic summaries of connector activity and
+> read-only graph snapshots. Its one way back into Revit is "Show in Revit" on a flyer, which
+> selects and zooms to elements a read tool already returned — selection only, no AI involved.**
 
 Each open Revit project becomes a small isometric village. Buildings stand for broad work areas
 (sheets, views, schedules, families, tags, elements, systems, coordination, office work); one
 character per connected MCP client walks between them as tools run. Below the village a
 **warehouse yard** stores the model's inventory: one warehouse per Revit category, as big as that
-category's element count. Nothing in the village shows model geometry or individual elements.
+category's element count. Nothing in the village shows model geometry. Individual elements appear
+in one place only: the **flyers** pinned at the overlook, one per read tool call that returned
+elements (see [Flyers at the overlook](#flyers-at-the-overlook)).
 
 To see it without Revit, open the page with `?demo=1` (for example
 `http://127.0.0.1:47800/?demo=1`, or the `village.html` file directly): a built-in deterministic
@@ -31,15 +34,24 @@ AI agent ──MCP──▶ RevitMCP.Bridge ──pipe──▶ PipeServer ─�
                        ├─ VillageGraphReader → read-only graph snapshot + theme
                        └─ serialized "state" / "step" messages
                                                ▼
-                       VillageSseServer  http://127.0.0.1:47800/  (GET only, loopback only)
+                       └─ VillageFlyerBoard  ← ids and names from read tool results
+                                               ▼
+                       VillageSseServer  http://127.0.0.1:47800/  (loopback only; GET, plus the flyer POSTs)
                                                ▼
                        village.html (Canvas 2D, EventSource, no external assets)
+                                               │
+                                               │ POST /show (token-checked, ids on the flyer only)
+                                               ▼
+                       VillageShowHandler ──own ExternalEvent──▶ Revit: select + zoom   (no MCP, no AI)
 ```
 
-The information flow is strictly one-way. The viewer has no endpoint that accepts a command, the
-hub has no reference back into the pipe server or the tool registry, and the hooks never modify,
-delay or retain the request or the result. If the village is disabled, not running, or failing,
-the two hook calls return immediately.
+Activity flows one way: the hub has no reference back into the pipe server or the tool registry,
+and the hooks never modify, delay or retain the request or the result. The page can send exactly
+four requests that do anything — archive, unarchive or dismiss a flyer, and Show in Revit — and
+none of them reaches MCP, the agent or the tool registry. Show in Revit runs on its own Revit
+`ExternalEvent` (`VillageShowHandler`), not through the connector's dispatcher, approval queue or
+activity log, and only sets the UI selection and zooms the view. If the village is disabled, not
+running, or failing, the two hook calls return immediately.
 
 Source layout. The feature is a separate project so the boundary is enforced by the compiler
 rather than by convention: `RevitMCP.Village` cannot reference the add-in, so it can never reach
@@ -50,7 +62,7 @@ into its own repository later without untangling anything.
 |---|---|
 | `RevitMCP.Village/` | Class library (netstandard2.0 + net8.0). Event schema, tool classification, bounded queue, aggregation, theme scoring, the loopback SSE server and the state hub. No Revit API, no add-in reference. |
 | `RevitMCP.Addin/Village/VillageGraphReader.cs` | The one piece that needs the add-in's graph classes: implements `IVillageGraphReader` from the library. |
-| `RevitMCP.Addin/Village/Hosting/` | `VillageService` (wiring, config, instance registration), `VillageHooks`, the WPF status view model |
+| `RevitMCP.Addin/Village/Hosting/` | `VillageService` (wiring, config, flyer board, instance registration), `VillageHooks`, `VillageShowHandler` (the Revit side of Show in Revit), the WPF status view model |
 | `RevitMCP.Addin/Village/Viewer/village.html` | The viewer page, embedded as a resource |
 | `RevitMCP.Tests/Village*Tests.cs` | Automated tests (no Revit needed) |
 
@@ -67,9 +79,15 @@ never throw.
 - Every classification, label, aggregation decision, theme score and building size is computed by
   deterministic application code (`VillageToolClassifier`, `VillageAggregator`,
   `VillageThemeScorer`). No LLM or external service is called anywhere in the module, and the
-  viewer page loads nothing from the network except its own `/events` stream and `/snapshot`.
+  viewer page loads nothing from the network except its own loopback listener.
 - Clicking a character or a warehouse only reads the snapshot the page already holds; nothing is
   requested and nothing is generated.
+- Flyers are built by the connector from tool results the agent **already received**; the agent
+  is never told about them and writes nothing extra. Opening, filtering and sorting a flyer happen
+  in the page.
+- Show in Revit is a direct call from the page to the add-in, which selects the elements on the
+  Revit thread. No model, MCP client or agent is involved, so a click costs nothing. The agent only
+  learns about it if it later reads the selection itself (for example `revit_get_selected_elements`).
 
 ## Enabling it
 
@@ -129,8 +147,9 @@ aggregator. Adding optional fields keeps the schema version; changing a field's 
 ## Privacy and sanitization
 
 Never published: prompts, AI responses, tool arguments, tool results, messages, warnings,
-errors, parameter values, element ids, model geometry, file contents, file paths, user names,
-credentials or tokens. The hooks read only the tool name, client name, success flag, status code,
+errors, parameter values, model geometry, file contents, file paths, user names, credentials or
+tokens. Element ids and names are published only on **flyers** (below), never in events, steps or
+the state snapshot. The hooks read only the tool name, client name, success flag, status code,
 duration, the document title and the model path (hashed), plus a shallow allow-listed numeric
 count from the result. The graph snapshot carries counts, category and level names, health
 counters and freshness — never node ids, element names or the `built_by` user. The one extension
@@ -148,6 +167,18 @@ null and change nothing. `VillageWarehouseRoutingTests.TheEventStillCarriesNoArg
 pins that a request carrying a parameter name, a value and a file path still serializes none of
 them.
 
+**Flyers** are the one place the village reads further into a result, and only for reads,
+searches, analyses and checks that succeeded (writes, exports and graph builds never post a
+flyer). `VillageFlyerExtractor` walks the result once on the hook thread, within a budget of
+50 000 nodes and 12 levels, and keeps per element only the id and the name / category / family /
+type / level strings (each capped at 120 characters). Parameter maps, tags, warnings, error
+lists, graph `extra` hints and id lists such as `invalidIds` are never entered, so no parameter
+value can reach a flyer. Only the add-in's own DTOs, JSON tokens and collections are read —
+framework types and anything from the Revit API are skipped, so no Revit getter runs off the
+Revit thread. Tool arguments are not read for flyers. Flyers are served only to the loopback page
+and saved locally (see below); `VillageFlyerTests.Extract_ElementDtos_KeepsRoutingFieldsAndNeverParameterValues`
+pins that a parameter value in the result never reaches a flyer.
+
 The tests `VillageEventTests.Serialize_NeverContainsPathsArgumentsOrResults`,
 `VillageStateHubTests.GraphToolResponses_FeedTheFreshnessHintWithoutRetainingTheResult` and
 `VillageGraphReaderTests.Snapshot_SerializesWithoutPathsUserNamesOrIds` pin this down.
@@ -156,16 +187,32 @@ The tests `VillageEventTests.Serialize_NeverContainsPathsArgumentsOrResults`,
 
 - Binds to a loopback address only. `village.host` accepts `127.0.0.1`, `localhost` or `::1`;
   anything else is coerced back to `127.0.0.1`.
-- Accepts `GET`/`HEAD` for `/`, `/events`, `/snapshot`, `/instances`, `/contents`, `/health`. Every other
-  method gets `405`, every other path `404`. Request bodies are never read.
+- Accepts `GET`/`HEAD` for `/`, `/events`, `/snapshot`, `/instances`, `/contents`, `/health`, and with
+  flyers on `/flyers` and `/flyers/{id}`. Every other method gets `405`, every other path `404`.
+- Accepts `POST` on four routes only, and only when flyers are on: `/flyers/{id}/archive`,
+  `/flyers/{id}/unarchive`, `/flyers/{id}/dismiss` and `/show`. Each POST must carry:
+  - the listener's **per-start token** in `X-Village-Token`. It is 24 random bytes, written into
+    the page the listener serves, and a page on another origin cannot read it;
+  - an `Origin`, if the browser sends one, that names this listener (scheme, loopback host and
+    port), and a `Sec-Fetch-Site`, if sent, of `same-origin`;
+  - a `Content-Length` (no chunked bodies) of at most 96 KB and `Content-Type: application/json`.
+
+  A custom header and a JSON body both force a CORS preflight, which the listener never answers,
+  so a page on another site cannot send these requests at all. Wrong token or origin gets `403`,
+  a missing length `411`, too large a body `413`, another media type `415`.
+- `/show` selects only ids that are on the named flyer (anything else in the request is dropped),
+  at most 5 000 at a time and one request at a time (`429` while one is running). Revit refuses
+  it when the active document is not the model the flyer was captured in.
 - The `Host` header must name a loopback host (`421` otherwise) to block DNS-rebinding pages.
 - No CORS headers are sent, so foreign origins cannot read responses or open the stream; a strict
   `Content-Security-Policy` is set on every response.
 - The request head is capped at 8 KB and must arrive within 5 s. At most `village.maxViewers`
   streams (default 8) are served; each viewer has a bounded outbound queue (256 messages) and a
   slow viewer loses old state messages rather than growing memory.
-- The server holds three read-only string providers and nothing else: there is no code path from
-  a request to the hub, the pipe server, MCP or Revit.
+- Besides its read-only string providers, the server holds one `IVillageActions` (the flyer board
+  and the Show in Revit handler). There is no code path from a request to the hub, the pipe
+  server, MCP, the agent or the tool registry, and no request can change the model. With
+  `village.flyersEnabled` off, the listener is GET-only again and the page gets no token.
 
 ## Configuration
 
@@ -201,6 +248,11 @@ key. Values are clamped into the ranges shown.
 | `toolAreas` | `{}` | | Per-tool area overrides, e.g. `{"revit_list_sheets": "office"}` |
 | `toolActivities` | `{}` | | Per-tool activity overrides |
 | `themes` | built-in | | System-theme mapping, see below |
+| `flyersEnabled` | `true` | | Pin read tool results as flyers at the overlook; off makes the listener GET-only |
+| `flyerMaxItems` | `2000` | 50–10000 | Elements kept per flyer; a larger result is marked truncated |
+| `maxFlyers` | `30` | 5–200 | Today's flyers kept; the oldest drop off first |
+| `flyerArchiveDays` | `30` | 1–365 | Days an archived flyer is kept |
+| `showInRevit` | `true` | | Allow Show in Revit from a flyer; off keeps flyers browse-only |
 
 Example:
 
@@ -220,6 +272,39 @@ Example:
   }
 }
 ```
+
+## Flyers at the overlook
+
+When a read tool returns elements, the connector pins a **flyer** to the notice board at the
+overlook: one flyer per call. A flyer is titled after the tool ("Find elements by parameter") and
+shows when it was posted, which client asked, how many elements it holds and its largest
+categories. The overlook's board shows one paper per flyer pinned today, with a count; clicking
+the overlook scrolls to the **Flyers at the overlook** card in the side panel.
+
+- **Today / Archive.** New flyers are cleared when the local day changes. **Archive** keeps one
+  for `flyerArchiveDays`; **Unarchive** puts it back on today's board; **Dismiss** removes it at
+  once. A repeat of the newest flyer (same tool, model and elements) only refreshes its time, so an
+  agent retrying or paging does not fill the board.
+- **Open** lists the elements with their name, category, family/type and level as the tool
+  returned them, plus their id. Filter by text, category and level, and sort by name, category,
+  type, level or id. The first 200 rows are drawn, with a button for the rest.
+- **Show in Revit** selects the elements in Revit and zooms the active view to them. It is on
+  each flyer (all of its elements), on the open flyer (all elements, or only those matching the
+  filters) and on each row (that one element). Revit refuses when the active document is not the
+  model the flyer came from. It reports elements that no longer exist and says when the active
+  view cannot zoom to them.
+
+What a flyer captures: reads, searches, analyses and checks (`get_`, `list_`, `find_`, `query_`,
+`select_`, `preview_`, `check_`, … — see the activity rules) that succeeded and returned element
+records. A record is an object with an `elementId`, or an `id` next to a `name`, `category`,
+`kind`, `family` or `type` (graph nodes use string ids, which count), plus id lists named
+`elementIds` or `selectedElementIds`. Results with none of these post nothing.
+
+Storage: one JSON file per model under `%LOCALAPPDATA%\RKTools\RevitMCP\Village\flyers\`,
+holding only the flyer fields above. It is loaded when the village starts and written shortly
+after each change, so the board survives a Revit restart. Names, types and levels on a flyer are
+what the tool returned at the time, not live values. The ids are re-checked in Revit when you
+click Show.
 
 ## Village layout (tool → area → building)
 
@@ -717,6 +802,10 @@ Graph values are routing and visualization metadata captured at build time, not 
 | A tool lands on the village square | It classified as `unknown`; add a `village.toolAreas` entry or extend the rule table. |
 | Theme looks wrong | Open Diagnostics; adjust `village.themes` categories/keywords (localised category names can be added). |
 | "Catching up" stays on | A large burst is being folded; it clears when the queue drains. |
+| No flyer after a query | Only successful reads, searches, analyses and checks that return element records post one; check `village.flyersEnabled`. |
+| Show in Revit says "another model" | Switch Revit to the model named on the flyer. Element ids only mean something in their own document. |
+| Show in Revit says to reload the page | The village restarted (new token) since the page loaded; reload it. |
+| No Show in Revit button | `village.showInRevit` is off, or the show handler failed to start (see the startup log). |
 
 ## Known limitations
 
@@ -729,11 +818,16 @@ Graph values are routing and visualization metadata captured at build time, not 
 - No persistent history: the replay-ready buffer lives in memory for the connector's lifetime.
 - The viewer is a single page with procedural sprites; it is not a 3D or geometry viewer by design.
 - Revit's UI language changes category names; add localised names to `village.themes`.
+- The notice board is drawn in the 2D view only; in the 3D view use the side panel card.
+- Flyer capture recognises element records by shape. A tool whose result uses other key names
+  posts no flyer.
+- Show in Revit waits up to 20 s for Revit. A modal dialog open in Revit blocks it, and the page
+  then says so.
 
 ## Rolling back
 
 Delete the `RevitMCP.Village` project (and its entry in `RevitMCP.slnx`) and `RevitMCP.Addin/Village`,
-then remove: the village block in `App.OnStartup` and the `_village?.Dispose()` line in
+then remove: the village block in `App.OnStartup` (including the `SetShowHandler` line) and the `_village?.Dispose()` line in
 `OnShutdown`; the one-line hooks in `PipeServer.HandleClientAsync` and `ActivityLogger.WriteAsync`;
 the `Village` property in `McpWindowViewModel`; the **PROJECT VILLAGE** section (and the
 `ScrollViewer`) in `McpWindow.xaml`; the `EmbeddedResource` and the `RevitMCP.Village`

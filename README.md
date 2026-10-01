@@ -96,7 +96,7 @@ Important repository references:
 - [`docs/extensible-storage.md`](docs/extensible-storage.md) — reading add-in data stored on elements
 - [`docs/family-types.md`](docs/family-types.md) — duplicating, renaming, and re-parameterising family types
 - [`docs/mcp-performance.md`](docs/mcp-performance.md) — lower-latency queries and reduced-credit tool profiles
-- [`docs/project-village.md`](docs/project-village.md) — opt-in, read-only "Project Village" activity visualizer (no AI calls, no Revit writes)
+- [`docs/project-village.md`](docs/project-village.md) — opt-in "Project Village" activity visualizer with a flyer board of query results and Show in Revit (no AI calls, no model changes)
 - [`docs/model-graph.md`](docs/model-graph.md) — per-model routing graph: find element ids cheaply before querying the live model
 - [`docs/move-elements.md`](docs/move-elements.md) — moving existing elements onto exact model coordinates in bulk
 - [`docs/place-from-cad.md`](docs/place-from-cad.md) — placing families at locations marked in an imported DWG, and reconstructing fixtures from loose DWG line work

@@ -91,6 +91,27 @@ public sealed class VillageOptions
     /// </summary>
     public bool WarehouseModelsOnly { get; set; } = true;
 
+    /// <summary>
+    /// Read tool results that return elements are pinned as flyers at the overlook
+    /// (<c>village.flyersEnabled</c>, default on). Off: no result is read beyond the counts.
+    /// </summary>
+    public bool FlyersEnabled { get; set; } = true;
+
+    /// <summary>Elements kept per flyer (<c>village.flyerMaxItems</c>); a larger result is marked truncated.</summary>
+    public int FlyerMaxItems { get; set; } = 2000;
+
+    /// <summary>Today's flyers kept on the board (<c>village.maxFlyers</c>); the oldest drop off first.</summary>
+    public int MaxFlyers { get; set; } = 30;
+
+    /// <summary>Days an archived flyer is kept (<c>village.flyerArchiveDays</c>).</summary>
+    public int FlyerArchiveDays { get; set; } = 30;
+
+    /// <summary>
+    /// The page may select a flyer's elements in Revit (<c>village.showInRevit</c>, default on).
+    /// Off: flyers stay browsable, and the listener answers no request that touches Revit.
+    /// </summary>
+    public bool ShowInRevit { get; set; } = true;
+
     /// <summary>Per-tool area overrides (<c>village.toolAreas</c>).</summary>
     public Dictionary<string, string> ToolAreas { get; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -142,6 +163,11 @@ public sealed class VillageOptions
         o.ReconnectBackoffMs = Int(user, company, "reconnectBackoffMs", o.ReconnectBackoffMs, 250, 60000);
         o.ReconnectBackoffMaxMs = Int(user, company, "reconnectBackoffMaxMs", o.ReconnectBackoffMaxMs, o.ReconnectBackoffMs, 300000);
         o.DiagnosticLogging = Bool(user, company, "diagnosticLogging", o.DiagnosticLogging);
+        o.FlyersEnabled = Bool(user, company, "flyersEnabled", o.FlyersEnabled);
+        o.FlyerMaxItems = Int(user, company, "flyerMaxItems", o.FlyerMaxItems, 50, 10000);
+        o.MaxFlyers = Int(user, company, "maxFlyers", o.MaxFlyers, 5, 200);
+        o.FlyerArchiveDays = Int(user, company, "flyerArchiveDays", o.FlyerArchiveDays, 1, 365);
+        o.ShowInRevit = Bool(user, company, "showInRevit", o.ShowInRevit);
 
         CopyMap(company, "toolAreas", o.ToolAreas);
         CopyMap(user, "toolAreas", o.ToolAreas);

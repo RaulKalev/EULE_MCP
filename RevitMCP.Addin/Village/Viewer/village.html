@@ -5,10 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Project Village</title>
 <!--
-  Project Village — passive, read-only visualization of EULE MCP activity.
+  Project Village — visualization of EULE MCP activity, with a flyer board at the overlook.
   Self-contained: no external scripts, fonts or images. Served by the connector's loopback
   listener; also runs from a file with ?demo=1 (built-in deterministic demo, no server).
-  It never sends commands: the only network calls are GET /events (SSE) and GET /snapshot.
+  It reads with GET (/events, /snapshot, /contents, /flyers). Its only requests that do
+  anything are the flyer actions — archive, unarchive, dismiss, and Show in Revit, which selects
+  and zooms to a flyer's elements. None of them reaches the AI agent or changes the model.
 -->
 <style>
   :root {
@@ -90,6 +92,29 @@
   #diag th, #diag td { text-align: left; padding: 3px 4px; border-bottom: 1px solid rgba(36,53,79,.7); font-weight: normal; }
   #diag td.num { text-align: right; font-variant-numeric: tabular-nums; }
   #diag .reason { color: var(--text); margin: 4px 0; }
+  #flyers h2 .flcount { margin-left: auto; color: #0a1428; background: var(--warn); border-radius: 999px; padding: 0 7px; font-size: 10.5px; letter-spacing: 0; }
+  #flyers h2 .flcount:empty { display: none; }
+  #flyers h2 { display: flex; align-items: center; gap: 6px; }
+  #flyersBody { display: flex; flex-direction: column; gap: 6px; }
+  .fltabs { display: flex; gap: 6px; }
+  .fltabs button.on, .flsort button.on { border-color: var(--accent); background: #1e3050; }
+  .flyer { border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: var(--r-sm); padding: 6px 9px; background: var(--panel-2); }
+  .flyer.archived { border-left-color: var(--muted); }
+  .flyer.other { opacity: .7; }
+  .fltitle { font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+  .fltitle .whn { color: var(--warn); font-variant-numeric: tabular-nums; }
+  .flmeta { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; }
+  .flbtns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+  .flbtns button, .flrow button { padding: 2px 10px; font-size: 11px; }
+  .flrow { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; padding: 4px 2px; border-bottom: 1px solid rgba(36,53,79,.7); font-size: 12px; }
+  .flrow .flname, .flrow .flsub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .flrow .flsub { color: var(--muted); font-size: 11px; }
+  #flyers .desc { color: var(--muted); font-size: 12px; margin: 4px 0 6px; }
+  #flHead strong { display: block; margin-bottom: 2px; }
+  #flStatus { font-size: 12px; color: var(--muted); min-height: 0; }
+  #flStatus.ok { color: var(--ok); } #flStatus.err { color: var(--err); }
+  button:disabled { opacity: .45; cursor: default; }
+  button:disabled:hover { border-color: var(--line); background: var(--panel-2); }
   footer { padding: 6px 14px; border-top: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: 11px; }
   @media (max-width: 900px) { main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; } aside { border-left: 0; border-top: 1px solid var(--line); max-height: 45vh; } }
 </style>
@@ -101,7 +126,7 @@
   <span class="badge" id="graphBadge"><span class="dot"></span><span>graph: unknown</span></span>
   <span class="badge" id="bridgeBadge"><span class="dot"></span><span>connecting</span></span>
   <span class="badge" id="modeBadge"><span class="dot"></span><span>live</span></span>
-  <span class="badge readonly" title="This page cannot send commands to Revit or to the AI agent.">read-only</span>
+  <span class="badge readonly" title="This page cannot change the model or reach the AI agent. Show in Revit on a flyer only selects and zooms.">model read-only</span>
   <span class="spacer"></span>
   <select id="levelFilter" title="Size every warehouse by what it holds on one level" hidden></select>
   <select id="instances" title="Other running villages (one per Revit instance)" hidden></select>
@@ -117,6 +142,7 @@
   <aside>
     <section id="activity"><h2>Current activity</h2><div id="agents">No agent connected yet.</div></section>
     <section id="attention"><h2>Needs attention</h2><div id="attentionBody">Nothing needs attention.</div></section>
+    <section id="flyers" hidden><h2>Flyers at the overlook <span class="flcount" id="flyerCount"></span></h2><div id="flyersBody"></div></section>
     <section id="session" class="collapsible" data-default="collapsed"><h2>This session</h2><div id="sessionBody"></div></section>
     <section id="systems" hidden><h2>Systems</h2><div id="systemsBody"></div></section>
     <section id="feed" class="collapsible" data-default="collapsed"><h2>Recent activity</h2><ul id="feedList"></ul></section>
@@ -130,7 +156,7 @@
     <section id="diag" hidden><h2>Diagnostics</h2><div id="diagBody"></div></section>
   </aside>
 </main>
-<footer id="notice">The Project Village is a passive visualization. It does not make AI calls, add content to the agent context, execute MCP tools, or write to Revit. It displays deterministic summaries of connector activity and read-only graph snapshots.</footer>
+<footer id="notice">The Project Village does not make AI calls, add content to the agent context, execute MCP tools, or change the model. It displays deterministic summaries of connector activity and read-only graph snapshots; flyers hold the element ids read tools already returned, and Show in Revit only selects them.</footer>
 
 <script>
 (function () {
@@ -309,6 +335,8 @@
     if (V.selected && !V.byId.has(V.selected) && !V.whById.has(V.selected)) V.selected = null;
     if (V.selectedAgent && !V.agents.has(V.selectedAgent)) V.selectedAgent = null;
     ensureContents();
+    // Flyers from another model cannot be shown; re-mark them when the active model changes.
+    if ((s.model_id || '') !== V.flyerModel) { V.flyerModel = s.model_id || ''; renderFlyers(); }
     renderHeader(); renderAgents(); renderFeed(); renderSelected(); renderInstances(); renderAttention(); renderSession(); renderSystems();
     if (GL.on) syncScene();
     if (!$('diag').hidden) renderDiagnostics();
@@ -420,6 +448,10 @@
     let html = '<strong>' + esc(b.label) + '</strong><div class="desc">' + esc(b.description || '') + '</div><div class="kv">';
     let reads = 0, writes = 0, exports = 0, failures = 0, deferred = 0, affected = 0, lastTool = null;
     for (const a of areas) if ((b.areas || []).includes(a.area)) { reads += a.reads; writes += a.writes; exports += a.exports; failures += a.failures; deferred += a.deferred; affected += a.affected; if (a.last_tool) lastTool = a.last_tool; }
+    if (b.id === 'overlook' && FLY.enabled) {
+      const today = FLY.list.filter(f => f.state !== 'archived').length;
+      html += kv('Flyers pinned today', today) + kv('Archived flyers', FLY.list.length - today);
+    }
     if (b.id === 'warning_area') {
       html += kv('Recent failures (5 min)', s.recent_failures || 0);
       html += kv('Graph status', g && g.freshness ? g.freshness.status : 'none');
@@ -759,6 +791,285 @@
       b.addEventListener('click', () => { V.focusSystem = V.focusSystem === sys ? '' : sys; renderSystems(); });
       el.appendChild(b);
     }
+  }
+
+  // ─── Flyers: what read tools returned, pinned at the overlook ────────────
+  // The connector pins one flyer per read tool call that returned elements: ids and names taken
+  // from a result the agent already received, so they cost no tokens. Opening, filtering and
+  // sorting happen here. The page's only requests that do anything are archive, unarchive,
+  // dismiss and Show in Revit, which selects and zooms to elements on the flyer — none of them
+  // reaches the agent or changes the model.
+  const ACTION_TOKEN = '__VILLAGE_ACTION_TOKEN__';        // filled in by the connector per start
+  const CAN_ACT = /^[0-9a-f]{16,}$/.test(ACTION_TOKEN);
+  const FLYER_ROWS_SHOWN = 200;
+  const FLY = { enabled: false, show: false, list: [], tab: 'new', openId: null, open: null, q: '', cat: '', level: '', sort: 'found', all: false, status: null, busy: false, built: false, filtered: [] };
+  let DEMO_BOARD = null;
+
+  function currentModel() { return (V.snapshot && V.snapshot.model_id) || ''; }
+  function sameModel(f) { const m = currentModel(); return !m || !f || f.model_id === m; }
+  function canAct() { return CAN_ACT || DEMO; }
+  function canShow(f) { return FLY.show && sameModel(f); }
+
+  function loadFlyers() {
+    if (DEMO) { if (DEMO_BOARD) applyBoard(DEMO_BOARD.view()); return; }
+    fetch('/flyers', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(v => { if (v) applyBoard(v); }).catch(() => { });
+  }
+
+  function applyBoard(view) {
+    FLY.enabled = !!(view && view.enabled);
+    FLY.show = !!(view && view.show_available) && canAct();
+    FLY.list = view && Array.isArray(view.flyers) ? view.flyers : [];
+    if (FLY.openId) {
+      const s = FLY.list.find(f => f.id === FLY.openId);
+      if (!s) { closeFlyer(); return; }
+      if (FLY.open) FLY.open.state = s.state;
+    }
+    renderFlyers();
+  }
+
+  function post(path, body) {
+    return fetch(path, {
+      method: 'POST', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', 'X-Village-Token': ACTION_TOKEN },
+      body: JSON.stringify(body || {})
+    }).then(r => r.json().catch(() => ({ ok: false, message: r.status === 403 ? 'The village restarted since this page loaded — reload the page.' : 'The connector answered ' + r.status + '.' })));
+  }
+
+  function timeOf(iso) {
+    const d = new Date(iso); if (isNaN(d)) return '';
+    const t = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return d.toDateString() === new Date().toDateString() ? t : d.toLocaleDateString() + ' ' + t;
+  }
+
+  function setFlyerStatus(kind, text) { FLY.status = text ? { kind, text } : null; paintStatus(); }
+  function paintStatus() {
+    const el = $('flStatus'); if (!el) return;
+    el.className = FLY.status ? (FLY.status.kind || '') : '';
+    el.textContent = FLY.status ? FLY.status.text : '';
+  }
+
+  function renderFlyers() {
+    const sec = $('flyers'); if (!sec) return;
+    sec.hidden = !FLY.enabled;
+    const today = FLY.list.filter(f => f.state !== 'archived'), archived = FLY.list.filter(f => f.state === 'archived');
+    $('flyerCount').textContent = today.length ? String(today.length) : '';
+    if (!FLY.enabled) return;
+    if (FLY.openId) { renderFlyerDetail(); return; }
+    FLY.built = false;
+    const list = FLY.tab === 'archived' ? archived : today;
+    let html = '<div class="fltabs"><button type="button" data-tab="new" class="' + (FLY.tab === 'new' ? 'on' : '') + '">Today (' + today.length + ')</button>' +
+      '<button type="button" data-tab="archived" class="' + (FLY.tab === 'archived' ? 'on' : '') + '">Archive (' + archived.length + ')</button></div>';
+    if (!list.length) html += '<div class="desc">' + (FLY.tab === 'archived'
+      ? 'Nothing archived. Archive a flyer to keep it after today.'
+      : 'No flyers yet. When the agent reads or finds elements, the result is pinned here. Today\'s flyers are cleared at midnight.') + '</div>';
+    for (const f of list) html += flyerCard(f);
+    html += '<div id="flStatus"></div>';
+    $('flyersBody').innerHTML = html;
+    paintStatus();
+  }
+
+  function flyerCard(f) {
+    const other = !sameModel(f);
+    const cats = (f.categories || []).map(c => c.name + ' ' + c.count.toLocaleString()).join(' · ');
+    const id = esc(f.id);
+    let html = '<div class="flyer' + (f.state === 'archived' ? ' archived' : '') + (other ? ' other' : '') + '">' +
+      '<div class="fltitle"><span>' + esc(f.title) + '</span><span class="whn" title="Elements found">' + f.total.toLocaleString() + (f.truncated ? '+' : '') + '</span></div>' +
+      '<div class="flmeta">' + esc([timeOf(f.updated_at), f.client, other ? 'from ' + (f.project_name || 'another model') : ''].filter(Boolean).join(' · ')) + '</div>' +
+      (cats ? '<div class="flmeta">' + esc(cats) + '</div>' : '') +
+      '<div class="flbtns"><button type="button" data-act="open" data-id="' + id + '">Open</button>';
+    if (FLY.show) html += '<button type="button" data-act="show" data-id="' + id + '"' + (other ? ' disabled title="Captured in another model — switch to it in Revit"' : ' title="Select all of them in Revit and zoom to them"') + '>Show in Revit</button>';
+    if (canAct()) html += f.state === 'archived'
+      ? '<button type="button" data-act="unarchive" data-id="' + id + '" title="Back to today\'s flyers">Unarchive</button>'
+      : '<button type="button" data-act="archive" data-id="' + id + '" title="Keep it after today">Archive</button>';
+    if (canAct()) html += '<button type="button" data-act="dismiss" data-id="' + id + '" title="Take it off the board">Dismiss</button>';
+    return html + '</div></div>';
+  }
+
+  function openFlyer(id) {
+    Object.assign(FLY, { openId: id, open: null, q: '', cat: '', level: '', sort: 'found', all: false, status: null, built: false });
+    renderFlyers();
+    const done = f => {
+      if (FLY.openId !== id) return;
+      FLY.open = f && Array.isArray(f.items) ? f : null;
+      if (!FLY.open) FLY.status = { kind: 'err', text: 'This flyer is no longer on the board.' };
+      FLY.built = false; renderFlyers();
+    };
+    if (DEMO) { done(DEMO_BOARD ? DEMO_BOARD.get(id) : null); return; }
+    fetch('/flyers/' + encodeURIComponent(id), { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(done).catch(() => done(null));
+  }
+
+  function closeFlyer() { Object.assign(FLY, { openId: null, open: null, status: null, built: false, filtered: [] }); renderFlyers(); }
+
+  function distinctField(items, field) {
+    const m = new Map(); for (const it of items) { const k = it[field] || ''; m.set(k, (m.get(k) || 0) + 1); }
+    return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], undefined, { numeric: true }));
+  }
+
+  function renderFlyerDetail() {
+    const body = $('flyersBody'), f = FLY.open;
+    if (!FLY.built) {
+      let html = '<div class="flbtns" style="margin-top:0"><button type="button" data-act="back">← All flyers</button></div><div id="flHead"></div>';
+      if (f) {
+        const cats = distinctField(f.items, 'category'), levels = distinctField(f.items, 'level');
+        const opt = (list, all) => '<option value="">' + esc(all + ' (' + list.length + ')') + '</option>' + list.map(([k, n]) => '<option value="v:' + esc(k) + '">' + esc((k || '(none)') + ' — ' + n.toLocaleString()) + '</option>').join('');
+        html += '<div class="whctl"><input id="flQ" type="search" placeholder="Filter by name, type or id…" autocomplete="off" spellcheck="false">' +
+          (cats.length > 1 ? '<select id="flCat" title="Category">' + opt(cats, 'All categories') + '</select>' : '') +
+          (levels.length > 1 ? '<select id="flLevel" title="Level">' + opt(levels, 'All levels') + '</select>' : '') +
+          '<select id="flSort" title="Sort"><option value="found">As returned</option><option value="name">Name</option><option value="category">Category</option><option value="type">Type</option><option value="level">Level</option><option value="id">Element id</option></select>' +
+          '<button id="flClear" type="button" title="Clear filters">Clear</button></div>' +
+          '<div class="flbtns" style="margin-top:0"><button id="flShowAll" type="button">Show in Revit</button></div>' +
+          '<div id="flSummary" class="desc"></div>';
+      } else if (!FLY.status) {
+        html += '<div class="desc">Loading the flyer…</div>';
+      }
+      html += '<div id="flStatus"></div><div id="flRows"></div>';
+      body.innerHTML = html;
+      FLY.built = !!f;
+      if (f) {
+        const set = (id, v) => { const el = $(id); if (el) el.value = v; };
+        const sync = () => { set('flQ', FLY.q); set('flCat', FLY.cat); set('flLevel', FLY.level); set('flSort', FLY.sort); };
+        sync();
+        const on = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
+        const refresh = () => { FLY.all = false; renderFlyerRows(); };
+        on('flQ', 'input', e => { FLY.q = e.target.value; refresh(); });
+        on('flCat', 'change', e => { FLY.cat = e.target.value; refresh(); });
+        on('flLevel', 'change', e => { FLY.level = e.target.value; refresh(); });
+        on('flSort', 'change', e => { FLY.sort = e.target.value; refresh(); });
+        on('flClear', 'click', () => { FLY.q = ''; FLY.cat = ''; FLY.level = ''; FLY.sort = 'found'; sync(); refresh(); });
+        on('flShowAll', 'click', () => {
+          const filtering = FLY.q || FLY.cat || FLY.level;
+          showInRevit(f.id, filtering ? FLY.filtered.map(it => it.id) : null);
+        });
+      }
+    }
+    renderFlyerHead();
+    paintStatus();
+    if (f) renderFlyerRows();
+  }
+
+  function renderFlyerHead() {
+    const el = $('flHead'); if (!el) return;
+    const s = FLY.list.find(x => x.id === FLY.openId) || FLY.open;
+    if (!s) { el.innerHTML = ''; return; }
+    const other = !sameModel(s);
+    let html = '<strong>' + esc(s.title) + '</strong><div class="desc">' +
+      esc('Returned by ' + s.tool + (s.client ? ' for ' + s.client : '') + ' · ' + timeOf(s.created_at) + (s.state === 'archived' ? ' · archived' : '')) + '</div>';
+    if (s.truncated) html += '<div class="desc">The result held ' + s.total.toLocaleString() + ' elements; this flyer keeps the first ' + ((FLY.open && FLY.open.items.length) || 0).toLocaleString() + '.</div>';
+    if (other) html += '<div class="desc">Captured in ' + esc(s.project_name || 'another model') + '. Switch to that model in Revit to show these elements.</div>';
+    html += '<div class="flbtns" style="margin-top:0">';
+    if (canAct()) html += s.state === 'archived'
+      ? '<button type="button" data-act="unarchive" data-id="' + esc(s.id) + '">Unarchive</button>'
+      : '<button type="button" data-act="archive" data-id="' + esc(s.id) + '">Archive</button>';
+    if (canAct()) html += '<button type="button" data-act="dismiss" data-id="' + esc(s.id) + '">Dismiss</button>';
+    html += '</div><div class="desc">Names, types and levels are what the tool returned at ' + esc(timeOf(s.created_at)) + ', not live values.</div>';
+    el.innerHTML = html;
+  }
+
+  function filteredItems() {
+    const f = FLY.open; if (!f) return [];
+    const q = FLY.q.trim().toLowerCase();
+    let items = f.items.filter(it =>
+      (!FLY.cat || 'v:' + (it.category || '') === FLY.cat) && (!FLY.level || 'v:' + (it.level || '') === FLY.level) &&
+      (!q || [it.name, it.type, it.family, it.category, it.level, String(it.id)].some(v => v && String(v).toLowerCase().includes(q))));
+    const by = k => (a, b) => (a[k] || '￿').localeCompare(b[k] || '￿', undefined, { numeric: true, sensitivity: 'base' });
+    const name = by('name');
+    const sorters = {
+      name, category: (a, b) => by('category')(a, b) || name(a, b), type: (a, b) => by('type')(a, b) || name(a, b),
+      level: (a, b) => by('level')(a, b) || name(a, b), id: (a, b) => a.id - b.id
+    };
+    if (sorters[FLY.sort]) items = items.slice().sort(sorters[FLY.sort]);
+    return items;
+  }
+
+  function renderFlyerRows() {
+    const f = FLY.open, rowsEl = $('flRows'), sumEl = $('flSummary'); if (!f || !rowsEl) return;
+    const items = filteredItems(); FLY.filtered = items;
+    const filtering = FLY.q || FLY.cat || FLY.level;
+    if (sumEl) sumEl.textContent = (filtering ? items.length.toLocaleString() + ' of ' + f.items.length.toLocaleString() : f.items.length.toLocaleString()) + ' elements';
+    const showAll = $('flShowAll');
+    if (showAll) {
+      showAll.hidden = !FLY.show;
+      showAll.disabled = !canShow(f) || items.length === 0 || FLY.busy;
+      showAll.textContent = 'Show ' + (filtering ? items.length.toLocaleString() + ' ' : 'all ') + 'in Revit';
+      showAll.title = sameModel(f) ? 'Select them in Revit and zoom to them' : 'Captured in another model — switch to it in Revit';
+    }
+    if (!items.length) { rowsEl.innerHTML = '<div class="desc">Nothing matches these filters.</div>'; return; }
+    const shown = FLY.all ? items : items.slice(0, FLYER_ROWS_SHOWN);
+    const allow = canShow(f) && !FLY.busy;
+    let html = '';
+    for (const it of shown) {
+      const sub = [it.category, it.family && it.type && !it.type.startsWith(it.family) ? it.family + ': ' + it.type : it.type, it.level].filter(Boolean).join(' · ');
+      html += '<div class="flrow"><div style="min-width:0"><div class="flname" title="' + esc(it.name || '') + '">' + esc(it.name || 'Element ' + it.id) + '</div>' +
+        '<div class="flsub" title="' + esc(sub) + '">' + esc((sub ? sub + ' · ' : '') + 'id ' + it.id) + '</div></div>' +
+        (FLY.show ? '<button type="button" data-act="show-one" data-eid="' + it.id + '"' + (allow ? '' : ' disabled') + ' title="Select it in Revit and zoom to it">Show</button>' : '') + '</div>';
+    }
+    if (items.length > shown.length) html += '<button id="flMore" type="button" style="margin-top:6px">Show all ' + items.length.toLocaleString() + ' rows</button>';
+    rowsEl.innerHTML = html;
+    const more = $('flMore'); if (more) more.addEventListener('click', () => { FLY.all = true; renderFlyerRows(); });
+  }
+
+  function showInRevit(flyerId, ids) {
+    if (FLY.busy || !FLY.show) return;
+    const n = ids ? ids.length : null;
+    if (DEMO) { setFlyerStatus('ok', 'Demo: Revit would select ' + (n == null ? 'all' : n.toLocaleString()) + ' element(s) and zoom to them.'); return; }
+    FLY.busy = true; setFlyerStatus('', 'Asking Revit to select ' + (n == null ? 'them' : n.toLocaleString() + ' element(s)') + '…');
+    if (FLY.open) renderFlyerRows();
+    post('/show', { flyer: flyerId, ids: ids || [] })
+      .then(res => setFlyerStatus(res && res.ok ? 'ok' : 'err', (res && res.message) || 'Revit did not answer.'))
+      .catch(() => setFlyerStatus('err', 'The connector could not be reached.'))
+      .then(() => { FLY.busy = false; if (FLY.open) renderFlyerRows(); });
+  }
+
+  function flyerAction(id, act) {
+    if (DEMO) { if (DEMO_BOARD) { DEMO_BOARD.apply(id, act); applyBoard(DEMO_BOARD.view()); } return; }
+    post('/flyers/' + encodeURIComponent(id) + '/' + act, {})
+      .then(res => { if (!res || !res.ok) setFlyerStatus('err', (res && res.message) || 'That flyer is no longer on the board.'); loadFlyers(); })
+      .catch(() => setFlyerStatus('err', 'The connector could not be reached.'));
+  }
+
+  $('flyersBody').addEventListener('click', e => {
+    const tab = e.target.closest('[data-tab]');
+    if (tab) { FLY.tab = tab.dataset.tab; renderFlyers(); return; }
+    const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
+    const act = b.dataset.act, id = b.dataset.id;
+    if (act === 'back') closeFlyer();
+    else if (act === 'open') openFlyer(id);
+    else if (act === 'show') showInRevit(id, null);
+    else if (act === 'show-one' && FLY.open) showInRevit(FLY.open.id, [Number(b.dataset.eid)]);
+    else if (act === 'dismiss') { if (FLY.openId === id) closeFlyer(); flyerAction(id, act); }
+    else if (act === 'archive' || act === 'unarchive') flyerAction(id, act);
+  });
+
+  /// Clicking the overlook brings its board into view.
+  function revealFlyers() {
+    const sec = $('flyers'); if (!sec || sec.hidden) return;
+    try { sec.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) { sec.scrollIntoView(); }
+  }
+
+  /// Paper flyers pinned to a small board on the overlook deck, one per flyer up to four.
+  function drawNoticeBoard(x, y) {
+    const n = FLY.list.filter(f => f.state !== 'archived').length;
+    if (!FLY.enabled || n === 0) return;
+    const k = Math.min(4, n), w = TILE * 0.36, h = TILE * 0.22, top = y - TILE * 0.38;
+    ctx.save();
+    ctx.fillStyle = '#5c4a33';
+    ctx.fillRect(x - w * 0.42, top + h, Math.max(1, TILE * 0.025), TILE * 0.15);
+    ctx.fillRect(x + w * 0.42 - Math.max(1, TILE * 0.025), top + h, Math.max(1, TILE * 0.025), TILE * 0.15);
+    ctx.fillStyle = '#7a6046'; ctx.fillRect(x - w / 2, top, w, h);
+    const papers = ['#fff6d8', '#e8f3ff', '#ffe4d6', '#eaffdf'];
+    for (let i = 0; i < k; i++) {
+      const px = x - w / 2 + w * (i + 0.5) / k;
+      ctx.save(); ctx.translate(px, top + h * 0.52); ctx.rotate((i % 2 ? -1 : 1) * 0.09);
+      ctx.fillStyle = papers[i % papers.length]; ctx.fillRect(-w * 0.09, -h * 0.34, w * 0.18, h * 0.68);
+      ctx.fillStyle = '#d0453a'; ctx.beginPath(); ctx.arc(0, -h * 0.27, Math.max(1, TILE * 0.012), 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    const r = Math.max(6, TILE * 0.09);
+    ctx.fillStyle = '#ffc76b'; ctx.beginPath(); ctx.arc(x + w / 2, top, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#1c2129'; ctx.font = '700 ' + Math.round(r * 1.15) + 'px system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(n > 9 ? '9+' : String(n), x + w / 2, top + 0.5);
+    ctx.restore();
   }
 
   function kv(k, v) { return '<span>' + esc(String(k)) + '</span><span>' + esc(String(v)) + '</span>'; }
@@ -1576,6 +1887,8 @@
     ctx.moveTo(c.x + hw * 0.25, c.y - deck + hh * 0.2 - TILE * 0.26);
     ctx.lineTo(c.x + hw * 0.62, c.y - deck + hh * 0.2 - TILE * 0.36);
     ctx.stroke();
+    // The notice board: one paper per flyer pinned today.
+    drawNoticeBoard(c.x - hw * 0.38, c.y - deck + hh * 0.12);
   }
 
   // A warehouse is a flat-roofed shed with a corrugated roof, loading bays along the front wall and
@@ -2006,6 +2319,7 @@
       const best = hit ? hit.building : null;
       V.selected = best === V.selected ? null : best;
       V.selectedAgent = null; renderSelected();
+      if (V.selected === 'overlook') revealFlyers();
     });
   }
 
@@ -2015,10 +2329,11 @@
     if (es) { try { es.close(); } catch (e) { } es = null; }
     V.connection = failures === 0 ? 'connecting' : 'reconnecting'; renderHeader();
     try { es = new EventSource('/events'); } catch (e) { scheduleReconnect(); return; }
-    es.onopen = () => { failures = 0; V.connection = 'connected'; renderHeader(); };
+    es.onopen = () => { failures = 0; V.connection = 'connected'; renderHeader(); loadFlyers(); };
     es.addEventListener('snapshot', ev => { try { applySnapshot(JSON.parse(ev.data), true); } catch (e) { } });
     es.addEventListener('state', ev => { try { applySnapshot(JSON.parse(ev.data), false); } catch (e) { } });
     es.addEventListener('step', ev => { try { onStep(JSON.parse(ev.data)); } catch (e) { } });
+    es.addEventListener('flyers', ev => { try { applyBoard(JSON.parse(ev.data)); } catch (e) { } });
     es.onerror = () => {
       // The browser retries on its own; after repeated failures back off manually so a stopped
       // connector is not hammered. Backoff limits come from the last snapshot (or defaults).
@@ -2113,8 +2428,33 @@
     demoContents.sign_workshop.total = 420;
     demoContents.warning_area = L('issues', 'Issue', null, null, [R('Circuits without a panel', 'Level 1', 'E-Power', 1), R('Circuits without elements', 'Level 0', 'E-Power', 2), R('Circuits without elements', 'Level 2', 'E-Power', 1), R('No room or space: Data Devices', 'Level 1', 'E-Data', 22), R('No room or space: Lighting Fixtures', 'Level 2', 'E-Lighting', 18)]);
     V.demoContents = demoContents;
+    // Demo flyers: the same shape GET /flyers and GET /flyers/{id} serve.
+    let nextId = 310000;
+    const demoItems = (cat, n) => Array.from({ length: n }, (_, i) => {
+      const t = TYPES[cat][Math.floor(rnd() * TYPES[cat].length)], [family, type] = t.split(': ');
+      return { id: nextId += 1 + Math.floor(rnd() * 40), name: type || t, category: cat, family, type: type || t, level: LEVELS[Math.floor(rnd() * LEVELS.length)] };
+    });
+    const ago = m => new Date(Date.now() - m * 60000).toISOString();
+    const demoFlyer = (id, title, tool, state, minutes, items) => ({
+      id, title, tool, client: 'Claude Code', model_id: 'demo', project_name: '1626_PP_EN (demo)', created_at: ago(minutes), updated_at: ago(minutes),
+      state, total: items.length, truncated: false, categories: [...distinctField(items, 'category')].slice(0, 4).map(([name, count]) => ({ name, count })), items
+    });
+    const flyers = [
+      demoFlyer('f0000000000000001', 'Find elements by parameter', 'revit_find_elements_by_parameter', 'new', 4, demoItems('Fire Alarm Devices', 46)),
+      demoFlyer('f0000000000000002', 'Get elements info', 'revit_get_elements_info', 'new', 18, demoItems('Lighting Fixtures', 12).concat(demoItems('Electrical Fixtures', 5))),
+      demoFlyer('f0000000000000003', 'Graph query', 'revit_graph_query', 'archived', 60 * 26, demoItems('Data Devices', 30))
+    ];
+    DEMO_BOARD = {
+      view: () => ({ enabled: true, show_available: true, flyers: flyers.map(f => Object.assign({}, f, { items: undefined })) }),
+      get: id => { const f = flyers.find(x => x.id === id); return f ? JSON.parse(JSON.stringify(f)) : null; },
+      apply: (id, act) => {
+        const i = flyers.findIndex(x => x.id === id); if (i < 0) return;
+        if (act === 'dismiss') flyers.splice(i, 1);
+        else flyers[i].state = act === 'archive' ? 'archived' : 'new';
+      }
+    };
     const snap = {
-      schema_version: 1, read_only: true, project_name: '1626_PP_EN (demo)', session_id: 'demo', mode: 'live', updated_at: new Date().toISOString(),
+      schema_version: 1, read_only: true, project_name: '1626_PP_EN (demo)', model_id: 'demo', session_id: 'demo', mode: 'live', updated_at: new Date().toISOString(),
       agents: [{ id: 'claude-code', name: 'Claude Code', state: 'idle', area: 'unknown', building: 'square', activity: 'unknown', in_progress: 0, tool_count: 0, failure_count: 0 }],
       areas, current_steps: [], recent_steps: [], recent_failures: 0, buildings: B, warehouses,
       warehouse_activity: [{ warehouse: 'wh_fire_alarm_devices', reads: 5, writes: 3, exports: 0, failures: 0, affected: 24, tools: ['revit_find_elements_by_parameter', 'revit_set_parameter'], last_tool: 'revit_set_parameter', last_at: new Date().toISOString() }, { warehouse: 'wh_data_devices', reads: 6, writes: 0, exports: 0, failures: 0, affected: 0, tools: ['revit_get_elements_info'], last_tool: 'revit_get_elements_info', last_at: new Date().toISOString() }, { warehouse: 'wh_lighting_fixtures', reads: 1, writes: 0, exports: 0, failures: 1, affected: 0, tools: ['revit_set_parameter'], last_tool: 'revit_set_parameter', last_at: new Date().toISOString() }],
@@ -2126,6 +2466,7 @@
       instances: [{ process_id: 1, revit_version: '2026', project_name: '1626_PP_EN (demo)', url: location.href, is_current: true }]
     };
     applySnapshot(snap, true);
+    loadFlyers();
     let id = 0; const agent = snap.agents[0];
     const script = [
       ['move', 'town_hall', 'graph', 'search'], ['work', 'town_hall', 'graph', 'search', 'Searched the model graph', 0],

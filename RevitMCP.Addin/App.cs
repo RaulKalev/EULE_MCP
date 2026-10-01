@@ -374,13 +374,17 @@ public class App : IExternalApplication
             connector.Start();
             DiagLog("ConnectorService auto-started.");
 
-            // Project Village (Village\) — passive, read-only activity visualizer. The loopback
+            // Project Village (Village\) — activity visualizer with a flyer board; it never changes the model. The loopback
             // listener is opt-in (village.enabled in the user/company config). Roll back by deleting
             // the Village folder, this block, the OnShutdown line and the two one-line hooks in
             // PipeServer and ActivityLogger. A failure here is logged and never fails startup.
             try
             {
                 _village = VillageService.Create(revitVersion, processId);
+                // "Show in Revit" from a flyer: its own ExternalEvent, created here in API context.
+                // It selects and zooms only; without it the page can still browse flyers.
+                try { _village.SetShowHandler(VillageShowHandler.Create().ShowAsync); }
+                catch (Exception ex) { DiagLog($"Project Village show handler unavailable: {ex.GetType().Name}: {ex.Message}"); }
                 _village.StartIfEnabled();
                 _viewModel.Village = new VillageStatusViewModel(_village);
                 DiagLog($"Project Village: {(_village.IsRunning ? "listening at " + _village.Url : "disabled")}");
