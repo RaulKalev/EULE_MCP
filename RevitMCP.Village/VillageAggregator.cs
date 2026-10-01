@@ -259,7 +259,7 @@ public sealed class VillageAggregator
                 {
                     if (SendAgentTo(agent, VillageLayout.Park, "Heads to the park", now)) changed = true;
                 }
-                else if (silentMs > IdleAfterMs &&
+                else if (silentMs > Math.Max(IdleAfterMs, _options.OverlookAfterSeconds * 1000.0) &&
                          !string.Equals(agent.Building, VillageLayout.Park, StringComparison.Ordinal))
                 {
                     if (SendAgentTo(agent, VillageLayout.Overlook, "Heads to the overlook", now)) changed = true;
@@ -358,6 +358,9 @@ public sealed class VillageAggregator
             });
         }
 
+        foreach (var activity in _warehouseActivity.Values.OrderBy(a => a.Warehouse, StringComparer.Ordinal))
+            snapshot.WarehouseActivity.Add(activity.Clone());
+
         foreach (var step in _openSteps.Values.OrderBy(s => s.Id))
         {
             var clone = step.Clone();
@@ -419,6 +422,19 @@ public sealed class VillageAggregator
         if (ShouldMove(agent, e))
             MoveAgent(agent, e.Area, e, now);
 
+        var here = WarehouseFor(e) is { } warehouse ? ActivityFor(warehouse.Id) : null;
+        if (here != null)
+        {
+            here.LastTool = e.ToolName;
+            here.LastAt = e.Timestamp;
+            if (!string.IsNullOrEmpty(e.ToolName))
+            {
+                here.Tools.Remove(e.ToolName!);
+                here.Tools.Add(e.ToolName!);
+                while (here.Tools.Count > 8) here.Tools.RemoveAt(0);
+            }
+        }
+
         var counters = CountersFor(e.Area);
         counters.LastTool = e.ToolName;
         counters.LastActivity = e.Activity;
@@ -429,6 +445,7 @@ public sealed class VillageAggregator
             case VillageEventTypes.ToolFailed:
             {
                 counters.Failures++;
+                if (here != null) here.Failures++;
                 agent.FailureCount++;
                 agent.State = VillageAgentStates.Error;
                 agent.Activity = VillageActivities.Error;
@@ -467,10 +484,14 @@ public sealed class VillageAggregator
 
             default:
             {
-                if (VillageActivities.IsWrite(e.Activity)) counters.Writes++;
-                else if (e.Activity == VillageActivities.Export) counters.Exports++;
-                else counters.Reads++;
-                if (e.AffectedCount.HasValue && e.AffectedCount.Value > 0) counters.Affected += e.AffectedCount.Value;
+                if (VillageActivities.IsWrite(e.Activity)) { counters.Writes++; if (here != null) here.Writes++; }
+                else if (e.Activity == VillageActivities.Export) { counters.Exports++; if (here != null) here.Exports++; }
+                else { counters.Reads++; if (here != null) here.Reads++; }
+                if (e.AffectedCount.HasValue && e.AffectedCount.Value > 0)
+                {
+                    counters.Affected += e.AffectedCount.Value;
+                    if (here != null) here.Affected += e.AffectedCount.Value;
+                }
 
                 agent.State = VillageAgentStates.Success;
                 agent.Activity = e.Activity;
@@ -496,6 +517,15 @@ public sealed class VillageAggregator
     /// null, so the character falls back to the area's landmark rather than walking nowhere.
     /// </summary>
     private VillageWarehouse? WarehouseFor(VillageEvent e) => WarehouseFor(e.Warehouse, e.Area);
+
+    private readonly Dictionary<string, VillageWarehouseActivity> _warehouseActivity = new(StringComparer.Ordinal);
+
+    private VillageWarehouseActivity ActivityFor(string id)
+    {
+        if (!_warehouseActivity.TryGetValue(id, out var activity))
+            _warehouseActivity[id] = activity = new VillageWarehouseActivity { Warehouse = id };
+        return activity;
+    }
 
     private VillageWarehouse? WarehouseFor(string? id, string? area)
     {
@@ -665,6 +695,7 @@ public sealed class VillageAggregator
             }
         }
         _recentFailures.Clear();
+        _warehouseActivity.Clear();
         Graph = null;
         Theme = null;
 

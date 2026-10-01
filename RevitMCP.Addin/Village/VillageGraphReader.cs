@@ -156,6 +156,8 @@ public sealed class VillageGraphReader : IVillageGraphReader
                 ReadAt = VillageEventSerializer.FormatTimestamp(now)
             };
             VillageThemeResult theme;
+            var contents = new Dictionary<string, VillageWarehouseContents>(StringComparer.OrdinalIgnoreCase);
+            var landmarkContents = new Dictionary<string, VillageWarehouseContents>(StringComparer.Ordinal);
 
             using (var db = GraphDatabase.OpenReadOnly(handle.ReadPath))
             {
@@ -199,6 +201,12 @@ public sealed class VillageGraphReader : IVillageGraphReader
                     .ToList();
 
                 snapshot.Counts.Schedules = CountSchedules(db);
+                contents = ReadContents(db, snapshot.Categories);
+                landmarkContents = ReadLandmarkContents(db);
+                snapshot.Panels = summary.Panels
+                    .Take(12)
+                    .Select(p => new VillagePanelSummary { Level = p.Level, Circuits = p.CircuitCount, FedElements = p.FedElementCount })
+                    .ToList();
 
                 var input = new VillageThemeInput
                 {
@@ -216,7 +224,7 @@ public sealed class VillageGraphReader : IVillageGraphReader
             snapshot.ReadMs = sw.ElapsedMilliseconds;
             snapshot.Freshness = VillageGraphFreshness.Evaluate(true, snapshot.BuiltAt, source.Hint, now);
 
-            var result = new VillageGraphReadResult { Snapshot = snapshot, Theme = theme, Changed = true, DatabasePath = path };
+            var result = new VillageGraphReadResult { Snapshot = snapshot, Theme = theme, Changed = true, DatabasePath = path, Contents = contents, LandmarkContents = landmarkContents };
             Remember(path, length, writeUtc, result);
             return result;
         }
@@ -255,6 +263,126 @@ public sealed class VillageGraphReader : IVillageGraphReader
         _lastLength = length;
         _lastWriteUtc = writeUtc;
         _last = result;
+    }
+
+    /// <summary>
+    /// Type × level × workset counts for every category the snapshot lists. Best effort: a graph
+    /// that cannot be grouped leaves the warehouses without a contents panel, nothing else.
+    /// </summary>
+    private static Dictionary<string, VillageWarehouseContents> ReadContents(GraphDatabase db, List<VillageThemeEvidence> categories)
+    {
+        var contents = new Dictionary<string, VillageWarehouseContents>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var names = categories.Select(c => c.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToList();
+            foreach (var group in db.ElementContents(names).GroupBy(r => r.Category, StringComparer.OrdinalIgnoreCase))
+            {
+                contents[group.Key] = VillageWarehouseContents.Build(group.Select(r => new VillageContentRow
+                {
+                    Type = r.Type, Level = r.Level, Workset = r.Workset, Count = r.Count
+                }));
+            }
+        }
+        catch
+        {
+            contents.Clear();
+        }
+        return contents;
+    }
+
+    /// <summary>Most nodes of one kind read to describe a landmark; a bigger model is described by its first nodes.</summary>
+    public const int MaxLandmarkNodes = 10_000;
+
+    /// <summary>
+    /// What each landmark stands for, as the same type × level × workset rows a warehouse has. Each
+    /// landmark is independent: one that cannot be read is left out and the others still show.
+    /// Counts and group names only — no node id, sheet number or view name leaves this method.
+    /// </summary>
+    private static Dictionary<string, VillageWarehouseContents> ReadLandmarkContents(GraphDatabase db)
+    {
+        var result = new Dictionary<string, VillageWarehouseContents>(StringComparer.Ordinal);
+
+        void Add(string id, Func<VillageWarehouseContents> build)
+        {
+            try { result[id] = build(); }
+            catch { /* this landmark simply has no contents panel */ }
+        }
+
+        VillageContentRow Row(string type, string level, string workset, long count = 1) =>
+            new() { Type = type, Level = level, Workset = workset, Count = count };
+
+        VillageContentRow FromGraph(GraphContentRow r) => Row(r.Type, r.Level, r.Workset, r.Count);
+
+        Add(VillageLayout.TownHall, () => VillageWarehouseContents.Build(
+            db.KindContents().Select(FromGraph), "graph nodes", "Node kind", "Level", "Workset"));
+
+        Add(VillageLayout.Houses, () => VillageWarehouseContents.Build(
+            db.ElementCategoryContents().Select(FromGraph), "elements", "Category"));
+
+        Add(VillageLayout.SignShop, () => VillageWarehouseContents.Build(
+            db.TagContents().Select(FromGraph), "tags", "Tagged category", "View level", "Workset"));
+
+        Add(VillageLayout.Warning, () => VillageWarehouseContents.Build(
+            db.HealthContents().Select(FromGraph), "issues", "Issue"));
+
+        Add(VillageLayout.Archive, () => VillageWarehouseContents.Build(
+            ReadNodes(db, GraphSchema.Kinds.Sheet, null).Select(n =>
+                Row(VillageContentGrouping.SheetPrefix(ExtraValue(n.Extra, "sheetNumber") ?? n.Name), string.Empty, n.Workset ?? string.Empty)),
+            "sheets", "Number prefix"));
+
+        Add(VillageLayout.Lookout, () => VillageWarehouseContents.Build(
+            ReadNodes(db, GraphSchema.Kinds.View, n => !IsSchedule(n)).Select(n =>
+                Row(ExtraValue(n.Extra, "viewType") ?? "(unknown)", n.Level ?? string.Empty, n.Workset ?? string.Empty)),
+            "views", "View type"));
+
+        Add(VillageLayout.Market, () => VillageWarehouseContents.Build(
+            ReadNodes(db, GraphSchema.Kinds.View, IsSchedule).Select(n =>
+                Row(VillageContentGrouping.FirstWord(n.Name), string.Empty, n.Workset ?? string.Empty)),
+            "schedules", "Name prefix"));
+
+        Add(VillageLayout.Workshop, () => VillageWarehouseContents.Build(
+            ReadNodes(db, GraphSchema.Kinds.Type, null).Select(n =>
+                Row(VillageContentGrouping.FamilyOf(n.Name), n.Category ?? string.Empty, n.Workset ?? string.Empty)),
+            "types", "Family", "Category"));
+
+        Add(VillageLayout.Utility, () => VillageWarehouseContents.Build(
+            ReadNodes(db, GraphSchema.Kinds.Panel, null)
+                .Select(n => Row("Panel", n.Level ?? string.Empty, n.Workset ?? string.Empty))
+                .Concat(ReadNodes(db, GraphSchema.Kinds.Circuit, null)
+                    .Select(n => Row("Circuit", n.Level ?? string.Empty, n.Workset ?? string.Empty))),
+            "panels and circuits", "Kind"));
+
+        return result;
+    }
+
+    private static List<GraphNode> ReadNodes(GraphDatabase db, string kind, Func<GraphNode, bool>? keep)
+    {
+        var nodes = new List<GraphNode>();
+        for (var page = 0; nodes.Count < MaxLandmarkNodes; page++)
+        {
+            var found = db.Find(kind, null, null, null, null, page, PageSize);
+            foreach (var node in found.Items)
+                if (keep == null || keep(node)) nodes.Add(node);
+            if (!found.HasMore || found.Items.Count == 0) break;
+        }
+        return nodes;
+    }
+
+    private static bool IsSchedule(GraphNode node) =>
+        node.Extra != null && (node.Extra.IndexOf("\"isSchedule\":true", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                               node.Extra.IndexOf("\"isSchedule\":\"true\"", StringComparison.OrdinalIgnoreCase) >= 0);
+
+    /// <summary>One string value out of a node's flat <c>extra</c> JSON, or null.</summary>
+    private static string? ExtraValue(string? extra, string key)
+    {
+        if (string.IsNullOrEmpty(extra)) return null;
+        try
+        {
+            var value = Newtonsoft.Json.Linq.JObject.Parse(extra!)[key];
+            var text = value?.ToString();
+            return string.IsNullOrWhiteSpace(text) ? null : text;
+        }
+        catch { return null; }
     }
 
     private static long CountSchedules(GraphDatabase db)

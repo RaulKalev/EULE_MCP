@@ -70,6 +70,21 @@ public static class CircuitPreviewBuilder
         return $"Add {sourceDesc} to circuit {circuitId}. Limit: {limit}";
     }
 
+    public static string BuildMoveElements(McpToolRequest request)
+    {
+        var circuitId = ToolArguments.GetLong(request.Arguments, "targetCircuitId");
+        var useSelection = ToolArguments.GetBool(request.Arguments, "useSelection");
+        var elementIds = ToolArguments.GetLongArray(request.Arguments, "elementIds");
+        var category = ToolArguments.GetString(request.Arguments, "category");
+        var limit = ToolArguments.GetInt(request.Arguments, "limit", 500);
+
+        var what = useSelection ? "current selection"
+            : elementIds.Length > 0 ? $"{elementIds.Length} element(s)"
+            : !string.IsNullOrWhiteSpace(category) ? $"elements in category '{category}'. Limit: {limit}"
+            : "query results";
+        return $"Move {what} off their current circuit(s) and onto circuit {circuitId}";
+    }
+
     public static string BuildReassignPanel(McpToolRequest request)
     {
         var circuitId = ToolArguments.GetLong(request.Arguments, "circuitId");

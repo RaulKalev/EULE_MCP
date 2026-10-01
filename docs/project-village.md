@@ -133,7 +133,10 @@ errors, parameter values, element ids, model geometry, file contents, file paths
 credentials or tokens. The hooks read only the tool name, client name, success flag, status code,
 duration, the document title and the model path (hashed), plus a shallow allow-listed numeric
 count from the result. The graph snapshot carries counts, category and level names, health
-counters and freshness — never node ids, element names or the `built_by` user.
+counters and freshness — never node ids, element names or the `built_by` user. The one extension
+is the warehouse **Contents** (`/contents`): type, level and workset names with counts. Type names
+are model definitions ("Smoke Detector: ATS-O"), not individual elements, and still carry no ids.
+Workset names are user-defined, so they can hold whatever the team named them.
 
 The one thing read from the request itself is the Revit **category**, and only through
 `VillageCategoryArgument`: a fixed allow-list of argument keys (`category`, `categoryName`,
@@ -153,7 +156,7 @@ The tests `VillageEventTests.Serialize_NeverContainsPathsArgumentsOrResults`,
 
 - Binds to a loopback address only. `village.host` accepts `127.0.0.1`, `localhost` or `::1`;
   anything else is coerced back to `127.0.0.1`.
-- Accepts `GET`/`HEAD` for `/`, `/events`, `/snapshot`, `/instances`, `/health`. Every other
+- Accepts `GET`/`HEAD` for `/`, `/events`, `/snapshot`, `/instances`, `/contents`, `/health`. Every other
   method gets `405`, every other path `404`. Request bodies are never read.
 - The `Host` header must name a loopback host (`421` otherwise) to block DNS-rebinding pages.
 - No CORS headers are sent, so foreign origins cannot read responses or open the stream; a strict
@@ -190,6 +193,7 @@ key. Values are clamped into the ranges shown.
 | `warehouseExcludeCategories` | see below | | Categories that never get a warehouse; a configured list **replaces** the defaults |
 | `warehouseModelsOnly` | `true` | | Only categories with a warehouse model of their own get a warehouse (see below) |
 | `modelsFolder` | next to the add-in | | Folder of optional glTF models; see the 3D models section |
+| `overlookAfterSeconds` | `15` | 2–600 | How long a character stays where it last worked before stepping out to the overlook |
 | `parkAfterSeconds` | `120` | 15–3600 | Idle time before a character walks to the park |
 | `maxEffects` | `6` | 1–24 | Simultaneous visual effects |
 | `reconnectBackoffMs` / `reconnectBackoffMaxMs` | `1000` / `15000` | | Viewer reconnect backoff |
@@ -317,8 +321,18 @@ The rules, all of them deterministic:
 - Work at two different warehouses never merges into one story step.
 - Rebuilding the yard walks characters off warehouses that no longer exist.
 
-Clicking a warehouse still shows its element count, its share of all counted elements, its system
-and its rank.
+Clicking a warehouse shows its element count, its share of all counted elements, its system and
+its rank, followed by a **Contents** panel: what the warehouse holds, as counts per type (family:
+type), level and workset. The panel has a type filter box, level and workset drop-downs, a
+group-by (type / level / workset) and a sort (most, fewest, A→Z, Z→A). Clicking a row narrows to
+it and regroups, so "which types are on Level 2?" is two clicks. Rows are aggregate counts: no
+element id, element name or parameter value is ever shown. At most 400 rows are kept per
+warehouse; anything smaller is counted as "more in groups too small to list".
+
+The data comes from one read-only `GET /contents` (every warehouse, keyed by warehouse id), fetched
+when a warehouse is first selected and again only when the graph is rebuilt. It is kept out of the
+state stream, which is pushed several times a second. All filtering and sorting then happens in the
+page, so exploring costs the connector nothing.
 
 Without a graph the yard is empty — like the rest of the graph-derived display, it runs in limited
 mode. The counts come from the graph file and are as old as the last build; the inspector says so.
@@ -368,7 +382,7 @@ what a character is doing when it is **not** working:
 
 | Place | When | Where |
 |---|---|---|
-| **Overlook** | Work finished, nothing queued, quiet for 8 s | Right edge of town |
+| **Overlook** | Work finished, nothing queued, quiet for `overlookAfterSeconds` (15 s) | Right edge of town |
 | **Park** | Still quiet after `parkAfterSeconds` (default 120) | Village centre |
 
 The progression is one-way per idle spell: a character steps out to the overlook, and if nothing
@@ -379,6 +393,64 @@ long quiet period does not fill the feed.
 The park sits on the tile the village square used to occupy, and `square` — the fallback
 destination for an unknown area — now resolves there, so a character with nowhere in particular to
 be stands in the park instead of on an empty plaza.
+
+## Reading the village
+
+Everything below is derived from the graph snapshot and the connector's own counters. Nothing is
+generated and nothing is requested while you explore; filtering and sorting run in the page.
+
+**Landmark contents.** Every landmark with something behind it gets the same Contents panel as a
+warehouse, with columns named for what it holds:
+
+| Landmark | Counts | Columns (type / level / workset) |
+|---|---|---|
+| Town hall | graph nodes | node kind / — / workset |
+| Archive | sheets | number prefix (`E`, `A`, `ATS`) / — / workset |
+| Lookout tower | views | view type / level / workset |
+| Market hall | schedules | first word of the name / — / workset |
+| Workshop | types | family / category / workset |
+| Sign workshop | tags | tagged category / view level / — |
+| Houses | elements | category / level / workset |
+| Utility district | panels and circuits | kind / level / workset |
+| Warning area | health problems | issue / level / workset |
+
+A column that never varies (all one value) gets no control. Sheet numbers and names, view names,
+panel names and element names are never published; sheets are grouped by prefix, and so on.
+
+**Health drill-down.** The warning area breaks its counts down by issue ("Circuits without a
+panel", "No room or space: Data Devices"), level and workset. Click a row to narrow, or use the
+**Needs attention** list, which links straight to it.
+
+**Warehouse activity.** The connector counts, per warehouse, the reads, writes, exports, failures
+and affected items of the tools that worked there, with the last tool and the tools used. The
+counters are keyed by warehouse id, so they survive the yard being rebuilt, and are reset when the
+document changes. On the map a warehouse glows under it: orange once edited, blue when only read,
+red after a failure, brighter with more activity.
+
+**Change since the previous build.** The hub remembers the counts of each distinct graph build it
+has seen (`built_at`). A warehouse shows `+14` against the build before, and the town hall and
+other landmarks show the same for their graph counts. The baseline is memory only, is never
+compared across models, and is empty until a second build arrives.
+
+**Level filter.** The header drop-down sizes every warehouse by what it holds on one level, using
+the contents rows; a warehouse with nothing there disappears. Counts are limited to the rows kept
+per warehouse, so a level can be undercounted by the "too small to list" remainder.
+
+**Systems.** A **Systems** legend lists the theme systems present among the warehouses; click one
+to dim everything else. Warehouses of one system are also joined by a faint dashed line.
+
+**Needs attention and This session.** Two panels assembled from the snapshot: stale graph, orphan
+circuits, elements without a room or space, recent failures, calls waiting for approval and agents
+in error, each clickable; and the session totals (tool calls, reads / writes / exports, items
+affected, busiest areas). Hovering a feed line lists the tools it merged. **Recent activity** and
+**This session** are collapsible cards that start folded; click a title (or press Enter on it) to
+open it. The choice is remembered per card in the browser.
+
+**Panels.** The utility district stands beside up to eight small cabinets, one per panel, taller
+the more circuits it feeds. Only the circuit count and level are published, never the name.
+
+The glow, the system links and the cabinets are drawn in the 2D view only; the 3D view shows the
+level filter and the contents but not these overlays.
 
 ## Clicking a character
 

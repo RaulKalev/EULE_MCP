@@ -30,6 +30,14 @@ public static class CircuitMutationService
         List<(long Id, string Reason)> Rejected,
         TransactionDiagnostics? Diagnostics = null);
 
+    public record MoveElementsResult(
+        bool Success,
+        string Message,
+        List<long> Moved,
+        List<(long Id, string Reason)> Rejected,
+        List<string> Warnings,
+        TransactionDiagnostics? Diagnostics = null);
+
     public record ReassignPanelResult(
         bool Success,
         string Message,
@@ -266,6 +274,77 @@ public static class CircuitMutationService
             true,
             $"Added {added.Count} element(s). {rejected.Count} rejected.",
             added, rejected, diag);
+    }
+
+    // ── Move elements between circuits ───────────────────────────────────
+
+    /// <summary>
+    /// Takes each element off the circuits it is on (<paramref name="elements"/> carries the
+    /// circuit ids) and puts it on <paramref name="target"/>. Each element is moved in its own
+    /// sub-transaction, so one that fails is rolled back to where it was rather than left
+    /// uncircuited. A source circuit that loses its last element is deleted by Revit; that is
+    /// reported as a warning.
+    /// </summary>
+    public static MoveElementsResult MoveBetweenCircuits(
+        Document doc,
+        ElectricalSystem target,
+        IEnumerable<(ElementId Id, List<long> SourceCircuitIds)> elements)
+    {
+        var moved = new List<long>();
+        var rejected = new List<(long Id, string Reason)>();
+        var warnings = new List<string>();
+        var sourceNames = new Dictionary<long, string>();
+
+        var (success, diag) = RevitTransactionRunner.Run(doc, "Revit MCP - Move Elements Between Circuits", () =>
+        {
+            foreach (var (eid, sourceIds) in elements)
+            {
+                var element = doc.GetElement(eid);
+                if (element is not FamilyInstance fi || fi.MEPModel == null)
+                {
+                    rejected.Add((eid.Value, "Element has no MEP model."));
+                    continue;
+                }
+
+                using var sub = new SubTransaction(doc);
+                try
+                {
+                    sub.Start();
+                    var set = new ElementSet();
+                    set.Insert(element);
+
+                    foreach (var sourceId in sourceIds)
+                    {
+                        if (sourceId == target.Id.Value) continue;
+                        if (doc.GetElement(new ElementId(sourceId)) is not ElectricalSystem source) continue;
+                        sourceNames[sourceId] = source.Name;
+                        source.RemoveFromCircuit(set);
+                    }
+
+                    target.AddToCircuit(set);
+                    sub.Commit();
+                    moved.Add(eid.Value);
+                }
+                catch (Exception ex)
+                {
+                    try { if (sub.GetStatus() == TransactionStatus.Started) sub.RollBack(); } catch { }
+                    rejected.Add((eid.Value, ex.Message));
+                }
+            }
+
+            foreach (var (sourceId, name) in sourceNames)
+                if (doc.GetElement(new ElementId(sourceId)) == null)
+                    warnings.Add($"Circuit '{name}' (id {sourceId}) had no elements left and was removed by Revit.");
+        });
+
+        if (!success)
+            return new MoveElementsResult(false,
+                $"Transaction failed: {diag.OriginalError}", new List<long>(), rejected, warnings, diag);
+
+        return new MoveElementsResult(
+            true,
+            $"Moved {moved.Count} element(s) to the target circuit. {rejected.Count} rejected.",
+            moved, rejected, warnings, diag);
     }
 
     // ── Reassign panel ───────────────────────────────────────────────────

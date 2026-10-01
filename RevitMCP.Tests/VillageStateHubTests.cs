@@ -230,6 +230,54 @@ public class VillageStateHubTests : IDisposable
     }
 
     [Fact]
+    public void GraphRefresh_ServesContentsForWarehousesAndLandmarks_AndTheChangeSinceTheLastBuild()
+    {
+        var dbPath = Path.Combine(_root, "1626", "1626_PP_EN.graph.db");
+        WriteFireAlarmGraph(dbPath, devices: 60);
+        var reader = new VillageGraphReader(Path.Combine(_root, "cache"), clock: () => _now);
+        using var hub = Hub(reader: reader, source: (ctx, hint) => new VillageGraphSource
+        {
+            DatabasePath = hint?.DatabasePath, Roots = { _root }, ModelName = ctx.ModelName, RootSource = "test root"
+        });
+
+        hub.ToolCompleted("revit_list_sheets", "Claude Code", true, null, 1, null, Context());
+        hub.RequestGraphRefresh();
+        hub.RunOnce();
+
+        var contents = JObject.Parse(hub.ContentsJson);
+        var warehouse = contents["wh_fire_alarm_devices"]!;
+        Assert.Equal(60, warehouse.Value<int>("total"));
+        Assert.Equal("EN_ATS-Sireen: Std", warehouse["rows"]![0]!.Value<string>("type"));
+        Assert.Equal("L1", warehouse["rows"]![0]!.Value<string>("level"));
+
+        // Landmarks describe what they stand for, with their own column labels.
+        Assert.Equal("EN", contents["archive"]!["rows"]![0]!.Value<string>("type"));
+        Assert.Equal("Number prefix", contents["archive"]!["labels"]!.Value<string>("type"));
+        Assert.Equal("sheets", contents["archive"]!.Value<string>("noun"));
+        Assert.Equal("Fire Alarm Devices", contents["houses"]!["rows"]![0]!.Value<string>("type"));
+        Assert.NotNull(contents["warning_area"]);
+
+        // Nothing identifying leaks into the contents: names are types, never individual elements.
+        Assert.DoesNotContain("Dev 1", hub.ContentsJson);
+        Assert.DoesNotContain("\"id\"", hub.ContentsJson);
+
+        var state = (JObject)VillageEventSerializer.ParseToken(hub.SnapshotJson);
+        Assert.Equal(JTokenType.Null, state["graph"]!["delta"]!.Type);
+
+        // A second, different build: the change is reported against the first, never against nothing.
+        WriteFireAlarmGraph(dbPath, devices: 80, builtAt: "2026-09-11T11:00:00Z");
+        _now = _now.AddMinutes(5);
+        hub.RequestGraphRefresh();
+        hub.RunOnce();
+
+        state = (JObject)VillageEventSerializer.ParseToken(hub.SnapshotJson);
+        Assert.Equal(20, state["graph"]!["delta"]!.Value<int>("elements"));
+        Assert.Equal("2026-09-10T11:00:00Z", state["graph"]!.Value<string>("previous_built_at"));
+        Assert.Equal(20, state["warehouses"]!.First(w => w.Value<string>("id") == "wh_fire_alarm_devices").Value<int>("delta"));
+        Assert.Equal(80, JObject.Parse(hub.ContentsJson)["wh_fire_alarm_devices"]!.Value<int>("total"));
+    }
+
+    [Fact]
     public void GraphRefresh_WithoutGraph_IsLimitedMode()
     {
         var reader = new VillageGraphReader(Path.Combine(_root, "cache"), clock: () => _now);
@@ -307,7 +355,7 @@ public class VillageStateHubTests : IDisposable
         hub.Stop(); // idempotent
     }
 
-    private static void WriteFireAlarmGraph(string path, int devices)
+    private static void WriteFireAlarmGraph(string path, int devices, string builtAt = "2026-09-10T11:00:00Z")
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var nodes = new List<GraphNode>
@@ -327,7 +375,7 @@ public class VillageStateHubTests : IDisposable
         var meta = new Dictionary<string, string>
         {
             [GraphSchema.MetaKeys.ModelName] = "1626_PP_EN",
-            [GraphSchema.MetaKeys.BuiltAt] = "2026-09-10T11:00:00Z",
+            [GraphSchema.MetaKeys.BuiltAt] = builtAt,
             [GraphSchema.MetaKeys.ElementCount] = devices.ToString(),
             [GraphSchema.MetaKeys.SchemaVersion] = GraphSchema.SchemaVersion.ToString()
         };

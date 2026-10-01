@@ -66,6 +66,29 @@ public class GraphDatabaseTests
     private static GraphEdge E(string src, string dst, string rel) => new(src, dst, rel);
 
     [Fact]
+    public void ElementContents_GroupsByTypeLevelAndWorkset_ForTheRequestedCategories()
+    {
+        using var db = BuildSample();
+
+        var rows = db.ElementContents(new[] { "lighting fixtures", "Electrical Fixtures" });
+
+        // E1 and E2 share type, level and workset → one row of two; E3 and E4 differ in level and workset.
+        var lights = Assert.Single(rows, r => r.Category == "Lighting Fixtures");
+        Assert.Equal(("LED: 600x600", "L1", "Electrical", 2L), (lights.Type, lights.Level, lights.Workset, lights.Count));
+        Assert.Equal(2, rows.Count(r => r.Category == "Electrical Fixtures"));
+        Assert.Equal(4, rows.Sum(r => r.Count));
+        // Categories that were not asked for never appear.
+        Assert.DoesNotContain(rows, r => r.Category == "Walls");
+    }
+
+    [Fact]
+    public void ElementContents_WithNoCategories_ReturnsNothing()
+    {
+        using var db = BuildSample();
+        Assert.Empty(db.ElementContents(Array.Empty<string>()));
+    }
+
+    [Fact]
     public void WriteGraph_StoresCountsAndMeta_AndIgnoresDuplicateEdges()
     {
         using var db = BuildSample();

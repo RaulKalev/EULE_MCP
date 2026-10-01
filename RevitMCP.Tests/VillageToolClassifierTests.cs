@@ -157,6 +157,7 @@ public class VillageToolClassifierTests
     [InlineData("revit_get_electrical_circuits", "electrical", "inspect")]
     [InlineData("revit_create_electrical_circuit", "electrical", "create")]
     [InlineData("revit_add_elements_to_circuit", "electrical", "modify")]
+    [InlineData("revit_move_elements_between_circuits", "electrical", "modify")]
     [InlineData("revit_check_circuit_health", "electrical", "validate")]
     [InlineData("revit_trace_circuit", "electrical", "analyze")]
     [InlineData("revit_estimate_circuit_length", "electrical", "analyze")]

@@ -152,6 +152,13 @@ public class ElementQueryEngine
             if (element is FamilyInstance fi)
                 info.Family = fi.Symbol?.Family?.Name ?? string.Empty;
 
+            // Detail lines, model lines and symbolic lines carry their style as a GraphicsStyle.
+            if (element is CurveElement curve)
+            {
+                try { info.LineStyle = curve.LineStyle?.Name; }
+                catch { /* some curve elements have no style; leave it out */ }
+            }
+
             if (options.IncludeTags)
             {
                 // Built once for the whole document, only when a returned element needs it.

@@ -55,6 +55,32 @@
   #selected .kv { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 12px; }
   #selected .kv span:nth-child(2n) { text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
   #selected .desc { color: var(--muted); font-size: 12px; margin: 4px 0 8px; }
+  #whContents h2 { margin: 12px 0 6px; }
+  .collapsible > h2 { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; }
+  .collapsible > h2::before { content: '▾'; display: inline-block; width: 10px; transition: transform .15s; }
+  .collapsible.collapsed > h2 { margin-bottom: 0; }
+  .collapsible.collapsed > h2::before { transform: rotate(-90deg); }
+  .collapsible.collapsed > :not(h2) { display: none; }
+  #attentionBody { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  .att { text-align: left; border-radius: 6px; padding: 4px 9px; line-height: 1.3; }
+  .att.err { border-color: var(--err); color: var(--err); } .att.warn { border-color: var(--warn); color: var(--warn); } .att.info { color: var(--muted); }
+  #session .kv { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 12px; }
+  #session .kv span:nth-child(2n) { text-align: right; font-variant-numeric: tabular-nums; }
+  #systemsBody { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; font-size: 11px; }
+  .chip.on { border-color: var(--accent); background: #1e3050; } .chipdot { width: 9px; height: 9px; border-radius: 50%; }
+  header #levelFilter { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 4px 8px; font-size: 12px; }
+  header #levelFilter[hidden] { display: none; }
+  .whctl { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 4px; }
+  .whctl input, .whctl select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 4px 8px; font-size: 12px; min-width: 0; }
+  .whctl input { grid-column: 1 / -1; }
+  .whctl button { padding: 3px 10px; }
+  .whrow { position: relative; display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 3px 6px; font-size: 12px; cursor: pointer; border-radius: 4px; overflow: hidden; }
+  .whrow:hover { background: rgba(255,255,255,.05); }
+  .whrow .whbar { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(120,180,255,.16); pointer-events: none; }
+  .whrow .whname { position: relative; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .whrow .whn { position: relative; font-variant-numeric: tabular-nums; }
+  #whMore { margin-top: 6px; }
   #controls { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
   button { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 999px; padding: 5px 13px; font-size: 12px; cursor: pointer; transition: border-color .15s, background .15s; }
   button:hover { border-color: var(--accent); background: #1e3050; }
@@ -77,6 +103,7 @@
   <span class="badge" id="modeBadge"><span class="dot"></span><span>live</span></span>
   <span class="badge readonly" title="This page cannot send commands to Revit or to the AI agent.">read-only</span>
   <span class="spacer"></span>
+  <select id="levelFilter" title="Size every warehouse by what it holds on one level" hidden></select>
   <select id="instances" title="Other running villages (one per Revit instance)" hidden></select>
 </header>
 <main>
@@ -89,7 +116,10 @@
   </div>
   <aside>
     <section id="activity"><h2>Current activity</h2><div id="agents">No agent connected yet.</div></section>
-    <section id="feed"><h2>Recent activity</h2><ul id="feedList"></ul></section>
+    <section id="attention"><h2>Needs attention</h2><div id="attentionBody">Nothing needs attention.</div></section>
+    <section id="session" class="collapsible" data-default="collapsed"><h2>This session</h2><div id="sessionBody"></div></section>
+    <section id="systems" hidden><h2>Systems</h2><div id="systemsBody"></div></section>
+    <section id="feed" class="collapsible" data-default="collapsed"><h2>Recent activity</h2><ul id="feedList"></ul></section>
     <section id="selected"><h2>Selected</h2><div id="selectedBody">Click a character, a landmark or a warehouse.</div></section>
     <section id="controls">
       <button id="pauseBtn" type="button">Pause animation</button>
@@ -130,7 +160,8 @@
     snapshot: null, buildings: [], byId: new Map(), warehouses: [], whById: new Map(),
     agents: new Map(), feed: [], effects: [],
     feedLimit: FEED_LIMIT_DEFAULT, effectLimit: EFFECT_LIMIT_DEFAULT, selected: null, selectedAgent: null, hover: null,
-    paused: false, speed: 1, connection: 'connecting', skipped: 0, lastStepId: 0, time: 0
+    paused: false, speed: 1, connection: 'connecting', skipped: 0, lastStepId: 0, time: 0,
+    allWarehouses: [], activity: new Map(), levelFilter: '', focusSystem: '', layoutTag: '', contents: null, contentsKey: null, contentsLoading: null
   };
 
   // ─── DOM ────────────────────────────────────────────────────────────────
@@ -175,7 +206,22 @@
     $('speedLabel').textContent = V.speed + '×';
     try { localStorage.setItem('village.speed', String(V.speed)); } catch (e2) { }
   });
+  // Collapsible cards: a click on the title folds the card. The choice is remembered per card in
+  // this browser; cards marked data-default="collapsed" start folded.
+  document.querySelectorAll('.collapsible').forEach(card => {
+    const key = 'village.collapsed.' + card.id;
+    let collapsed = card.dataset.default === 'collapsed';
+    try { const saved = localStorage.getItem(key); if (saved !== null) collapsed = saved === '1'; } catch (e) { /* storage may be unavailable */ }
+    const title = card.querySelector('h2');
+    title.tabIndex = 0; title.setAttribute('role', 'button');
+    const apply = () => { card.classList.toggle('collapsed', collapsed); title.setAttribute('aria-expanded', String(!collapsed)); };
+    const toggle = () => { collapsed = !collapsed; apply(); try { localStorage.setItem(key, collapsed ? '1' : '0'); } catch (e) { } };
+    title.addEventListener('click', toggle);
+    title.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+    apply();
+  });
   $('diagBtn').addEventListener('click', () => { const d = $('diag'); d.hidden = !d.hidden; renderDiagnostics(); });
+  $('levelFilter').addEventListener('change', e => { V.levelFilter = e.target.value; rebuildWarehouses(); GROUND.dirty = true; if (GL.on) syncScene(); if (WHS) WHS.built = false; renderSelected(); renderSystems(); });
   $('instances').addEventListener('change', e => { const url = e.target.value; if (url && url !== location.origin + '/') location.href = url; });
 
   // ─── Geometry ───────────────────────────────────────────────────────────
@@ -229,11 +275,11 @@
     // Warehouses: one per Revit category that has elements. The connector already dropped empty
     // categories and sized each one; the viewer only caps the count and lays out the yard.
     const maxWarehouses = (s.viewer_options && s.viewer_options.max_warehouses != null) ? s.viewer_options.max_warehouses : 10;
-    V.warehouses = (Array.isArray(s.warehouses) ? s.warehouses : [])
+    V.allWarehouses = (Array.isArray(s.warehouses) ? s.warehouses : [])
       .filter(w => w && w.count > 0)
       .slice(0, Math.max(0, maxWarehouses));
-    V.whById = new Map(V.warehouses.map(w => [w.id, w]));
-    fitGrid();
+    V.activity = new Map((s.warehouse_activity || []).map(a => [a.warehouse, a]));
+    rebuildWarehouses();
 
     const seen = new Set();
     (s.agents || []).forEach((a, i) => {
@@ -262,7 +308,8 @@
     }
     if (V.selected && !V.byId.has(V.selected) && !V.whById.has(V.selected)) V.selected = null;
     if (V.selectedAgent && !V.agents.has(V.selectedAgent)) V.selectedAgent = null;
-    renderHeader(); renderAgents(); renderFeed(); renderSelected(); renderInstances();
+    ensureContents();
+    renderHeader(); renderAgents(); renderFeed(); renderSelected(); renderInstances(); renderAttention(); renderSession(); renderSystems();
     if (GL.on) syncScene();
     if (!$('diag').hidden) renderDiagnostics();
   }
@@ -347,6 +394,7 @@
       const li = document.createElement('li'); li.className = st.kind || '';
       const t = document.createElement('time'); t.textContent = (st.ended_at || st.started_at || '').substring(11, 19);
       const span = document.createElement('span'); span.textContent = st.label || '';
+      if (st.tools && st.tools.length) li.title = st.tools.join(', ') + (st.tool_count > st.tools.length ? ' … (' + st.tool_count + ' calls)' : '');
       li.append(t, span); ul.appendChild(li);
     }
     if (V.feed.length === 0) { const li = document.createElement('li'); li.textContent = 'Waiting for activity…'; ul.appendChild(li); }
@@ -355,12 +403,20 @@
   function renderSelected() {
     const body = $('selectedBody');
     const ag = V.selectedAgent ? V.agents.get(V.selectedAgent) : null;
-    if (ag) { renderAgentCard(body, ag); return; }
     const wh = V.selected ? V.whById.get(V.selected) : null;
-    if (wh) { renderWarehouse(body, wh); return; }
-    const b = V.selected ? V.byId.get(V.selected) : null;
+    const b = V.selected && !wh ? V.byId.get(V.selected) : null;
+    // A warehouse or landmark panel owns live controls (a filter box); every other card is rebuilt from scratch.
+    if (ag || (!wh && !b)) delete body.dataset.whId;
+    if (ag) { renderAgentCard(body, ag); return; }
+    if (wh) { renderPlace(body, wh.id, el => renderWarehouseInfo(el, wh), true); return; }
     if (!b) { body.textContent = 'Click a character, a landmark or a warehouse.'; return; }
-    const s = V.snapshot || {}; const areas = s.areas || []; const g = s.graph; const counts = (g && g.counts) || {};
+    renderPlace(body, b.id, el => renderLandmarkInfo(el, b), false);
+  }
+
+  function fmtDelta(n) { return (n > 0 ? '+' : '') + Number(n).toLocaleString(); }
+
+  function renderLandmarkInfo(el, b) {
+    const s = V.snapshot || {}; const areas = s.areas || []; const g = s.graph; const counts = (g && g.counts) || {}; const delta = (g && g.delta) || null;
     let html = '<strong>' + esc(b.label) + '</strong><div class="desc">' + esc(b.description || '') + '</div><div class="kv">';
     let reads = 0, writes = 0, exports = 0, failures = 0, deferred = 0, affected = 0, lastTool = null;
     for (const a of areas) if ((b.areas || []).includes(a.area)) { reads += a.reads; writes += a.writes; exports += a.exports; failures += a.failures; deferred += a.deferred; affected += a.affected; if (a.last_tool) lastTool = a.last_tool; }
@@ -372,12 +428,14 @@
       html += kv('Reads', reads) + kv('Writes', writes) + kv('Exports', exports) + kv('Failures', failures) + kv('Awaiting approval', deferred) + kv('Items affected', affected);
       if (lastTool) html += kv('Last tool', lastTool);
       const gk = { archive: ['sheets'], lookout: ['views'], market: ['schedules'], workshop: ['types'], sign_workshop: ['tags'], houses: ['elements', 'levels', 'spaces'], utility_district: ['panels', 'circuits'], town_hall: ['nodes', 'edges', 'worksets'] }[b.id] || [];
-      for (const k of gk) if (counts[k] != null) html += kv('Graph: ' + k, counts[k].toLocaleString());
+      for (const k of gk) if (counts[k] != null) html += kv('Graph: ' + k, counts[k].toLocaleString() + (delta && delta[k] ? '  (' + fmtDelta(delta[k]) + ')' : ''));
+      if (b.id === 'utility_district' && g && g.panels && g.panels.length) html += kv('Most loaded panels (circuits)', g.panels.slice(0, 6).map(p => p.circuits).join(', '));
       if (b.id === 'town_hall' && g && g.built_at) html += kv('Graph built', g.built_at.replace('T', ' ').replace('Z', ' UTC'));
+      if (delta && g.previous_built_at && b.id === 'town_hall') html += kv('Compared with build', g.previous_built_at.replace('T', ' ').replace('Z', ' UTC'));
     }
     html += modelHint('landmarks', b.id);
     html += '</div>';
-    body.innerHTML = html;
+    el.innerHTML = html;
   }
   const SYSTEM_LABELS = {
     fire_alarm: 'Fire alarm', security: 'Security / access control', lighting: 'Lighting / DALI',
@@ -422,19 +480,285 @@
     return kv('3D model', (found ? '✓ ' : '— ') + path);
   }
 
-  function renderWarehouse(body, wh) {
+  // The snapshot arrives several times a second and re-renders the card, so a place's panel is
+  // split in two: #whInfo is rewritten every time, while #whContents (filter box, selects, rows)
+  // is built once per selected place and only its result list is refreshed.
+  function renderPlace(body, id, infoFn, isWarehouse) {
+    if (body.dataset.whId !== id) {
+      body.dataset.whId = id;
+      body.innerHTML = '<div id="whInfo"></div><div id="whContents"></div>';
+      WHS = { id, isWh: isWarehouse, group: 'type', sort: 'count_desc', q: '', level: V.levelFilter ? 'v:' + V.levelFilter : '', workset: '', all: false, built: false, labels: null, none: null };
+      ensureContents();
+    }
+    infoFn($('whInfo'));
+    renderContents(id);
+  }
+
+  // ─── Contents: type × level × workset counts, explored in the page ─────────
+  // One GET /contents holds every warehouse and landmark; filtering, grouping and sorting then
+  // happen here, so exploring costs the connector nothing. Rows are aggregate counts — no element
+  // ids, no element names, no parameter values.
+  let WHS = null;
+  const CONTENT_ROWS_SHOWN = 50;
+  const DEFAULT_LABELS = { type: 'Type', level: 'Level', workset: 'Workset' };
+
+  // One fetch covers every place, so the key is the graph build plus the yard's counts: it changes
+  // when the graph is rebuilt, not when another building is clicked.
+  function contentsKey() { const g = (V.snapshot || {}).graph; return (g && g.exists ? (g.built_at || '') : '') + '|' + V.allWarehouses.map(w => w.id + ':' + w.count).join(','); }
+
+  function ensureContents() {
     const g = (V.snapshot || {}).graph;
+    if (!g || !g.exists) return;
+    const key = contentsKey();
+    if (V.contentsKey === key || V.contentsLoading === key) return;
+    V.contentsLoading = key;
+    const done = data => {
+      V.contentsLoading = null;
+      if (data) { V.contents = data; V.contentsKey = key; }
+      else if (!V.contents) V.contents = {};
+      rebuildLevelOptions();
+      if (V.levelFilter) { rebuildWarehouses(); GROUND.dirty = true; if (GL.on) syncScene(); }
+      if (WHS) WHS.built = false;
+      renderSelected(); renderSystems();
+    };
+    if (DEMO) { done(V.demoContents || {}); return; }
+    fetch('/contents', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(done).catch(() => done(null));
+  }
+
+  function renderContents(id) {
+    const host = $('whContents');
+    if (!host || !WHS || WHS.id !== id) return;
+    const g = (V.snapshot || {}).graph;
+    if (!g || !g.exists) { host.innerHTML = WHS.isWh ? '<div class="desc">No breakdown without a graph. Build one with revit_graph_build.</div>' : ''; WHS.built = false; return; }
+    // Counts moved since the data was fetched (the graph was rebuilt): fetch again, keep the controls.
+    if (V.contents && V.contentsKey !== contentsKey()) ensureContents();
+    if (!V.contents) { host.innerHTML = '<div class="desc">Loading contents…</div>'; WHS.built = false; return; }
+    const data = V.contents[id];
+    if (!data || !data.rows || !data.rows.length) {
+      host.innerHTML = WHS.isWh ? '<div class="desc">No type, level or workset breakdown is available for this warehouse.</div>' : '';
+      WHS.built = false; return;
+    }
+    if (!WHS.built) buildContentsControls(host, data);
+    renderContentRows(data);
+  }
+
+  function pluralize(word, n) { return n === 1 ? word : /[^aeiou]y$/.test(word) ? word.slice(0, -1) + 'ies' : /(s|x|ch|sh)$/.test(word) ? word + 'es' : word + 's'; }
+  function distinct(rows, field) { const m = new Map(); for (const r of rows) m.set(r[field], (m.get(r[field]) || 0) + r.count); return m; }
+
+  function facetOptions(rows, field, allLabel) {
+    const list = [...distinct(rows, field).entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], undefined, { numeric: true }));
+    return '<option value="">' + esc(allLabel + ' (' + list.length + ')') + '</option>' +
+      list.map(([k, n]) => '<option value="v:' + esc(k) + '">' + esc((k || WHS.none[field]) + ' — ' + n.toLocaleString()) + '</option>').join('');
+  }
+
+  function buildContentsControls(host, data) {
+    const rows = data.rows;
+    const labels = Object.assign({}, DEFAULT_LABELS, data.labels || {});
+    WHS.labels = labels;
+    WHS.none = { type: '(no ' + labels.type.toLowerCase() + ')', level: '(no ' + labels.level.toLowerCase() + ')', workset: '(no ' + labels.workset.toLowerCase() + ')' };
+    // A column that never varies is not worth a control.
+    const vary = { level: distinct(rows, 'level').size > 1, workset: distinct(rows, 'workset').size > 1 };
+    if (!vary.level) WHS.level = '';
+    if (!vary.workset) WHS.workset = '';
+    if (!vary[WHS.group] && WHS.group !== 'type') WHS.group = 'type';
+    const plural = labels.type.toLowerCase();
+    host.innerHTML =
+      '<h2 style="margin-top:12px">Contents</h2>' +
+      '<div class="whctl"><input id="whQ" type="search" placeholder="Filter by ' + esc(plural) + '…" autocomplete="off" spellcheck="false">' +
+      (vary.level ? '<select id="whLevel" title="' + esc(labels.level) + '">' + facetOptions(rows, 'level', 'All ' + labels.level.toLowerCase() + 's') + '</select>' : '') +
+      (vary.workset ? '<select id="whWorkset" title="' + esc(labels.workset) + '">' + facetOptions(rows, 'workset', 'All ' + labels.workset.toLowerCase() + 's') + '</select>' : '') +
+      '<select id="whGroup" title="Group by"><option value="type">Group by ' + esc(plural) + '</option>' +
+      (vary.level ? '<option value="level">Group by ' + esc(labels.level.toLowerCase()) + '</option>' : '') +
+      (vary.workset ? '<option value="workset">Group by ' + esc(labels.workset.toLowerCase()) + '</option>' : '') + '</select>' +
+      '<select id="whSort" title="Sort"><option value="count_desc">Most first</option><option value="count_asc">Fewest first</option><option value="name_asc">Name A → Z</option><option value="name_desc">Name Z → A</option></select>' +
+      '<button id="whClear" type="button" title="Clear filters">Clear</button></div>' +
+      '<div id="whSummary" class="desc"></div><div id="whRows"></div>';
+    WHS.built = true;
+    const set = (id, v) => { const el = $(id); if (el) el.value = v; };
+    const sync = () => { set('whQ', WHS.q); set('whLevel', WHS.level); set('whWorkset', WHS.workset); set('whGroup', WHS.group); set('whSort', WHS.sort); };
+    sync();
+    const refresh = () => { WHS.all = false; const cur = V.contents && V.contents[WHS.id]; if (cur) renderContentRows(cur); };
+    const on = (id, ev, fn) => { const el = $(id); if (el) el.addEventListener(ev, fn); };
+    on('whQ', 'input', e => { WHS.q = e.target.value; refresh(); });
+    on('whLevel', 'change', e => { WHS.level = e.target.value; refresh(); });
+    on('whWorkset', 'change', e => { WHS.workset = e.target.value; refresh(); });
+    on('whGroup', 'change', e => { WHS.group = e.target.value; refresh(); });
+    on('whSort', 'change', e => { WHS.sort = e.target.value; refresh(); });
+    on('whClear', 'click', () => { WHS.q = ''; WHS.level = ''; WHS.workset = ''; sync(); refresh(); });
+    on('whRows', 'click', e => {
+      const row = e.target.closest('[data-key]'); if (!row) return;
+      // Click a row to narrow to it: a level or workset sets that filter, a type fills the search box.
+      // Then regroup so the rows show what is left: types after a level or workset, levels after a type.
+      const key = row.dataset.key;
+      if (WHS.group === 'level') { WHS.level = 'v:' + key; WHS.group = 'type'; }
+      else if (WHS.group === 'workset') { WHS.workset = 'v:' + key; WHS.group = 'type'; }
+      else { WHS.q = key; WHS.group = vary.level ? 'level' : (vary.workset ? 'workset' : 'type'); }
+      sync(); refresh();
+    });
+  }
+
+  function renderContentRows(data) {
+    const rowsEl = $('whRows'), summaryEl = $('whSummary');
+    if (!rowsEl || !WHS) return;
+    const q = WHS.q.trim().toLowerCase();
+    const filtered = data.rows.filter(r =>
+      (!WHS.level || 'v:' + r.level === WHS.level) && (!WHS.workset || 'v:' + r.workset === WHS.workset) &&
+      (!q || r.type.toLowerCase().includes(q)));
+    const groups = new Map();
+    for (const r of filtered) groups.set(r[WHS.group], (groups.get(r[WHS.group]) || 0) + r.count);
+    const list = [...groups.entries()];
+    const byName = (a, b) => (a[0] || '\uffff').localeCompare(b[0] || '\uffff', undefined, { numeric: true, sensitivity: 'base' });
+    list.sort({
+      count_desc: (a, b) => b[1] - a[1] || byName(a, b), count_asc: (a, b) => a[1] - b[1] || byName(a, b),
+      name_asc: byName, name_desc: (a, b) => byName(b, a)
+    }[WHS.sort]);
+    const matched = filtered.reduce((n, r) => n + r.count, 0);
+    const max = list.reduce((m, e) => Math.max(m, e[1]), 0) || 1;
+    const filtering = WHS.q || WHS.level || WHS.workset;
+    const noun = data.noun || 'elements';
+    summaryEl.textContent = (filtering ? matched.toLocaleString() + ' of ' + data.total.toLocaleString() : data.total.toLocaleString()) +
+      ' ' + noun + ' · ' + list.length.toLocaleString() + ' ' + pluralize(WHS.labels[WHS.group].toLowerCase(), list.length) +
+      (data.omitted > 0 && !filtering ? ' · ' + data.omitted.toLocaleString() + ' more in groups too small to list' : '');
+    if (list.length === 0) { rowsEl.innerHTML = '<div class="desc">Nothing matches these filters.</div>'; return; }
+    const shown = WHS.all ? list : list.slice(0, CONTENT_ROWS_SHOWN);
+    let html = '';
+    for (const [key, n] of shown) {
+      const label = key || WHS.none[WHS.group];
+      html += '<div class="whrow" data-key="' + esc(key) + '" title="' + esc(label) + ' — click to narrow"><span class="whbar" style="width:' +
+        Math.max(2, Math.round(n / max * 100)) + '%"></span><span class="whname">' + esc(label) + '</span><span class="whn">' + n.toLocaleString() + '</span></div>';
+    }
+    if (list.length > shown.length) html += '<button id="whMore" type="button">Show all ' + list.length.toLocaleString() + '</button>';
+    rowsEl.innerHTML = html;
+    const more = $('whMore');
+    if (more) more.addEventListener('click', () => { WHS.all = true; renderContentRows(data); });
+  }
+
+  // ─── Level filter: resize every warehouse to what it holds on one level ────
+  const fpFor = n => Math.round((1.05 + 1.05 * Math.min(1, Math.log10(1 + n) / Math.log10(5001))) * 1000) / 1000;
+  const sizeFor = n => n < 10 ? 1 : n < 50 ? 2 : n < 200 ? 3 : n < 1000 ? 4 : n < 5000 ? 5 : 6;
+
+  function rebuildWarehouses() {
+    let list = V.allWarehouses;
+    const lv = V.levelFilter;
+    if (lv && V.contents) {
+      list = list.map(w => {
+        const d = V.contents[w.id]; if (!d) return null;
+        const n = d.rows.reduce((a, r) => r.level === lv ? a + r.count : a, 0);
+        return n > 0 ? Object.assign({}, w, { count: n, footprint: fpFor(n), size: sizeFor(n), bays: Math.max(2, Math.min(6, sizeFor(n))), delta: null, filtered: true }) : null;
+      }).filter(Boolean);
+      const total = list.reduce((a, w) => a + w.count, 0) || 1;
+      for (const w of list) w.share = w.count / total;
+    }
+    V.warehouses = list;
+    V.whById = new Map(list.map(w => [w.id, w]));
+    V.layoutTag = (lv || '') + '|' + list.map(w => w.count).join(',');
+    fitGrid();
+  }
+
+  function rebuildLevelOptions() {
+    const sel = $('levelFilter'); if (!sel) return;
+    const totals = new Map();
+    if (V.contents) for (const w of V.allWarehouses) { const d = V.contents[w.id]; if (d) for (const r of d.rows) if (r.level) totals.set(r.level, (totals.get(r.level) || 0) + r.count); }
+    const levels = [...totals.keys()].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    if (V.levelFilter && !totals.has(V.levelFilter)) V.levelFilter = '';
+    sel.innerHTML = '<option value="">All levels</option>' + levels.map(l => '<option value="' + esc(l) + '">' + esc(l) + ' — ' + totals.get(l).toLocaleString() + '</option>').join('');
+    sel.value = V.levelFilter || '';
+    sel.hidden = levels.length < 2;
+  }
+
+  function renderWarehouseInfo(body, wh) {
+    const g = (V.snapshot || {}).graph;
+    const filt = wh.filtered ? ' on ' + V.levelFilter : '';
     let html = '<strong>' + esc(wh.label) + '</strong><div class="desc">Warehouse for the ' +
-      esc(wh.label) + ' category. Its size follows the element count in the model graph.</div><div class="kv">';
-    html += kv('Elements', wh.count.toLocaleString());
+      esc(wh.label) + ' category. Its size follows the element count in the model graph' + esc(filt) + '.</div><div class="kv">';
+    html += kv('Elements' + filt, wh.count.toLocaleString());
+    if (wh.delta != null && g && g.previous_built_at) html += kv('Since previous build', wh.delta === 0 ? 'no change' : fmtDelta(wh.delta));
     html += kv('Share of stored elements', Math.round((wh.share || 0) * 1000) / 10 + '%');
     html += kv('System', SYSTEM_LABELS[wh.system] || wh.system);
     html += kv('Warehouse size', (SIZE_WORDS[wh.size] || wh.size) + ' (' + wh.size + ' of 6)');
     html += kv('Rank by count', '#' + ((wh.rank || 0) + 1));
     html += modelHint('warehouses', wh.id);
     if (g && g.built_at) html += kv('Counted at', g.built_at.replace('T', ' ').replace('Z', ' UTC'));
-    html += '</div><div class="desc">Graph counts are captured when the graph is built, not live Revit values.</div>';
+    html += '</div>';
+
+    // What the agent did here this session: counted by the connector per warehouse, so it is not
+    // limited to the steps still in the feed.
+    const act = V.activity.get(wh.id);
+    html += '<h2 style="margin-top:12px">Activity this session</h2>';
+    if (!act) html += '<div class="desc">No tool has worked on this category yet.</div>';
+    else {
+      html += '<div class="kv">' + kv('Reads', act.reads) + kv('Writes', act.writes) + kv('Exports', act.exports) + kv('Failures', act.failures) + kv('Items affected', (act.affected || 0).toLocaleString());
+      if (act.last_tool) html += kv('Last tool', act.last_tool);
+      if (act.last_at) html += kv('Last at', act.last_at.substring(11, 19));
+      if (act.tools && act.tools.length) html += kv('Tools used', act.tools.join(', '));
+      html += '</div>';
+    }
+    html += '<div class="desc">Graph counts are captured when the graph is built, not live Revit values.</div>';
     body.innerHTML = html;
+  }
+
+  // ─── Needs attention, session summary, system legend ──────────────────────
+  function areaBuilding(area) { const b = V.buildings.find(x => (x.areas || []).includes(area)); return b ? b.id : null; }
+  function selectPlace(id) { V.selected = id; V.selectedAgent = null; renderSelected(); }
+  function selectAgent(id) { V.selectedAgent = id; V.selected = null; renderSelected(); }
+
+  function attentionItems() {
+    const s = V.snapshot || {}, g = s.graph, items = [];
+    if (!g || !g.exists) { items.push({ sev: 'warn', text: 'No model graph — the village runs in limited mode', go: 'town_hall' }); }
+    else {
+      const f = g.freshness || {};
+      if (g.error) items.push({ sev: 'err', text: 'The graph could not be read', go: 'town_hall' });
+      else if (f.status === 'stale') items.push({ sev: 'err', text: 'Graph is stale: ' + (f.reason || 'rebuild it'), go: 'town_hall' });
+      else if (f.status === 'possibly_stale') items.push({ sev: 'warn', text: 'Graph may be stale: writes happened since it was checked', go: 'town_hall' });
+      const h = g.health || {};
+      if (h.circuits_without_panel > 0) items.push({ sev: 'warn', text: h.circuits_without_panel + ' circuit(s) without a panel', go: 'warning_area' });
+      if (h.circuits_without_elements > 0) items.push({ sev: 'warn', text: h.circuits_without_elements + ' circuit(s) without elements', go: 'warning_area' });
+      if (h.elements_without_location > 0) items.push({ sev: 'info', text: h.elements_without_location.toLocaleString() + ' element(s) without a room or space', go: 'warning_area' });
+    }
+    if (s.recent_failures > 0) items.push({ sev: 'err', text: s.recent_failures + ' tool failure(s) in the last 5 minutes', go: 'warning_area' });
+    for (const a of s.areas || []) if (a.deferred > 0) items.push({ sev: 'warn', text: a.deferred + ' ' + (AREA_LABELS[a.area] || a.area) + ' call(s) waiting for or refused approval', go: areaBuilding(a.area) });
+    for (const ag of V.agents.values()) if (ag.state === 'error') items.push({ sev: 'err', text: ag.name + ' hit an error', agent: ag.id });
+    return items;
+  }
+
+  function renderAttention() {
+    const el = $('attentionBody'); if (!el) return;
+    const items = attentionItems();
+    el.innerHTML = '';
+    if (items.length === 0) { el.textContent = 'Nothing needs attention.'; return; }
+    for (const it of items) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'att ' + it.sev; b.textContent = it.text;
+      if (it.go || it.agent) b.addEventListener('click', () => it.agent ? selectAgent(it.agent) : selectPlace(it.go));
+      el.appendChild(b);
+    }
+  }
+
+  function renderSession() {
+    const el = $('sessionBody'); if (!el) return;
+    const s = V.snapshot || {}; let reads = 0, writes = 0, exports = 0, failures = 0, deferred = 0, affected = 0;
+    const per = [];
+    for (const a of s.areas || []) { reads += a.reads; writes += a.writes; exports += a.exports; failures += a.failures; deferred += a.deferred; affected += a.affected; const n = a.reads + a.writes + a.exports; if (n > 0) per.push([a.area, n]); }
+    let tools = 0; for (const ag of V.agents.values()) tools += ag.toolCount || 0;
+    per.sort((x, y) => y[1] - x[1]);
+    let html = '<div class="kv">' + kv('Tool calls', tools.toLocaleString()) + kv('Reads / writes / exports', reads + ' / ' + writes + ' / ' + exports) + kv('Items affected', affected.toLocaleString()) + kv('Failures', failures) + kv('Awaiting approval', deferred);
+    for (const [area, n] of per.slice(0, 3)) html += kv('Busiest: ' + (AREA_LABELS[area] || area), n);
+    html += '</div>';
+    el.innerHTML = html;
+  }
+
+  function renderSystems() {
+    const sec = $('systems'), el = $('systemsBody'); if (!sec || !el) return;
+    const by = new Map();
+    for (const w of V.warehouses) { const e = by.get(w.system) || { n: 0, count: 0, color: w.primary }; e.n++; e.count += w.count; by.set(w.system, e); }
+    sec.hidden = by.size === 0;
+    el.innerHTML = '';
+    for (const [sys, e] of by) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'chip' + (V.focusSystem === sys ? ' on' : '');
+      b.innerHTML = '<span class="chipdot" style="background:' + esc(e.color || '#888') + '"></span>' + esc(SYSTEM_LABELS[sys] || sys) + ' · ' + e.n;
+      b.title = e.count.toLocaleString() + ' elements in ' + e.n + ' warehouse(s). Click to highlight.';
+      b.addEventListener('click', () => { V.focusSystem = V.focusSystem === sys ? '' : sys; renderSystems(); });
+      el.appendChild(b);
+    }
   }
 
   function kv(k, v) { return '<span>' + esc(String(k)) + '</span><span>' + esc(String(v)) + '</span>'; }
@@ -634,7 +958,7 @@
 
   function groundKey(T) {
     return T.key + '|' + Math.round(TILE * 10) + '|' + Math.round(ORIGIN.x) + ',' + Math.round(ORIGIN.y) +
-      '|' + GRID_W + 'x' + GRID_H + '|' + V.buildings.length + ':' + V.warehouses.length;
+      '|' + GRID_W + 'x' + GRID_H + '|' + V.buildings.length + ':' + V.warehouses.length + ':' + V.layoutTag;
   }
 
   function paintGround(T) {
@@ -766,7 +1090,7 @@
   /// Deterministic scenery positions, shared by both renderers. Anything too close to a building,
   /// to the centre or to a lane is skipped, which is what keeps the village readable.
   function sceneryPlan() {
-    const key = GRID_W + "x" + GRID_H + ":" + V.buildings.length + ":" + V.warehouses.length;
+    const key = GRID_W + "x" + GRID_H + ":" + V.buildings.length + ":" + V.warehouses.length + ":" + V.layoutTag;
     if (SCENERY.key === key) return SCENERY.items;
     const blocked = [];
     for (const b of V.buildings) blocked.push({ x: b.tile_x + 0.5, y: b.tile_y + 0.5, r: 1.5 + (b.size || 1) * 0.34 });
@@ -892,7 +1216,7 @@
   }
 
   function lanePaths() {
-    const key = GRID_W + 'x' + GRID_H + ':' + V.buildings.length + ':' + V.warehouses.length;
+    const key = GRID_W + 'x' + GRID_H + ':' + V.buildings.length + ':' + V.warehouses.length + ':' + V.layoutTag;
     if (LANES.key === key) return LANES.paths;
     const paths = [];
     const obstacles = laneObstacles();
@@ -1118,7 +1442,10 @@
     // Depth-sorted drawables
     const items = [];
     for (const b of V.buildings) items.push({ d: b.tile_x + b.tile_y + 1, draw: () => drawBuilding(b, T) });
-    for (const wh of V.warehouses) items.push({ d: wh.tile_x + wh.tile_y + 1, draw: () => drawWarehouse(wh, T) });
+    drawSystemLinks();
+    for (const wh of V.warehouses) items.push({ d: wh.tile_x + wh.tile_y + 1, draw: () => {
+      if (V.focusSystem && wh.system !== V.focusSystem) { ctx.save(); ctx.globalAlpha = 0.28; drawWarehouse(wh, T); ctx.restore(); } else drawWarehouse(wh, T);
+    } });
     for (const ag of V.agents.values()) items.push({ d: ag.x + ag.y + 0.2, draw: () => drawAgent(ag) });
     for (const e of V.effects) { const p = posOf(e.building); items.push({ d: p.x + p.y + 3, draw: () => drawEffect(e) }); }
     items.sort((a, b) => a.d - b.d);
@@ -1129,7 +1456,8 @@
     // Legend
     ctx.fillStyle = 'rgba(230,235,242,.75)'; ctx.font = '11px system-ui, sans-serif'; ctx.textAlign = 'right';
     ctx.fillText('theme: ' + T.name.replace('_', ' ') + (T.visible.length ? ' · districts: ' + T.visible.map(v => v.replace('_', ' ')).join(', ') : '') +
-      (V.warehouses.length ? ' · warehouses: ' + V.warehouses.length : ''), W - 12, H - 12);
+      (V.warehouses.length ? ' · warehouses: ' + V.warehouses.length : '') + (V.activity.size ? ' · glow: orange edited, blue read, red failed' : '') +
+      (V.levelFilter ? ' · level: ' + V.levelFilter : ''), W - 12, H - 12);
     ctx.textAlign = 'left';
   }
 
@@ -1182,6 +1510,7 @@
     else if (b.sprite === 'park') { drawPark(c, hw, hh, T); b._screen = { x: c.x, y: c.y, hw: hw * 0.9, top: c.y - hh - TILE * 0.5, bottom: c.y + hh + TILE * 0.3, labelY: c.y + hh + 4 }; return; }
     else if (b.sprite === 'overlook') { drawOverlook(c, hw, hh, hgt, T); }
     else { box(c.x, c.y, hw, hh, hgt, roof, wallL, wallR); }
+    if (b.id === 'utility_district') drawPanels(c, hw, hh, T);
 
     // Sprite details
     const top = c.y - hgt;
@@ -1262,6 +1591,7 @@
     const tint = wh.hue != null ? wh.hue : 210;
     const wallL = 'hsl(' + tint + ', 12%, 76%)', wallR = 'hsl(' + tint + ', 14%, 58%)';
 
+    drawHeat(c, hw, hh, V.activity.get(wh.id));
     box(c.x, c.y, hw, hh, hgt, roof, wallL, wallR);
     const top = c.y - hgt;
 
@@ -1309,9 +1639,54 @@
   /// selection and anywhere a character is standing brighten and gain a pill.
   /// The buildings are recognisable on their own, so a name only appears for the place under the
   /// pointer and the selected one. A permanent label on every building crowded the village.
+  /// Ground glow under a warehouse the agent has worked on: orange for edits, blue for reads
+  /// only, red once a tool failed there. Brighter for more activity, and it breathes a little.
+  function drawHeat(c, hw, hh, act) {
+    if (!act) return;
+    const w = act.writes + act.exports * 0.5, r = act.reads;
+    let col = null, a = 0;
+    if (act.failures > 0) { col = '255,90,90'; a = 0.5; }
+    else if (w > 0) { col = '255,150,60'; a = Math.min(0.6, 0.2 + 0.08 * Math.log2(1 + w)); }
+    else if (r > 0) { col = '110,180,255'; a = Math.min(0.4, 0.12 + 0.05 * Math.log2(1 + r)); }
+    if (!col) return;
+    const pulse = V.paused ? 1 : 0.88 + 0.12 * Math.sin(V.time * 3);
+    ctx.fillStyle = 'rgba(' + col + ',' + (a * pulse).toFixed(3) + ')';
+    ctx.beginPath(); ctx.ellipse(c.x, c.y + hh * 0.1, hw * 1.45, hh * 1.5, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  /// A faint dashed line through the doors of each system's warehouses, in the order of their
+  /// rank, so categories that belong together read as one family across the yard.
+  function drawSystemLinks() {
+    const by = new Map();
+    for (const w of V.warehouses) { if (w.system === 'other') continue; if (!by.has(w.system)) by.set(w.system, []); by.get(w.system).push(w); }
+    for (const [sys, list] of by) {
+      if (list.length < 2) continue;
+      list.sort((a, b) => (a.rank || 0) - (b.rank || 0));
+      ctx.save();
+      ctx.strokeStyle = list[0].accent || '#aab'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 5]);
+      ctx.globalAlpha = V.focusSystem === sys ? 0.85 : (V.focusSystem ? 0.12 : 0.34);
+      for (let i = 0; i + 1 < list.length; i++) {
+        const p = iso(list[i].tile_x + 0.5, list[i].tile_y + 0.5), q = iso(list[i + 1].tile_x + 0.5, list[i + 1].tile_y + 0.5);
+        ctx.beginPath(); ctx.moveTo(p.x, p.y + TILE * 0.2); ctx.quadraticCurveTo((p.x + q.x) / 2, Math.max(p.y, q.y) + TILE * 0.55, q.x, q.y + TILE * 0.2); ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  /// The panels behind the utility district as small cabinets, taller the more circuits they feed.
+  function drawPanels(c, hw, hh, T) {
+    const g = (V.snapshot || {}).graph, panels = g && g.panels;
+    if (!panels || !panels.length) return;
+    for (let i = 0; i < Math.min(8, panels.length); i++) {
+      const px = c.x + hw + TILE * (0.22 + i * 0.2), py = c.y + hh * 0.3 + TILE * i * 0.1;
+      const h = TILE * (0.1 + 0.42 * Math.min(1, (panels[i].circuits || 0) / 60));
+      box(px, py, TILE * 0.07, TILE * 0.035, h, T.primary, '#d8d4cb', '#9aa0b4');
+    }
+  }
+
   function drawLabels() {
     for (const b of V.buildings) if (V.hover === b.id || V.selected === b.id) drawLabel(b);
-    for (const wh of V.warehouses) if (V.hover === wh.id || V.selected === wh.id) drawLabel(wh, wh.count.toLocaleString());
+    for (const wh of V.warehouses) if (V.hover === wh.id || V.selected === wh.id) drawLabel(wh, wh.count.toLocaleString() + (wh.delta ? ' (' + fmtDelta(wh.delta) + ')' : ''));
   }
 
   function drawLabel(b, suffix) {
@@ -1696,14 +2071,54 @@
         share: Math.round(x[1] / whTotal * 10000) / 10000, system: x[2], primary: x[3], accent: x[4], hue: x[5],
         tile_x: Math.round((1.6 + (i % 5) * 2.6 + (Math.floor(i / 5) % 2 ? 1.3 : 0) + nudge(i, 7) * 0.22) * 1000) / 1000,
         tile_y: Math.round((14 + Math.floor(i / 5) * 2.8 + nudge(i, 5) * 0.22) * 1000) / 1000, row: Math.floor(i / 5),
-        footprint: Math.round((1.05 + 1.05 * ratio) * 1000) / 1000, size, bays: Math.max(2, Math.min(6, size)), rank: i
+        footprint: Math.round((1.05 + 1.05 * ratio) * 1000) / 1000, size, bays: Math.max(2, Math.min(6, size)), rank: i, delta: [14, -6, 0, 2, 0, 0, 0, 0][i]
       };
     });
+    // Demo contents: the same shape GET /contents serves — type × level × workset counts per warehouse.
+    const TYPES = {
+      'Fire Alarm Devices': ['Smoke Detector: ATS-O', 'Smoke Detector: ATS-OT', 'Manual Call Point: ATS-KP', 'Sounder: ATS-S', 'Heat Detector: ATS-T', 'Input Module: ATS-IM'],
+      'Lighting Fixtures': ['Downlight: LED 12W', 'Linear: LED 36W', 'Panel: 600x600', 'Emergency: Exit Sign', 'Wall Light: IP65'],
+      'Data Devices': ['Data Outlet: RJ45 Cat6A', 'Data Outlet: RJ45 Double', 'WiFi: Access Point', 'Patch Panel: 24 port'],
+      'Electrical Equipment': ['Distribution Board: DB-1', 'Distribution Board: DB-2', 'Transformer: 630kVA', 'UPS: 10kVA'],
+      'Security Devices': ['Camera: Dome', 'Card Reader: Mifare', 'Door Contact', 'Motion Detector: PIR'],
+      'Electrical Fixtures': ['Socket: Schuko', 'Socket: Double', 'Switch: 1-gang', 'Switch: 2-gang'],
+      'Conduits': ['Conduit: EMT 20', 'Conduit: EMT 25'],
+      'Mechanical Equipment': ['AHU: Supply', 'Fan Coil: FC-2', 'Pump: P-1']
+    };
+    const LEVELS = ['Level 0', 'Level 1', 'Level 2', 'Roof'], WORKSETS = ['E-Fire Alarm', 'E-Lighting', 'E-Data', 'E-Power', 'Shared'];
+    const demoContents = {};
+    for (const x of WH) {
+      const id = 'wh_' + x[0].toLowerCase().replace(/[^a-z0-9]+/g, '_'), types = TYPES[x[0]], rows = [];
+      let left = x[1];
+      for (let i = 0; left > 0; i++) {
+        const n = Math.min(left, Math.max(1, Math.round(rnd() * x[1] / 5)));
+        rows.push({ type: types[Math.floor(rnd() * types.length)], level: LEVELS[Math.floor(rnd() * LEVELS.length)], workset: WORKSETS[Math.floor(rnd() * WORKSETS.length)], count: n });
+        left -= n;
+      }
+      const merged = new Map();
+      for (const r of rows) { const k = r.type + '|' + r.level + '|' + r.workset; if (merged.has(k)) merged.get(k).count += r.count; else merged.set(k, r); }
+      demoContents[id] = { rows: [...merged.values()].sort((a, b) => b.count - a.count), total: x[1], omitted: 0 };
+    }
+    // Landmarks hold other things than elements; each says what its columns mean.
+    const R = (type, level, workset, count) => ({ type, level, workset, count });
+    const L = (noun, type, level, workset, rows) => ({ labels: { type, level: level || 'Level', workset: workset || 'Workset' }, noun, rows, total: rows.reduce((a, r) => a + r.count, 0), omitted: 0 });
+    demoContents.archive = L('sheets', 'Number prefix', null, null, [R('E', '', 'Sheets', 14), R('A', '', 'Sheets', 9), R('V', '', 'Sheets', 6), R('K', '', 'Sheets', 5)]);
+    demoContents.lookout = L('views', 'View type', null, null, [R('FloorPlan', 'Level 1', 'Views', 38), R('FloorPlan', 'Level 2', 'Views', 34), R('CeilingPlan', 'Level 1', 'Views', 22), R('Section', '', 'Views', 18), R('ThreeD', '', 'Views', 6), R('DraftingView', '', 'Views', 12)]);
+    demoContents.market = L('schedules', 'Name prefix', null, null, [R('Fire', '', 'Views', 3), R('Lighting', '', 'Views', 2), R('Panel', '', 'Views', 3)]);
+    demoContents.workshop = L('types', 'Family', 'Category', null, [R('Smoke Detector', 'Fire Alarm Devices', 'E-Fire Alarm', 4), R('Manual Call Point', 'Fire Alarm Devices', 'E-Fire Alarm', 2), R('Downlight', 'Lighting Fixtures', 'E-Lighting', 5), R('Data Outlet', 'Data Devices', 'E-Data', 3), R('Distribution Board', 'Electrical Equipment', 'E-Power', 4)]);
+    demoContents.sign_workshop = L('tags', 'Tagged category', 'View level', null, [R('Fire Alarm Devices', 'Level 1', '', 160), R('Fire Alarm Devices', 'Level 2', '', 120), R('Lighting Fixtures', 'Level 1', '', 90), R('Data Devices', 'Level 2', '', 50)]);
+    demoContents.houses = L('elements', 'Category', null, null, WH.flatMap(x => demoContents['wh_' + x[0].toLowerCase().replace(/[^a-z0-9]+/g, '_')].rows.map(r => R(x[0], r.level, r.workset, r.count))));
+    demoContents.utility_district = L('panels and circuits', 'Kind', null, null, [R('Panel', 'Level 0', 'E-Power', 3), R('Panel', 'Level 1', 'E-Power', 2), R('Panel', 'Level 2', 'E-Power', 1), R('Circuit', 'Level 0', 'E-Power', 18), R('Circuit', 'Level 1', 'E-Power', 14), R('Circuit', 'Level 2', 'E-Power', 8)]);
+    demoContents.town_hall = L('graph nodes', 'Node kind', null, null, [R('element', '', 'Shared', 1900), R('type', '', 'Shared', 140), R('view', '', 'Shared', 212), R('sheet', '', 'Shared', 34), R('circuit', '', 'E-Power', 40)]);
+    demoContents.sign_workshop.total = 420;
+    demoContents.warning_area = L('issues', 'Issue', null, null, [R('Circuits without a panel', 'Level 1', 'E-Power', 1), R('Circuits without elements', 'Level 0', 'E-Power', 2), R('Circuits without elements', 'Level 2', 'E-Power', 1), R('No room or space: Data Devices', 'Level 1', 'E-Data', 22), R('No room or space: Lighting Fixtures', 'Level 2', 'E-Lighting', 18)]);
+    V.demoContents = demoContents;
     const snap = {
       schema_version: 1, read_only: true, project_name: '1626_PP_EN (demo)', session_id: 'demo', mode: 'live', updated_at: new Date().toISOString(),
       agents: [{ id: 'claude-code', name: 'Claude Code', state: 'idle', area: 'unknown', building: 'square', activity: 'unknown', in_progress: 0, tool_count: 0, failure_count: 0 }],
       areas, current_steps: [], recent_steps: [], recent_failures: 0, buildings: B, warehouses,
-      graph: { exists: true, file_name: '1626_PP_EN.graph.db', root_source: 'demo', built_at: new Date(Date.now() - 42 * 60000).toISOString(), freshness: { status: 'fresh', reason: 'Demo graph.', age_seconds: 2520 }, counts: { nodes: 2110, edges: 5300, elements: 1900, types: 140, sheets: 34, views: 212, schedules: 8, levels: 3, spaces: 120, worksets: 6, panels: 6, circuits: 40, tags: 420 }, health: { circuits_without_panel: 1, circuits_without_elements: 3, elements_without_location: 40, issues: 4 } },
+      warehouse_activity: [{ warehouse: 'wh_fire_alarm_devices', reads: 5, writes: 3, exports: 0, failures: 0, affected: 24, tools: ['revit_find_elements_by_parameter', 'revit_set_parameter'], last_tool: 'revit_set_parameter', last_at: new Date().toISOString() }, { warehouse: 'wh_data_devices', reads: 6, writes: 0, exports: 0, failures: 0, affected: 0, tools: ['revit_get_elements_info'], last_tool: 'revit_get_elements_info', last_at: new Date().toISOString() }, { warehouse: 'wh_lighting_fixtures', reads: 1, writes: 0, exports: 0, failures: 1, affected: 0, tools: ['revit_set_parameter'], last_tool: 'revit_set_parameter', last_at: new Date().toISOString() }],
+      graph: { exists: true, file_name: '1626_PP_EN.graph.db', previous_built_at: new Date(Date.now() - 26 * 3600000).toISOString(), delta: { nodes: 40, edges: 90, elements: 10, types: 2, sheets: 3, views: 0, schedules: 0, levels: 0, spaces: 0, worksets: 0, panels: 1, circuits: 4, tags: 12 }, panels: [{ level: 'Level 0', circuits: 34, fed_elements: 120 }, { level: 'Level 1', circuits: 22, fed_elements: 80 }, { level: 'Level 1', circuits: 12, fed_elements: 40 }, { level: 'Level 2', circuits: 6, fed_elements: 14 }], root_source: 'demo', built_at: new Date(Date.now() - 42 * 60000).toISOString(), freshness: { status: 'fresh', reason: 'Demo graph.', age_seconds: 2520 }, counts: { nodes: 2110, edges: 5300, elements: 1900, types: 140, sheets: 34, views: 212, schedules: 8, levels: 3, spaces: 120, worksets: 6, panels: 6, circuits: 40, tags: 420 }, health: { circuits_without_panel: 1, circuits_without_elements: 3, elements_without_location: 40, issues: 4 } },
       theme: { theme: 'fire_alarm', label: 'Fire alarm', dominant: 'fire_alarm', visible_systems: ['fire_alarm', 'lighting'], primary: '#b8432f', accent: '#ff8a75', reason: 'Fire alarm holds 69% of the evidence (420 by category, 380 by name) — dominant.', identity: { hue: 14, pattern: 1, seed: 1 }, config_source: 'default', thresholds: { min_sample_count: 20, min_system_count: 10, dominant_share: 0.45, visible_share: 0.1, category_weight: 1, name_weight: 0.5 },
         scores: [{ system: 'fire_alarm', label: 'Fire alarm', category_score: 420, name_score: 380, name_contribution: 190, score: 610, share: 0.69, visible: true, dominant: true }, { system: 'lighting', label: 'Lighting / DALI', category_score: 90, name_score: 30, name_contribution: 15, score: 105, share: 0.12, visible: true, dominant: false }, { system: 'it_av', label: 'IT / AV / data', category_score: 60, name_score: 0, name_contribution: 0, score: 60, share: 0.07, visible: false, dominant: false }, { system: 'security', label: 'Security / access control', category_score: 40, name_score: 80, name_contribution: 40, score: 80, share: 0.09, visible: false, dominant: false }, { system: 'electrical', label: 'General electrical', category_score: 30, name_score: 0, name_contribution: 0, score: 30, share: 0.03, visible: false, dominant: false }] },
       stats: { events_processed: 0, steps_emitted: 0, unknown_tools: 0, unknown_events: 0, catch_up_entries: 0, last_sequence: 0 }, queue: { enqueued: 0, depth: 0, capacity: 2000, high_water: 0 },
@@ -2025,7 +2440,7 @@
   /// group and rebuilt wholesale on a layout change, so the per-frame cost stays a single render.
   async function buildStatic() {
     const T3 = GL.lib;
-    const key = GRID_W + 'x' + GRID_H + ':' + V.buildings.length + ':' + V.warehouses.length + ':' + (GL.lookup ? GL.lookup.size : 0);
+    const key = GRID_W + 'x' + GRID_H + ':' + V.buildings.length + ':' + V.warehouses.length + ':' + V.layoutTag + ':' + (GL.lookup ? GL.lookup.size : 0);
     if (GL.staticKey === key) return;
     GL.staticKey = key;
     if (GL.static) { GL.root.remove(GL.static); disposeTree(GL.static); }

@@ -12,6 +12,10 @@ public class ElementInfoDto
     public long? TypeElementId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Level { get; set; } = string.Empty;
+    /// <summary>Line style name of a detail line, model line or other curve element; omitted for everything else.</summary>
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public string? LineStyle { get; set; }
+
     public Dictionary<string, ParameterValueDto> Parameters { get; set; } = new();
 
     // Populated only when the query sets IncludeTags; empty list = queried, no tags attached.

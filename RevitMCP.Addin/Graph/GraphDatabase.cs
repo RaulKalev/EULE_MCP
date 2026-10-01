@@ -572,6 +572,106 @@ public sealed class GraphDatabase : IDisposable
         return s;
     }
 
+    /// <summary>
+    /// Element counts per category, type, level and workset for the given categories (matched
+    /// case-insensitively). The type is the one the element's <c>type_of</c> edge points at, empty
+    /// when it has none. Aggregate counts only: no element id or name leaves this method.
+    /// </summary>
+    public List<GraphContentRow> ElementContents(IReadOnlyCollection<string> categories)
+    {
+        var rows = new List<GraphContentRow>();
+        if (categories == null || categories.Count == 0) return rows;
+
+        using var cmd = _connection.CreateCommand();
+        var names = new List<string>();
+        var i = 0;
+        foreach (var category in categories)
+        {
+            var name = "$c" + i++;
+            names.Add(name);
+            cmd.Parameters.AddWithValue(name, category);
+        }
+
+        cmd.CommandText =
+            "SELECT e.category, COALESCE(t.name, ''), COALESCE(e.level, ''), COALESCE(e.workset, ''), COUNT(*) " +
+            "FROM nodes e " +
+            "LEFT JOIN edges r ON r.src = e.id AND r.rel = 'type_of' " +
+            "LEFT JOIN nodes t ON t.id = r.dst " +
+            "WHERE e.kind = 'element' AND e.category COLLATE NOCASE IN (" + string.Join(",", names) + ") " +
+            "GROUP BY e.category, t.name, e.level, e.workset";
+
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            rows.Add(new GraphContentRow
+            {
+                Category = reader.GetString(0),
+                Type = reader.GetString(1),
+                Level = reader.GetString(2),
+                Workset = reader.GetString(3),
+                Count = reader.GetInt64(4)
+            });
+        }
+        return rows;
+    }
+
+    // ─── Aggregates for the village's landmarks. Counts only: no id or name leaves these. ───
+
+    private List<GraphContentRow> ContentRows(string sql)
+    {
+        var rows = new List<GraphContentRow>();
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = sql;
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            rows.Add(new GraphContentRow
+            {
+                Type = reader.IsDBNull(0) ? string.Empty : reader.GetString(0),
+                Level = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
+                Workset = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                Count = reader.GetInt64(3)
+            });
+        }
+        return rows;
+    }
+
+    /// <summary>Nodes by kind and workset (the town hall).</summary>
+    public List<GraphContentRow> KindContents() => ContentRows(
+        "SELECT kind, '', COALESCE(workset, ''), COUNT(*) FROM nodes GROUP BY kind, workset");
+
+    /// <summary>Elements by category, level and workset (the houses).</summary>
+    public List<GraphContentRow> ElementCategoryContents() => ContentRows(
+        "SELECT COALESCE(category, ''), COALESCE(level, ''), COALESCE(workset, ''), COUNT(*) " +
+        "FROM nodes WHERE kind = 'element' GROUP BY category, level, workset");
+
+    /// <summary>Tag edges by the tagged element's category and the level of the view holding the tag (the sign workshop).</summary>
+    public List<GraphContentRow> TagContents() => ContentRows(
+        "SELECT COALESCE(e.category, ''), COALESCE(v.level, ''), '', COUNT(*) " +
+        "FROM edges r JOIN nodes e ON e.id = r.src JOIN nodes v ON v.id = r.dst " +
+        "WHERE r.rel = 'tagged_in' GROUP BY e.category, v.level");
+
+    /// <summary>
+    /// The health problems the warning area counts, broken down: each row's type names the issue,
+    /// and for elements without a room or space also the category.
+    /// </summary>
+    public List<GraphContentRow> HealthContents()
+    {
+        var rows = ContentRows(
+            "SELECT 'Circuits without a panel', COALESCE(c.level, ''), COALESCE(c.workset, ''), COUNT(*) " +
+            "FROM nodes c WHERE c.kind = 'circuit' AND NOT EXISTS (SELECT 1 FROM edges e WHERE e.src = c.id AND e.rel = 'fed_by') " +
+            "GROUP BY c.level, c.workset");
+        rows.AddRange(ContentRows(
+            "SELECT 'Circuits without elements', COALESCE(c.level, ''), COALESCE(c.workset, ''), COUNT(*) " +
+            "FROM nodes c WHERE c.kind = 'circuit' AND NOT EXISTS (SELECT 1 FROM edges e WHERE e.dst = c.id AND e.rel = 'fed_by') " +
+            "GROUP BY c.level, c.workset"));
+        rows.AddRange(ContentRows(
+            "SELECT 'No room or space: ' || COALESCE(c.category, ''), COALESCE(c.level, ''), COALESCE(c.workset, ''), COUNT(*) " +
+            "FROM nodes c WHERE c.kind = 'element' AND NOT EXISTS (SELECT 1 FROM edges e WHERE e.src = c.id AND e.rel = 'located_in') " +
+            "GROUP BY c.category, c.level, c.workset"));
+        return rows;
+    }
+
     private List<GraphNode> Sample(string fromWhere, int sampleSize)
     {
         var list = new List<GraphNode>();

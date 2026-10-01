@@ -65,6 +65,7 @@ public sealed class VillageStateHub : IDisposable
     private int _graphRefreshRequested;
     private volatile string _snapshotJson = "{}";
     private volatile string _instancesJson = "[]";
+    private volatile string _contentsJson = "{}";
     private DateTimeOffset _lastStatePush = DateTimeOffset.MinValue;
     private DateTimeOffset _lastGraphRefresh = DateTimeOffset.MinValue;
     private bool _stateDirty;
@@ -135,6 +136,12 @@ public sealed class VillageStateHub : IDisposable
 
     /// <summary>Latest serialized instance list; safe to read from any thread.</summary>
     public string InstancesJson => _instancesJson;
+
+    /// <summary>
+    /// What each warehouse holds, keyed by warehouse id. Kept out of the state snapshot, which is
+    /// pushed several times a second; the viewer fetches it when a warehouse is selected.
+    /// </summary>
+    public string ContentsJson => _contentsJson;
 
     public VillageProjectContext CurrentContext => _context;
     public VillageGraphHint? GraphHint => _graphHint;
@@ -398,6 +405,7 @@ public sealed class VillageStateHub : IDisposable
             };
 
             var result = _graphReader.Read(source);
+            TrackBaseline(result.Snapshot);
             var modelId = context.ComputeModelId();
             var theme = result.Theme;
             if (theme != null) theme.Identity = VillageThemeScorer.IdentityFor(modelId);
@@ -415,10 +423,19 @@ public sealed class VillageStateHub : IDisposable
             Aggregator.Theme = themeToken;
             Aggregator.Buildings = VillageLayoutSizer.Apply(VillageLayout.Default, result.Snapshot, theme);
             // One warehouse per category with elements; none at all when the graph is missing.
-            Aggregator.SetWarehouses(VillageWarehouseYard.Plan(result.Snapshot.Categories, _themes, _options.MaxWarehouses, _options.WarehouseExcludeCategories, modelFilter));
+            var yard = VillageWarehouseYard.Plan(result.Snapshot.Categories, _themes, _options.MaxWarehouses, _options.WarehouseExcludeCategories, modelFilter);
+            if (_baselineCategories != null)
+                foreach (var warehouse in yard)
+                    warehouse.Delta = warehouse.Count - (_baselineCategories.TryGetValue(warehouse.Category, out var before) ? before : 0);
+            Aggregator.SetWarehouses(yard);
             var lookup = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var warehouse in Aggregator.Warehouses) lookup[warehouse.Category] = warehouse.Id;
             _warehouseByCategory = lookup;
+            var contents = new Dictionary<string, VillageWarehouseContents>(StringComparer.Ordinal);
+            foreach (var warehouse in Aggregator.Warehouses)
+                if (result.Contents.TryGetValue(warehouse.Category, out var held)) contents[warehouse.Id] = held;
+            foreach (var landmark in result.LandmarkContents) contents[landmark.Key] = landmark.Value;
+            _contentsJson = JsonConvert.SerializeObject(contents);
             if (result.Changed)
                 Aggregator.Process(Factory.GraphRefreshed(context, result.Snapshot.Exists && result.Snapshot.Error == null, result.Snapshot.Counts.Nodes));
             _stateDirty = true;
@@ -428,6 +445,60 @@ public sealed class VillageStateHub : IDisposable
         {
             Log("graph refresh error: " + ex.GetType().Name + ": " + ex.Message);
         }
+    }
+
+    // ─── Change since the previous build ────────────────────────────────────
+
+    private string? _trackedModel;
+    private string? _trackedBuiltAt;
+    private VillageGraphCounts? _trackedCounts;
+    private Dictionary<string, long>? _trackedCategories;
+    private string? _baselineBuiltAt;
+    private VillageGraphCounts? _baselineCounts;
+    private Dictionary<string, long>? _baselineCategories;
+
+    /// <summary>
+    /// Remembers the counts of each distinct graph build seen this session and stamps the snapshot
+    /// with the change since the build before it. Idempotent for a snapshot that has not changed,
+    /// so the cached result of an unchanged file keeps the same delta. Memory only.
+    /// </summary>
+    private void TrackBaseline(VillageGraphSnapshot snapshot)
+    {
+        if (!snapshot.Exists || snapshot.Error != null || string.IsNullOrEmpty(snapshot.BuiltAt)) return;
+
+        // A different model is a different history: never diff across documents.
+        if (!string.Equals(_trackedModel, snapshot.ModelName, StringComparison.Ordinal))
+        {
+            _trackedModel = snapshot.ModelName;
+            _trackedBuiltAt = null; _trackedCounts = null; _trackedCategories = null;
+            _baselineBuiltAt = null; _baselineCounts = null; _baselineCategories = null;
+        }
+
+        if (!string.Equals(_trackedBuiltAt, snapshot.BuiltAt, StringComparison.Ordinal))
+        {
+            if (_trackedCounts != null)
+            {
+                _baselineBuiltAt = _trackedBuiltAt;
+                _baselineCounts = _trackedCounts;
+                _baselineCategories = _trackedCategories;
+            }
+            _trackedBuiltAt = snapshot.BuiltAt;
+            _trackedCounts = JsonConvert.DeserializeObject<VillageGraphCounts>(JsonConvert.SerializeObject(snapshot.Counts));
+            _trackedCategories = snapshot.Categories.ToDictionary(c => c.Name, c => c.Count, StringComparer.OrdinalIgnoreCase);
+        }
+
+        if (_baselineCounts == null) return;
+        var now = snapshot.Counts;
+        var then = _baselineCounts;
+        snapshot.PreviousBuiltAt = _baselineBuiltAt;
+        snapshot.Delta = new VillageGraphCounts
+        {
+            Nodes = now.Nodes - then.Nodes, Edges = now.Edges - then.Edges, Elements = now.Elements - then.Elements,
+            Types = now.Types - then.Types, Sheets = now.Sheets - then.Sheets, Views = now.Views - then.Views,
+            Schedules = now.Schedules - then.Schedules, Levels = now.Levels - then.Levels, Spaces = now.Spaces - then.Spaces,
+            Worksets = now.Worksets - then.Worksets, Panels = now.Panels - then.Panels, Circuits = now.Circuits - then.Circuits,
+            Tags = now.Tags - then.Tags
+        };
     }
 
     private void RefreshInstances()

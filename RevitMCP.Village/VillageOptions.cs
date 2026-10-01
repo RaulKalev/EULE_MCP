@@ -49,6 +49,12 @@ public sealed class VillageOptions
     /// <summary>Agents with no activity for this long are shown as disconnected.</summary>
     public int AgentIdleSeconds { get; set; } = 300;
 
+    /// <summary>
+    /// A character stays where it last worked this long before stepping out to the overlook, so a
+    /// follow-up command goes straight to its building instead of via the overlook.
+    /// </summary>
+    public int OverlookAfterSeconds { get; set; } = 15;
+
     /// <summary>A character idle this long walks to the park in the village centre.</summary>
     public int ParkAfterSeconds { get; set; } = 120;
 
@@ -126,6 +132,7 @@ public sealed class VillageOptions
         o.HistoryLimit = Int(user, company, "historyLimit", o.HistoryLimit, 50, 5000);
         o.GraphRefreshSeconds = Int(user, company, "graphRefreshSeconds", o.GraphRefreshSeconds, 10, 3600);
         o.AgentIdleSeconds = Int(user, company, "agentIdleSeconds", o.AgentIdleSeconds, 30, 3600);
+        o.OverlookAfterSeconds = Int(user, company, "overlookAfterSeconds", o.OverlookAfterSeconds, 2, 600);
         o.ParkAfterSeconds = Int(user, company, "parkAfterSeconds", o.ParkAfterSeconds, 15, 3600);
         o.AnimationSpeed = Dbl(user, company, "animationSpeed", o.AnimationSpeed, 0.1, 5.0);
         o.MaxViewers = Int(user, company, "maxViewers", o.MaxViewers, 1, 32);

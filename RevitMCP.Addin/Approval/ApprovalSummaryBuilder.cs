@@ -24,6 +24,7 @@ public static class ApprovalSummaryBuilder
             "revit_set_circuit_parameter" => BuildSetCircuitParameter(request),
             "revit_create_electrical_circuit" => CircuitPreviewBuilder.BuildCreateCircuit(request),
             "revit_add_elements_to_circuit" => CircuitPreviewBuilder.BuildAddElements(request),
+            "revit_move_elements_between_circuits" => CircuitPreviewBuilder.BuildMoveElements(request),
             "revit_reassign_circuit_panel" => CircuitPreviewBuilder.BuildReassignPanel(request),
             "revit_change_circuit_cable_or_wire_type" => CircuitPreviewBuilder.BuildChangeWireType(request),
             "revit_select_circuit_elements" => BuildSelectCircuitElements(request),

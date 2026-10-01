@@ -26,7 +26,7 @@ public sealed class VillageServerStats
 ///
 /// Security model:
 /// - binds to a loopback address only (the options coerce anything else back to 127.0.0.1);
-/// - accepts GET/HEAD for a fixed route allow-list: "/", "/events", "/snapshot", "/instances", "/health";
+/// - accepts GET/HEAD for a fixed route allow-list: "/", "/events", "/snapshot", "/instances", "/contents", "/health";
 ///   every other method or path is refused, and a request body is never read;
 /// - the Host header must name a loopback host (blocks DNS-rebinding pages from reading local state);
 /// - no CORS headers are sent, so foreign origins cannot read responses or open the stream;
@@ -63,8 +63,10 @@ public sealed class VillageSseServer : IDisposable
         Func<string>? instancesJsonProvider = null,
         Action<string>? log = null,
         Func<VillageModelLibrary?>? modelLibraryProvider = null,
-        Func<string, byte[]?>? vendorProvider = null)
+        Func<string, byte[]?>? vendorProvider = null,
+        Func<string>? contentsJsonProvider = null)
     {
+        _contentsJson = contentsJsonProvider ?? (() => "{}");
         _options = options;
         _snapshotJson = snapshotJsonProvider;
         _html = htmlProvider;
@@ -74,6 +76,7 @@ public sealed class VillageSseServer : IDisposable
         _vendor = vendorProvider ?? (_ => null);
     }
 
+    private readonly Func<string> _contentsJson;
     private readonly Func<VillageModelLibrary?> _modelLibrary;
     private readonly Func<string, byte[]?> _vendor;
 
@@ -263,6 +266,9 @@ public sealed class VillageSseServer : IDisposable
                     return;
                 case "/instances":
                     await WriteSimpleAsync(stream, 200, "OK", "application/json; charset=utf-8", SafeProvide(_instancesJson, "[]"), ct, headOnly: request.Method == "HEAD").ConfigureAwait(false);
+                    return;
+                case "/contents":
+                    await WriteSimpleAsync(stream, 200, "OK", "application/json; charset=utf-8", SafeProvide(_contentsJson, "{}"), ct, headOnly: request.Method == "HEAD").ConfigureAwait(false);
                     return;
                 case "/health":
                     await WriteSimpleAsync(stream, 200, "OK", "application/json; charset=utf-8", HealthJson(), ct, headOnly: request.Method == "HEAD").ConfigureAwait(false);

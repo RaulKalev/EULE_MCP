@@ -53,6 +53,30 @@ public sealed class VillageAreaCounters
     [JsonIgnore] public long Total => Reads + Writes + Exports + Failures + Deferred;
 }
 
+/// <summary>
+/// What the agent did at one warehouse this session. Keyed by warehouse id, so it survives the
+/// yard being rebuilt; the viewer tints the warehouse by it and shows it when it is selected.
+/// </summary>
+public sealed class VillageWarehouseActivity
+{
+    [JsonProperty("warehouse")] public string Warehouse { get; set; } = string.Empty;
+    [JsonProperty("reads")] public long Reads { get; set; }
+    [JsonProperty("writes")] public long Writes { get; set; }
+    [JsonProperty("exports")] public long Exports { get; set; }
+    [JsonProperty("failures")] public long Failures { get; set; }
+    [JsonProperty("affected")] public long Affected { get; set; }
+    /// <summary>Distinct tool names used here, most recent last, at most eight.</summary>
+    [JsonProperty("tools")] public List<string> Tools { get; set; } = new();
+    [JsonProperty("last_tool")] public string? LastTool { get; set; }
+    [JsonProperty("last_at")] public string? LastAt { get; set; }
+
+    public VillageWarehouseActivity Clone() => new()
+    {
+        Warehouse = Warehouse, Reads = Reads, Writes = Writes, Exports = Exports, Failures = Failures,
+        Affected = Affected, Tools = new List<string>(Tools), LastTool = LastTool, LastAt = LastAt
+    };
+}
+
 /// <summary>Kinds of story steps the aggregator produces.</summary>
 public static class VillageStepKinds
 {
@@ -153,6 +177,8 @@ public sealed class VillageStateSnapshot
     [JsonProperty("buildings")] public List<VillageBuilding> Buildings { get; set; } = new();
     /// <summary>One warehouse per Revit category that has elements in the graph; empty in limited mode.</summary>
     [JsonProperty("warehouses")] public List<VillageWarehouse> Warehouses { get; set; } = new();
+    /// <summary>Per-warehouse activity this session; only warehouses that saw a tool appear.</summary>
+    [JsonProperty("warehouse_activity")] public List<VillageWarehouseActivity> WarehouseActivity { get; set; } = new();
     /// <summary>Graph snapshot object (see VillageGraphSnapshot) or null in limited mode.</summary>
     [JsonProperty("graph")] public JToken? Graph { get; set; }
     /// <summary>Theme result object (see VillageThemeResult) or null when no graph is available.</summary>
