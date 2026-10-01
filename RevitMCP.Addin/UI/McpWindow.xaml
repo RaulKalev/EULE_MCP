@@ -216,7 +216,7 @@
                                 Margin="0,0,0,6"
                                 ToolTip="Route AI agent requests to this Revit instance when several Revit windows (e.g. 2024 and 2026) are open at the same time." />
 
-                        <!-- Project Village — passive, read-only activity visualizer (localhost page) -->
+                        <!-- Project Village — activity visualizer and flyer board (localhost page) -->
                         <TextBlock Text="PROJECT VILLAGE" Style="{StaticResource SectionHeaderStyle}" />
                         <Border Background="{DynamicResource SecondaryBackgroundBrush}"
                                 CornerRadius="4" Padding="8,5" Margin="0,0,0,6">
@@ -224,7 +224,7 @@
                                 <TextBlock Text="{Binding Village.StatusText}"
                                            Foreground="{DynamicResource ForegroundBrush}"
                                            FontSize="11" TextWrapping="Wrap" />
-                                <TextBlock Text="Read-only: it never sends commands to Revit or to the agent."
+                                <TextBlock Text="Never changes the model or talks to the agent. Show in Revit on a flyer only selects."
                                            Foreground="{DynamicResource IconForegroundBrush}"
                                            FontSize="10" Margin="0,2,0,0" />
                                 <UniformGrid Columns="2" Margin="0,6,0,0">

@@ -2,8 +2,10 @@ using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace RevitMCP.Village;
 
@@ -14,6 +16,8 @@ public sealed class VillageServerStats
     [JsonProperty("viewers_rejected")] public long ViewersRejected { get; set; }
     [JsonProperty("bad_requests")] public long BadRequests { get; set; }
     [JsonProperty("forbidden_hosts")] public long ForbiddenHosts { get; set; }
+    [JsonProperty("actions_refused")] public long ActionsRefused { get; set; }
+    [JsonProperty("actions_handled")] public long ActionsHandled { get; set; }
     [JsonProperty("messages_sent")] public long MessagesSent { get; set; }
     [JsonProperty("messages_dropped")] public long MessagesDropped { get; set; }
     [JsonProperty("max_pending_observed")] public int MaxPendingObserved { get; set; }
@@ -26,13 +30,20 @@ public sealed class VillageServerStats
 ///
 /// Security model:
 /// - binds to a loopback address only (the options coerce anything else back to 127.0.0.1);
-/// - accepts GET/HEAD for a fixed route allow-list: "/", "/events", "/snapshot", "/instances", "/contents", "/health";
-///   every other method or path is refused, and a request body is never read;
+/// - accepts GET/HEAD for a fixed route allow-list: "/", "/events", "/snapshot", "/instances", "/contents", "/health",
+///   and, when flyers are on, "/flyers" and "/flyers/{id}";
+/// - accepts POST only on the flyer action routes ("/flyers/{id}/archive|unarchive|dismiss", "/show"), and only
+///   when an <see cref="IVillageActions"/> was supplied. A POST must carry this listener's per-start token in
+///   <c>X-Village-Token</c> (the token is written into the page it serves, which another origin cannot read),
+///   an Origin, if any, of this listener, and a JSON body of at most <see cref="MaxActionBodyBytes"/>;
+///   every other method, path or body is refused;
 /// - the Host header must name a loopback host (blocks DNS-rebinding pages from reading local state);
-/// - no CORS headers are sent, so foreign origins cannot read responses or open the stream;
+/// - no CORS headers are sent, so foreign origins cannot read responses, open the stream, or send the token header;
 /// - the request head is capped at 8 KB and must arrive within a few seconds;
 /// - each viewer has a bounded outbound queue: a slow viewer loses old state messages, never the connector.
-/// Nothing received from a client is ever passed to the hub, MCP or Revit. No Revit API dependency.
+/// A request can reach the flyer board and, through the add-in's handler, select a flyer's elements in
+/// Revit; nothing received from a client is passed to the hub, MCP, the agent or the tool registry, and
+/// no request can change the model. No Revit API dependency.
 /// </summary>
 public sealed class VillageSseServer : IDisposable
 {
@@ -40,6 +51,10 @@ public sealed class VillageSseServer : IDisposable
     public const int RequestReadTimeoutMs = 5000;
     public const int HeartbeatIntervalMs = 15000;
     public const int PerClientQueueCapacity = 256;
+    public const int MaxActionBodyBytes = 96 * 1024;
+
+    /// <summary>Replaced in the served page by the per-start action token (empty when actions are off).</summary>
+    public const string TokenPlaceholder = "__VILLAGE_ACTION_TOKEN__";
 
     private static readonly string[] AllowedHosts = { "127.0.0.1", "localhost", "[::1]", "::1" };
 
@@ -64,8 +79,11 @@ public sealed class VillageSseServer : IDisposable
         Action<string>? log = null,
         Func<VillageModelLibrary?>? modelLibraryProvider = null,
         Func<string, byte[]?>? vendorProvider = null,
-        Func<string>? contentsJsonProvider = null)
+        Func<string>? contentsJsonProvider = null,
+        IVillageActions? actions = null)
     {
+        _actions = actions;
+        ActionToken = actions == null ? string.Empty : NewToken();
         _contentsJson = contentsJsonProvider ?? (() => "{}");
         _options = options;
         _snapshotJson = snapshotJsonProvider;
@@ -79,6 +97,13 @@ public sealed class VillageSseServer : IDisposable
     private readonly Func<string> _contentsJson;
     private readonly Func<VillageModelLibrary?> _modelLibrary;
     private readonly Func<string, byte[]?> _vendor;
+    private readonly IVillageActions? _actions;
+    private readonly SemaphoreSlim _showGate = new(1, 1);
+
+    /// <summary>The secret a POST must echo; empty when this listener takes no actions.</summary>
+    public string ActionToken { get; }
+
+    public bool AcceptsActions => _actions != null;
 
     public int Port { get; private set; }
     public bool IsListening => _listener != null && _cts != null && !_cts.IsCancellationRequested;
@@ -101,6 +126,8 @@ public sealed class VillageSseServer : IDisposable
                     ViewersRejected = _stats.ViewersRejected,
                     BadRequests = _stats.BadRequests,
                     ForbiddenHosts = _stats.ForbiddenHosts,
+                    ActionsRefused = _stats.ActionsRefused,
+                    ActionsHandled = _stats.ActionsHandled,
                     MessagesSent = _stats.MessagesSent,
                     MessagesDropped = _stats.MessagesDropped,
                     MaxPendingObserved = _stats.MaxPendingObserved,
@@ -225,7 +252,7 @@ public sealed class VillageSseServer : IDisposable
         {
             socket.NoDelay = true;
             var stream = socket.GetStream();
-            var head = await ReadHeadAsync(stream, ct).ConfigureAwait(false);
+            var (head, leftover) = await ReadHeadAsync(stream, ct).ConfigureAwait(false);
             if (head == null)
             {
                 lock (_gate) _stats.BadRequests++;
@@ -248,10 +275,16 @@ public sealed class VillageSseServer : IDisposable
                 return;
             }
 
+            if (request.Method == "POST" && _actions != null && IsActionRoute(request.Path))
+            {
+                await HandleActionAsync(stream, request, leftover, ct).ConfigureAwait(false);
+                return;
+            }
+
             if (request.Method != "GET" && request.Method != "HEAD")
             {
                 lock (_gate) _stats.BadRequests++;
-                await WriteSimpleAsync(stream, 405, "Method Not Allowed", "text/plain", "read-only: GET only", ct, "Allow: GET, HEAD").ConfigureAwait(false);
+                await WriteSimpleAsync(stream, 405, "Method Not Allowed", "text/plain", "GET only", ct, "Allow: GET, HEAD").ConfigureAwait(false);
                 return;
             }
 
@@ -259,7 +292,10 @@ public sealed class VillageSseServer : IDisposable
             {
                 case "/":
                 case "/index.html":
-                    await WriteSimpleAsync(stream, 200, "OK", "text/html; charset=utf-8", SafeProvide(_html, "<!doctype html><title>Project Village</title><p>Viewer unavailable.</p>"), ct, headOnly: request.Method == "HEAD").ConfigureAwait(false);
+                    await WriteSimpleAsync(stream, 200, "OK", "text/html; charset=utf-8", PageHtml(), ct, headOnly: request.Method == "HEAD").ConfigureAwait(false);
+                    return;
+                case "/flyers" when _actions != null:
+                    await WriteSimpleAsync(stream, 200, "OK", "application/json; charset=utf-8", SafeProvide(_actions.BoardJson, "{\"enabled\":false,\"flyers\":[]}"), ct, headOnly: request.Method == "HEAD").ConfigureAwait(false);
                     return;
                 case "/snapshot":
                     await WriteSimpleAsync(stream, 200, "OK", "application/json; charset=utf-8", SafeProvide(_snapshotJson, "{}"), ct, headOnly: request.Method == "HEAD").ConfigureAwait(false);
@@ -297,7 +333,18 @@ public sealed class VillageSseServer : IDisposable
                     // only "/events" may ever reach the stream handler below.
                     byte[]? payload = null;
                     string? type = null;
-                    if (request.Path.StartsWith("/vendor/", StringComparison.Ordinal))
+                    var flyerId = _actions != null ? FlyerIdFrom(request.Path) : null;
+                    if (flyerId != null)
+                    {
+                        string? json;
+                        try { json = _actions!.FlyerJson(flyerId); } catch { json = null; }
+                        if (json != null)
+                        {
+                            await WriteSimpleAsync(stream, 200, "OK", "application/json; charset=utf-8", json, ct, headOnly: request.Method == "HEAD").ConfigureAwait(false);
+                            return;
+                        }
+                    }
+                    else if (request.Path.StartsWith("/vendor/", StringComparison.Ordinal))
                     {
                         payload = SafeVendor(request.Path.Substring("/vendor/".Length));
                         type = "application/javascript; charset=utf-8";
@@ -390,10 +437,19 @@ public sealed class VillageSseServer : IDisposable
         public string Method = string.Empty;
         public string Path = string.Empty;
         public string Host = string.Empty;
+        public string? Origin;
+        public string? ContentType;
+        public long? ContentLength;
+        public string? Token;
+        public string? FetchSite;
+        public bool Chunked;
     }
 
-    /// <summary>Reads up to the end of the request head. Returns null on timeout, oversize or disconnect.</summary>
-    private static async Task<string?> ReadHeadAsync(NetworkStream stream, CancellationToken ct)
+    /// <summary>
+    /// Reads up to the end of the request head. Returns a null head on timeout, oversize or
+    /// disconnect; otherwise the head and any body bytes that arrived with it.
+    /// </summary>
+    private static async Task<(string? Head, byte[] Leftover)> ReadHeadAsync(NetworkStream stream, CancellationToken ct)
     {
         var buffer = new byte[MaxRequestHeadBytes];
         var total = 0;
@@ -404,23 +460,30 @@ public sealed class VillageSseServer : IDisposable
             while (total < buffer.Length)
             {
                 var read = await stream.ReadAsync(buffer, total, buffer.Length - total, timeout.Token).ConfigureAwait(false);
-                if (read <= 0) return null;
+                if (read <= 0) return (null, Array.Empty<byte>());
                 total += read;
+                // ASCII decoding maps every byte to one char, so a char index is a byte index.
                 var text = Encoding.ASCII.GetString(buffer, 0, total);
                 var end = text.IndexOf("\r\n\r\n", StringComparison.Ordinal);
-                if (end >= 0) return text.Substring(0, end);
-                end = text.IndexOf("\n\n", StringComparison.Ordinal);
-                if (end >= 0) return text.Substring(0, end);
+                var sep = 4;
+                var bare = text.IndexOf("\n\n", StringComparison.Ordinal);
+                if (end < 0 || (bare >= 0 && bare < end)) { end = bare; sep = 2; }
+                if (end >= 0)
+                {
+                    var rest = new byte[total - end - sep];
+                    Array.Copy(buffer, end + sep, rest, 0, rest.Length);
+                    return (text.Substring(0, end), rest);
+                }
             }
         }
         catch (OperationCanceledException)
         {
-            return null;
+            return (null, Array.Empty<byte>());
         }
-        return null; // head too large
+        return (null, Array.Empty<byte>()); // head too large
     }
 
-    /// <summary>Parses the request line and the Host header only. Anything unexpected → null.</summary>
+    /// <summary>Parses the request line and the few headers the server acts on. Anything unexpected → null.</summary>
     private static Request? ParseRequest(string head)
     {
         var lines = head.Split('\n');
@@ -437,17 +500,30 @@ public sealed class VillageSseServer : IDisposable
         var path = q >= 0 ? target.Substring(0, q) : target;
         if (path.IndexOf("..", StringComparison.Ordinal) >= 0 || path.Any(c => c < 32 || c > 126)) return null;
 
-        var host = string.Empty;
+        var request = new Request { Method = method.ToUpperInvariant(), Path = path };
+        var hostSeen = false;
         for (var i = 1; i < lines.Length; i++)
         {
             var line = lines[i].TrimEnd('\r');
-            if (line.StartsWith("Host:", StringComparison.OrdinalIgnoreCase))
+            var colon = line.IndexOf(':');
+            if (colon <= 0) continue;
+            var name = line.Substring(0, colon).Trim();
+            var value = line.Substring(colon + 1).Trim();
+            if (name.Equals("Host", StringComparison.OrdinalIgnoreCase))
             {
-                host = line.Substring(5).Trim();
-                break;
+                if (hostSeen) continue;
+                hostSeen = true;
+                request.Host = value;
             }
+            else if (name.Equals("Origin", StringComparison.OrdinalIgnoreCase)) request.Origin = value;
+            else if (name.Equals("Content-Type", StringComparison.OrdinalIgnoreCase)) request.ContentType = value;
+            else if (name.Equals("X-Village-Token", StringComparison.OrdinalIgnoreCase)) request.Token = value;
+            else if (name.Equals("Sec-Fetch-Site", StringComparison.OrdinalIgnoreCase)) request.FetchSite = value;
+            else if (name.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase)) request.Chunked = true;
+            else if (name.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
+                request.ContentLength = long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : -1;
         }
-        return new Request { Method = method.ToUpperInvariant(), Path = path, Host = host };
+        return request;
     }
 
     /// <summary>Loopback hosts only. An absent Host header is accepted for HTTP/1.0-style local tools.</summary>
@@ -468,6 +544,226 @@ public sealed class VillageSseServer : IDisposable
             if (colon >= 0) h = h.Substring(0, colon);
         }
         return Array.IndexOf(AllowedHosts, h) >= 0;
+    }
+
+    // ─── Flyer actions ──────────────────────────────────────────────────────
+
+    /// <summary>"/show" or "/flyers/{id}/{archive|unarchive|dismiss}".</summary>
+    public static bool IsActionRoute(string path) =>
+        path == "/show" || FlyerAction(path, out _, out _);
+
+    /// <summary>The id in "/flyers/{id}", or null.</summary>
+    public static string? FlyerIdFrom(string path)
+    {
+        const string prefix = "/flyers/";
+        if (!path.StartsWith(prefix, StringComparison.Ordinal)) return null;
+        var id = path.Substring(prefix.Length);
+        return VillageFlyerBoard.IsValidId(id) ? id : null;
+    }
+
+    /// <summary>Splits "/flyers/{id}/{action}" for one of the board's actions.</summary>
+    public static bool FlyerAction(string path, out string id, out string action)
+    {
+        id = action = string.Empty;
+        const string prefix = "/flyers/";
+        if (!path.StartsWith(prefix, StringComparison.Ordinal)) return false;
+        var parts = path.Substring(prefix.Length).Split('/');
+        if (parts.Length != 2 || !VillageFlyerBoard.IsValidId(parts[0]) || !VillageFlyerBoard.IsAction(parts[1])) return false;
+        id = parts[0];
+        action = parts[1];
+        return true;
+    }
+
+    /// <summary>
+    /// Why an action request is refused, or null when it may proceed: the per-start token must
+    /// match, and the browser's Origin and Sec-Fetch-Site, when sent, must name this listener.
+    /// </summary>
+    private string? RefuseAction(Request request)
+    {
+        if (string.IsNullOrEmpty(ActionToken) || !FixedTimeEquals(request.Token, ActionToken)) return "missing or wrong action token";
+        if (request.FetchSite != null && !request.FetchSite.Equals("same-origin", StringComparison.OrdinalIgnoreCase)) return "cross-site request";
+        if (request.Origin != null && !IsOwnOrigin(request.Origin)) return "foreign origin";
+        return null;
+    }
+
+    private bool IsOwnOrigin(string origin)
+    {
+        if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri)) return false;
+        if (uri.Scheme != "http" || uri.Port != Port) return false;
+        if (!string.IsNullOrEmpty(uri.PathAndQuery) && uri.PathAndQuery != "/") return false;
+        return IsAllowedHost(uri.Host);
+    }
+
+    private static bool FixedTimeEquals(string? a, string b)
+    {
+        if (a == null || a.Length != b.Length) return false;
+        var diff = 0;
+        for (var i = 0; i < a.Length; i++) diff |= a[i] ^ b[i];
+        return diff == 0;
+    }
+
+    private async Task HandleActionAsync(NetworkStream stream, Request request, byte[] leftover, CancellationToken ct)
+    {
+        var refusal = RefuseAction(request);
+        if (refusal != null)
+        {
+            lock (_gate) _stats.ActionsRefused++;
+            Log("action refused: " + refusal);
+            await WriteSimpleAsync(stream, 403, "Forbidden", "text/plain", refusal, ct).ConfigureAwait(false);
+            return;
+        }
+        if (request.Chunked || request.ContentLength == null || request.ContentLength < 0)
+        {
+            lock (_gate) _stats.ActionsRefused++;
+            await WriteSimpleAsync(stream, 411, "Length Required", "text/plain", "Content-Length required", ct).ConfigureAwait(false);
+            return;
+        }
+        if (request.ContentLength > MaxActionBodyBytes)
+        {
+            lock (_gate) _stats.ActionsRefused++;
+            await WriteSimpleAsync(stream, 413, "Payload Too Large", "text/plain", "body too large", ct).ConfigureAwait(false);
+            return;
+        }
+        var length = (int)request.ContentLength.Value;
+        if (length > 0 && !IsJsonType(request.ContentType))
+        {
+            lock (_gate) _stats.ActionsRefused++;
+            await WriteSimpleAsync(stream, 415, "Unsupported Media Type", "text/plain", "application/json only", ct).ConfigureAwait(false);
+            return;
+        }
+
+        var body = await ReadBodyAsync(stream, leftover, length, ct).ConfigureAwait(false);
+        JObject? json = null;
+        if (body == null || (length > 0 && (json = ParseBody(body)) == null))
+        {
+            lock (_gate) _stats.BadRequests++;
+            await WriteSimpleAsync(stream, 400, "Bad Request", "text/plain", "bad request body", ct).ConfigureAwait(false);
+            return;
+        }
+
+        if (request.Path == "/show")
+        {
+            await HandleShowAsync(stream, json, ct).ConfigureAwait(false);
+            return;
+        }
+
+        FlyerAction(request.Path, out var id, out var action);
+        bool applied;
+        try { applied = _actions!.Apply(id, action); }
+        catch { applied = false; }
+        lock (_gate) _stats.ActionsHandled++;
+        if (applied)
+            await WriteSimpleAsync(stream, 200, "OK", "application/json; charset=utf-8", "{\"ok\":true}", ct).ConfigureAwait(false);
+        else
+            await WriteSimpleAsync(stream, 404, "Not Found", "application/json; charset=utf-8", "{\"ok\":false,\"status\":\"not_found\"}", ct).ConfigureAwait(false);
+    }
+
+    private async Task HandleShowAsync(NetworkStream stream, JObject? json, CancellationToken ct)
+    {
+        var flyer = json?["flyer"] is JValue fv && fv.Type == JTokenType.String ? fv.Value<string>() : null;
+        List<long>? ids = null;
+        if (json?["ids"] is JArray array)
+        {
+            if (array.Count > VillageFlyerActions.MaxShowIds)
+            {
+                await WriteJsonAsync(stream, 413, "Payload Too Large", VillageShowResult.Fail(VillageShowStatus.BadRequest, $"At most {VillageFlyerActions.MaxShowIds} elements can be shown at once."), ct).ConfigureAwait(false);
+                return;
+            }
+            ids = new List<long>(array.Count);
+            foreach (var t in array)
+                if (VillageFlyerExtractor.TryId(t, out var id)) ids.Add(id);
+        }
+        if (flyer == null || !VillageFlyerBoard.IsValidId(flyer))
+        {
+            await WriteJsonAsync(stream, 400, "Bad Request", VillageShowResult.Fail(VillageShowStatus.BadRequest, "Name the flyer to show."), ct).ConfigureAwait(false);
+            return;
+        }
+
+        // One selection at a time: Revit runs them one by one anyway, and a double click should not queue two.
+        if (!await _showGate.WaitAsync(0, ct).ConfigureAwait(false))
+        {
+            await WriteJsonAsync(stream, 429, "Too Many Requests", VillageShowResult.Fail(VillageShowStatus.Busy, "Revit is still showing the previous selection."), ct).ConfigureAwait(false);
+            return;
+        }
+        VillageShowResult result;
+        try
+        {
+            result = await _actions!.ShowAsync(flyer, ids, ct).ConfigureAwait(false)
+                     ?? VillageShowResult.Fail(VillageShowStatus.Error, "No result.");
+        }
+        catch (Exception ex)
+        {
+            result = VillageShowResult.Fail(VillageShowStatus.Error, "Show in Revit failed: " + VillageEventSerializer.Truncate(ex.Message));
+        }
+        finally
+        {
+            _showGate.Release();
+        }
+        lock (_gate) _stats.ActionsHandled++;
+        await WriteJsonAsync(stream, 200, "OK", result, ct).ConfigureAwait(false);
+    }
+
+    private static bool IsJsonType(string? contentType)
+    {
+        if (string.IsNullOrWhiteSpace(contentType)) return false;
+        var semi = contentType!.IndexOf(';');
+        var media = (semi >= 0 ? contentType.Substring(0, semi) : contentType).Trim();
+        return media.Equals("application/json", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Exactly <paramref name="length"/> body bytes, within the request timeout; null otherwise.</summary>
+    private static async Task<byte[]?> ReadBodyAsync(NetworkStream stream, byte[] leftover, int length, CancellationToken ct)
+    {
+        var body = new byte[length];
+        var have = Math.Min(length, leftover.Length);
+        Array.Copy(leftover, body, have);
+        if (have == length) return body;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(RequestReadTimeoutMs);
+        try
+        {
+            while (have < length)
+            {
+                var read = await stream.ReadAsync(body, have, length - have, timeout.Token).ConfigureAwait(false);
+                if (read <= 0) return null;
+                have += read;
+            }
+            return body;
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
+    private static JObject? ParseBody(byte[] body)
+    {
+        try
+        {
+            var text = Encoding.UTF8.GetString(body);
+            using var reader = new JsonTextReader(new StringReader(text)) { MaxDepth = 8, DateParseHandling = DateParseHandling.None };
+            return JToken.ReadFrom(reader) as JObject;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static Task WriteJsonAsync(NetworkStream stream, int status, string reason, object payload, CancellationToken ct) =>
+        WriteSimpleAsync(stream, status, reason, "application/json; charset=utf-8", JsonConvert.SerializeObject(payload), ct);
+
+    private string PageHtml()
+    {
+        var html = SafeProvide(_html, "<!doctype html><title>Project Village</title><p>Viewer unavailable.</p>");
+        return html.Replace(TokenPlaceholder, ActionToken);
+    }
+
+    private static string NewToken()
+    {
+        var bytes = new byte[24];
+        using (var rng = RandomNumberGenerator.Create()) rng.GetBytes(bytes);
+        return string.Concat(bytes.Select(b => b.ToString("x2", CultureInfo.InvariantCulture)));
     }
 
     // ─── Responses ──────────────────────────────────────────────────────────
@@ -566,7 +862,8 @@ public sealed class VillageSseServer : IDisposable
     private string HealthJson()
     {
         var s = Stats;
-        return "{\"ok\":true,\"read_only\":true,\"clients\":" + s.ActiveClients.ToString(CultureInfo.InvariantCulture) +
+        return "{\"ok\":true,\"read_only\":true,\"actions\":" + (AcceptsActions ? "true" : "false") +
+               ",\"clients\":" + s.ActiveClients.ToString(CultureInfo.InvariantCulture) +
                ",\"max_viewers\":" + _options.MaxViewers.ToString(CultureInfo.InvariantCulture) +
                ",\"schema_version\":" + VillageSchema.Version.ToString(CultureInfo.InvariantCulture) + "}";
     }

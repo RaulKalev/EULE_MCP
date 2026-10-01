@@ -10,7 +10,7 @@ namespace RevitMCP.Addin.Village.Hosting;
 
 /// <summary>
 /// Owns the village for one Revit process: options from the user/company config, the state hub,
-/// the loopback SSE server, the graph reader and the instance registration. Created once in
+/// the loopback SSE server, the graph reader, the flyer board and the instance registration. Created once in
 /// <c>App.OnStartup</c>; starting the listener is opt-in (<c>village.enabled</c>) and can be
 /// toggled from the connector window. Every public member is guarded — a failure here is logged
 /// and otherwise invisible to the connector. Contains no Revit API calls.
@@ -33,6 +33,8 @@ public sealed class VillageService : IDisposable
     private readonly VillageInstanceRegistry _registry = new();
     private VillageSseServer? _server;
     private string? _html;
+    private Func<VillageShowRequest, CancellationToken, Task<VillageShowResult>>? _show;
+    private bool _flyersLoaded;
 
     /// <summary>The process-wide instance the hooks consult. Null until App.OnStartup created it.</summary>
     public static VillageService? Current { get; private set; }
@@ -48,14 +50,37 @@ public sealed class VillageService : IDisposable
             Path.GetFullPath(cacheRoot),
             new VillageThemeScorer(VillageThemeConfig.FromJson(options.ThemesJson)));
 
+        // Flyers: one small JSON file per model next to the graph cache (ids and names only).
+        var flyerRoot = Path.Combine(GraphPathResolver.DefaultLocalRoot(), "..", "Village", "flyers");
+        Flyers = new VillageFlyerBoard(options.MaxFlyers, options.FlyerArchiveDays, Path.GetFullPath(flyerRoot), log: Log);
+        Actions = new VillageFlyerActions(Flyers, () => Options.ShowInRevit ? _show : null, options.FlyersEnabled);
+        Flyers.Changed += OnFlyersChanged;
+
         Hub = new VillageStateHub(
             options,
             graphReader: reader,
             graphSourceProvider: BuildGraphSource,
             instancesProvider: ListInstances,
             log: Log,
-            warehouseModelKeys: () => ModelLibrary()?.WarehouseModelKeys());
+            warehouseModelKeys: () => ModelLibrary()?.WarehouseModelKeys(),
+            flyers: Flyers);
         Hub.MessagePublished += OnMessage;
+    }
+
+    /// <summary>The notice board read tool results are pinned to.</summary>
+    public VillageFlyerBoard Flyers { get; }
+
+    /// <summary>What the page may ask for: flyer listing and actions, and Show in Revit.</summary>
+    public VillageFlyerActions Actions { get; }
+
+    /// <summary>
+    /// Supplies the Revit side of "Show in Revit" (see <see cref="VillageShowHandler"/>). Without
+    /// it, flyers can still be browsed, archived and dismissed.
+    /// </summary>
+    public void SetShowHandler(Func<VillageShowRequest, CancellationToken, Task<VillageShowResult>> show)
+    {
+        _show = show;
+        OnFlyersChanged();
     }
 
     public VillageOptions Options { get; private set; }
@@ -108,8 +133,13 @@ public sealed class VillageService : IDisposable
             if (_server != null && _server.IsListening) return true;
             try
             {
+                if (Options.FlyersEnabled && !_flyersLoaded)
+                {
+                    _flyersLoaded = true;
+                    Flyers.Load();
+                }
                 var server = new VillageSseServer(Options, () => Hub.SnapshotJson, LoadViewerHtml, () => Hub.InstancesJson, Log,
-                    ModelLibrary, LoadVendorAsset, () => Hub.ContentsJson);
+                    ModelLibrary, LoadVendorAsset, () => Hub.ContentsJson, Options.FlyersEnabled ? Actions : null);
                 if (!server.Start())
                 {
                     LastError = $"No free loopback port between {Options.Port} and {Options.Port + VillageOptions.PortFallbackAttempts - 1}.";
@@ -141,6 +171,7 @@ public sealed class VillageService : IDisposable
             try { _server?.Stop(); } catch { }
             _server = null;
             try { Hub.Stop(); } catch { }
+            try { Flyers.Flush(); } catch { }
             Log("stopped");
         }
     }
@@ -169,6 +200,16 @@ public sealed class VillageService : IDisposable
         lock (_gate) server = _server;
         server?.Broadcast(eventName, json);
         if (eventName == "state") RefreshRegistration();
+    }
+
+    private void OnFlyersChanged()
+    {
+        if (!Options.FlyersEnabled) return;
+        VillageSseServer? server;
+        lock (_gate) server = _server;
+        if (server == null) return;
+        try { server.Broadcast("flyers", Actions.BoardJson()); }
+        catch (Exception ex) { Log("flyer broadcast failed: " + ex.Message); }
     }
 
     private VillageGraphSource BuildGraphSource(VillageProjectContext context, VillageGraphHint? hint)

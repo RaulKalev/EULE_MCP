@@ -81,7 +81,8 @@ public sealed class VillageStateHub : IDisposable
         Func<List<VillageInstanceLink>>? instancesProvider = null,
         Func<DateTimeOffset>? clock = null,
         Action<string>? log = null,
-        Func<ISet<string>?>? warehouseModelKeys = null)
+        Func<ISet<string>?>? warehouseModelKeys = null,
+        VillageFlyerBoard? flyers = null)
     {
         _options = options ?? VillageOptions.Default;
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
@@ -93,6 +94,7 @@ public sealed class VillageStateHub : IDisposable
         _graphSourceProvider = graphSourceProvider;
         _instancesProvider = instancesProvider;
         _warehouseModelKeys = warehouseModelKeys;
+        Flyers = flyers;
         _log = log;
         _catchUpEnterDepth = Math.Max(50, _options.QueueSize / 10);
         _themes = VillageThemeConfig.FromJson(_options.ThemesJson);
@@ -124,6 +126,9 @@ public sealed class VillageStateHub : IDisposable
     public VillageEventFactory Factory { get; }
     public VillageAggregator Aggregator { get; }
     public VillageEventQueue Queue { get; }
+
+    /// <summary>The notice board read tool results are pinned to, or null when flyers are off.</summary>
+    public VillageFlyerBoard? Flyers { get; }
     public string SessionId => Factory.SessionId;
     public bool IsRunning => _consumer != null && !_consumer.IsCompleted;
     public long HookFailures => Interlocked.Read(ref _hookFailures);
@@ -220,8 +225,28 @@ public sealed class VillageStateHub : IDisposable
                 _graphHint = ExtractGraphHint(e.ToolName, resultData, _clock());
                 RequestGraphRefresh();
             }
+
+            if (success && IsFlyerActivity(e.Activity)) PostFlyer(e.ToolName, clientName, ctx, resultData);
         }
         catch { Interlocked.Increment(ref _hookFailures); }
+    }
+
+    /// <summary>Reads, searches, analyses and checks can post a flyer; writes, exports and graph builds never do.</summary>
+    public static bool IsFlyerActivity(string? activity) =>
+        activity == VillageActivities.Inspect || activity == VillageActivities.Search ||
+        activity == VillageActivities.Analyze || activity == VillageActivities.Validate;
+
+    /// <summary>
+    /// Pins the elements a read tool returned. The result is walked once, here, for ids and names
+    /// (see <see cref="VillageFlyerExtractor"/>); it is not kept, and a result without elements
+    /// posts nothing.
+    /// </summary>
+    private void PostFlyer(string? toolName, string? clientName, VillageProjectContext ctx, object? resultData)
+    {
+        var board = Flyers;
+        if (board == null || !_options.FlyersEnabled || resultData == null) return;
+        var found = VillageFlyerExtractor.Extract(resultData, _options.FlyerMaxItems);
+        if (found.Items.Count > 0) board.Post(toolName, clientName, ctx, found);
     }
 
     /// <summary>Called by the host when the active document changes outside a tool call (optional).</summary>
@@ -344,6 +369,7 @@ public sealed class VillageStateHub : IDisposable
         if (Aggregator.CatchUp && Queue.Count == 0) Aggregator.SetCatchUp(false);
 
         if (Aggregator.Tick()) _stateDirty = true;
+        Flyers?.Tick();
         MaybeRefreshGraph();
 
         var now = _clock();
