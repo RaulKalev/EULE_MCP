@@ -221,7 +221,7 @@ public class ControlledRoomSyncService
             }
 
             // ── e. Determine current values ───────────────────────────────────
-            string? currentName   = room!.Name?.Trim();
+            string? currentName   = RoomNameReader.GetName(room!);
             string? currentNumber = room!.Number?.Trim();
 
             result.OldName   = request.UpdateName   ? currentName   : null;

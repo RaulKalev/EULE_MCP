@@ -91,20 +91,37 @@ public static class RoomAuditMath
     // ── Room lookup ───────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Index of the room containing the point: plan inside the footprint and z between the room
-    /// floor and its top (height or 6 m when unknown), with <see cref="VerticalSlackMm"/> slack.
-    /// When several stacked rooms qualify the one with the highest floor at or below z wins. -1 if none.
+    /// Plan distance within which a point on or just outside a room edge still counts as in the room.
+    /// Wall devices placed with offsetFromWallMm = 0 sit exactly on the finished face (#57).
+    /// </summary>
+    public const double BoundaryToleranceMm = 5;
+
+    /// <summary>
+    /// Index of the room containing the point: plan inside the footprint (or within
+    /// <see cref="BoundaryToleranceMm"/> of its edge) and z between the room floor and its top
+    /// (height or 6 m when unknown), with <see cref="VerticalSlackMm"/> slack. A room that strictly
+    /// contains the point beats one that only touches it; among equals the highest floor at or below
+    /// z wins. -1 if none.
     /// </summary>
     public static int LocateRoom(IReadOnlyList<RoomCandidate> rooms, P2 point, double zMm)
     {
         var best = -1;
+        var bestStrict = false;
         for (int i = 0; i < rooms.Count; i++)
         {
             var r = rooms[i];
             var top = r.FloorZMm + (r.HeightMm ?? 6000);
             if (zMm < r.FloorZMm - VerticalSlackMm || zMm > top + VerticalSlackMm) continue;
-            if (!RoomGeometryMath.Contains(r.Polygon, point)) continue;
-            if (best < 0 || r.FloorZMm > rooms[best].FloorZMm) best = i;
+
+            var strict = RoomGeometryMath.Contains(r.Polygon, point);
+            if (!strict && RoomGeometryMath.DistanceToBoundary(r.Polygon, point) > BoundaryToleranceMm) continue;
+
+            var better = best < 0
+                || (strict && !bestStrict)
+                || (strict == bestStrict && r.FloorZMm > rooms[best].FloorZMm);
+            if (!better) continue;
+            best = i;
+            bestStrict = strict;
         }
         return best;
     }

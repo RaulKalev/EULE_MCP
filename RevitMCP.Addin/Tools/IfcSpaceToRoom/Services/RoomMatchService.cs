@@ -35,7 +35,7 @@ public class RoomMatchService
                 RoomId:  r.Id.Value,
                 LevelId: GetRoomLevelId(r),
                 Number:  (r.Number ?? string.Empty).Trim(),
-                Name:    (r.Name   ?? string.Empty).Trim()
+                Name:    RoomNameReader.GetName(r)
             ))
             .ToList();
     }

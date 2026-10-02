@@ -31,6 +31,26 @@ public class RoomAuditMathTests
         Assert.Equal(-1, RoomAuditMath.LocateRoom(rooms, new P2(2000, 2000), 20000));
     }
 
+    [Fact]
+    public void LocateRoom_PointOnTheEdge_CountsAsInside()
+    {
+        // #57: a wall device with offsetFromWallMm = 0 sits exactly on the finished face.
+        var rooms = new[] { Room("08", "Väikeklass", 16, 0) };
+        Assert.Equal(0, RoomAuditMath.LocateRoom(rooms, new P2(2000, 4000), 300));   // top edge
+        Assert.Equal(0, RoomAuditMath.LocateRoom(rooms, new P2(0, 2000), 300));      // left edge
+        Assert.Equal(0, RoomAuditMath.LocateRoom(rooms, new P2(2000, 4004), 300));   // 4 mm outside
+        Assert.Equal(-1, RoomAuditMath.LocateRoom(rooms, new P2(2000, 4010), 300));  // 10 mm outside
+    }
+
+    [Fact]
+    public void LocateRoom_PrefersTheRoomThatContainsThePoint()
+    {
+        // Two rooms sharing an edge at x = 4000: a point 2 mm inside B is on A's edge tolerance only.
+        var rooms = new[] { Room("A", "A", 16, 0), Room("B", "B", 16, 0, x0: 4000) };
+        Assert.Equal(1, RoomAuditMath.LocateRoom(rooms, new P2(4002, 2000), 300));
+        Assert.Equal(0, RoomAuditMath.LocateRoom(rooms, new P2(3998, 2000), 300));
+    }
+
     [Theory]
     [InlineData(0, 90, 90)]
     [InlineData(350, 10, 20)]
