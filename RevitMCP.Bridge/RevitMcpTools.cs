@@ -2469,7 +2469,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_set_device_codes"),
-     Description("Writes device codes into the project config (requires approval, backs up first). deviceCodes: {CODE: {family, type, mount: wall|ceiling|floor, heightMm, offsetFromWallMm, offsetFromCeilingMm, doorSide: lock|hinge, doorOffsetMm, rotationOffsetDeg, avoidCategories[], clearanceMm, maxSpacingMm, maxDistFromWallMm, sourceType, typeParameters{}}}. Merges by code unless replace=true; removeCodes[] deletes. settings: {roomParameter, handOrientationPointsTo: latch|hinge, swingTowardFacing}. Invalid entries write nothing.")]
+     Description("Writes device codes into the project config (requires approval, backs up first). deviceCodes: {CODE: {family, type, mount: wall|ceiling|floor, heightMm, offsetFromWallMm, offsetFromCeilingMm, doorSide: lock|hinge, doorOffsetMm, rotationOffsetDeg, avoidCategories[], clearanceMm, maxSpacingMm, maxDistFromWallMm, coverageRadiusMm, fovDeg, rangeM, detectorType (pointSmoke|linearSmoke|aspirating|pointHeat|linearHeat|flame|co|sounder), detectorClass, soundLevelDb (sounders, dB(A) at 1 m), tone, sourceType, typeParameters{}}}. Merges by code unless replace=true; removeCodes[] deletes. settings: {roomParameter, handOrientationPointsTo: latch|hinge, swingTowardFacing}. Invalid entries write nothing.")]
     public async Task<string> SetDeviceCodes(
         [Description("Device code entries keyed by code")] object? deviceCodes = null,
         [Description("Codes to remove")] string[]? removeCodes = null,
@@ -2558,7 +2558,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_preview_place_in_room", ReadOnly = true),
-     Description("Previews unhosted devices inside rooms, no changes. strategy: center | grid (maxSpacingMm, maxDistFromWallMm, coverageRadiusMm; reports uncovered m2) | nearDoor (side inside|outside, doorSide lock|hinge, offsetMm) | points ([{u,v}] 0..1 of the room bbox). Ceiling codes: z = ceiling - offsetFromCeilingMm; others level + heightMm. Warns about avoidCategories within clearanceMm, outside-room points, duplicates.")]
+     Description("Previews unhosted devices inside rooms, no changes. strategy: center | grid (maxSpacingMm, maxDistFromWallMm, coverageRadiusMm; reports uncovered m2) | nearDoor (side inside|outside, doorSide lock|hinge, offsetMm) | points ([{u,v}] 0..1 of the room bbox). Ceiling codes: z = ceiling - offsetFromCeilingMm; others level + heightMm. Fire detectors (detectorType) follow the fire rules: grid spacing/wall distance from 6.5.2.2/6.5.2.3 (smoke 8.8/4.4 m, heat 6.4/3.2 m; corridors up to 2 m wide on the centreline at 12.4/9.0 m), ceilingSlopeDeg widens them, and Table 1 blocks unsuitable room heights. Warns about avoidCategories within clearanceMm, outside-room points, duplicates.")]
     public async Task<string> PreviewPlaceInRoom(
         [Description("Device code")] string deviceCode,
         [Description("Room numbers")] string[]? roomNumbers = null,
@@ -2572,6 +2572,9 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("nearDoor: clearance from the door edge (default from code)")] double? offsetMm = null,
         [Description("points: [{u, v}] relative to the room bounding box")] object[]? points = null,
         [Description("Override height (wall/floor: above level; ceiling: above floor)")] double? heightMm = null,
+        [Description("Fire detectors: ceiling slope in degrees (+1 % spacing per degree, max 25 %)")] double ceilingSlopeDeg = 0,
+        [Description("Fire detectors: auto (corridors up to 2 m wide get a centreline row) | off")] string corridorMode = "auto",
+        [Description("Fire detectors: place even where Table 1 says the type is unsuitable for the room height")] bool allowUnsuitableHeight = false,
         [Description("host | link")] string? source = null,
         [Description("Link instance id")] long linkInstanceId = 0,
         [Description("Level name filter")] string? levelName = null,
@@ -2581,6 +2584,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     {
         var args = InRoomArgs(deviceCode, roomNumbers, roomFilter, strategy, maxSpacingMm, maxDistFromWallMm, coverageRadiusMm,
             side, doorSide, offsetMm, points, heightMm, source, linkInstanceId, levelName, deviceCodes, projectRoot);
+        AddFireArgs(args, ceilingSlopeDeg, corridorMode, allowUnsuitableHeight);
         return FormatResult(await pipeClient.SendAsync("revit_preview_place_in_room", args, cancellationToken));
     }
 
@@ -2599,6 +2603,9 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("nearDoor: clearance from the door edge")] double? offsetMm = null,
         [Description("points: [{u, v}]")] object[]? points = null,
         [Description("Override height")] double? heightMm = null,
+        [Description("Fire detectors: ceiling slope in degrees")] double ceilingSlopeDeg = 0,
+        [Description("Fire detectors: auto | off (corridor centreline layout)")] string corridorMode = "auto",
+        [Description("Fire detectors: place even where Table 1 says unsuitable")] bool allowUnsuitableHeight = false,
         [Description("host | link")] string? source = null,
         [Description("Link instance id")] long linkInstanceId = 0,
         [Description("Level name filter")] string? levelName = null,
@@ -2612,6 +2619,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             side, doorSide, offsetMm, points, heightMm, source, linkInstanceId, levelName, deviceCodes, projectRoot);
         args["skipDevicesWithWarnings"] = skipDevicesWithWarnings;
         args["roomParameter"] = roomParameter ?? string.Empty;
+        AddFireArgs(args, ceilingSlopeDeg, corridorMode, allowUnsuitableHeight);
         return FormatResult(await pipeClient.SendAsync("revit_place_in_room", args, cancellationToken));
     }
 
@@ -2660,6 +2668,280 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         }
 
         return blocks;
+    }
+
+    [McpServerTool(Name = "revit_get_linked_elements_in_room", ReadOnly = true),
+     Description("Lists elements of given categories (Lighting Fixtures, Air Terminals, Ceilings, Furniture, …) standing in a room, host mm: id, model, category, typeName, location {x,y,z}, bbox. Rooms from source/linkInstanceId; elements from elementLinkInstanceIds[] (e.g. EK/KVJ links) and/or includeHost, default the room source model.")]
+    public async Task<string> GetLinkedElementsInRoom(
+        [Description("Categories to list")] string[] categories,
+        [Description("Room number")] string? roomNumber = null,
+        [Description("Room numbers")] string[]? roomNumbers = null,
+        [Description("Room name filter (text or regex)")] string? roomFilter = null,
+        [Description("Room source: host | link")] string? source = null,
+        [Description("Room source link instance id (AR link)")] long linkInstanceId = 0,
+        [Description("Links to read elements from (default: the room source model)")] long[]? elementLinkInstanceIds = null,
+        [Description("Also read elements from the host model")] bool includeHost = false,
+        [Description("Level name")] string? levelName = null,
+        [Description("Max elements per room (default 500)")] int limitPerRoom = 500,
+        CancellationToken cancellationToken = default)
+    {
+        var args = RoomArgs(source, linkInstanceId, levelName, null);
+        args["categories"] = categories;
+        args["roomNumber"] = roomNumber ?? string.Empty;
+        args["roomNumbers"] = roomNumbers ?? [];
+        args["roomFilter"] = roomFilter ?? string.Empty;
+        args["elementLinkInstanceIds"] = elementLinkInstanceIds ?? [];
+        args["includeHost"] = includeHost;
+        args["limitPerRoom"] = limitPerRoom;
+        return FormatResult(await pipeClient.SendAsync("revit_get_linked_elements_in_room", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_preview_rotate_elements", ReadOnly = true),
+     Description("Previews rotating elements about their own insertion point, no changes. rotations=[{elementId, angleDeg (absolute facing, CCW from +X) | rotateByDeg | faceToward {x,y} (host mm), expectedAngleDeg?}] or elementIds + one shared target. expectedAngleDeg is a staleness check within angleToleranceDeg (default 0.5).")]
+    public async Task<string> PreviewRotateElements(
+        [Description("Per-element rotations")] object[]? rotations = null,
+        [Description("Elements sharing one target")] long[]? elementIds = null,
+        [Description("Shared absolute facing angle")] double? angleDeg = null,
+        [Description("Shared relative rotation")] double? rotateByDeg = null,
+        [Description("Shared point to face {x, y} (host mm)")] object? faceToward = null,
+        [Description("Staleness tolerance (default 0.5°)")] double angleToleranceDeg = 0.5,
+        [Description("Skip pinned elements (default true)")] bool skipPinned = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = RotateArgs(rotations, elementIds, angleDeg, rotateByDeg, faceToward, angleToleranceDeg, skipPinned);
+        return FormatResult(await pipeClient.SendAsync("revit_preview_rotate_elements", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_rotate_elements"),
+     Description("Rotates elements about their own insertion point. Requires approval; one undoable transaction. Same arguments as revit_preview_rotate_elements plus atomic (default true).")]
+    public async Task<string> RotateElements(
+        [Description("Per-element rotations")] object[]? rotations = null,
+        [Description("Elements sharing one target")] long[]? elementIds = null,
+        [Description("Shared absolute facing angle")] double? angleDeg = null,
+        [Description("Shared relative rotation")] double? rotateByDeg = null,
+        [Description("Shared point to face {x, y} (host mm)")] object? faceToward = null,
+        [Description("Staleness tolerance (default 0.5°)")] double angleToleranceDeg = 0.5,
+        [Description("Skip pinned elements (default true)")] bool skipPinned = true,
+        [Description("Any failure undoes all (default true)")] bool atomic = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = RotateArgs(rotations, elementIds, angleDeg, rotateByDeg, faceToward, angleToleranceDeg, skipPinned);
+        args["atomic"] = atomic;
+        return FormatResult(await pipeClient.SendAsync("revit_rotate_elements", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_preview_set_elevation", ReadOnly = true),
+     Description("Previews setting elements' elevation above their level, no changes. elevations=[{elementId, elevationFromLevelMm, expectedElevationFromLevelMm?}] or elementIds + elevationFromLevelMm; expected values are a staleness check within toleranceMm (default 1).")]
+    public async Task<string> PreviewSetElevation(
+        [Description("Per-element elevations")] object[]? elevations = null,
+        [Description("Elements sharing one elevation")] long[]? elementIds = null,
+        [Description("Shared elevation above level")] double? elevationFromLevelMm = null,
+        [Description("Staleness tolerance (default 1 mm)")] double toleranceMm = 1,
+        [Description("Skip pinned elements (default true)")] bool skipPinned = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = ElevationArgs(elevations, elementIds, elevationFromLevelMm, toleranceMm, skipPinned);
+        return FormatResult(await pipeClient.SendAsync("revit_preview_set_elevation", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_set_elevation"),
+     Description("Sets elements' elevation above their level. Requires approval; one undoable transaction. Same arguments as revit_preview_set_elevation plus atomic (default true).")]
+    public async Task<string> SetElevation(
+        [Description("Per-element elevations")] object[]? elevations = null,
+        [Description("Elements sharing one elevation")] long[]? elementIds = null,
+        [Description("Shared elevation above level")] double? elevationFromLevelMm = null,
+        [Description("Staleness tolerance (default 1 mm)")] double toleranceMm = 1,
+        [Description("Skip pinned elements (default true)")] bool skipPinned = true,
+        [Description("Any failure undoes all (default true)")] bool atomic = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = ElevationArgs(elevations, elementIds, elevationFromLevelMm, toleranceMm, skipPinned);
+        args["atomic"] = atomic;
+        return FormatResult(await pipeClient.SendAsync("revit_set_elevation", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_preview_assign_room_to_elements", ReadOnly = true),
+     Description("Previews writing the room number (from the room each device stands in) into a text parameter, no changes. Elements: elementIds or devices of the device code map (codes[] limits). roomParameter (default devicePlacement.roomParameter); onlyEmpty keeps existing values. Rooms from source/linkInstanceId (linked Room or IfcSpace).")]
+    public async Task<string> PreviewAssignRoomToElements(
+        [Description("Elements (default: all devices of the device code map)")] long[]? elementIds = null,
+        [Description("Only devices with these codes")] string[]? codes = null,
+        [Description("Text parameter for the room number")] string? roomParameter = null,
+        [Description("Only fill empty values")] bool onlyEmpty = false,
+        [Description("Room source: host | link")] string? source = null,
+        [Description("Room source link instance id")] long linkInstanceId = 0,
+        [Description("Level name")] string? levelName = null,
+        [Description("Project root (optional)")] string? projectRoot = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = AssignRoomArgs(elementIds, codes, roomParameter, onlyEmpty, source, linkInstanceId, levelName, projectRoot);
+        return FormatResult(await pipeClient.SendAsync("revit_preview_assign_room_to_elements", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_assign_room_to_elements"),
+     Description("Writes the room number into existing devices' room parameter. Requires approval; one undoable transaction. Same arguments as revit_preview_assign_room_to_elements plus atomic (default true).")]
+    public async Task<string> AssignRoomToElements(
+        [Description("Elements (default: all devices of the device code map)")] long[]? elementIds = null,
+        [Description("Only devices with these codes")] string[]? codes = null,
+        [Description("Text parameter for the room number")] string? roomParameter = null,
+        [Description("Only fill empty values")] bool onlyEmpty = false,
+        [Description("Room source: host | link")] string? source = null,
+        [Description("Room source link instance id")] long linkInstanceId = 0,
+        [Description("Level name")] string? levelName = null,
+        [Description("Project root (optional)")] string? projectRoot = null,
+        [Description("Any failure undoes all (default true)")] bool atomic = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = AssignRoomArgs(elementIds, codes, roomParameter, onlyEmpty, source, linkInstanceId, levelName, projectRoot);
+        args["atomic"] = atomic;
+        return FormatResult(await pipeClient.SendAsync("revit_assign_room_to_elements", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_check_devices_per_room", ReadOnly = true),
+     Description("Checks device counts per room against rules=[{code, min?, max?, roomFilter? (name regex), excludeRoomFilter?, roomNumbers?, minAreaM2?, maxAreaM2?}], lists devices outside every room, and devices whose height is off their code by more than heightToleranceMm (default 50). Rooms from source/linkInstanceId; devices from the device code map (codes[] limits).")]
+    public async Task<string> CheckDevicesPerRoom(
+        [Description("Count rules")] object[] rules,
+        [Description("Only devices with these codes")] string[]? codes = null,
+        [Description("Height tolerance (default 50 mm)")] double heightToleranceMm = 50,
+        [Description("Room source: host | link")] string? source = null,
+        [Description("Room source link instance id")] long linkInstanceId = 0,
+        [Description("Level name")] string? levelName = null,
+        [Description("Project root (optional)")] string? projectRoot = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = RoomArgs(source, linkInstanceId, levelName, projectRoot);
+        args["rules"] = ToJToken(rules);
+        args["codes"] = codes ?? [];
+        args["heightToleranceMm"] = heightToleranceMm;
+        return FormatResult(await pipeClient.SendAsync("revit_check_devices_per_room", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_check_device_alignment", ReadOnly = true),
+     Description("Checks that unhosted devices still sit on their mount after a linked-model update: wall (distance from the nearest wall face vs offsetFromWallMm, negative = inside the wall; height vs heightMm), ceiling (gap below the linked ceiling vs offsetFromCeilingMm), floor (height vs heightMm); devices outside every room are listed. toleranceMm (default 20). Returns suggestedMoves for revit_preview_move_elements / revit_move_elements.")]
+    public async Task<string> CheckDeviceAlignment(
+        [Description("Only devices with these codes")] string[]? codes = null,
+        [Description("Tolerance (default 20 mm)")] double toleranceMm = 20,
+        [Description("Room source: host | link")] string? source = null,
+        [Description("Room source link instance id")] long linkInstanceId = 0,
+        [Description("Level name")] string? levelName = null,
+        [Description("Project root (optional)")] string? projectRoot = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = RoomArgs(source, linkInstanceId, levelName, projectRoot);
+        args["codes"] = codes ?? [];
+        args["toleranceMm"] = toleranceMm;
+        return FormatResult(await pipeClient.SendAsync("revit_check_device_alignment", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_check_coverage", ReadOnly = true),
+     Description("Checks per-room coverage on a sample grid (stepMm, default 500). Radius devices (smoke detectors, APs): radiusMm, else the code's coverageRadiusMm, else 7500. Cameras (codes with fovDeg): view sector fovDeg x rangeM. scope: room (only devices in the room count) | level (all devices on the storey; default for codes with coverageRadiusMm and no fovDeg). Returns covered %, uncovered m² and uncovered regions (area + centre) per room.")]
+    public async Task<string> CheckCoverage(
+        [Description("Device codes to check")] string[] codes,
+        [Description("Room numbers")] string[]? roomNumbers = null,
+        [Description("Room name filter (text or regex)")] string? roomFilter = null,
+        [Description("Override radius for radius devices")] double? radiusMm = null,
+        [Description("room | level (default per code)")] string? scope = null,
+        [Description("Sample spacing (default 500 mm)")] double stepMm = 500,
+        [Description("Uncovered regions listed per room (default 5)")] int maxRegionsPerRoom = 5,
+        [Description("Ceiling slope for fire detector radii (+1 % per degree, max 25 %)")] double ceilingSlopeDeg = 0,
+        [Description("Room source: host | link")] string? source = null,
+        [Description("Room source link instance id")] long linkInstanceId = 0,
+        [Description("Level name")] string? levelName = null,
+        [Description("Project root (optional)")] string? projectRoot = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = RoomArgs(source, linkInstanceId, levelName, projectRoot);
+        args["codes"] = codes;
+        args["roomNumbers"] = roomNumbers ?? [];
+        args["roomFilter"] = roomFilter ?? string.Empty;
+        if (radiusMm != null) args["radiusMm"] = radiusMm;
+        args["scope"] = scope ?? string.Empty;
+        args["stepMm"] = stepMm;
+        args["maxRegionsPerRoom"] = maxRegionsPerRoom;
+        args["ceilingSlopeDeg"] = ceilingSlopeDeg;
+        return FormatResult(await pipeClient.SendAsync("revit_check_coverage", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_check_fire_alarm", ReadOnly = true),
+     Description("Checks fire alarm devices per room (device codes with detectorType): Table 1 detector type vs room height (suitable/conditional/unsuitable), rooms without detection (excludeRoomFilter), point detector coverage (smoke/CO/ASD 6.2 m, heat 4.5 m, x ceilingSlopeDeg factor; corridor spacing and end distance), sounder levels (65 dB(A) or ambient + 10, 75 dB(A) in sleepingRoomFilter rooms, max 118 dB(A); free-field estimate) and one alarm tone for all sounders.")]
+    public async Task<string> CheckFireAlarm(
+        [Description("Room numbers")] string[]? roomNumbers = null,
+        [Description("Room name filter (text or regex)")] string? roomFilter = null,
+        [Description("Rooms that need no detection or alarm (name regex), e.g. WC")] string? excludeRoomFilter = null,
+        [Description("Rooms where people sleep (name regex): 75 dB(A) needed")] string? sleepingRoomFilter = null,
+        [Description("Ambient noise lasting over 30 s, dB(A), for all rooms")] double? ambientNoiseDb = null,
+        [Description("Per-room ambient noise: [{roomFilter, ambientNoiseDb}]")] object[]? roomNoise = null,
+        [Description("Sounders counted: room (default) | level")] string soundScope = "room",
+        [Description("Ceiling slope in degrees")] double ceilingSlopeDeg = 0,
+        [Description("Sample spacing (default 500 mm)")] double stepMm = 500,
+        [Description("Only these device codes")] string[]? codes = null,
+        [Description("Room source: host | link")] string? source = null,
+        [Description("Room source link instance id")] long linkInstanceId = 0,
+        [Description("Level name")] string? levelName = null,
+        [Description("Project root (optional)")] string? projectRoot = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = RoomArgs(source, linkInstanceId, levelName, projectRoot);
+        args["roomNumbers"] = roomNumbers ?? [];
+        args["roomFilter"] = roomFilter ?? string.Empty;
+        args["excludeRoomFilter"] = excludeRoomFilter ?? string.Empty;
+        args["sleepingRoomFilter"] = sleepingRoomFilter ?? string.Empty;
+        if (ambientNoiseDb != null) args["ambientNoiseDb"] = ambientNoiseDb;
+        args["roomNoise"] = ToJToken(roomNoise);
+        args["soundScope"] = soundScope;
+        args["ceilingSlopeDeg"] = ceilingSlopeDeg;
+        args["stepMm"] = stepMm;
+        args["codes"] = codes ?? [];
+        return FormatResult(await pipeClient.SendAsync("revit_check_fire_alarm", args, cancellationToken));
+    }
+
+    private static void AddFireArgs(Dictionary<string, object?> args, double ceilingSlopeDeg, string corridorMode, bool allowUnsuitableHeight)
+    {
+        args["ceilingSlopeDeg"] = ceilingSlopeDeg;
+        args["corridorMode"] = corridorMode;
+        args["allowUnsuitableHeight"] = allowUnsuitableHeight;
+    }
+
+    private static Dictionary<string, object?> RotateArgs(
+        object[]? rotations, long[]? elementIds, double? angleDeg, double? rotateByDeg, object? faceToward,
+        double angleToleranceDeg, bool skipPinned)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["rotations"] = ToJToken(rotations),
+            ["elementIds"] = elementIds ?? [],
+            ["angleToleranceDeg"] = angleToleranceDeg,
+            ["skipPinned"] = skipPinned
+        };
+        if (angleDeg != null) args["angleDeg"] = angleDeg;
+        if (rotateByDeg != null) args["rotateByDeg"] = rotateByDeg;
+        if (faceToward != null) args["faceToward"] = ToJToken(faceToward);
+        return args;
+    }
+
+    private static Dictionary<string, object?> ElevationArgs(
+        object[]? elevations, long[]? elementIds, double? elevationFromLevelMm, double toleranceMm, bool skipPinned)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["elevations"] = ToJToken(elevations),
+            ["elementIds"] = elementIds ?? [],
+            ["toleranceMm"] = toleranceMm,
+            ["skipPinned"] = skipPinned
+        };
+        if (elevationFromLevelMm != null) args["elevationFromLevelMm"] = elevationFromLevelMm;
+        return args;
+    }
+
+    private static Dictionary<string, object?> AssignRoomArgs(
+        long[]? elementIds, string[]? codes, string? roomParameter, bool onlyEmpty,
+        string? source, long linkInstanceId, string? levelName, string? projectRoot)
+    {
+        var args = RoomArgs(source, linkInstanceId, levelName, projectRoot);
+        args["elementIds"] = elementIds ?? [];
+        args["codes"] = codes ?? [];
+        args["roomParameter"] = roomParameter ?? string.Empty;
+        args["onlyEmpty"] = onlyEmpty;
+        return args;
     }
 
     private static Dictionary<string, object?> RoomArgs(string? source, long linkInstanceId, string? levelName, string? projectRoot) =>

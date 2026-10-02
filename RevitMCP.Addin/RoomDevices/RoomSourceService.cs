@@ -135,6 +135,19 @@ internal sealed class OpeningRecord
     public string TypeName { get; set; } = string.Empty;
 }
 
+/// <summary>An element of the source model found inside a room, in host coordinates.</summary>
+internal sealed class LinkedElementInRoom
+{
+    public Element Element { get; set; } = null!;
+    public string Category { get; set; } = string.Empty;
+    public string TypeName { get; set; } = string.Empty;
+    public Bounds2 Plan { get; set; }
+    public double MinZ { get; set; }
+    public double MaxZ { get; set; }
+    public P2? Location { get; set; }
+    public double? LocationZ { get; set; }
+}
+
 internal sealed class RoomFilter
 {
     public string LevelName { get; set; } = string.Empty;
@@ -620,13 +633,18 @@ internal sealed class RoomSourceService
 
     // ── Linked elements by category ───────────────────────────────────────────
 
-    /// <summary>Elements of the given categories in the source model whose plan bounds overlap the room.</summary>
-    public List<(Element Element, string Category, Bounds2 Plan, double MinZ, double MaxZ)> ElementsInRoom(
-        RoomRecord room, IEnumerable<string> categories, List<string> warnings)
+    /// <summary>
+    /// Elements of the given categories in the source model that stand in the room: plan centre inside
+    /// the footprint and vertical bounds overlapping floor … top + 1.5 m (so items above a suspended
+    /// ceiling still count, but other storeys do not).
+    /// </summary>
+    public List<LinkedElementInRoom> ElementsInRoom(RoomRecord room, IEnumerable<string> categories, List<string> warnings)
     {
-        var result = new List<(Element, string, Bounds2, double, double)>();
+        var result = new List<LinkedElementInRoom>();
         var resolver = new Query.CategoryResolver();
         var roomBounds = room.Bounds;
+        var bottom = room.FloorZMm - 100;
+        var top = room.FloorZMm + (room.HeightMm ?? 4000) + 1500;
 
         foreach (var name in categories.Distinct(StringComparer.OrdinalIgnoreCase))
         {
@@ -641,9 +659,32 @@ internal sealed class RoomSourceService
             {
                 var b = _source.HostBounds(e);
                 if (b == null || !roomBounds.Intersects(b.Value.Plan)) continue;
-                var c = new P2((b.Value.Plan.MinX + b.Value.Plan.MaxX) / 2, (b.Value.Plan.MinY + b.Value.Plan.MaxY) / 2);
+                if (b.Value.MaxZMm < bottom || b.Value.MinZMm > top) continue;
+
+                P2? location = null;
+                double? locationZ = null;
+                if (e.Location is LocationPoint lp)
+                {
+                    location = _source.ToHostMm(lp.Point);
+                    locationZ = _source.ToHostZMm(lp.Point);
+                }
+                var c = location ?? new P2((b.Value.Plan.MinX + b.Value.Plan.MaxX) / 2, (b.Value.Plan.MinY + b.Value.Plan.MaxY) / 2);
                 if (!RoomGeometryMath.Contains(room.Polygon, c)) continue;
-                result.Add((e, resolved.Category.Name, b.Value.Plan, b.Value.MinZMm, b.Value.MaxZMm));
+
+                string typeName = string.Empty;
+                try { typeName = e.Document.GetElement(e.GetTypeId())?.Name ?? string.Empty; } catch { }
+
+                result.Add(new LinkedElementInRoom
+                {
+                    Element = e,
+                    Category = resolved.Category.Name,
+                    TypeName = typeName,
+                    Plan = b.Value.Plan,
+                    MinZ = b.Value.MinZMm,
+                    MaxZ = b.Value.MaxZMm,
+                    Location = location,
+                    LocationZ = locationZ
+                });
             }
         }
         return result;

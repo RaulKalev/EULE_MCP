@@ -49,6 +49,8 @@ public sealed class VillageToolClassifier
         ("device_code",        VillageAreas.Office),
         ("device_type",        VillageAreas.FamiliesTypes),
         ("level",              VillageAreas.Elements),
+        ("elevation",          VillageAreas.Elements),
+        ("coverage",           VillageAreas.Elements),
         ("clash",              VillageAreas.Coordination),
         ("tag",                VillageAreas.TagsAnnotations),
         ("retag",              VillageAreas.TagsAnnotations),
@@ -156,7 +158,7 @@ public sealed class VillageToolClassifier
         // create
         ["create"] = VillageActivities.Create, ["place"] = VillageActivities.Create, ["duplicate"] = VillageActivities.Create,
         ["annotate"] = VillageActivities.Create, ["convert"] = VillageActivities.Create,
-        ["ensure"] = VillageActivities.Create,
+        ["ensure"] = VillageActivities.Create, ["rotate"] = VillageActivities.Modify,
         // modify
         ["set"] = VillageActivities.Modify, ["apply"] = VillageActivities.Modify, ["rename"] = VillageActivities.Modify,
         ["reassign"] = VillageActivities.Modify, ["change"] = VillageActivities.Modify, ["assign"] = VillageActivities.Modify,

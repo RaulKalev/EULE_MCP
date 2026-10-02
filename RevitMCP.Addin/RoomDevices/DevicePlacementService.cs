@@ -327,6 +327,8 @@ internal static class DevicePlacementService
 
         foreach (var room in rooms)
         {
+            var before = plan.Devices.Count;
+            var heightBlock = CheckFireHeight(plan, code, room, cache, args);
             switch (strategy)
             {
                 case "center":
@@ -334,32 +336,8 @@ internal static class DevicePlacementService
                     break;
 
                 case "grid":
-                {
-                    var spacing = ToolArguments.GetDouble(args, "maxSpacingMm", code.MaxSpacingMm ?? 0);
-                    if (spacing <= 0)
-                    {
-                        error = $"strategy=grid needs maxSpacingMm (argument or code '{code.Code}').";
-                        return null;
-                    }
-                    var maxWall = ToolArguments.GetDouble(args, "maxDistFromWallMm", code.MaxDistFromWallMm ?? 0);
-                    double? radius = args.TryGetValue("coverageRadiusMm", out var r) && r != null
-                        ? ToolArguments.GetDouble(args, "coverageRadiusMm")
-                        : null;
-                    var grid = RoomGeometryMath.Grid(room.Polygon, spacing, maxWall, coverageRadiusMm: radius);
-                    foreach (var p in grid.Points) AddFree(plan, doc, code, room, cache, args, "grid", p);
-                    plan.RoomNotes.Add(new
-                    {
-                        roomNumber = room.Number,
-                        points = grid.Points.Count,
-                        stepXMm = Math.Round(grid.StepXMm, 0),
-                        stepYMm = Math.Round(grid.StepYMm, 0),
-                        coverageRadiusMm = Math.Round(grid.CoverageRadiusMm, 0),
-                        uncoveredAreaM2 = grid.UncoveredAreaM2
-                    });
-                    if (grid.SamplesUncovered > 0)
-                        plan.Warnings.Add($"Room {room.Number}: about {grid.UncoveredAreaM2} m² is farther than {grid.CoverageRadiusMm:0} mm from every point.");
+                    if (!PlanGrid(plan, doc, code, room, cache, args, out error)) return null;
                     break;
-                }
 
                 case "neardoor":
                     AddNearDoors(plan, doc, code, room, cache, args);
@@ -387,11 +365,126 @@ internal static class DevicePlacementService
                     break;
                 }
             }
+
+            if (heightBlock != null)
+                foreach (var d in plan.Devices.Skip(before).Where(d => d.Blocked == null))
+                    d.Blocked = heightBlock;
         }
 
         FinishChecks(doc, plan);
         return plan;
     }
+
+    /// <summary>
+    /// strategy=grid. Fire detectors with point spacing rules (detectorType pointSmoke/co/aspirating/
+    /// pointHeat) follow 6.5.2.2/6.5.2.3: corridors up to 2 m wide get a centreline row, other rooms the
+    /// largest grid within the max spacing and wall distance; a sloped ceiling (ceilingSlopeDeg) widens
+    /// both. Explicit maxSpacingMm / maxDistFromWallMm still win but are flagged when they exceed the rules.
+    /// </summary>
+    private static bool PlanGrid(PlacementPlan plan, Document doc, DeviceCode code, RoomRecord room, RoomCache cache,
+        Dictionary<string, object?> args, out string? error)
+    {
+        error = null;
+        var slope = ToolArguments.GetDouble(args, "ceilingSlopeDeg", 0);
+        var rules = code.IsFireDetector ? FireAlarmRules.Spacing(code.DetectorType!, slope) : null;
+
+        double? argSpacing = HasNumber(args, "maxSpacingMm") ? ToolArguments.GetDouble(args, "maxSpacingMm") : code.MaxSpacingMm;
+        double? argWall = HasNumber(args, "maxDistFromWallMm") ? ToolArguments.GetDouble(args, "maxDistFromWallMm") : code.MaxDistFromWallMm;
+        double? radius = HasNumber(args, "coverageRadiusMm") ? ToolArguments.GetDouble(args, "coverageRadiusMm") : rules?.RadiusMm ?? code.CoverageRadiusMm;
+
+        if (rules != null)
+        {
+            if (argSpacing > rules.MaxSpacingMm + 1)
+                plan.Warnings.Add($"maxSpacingMm {argSpacing:0} exceeds the {code.DetectorType} limit of {rules.MaxSpacingMm:0} mm.");
+            if (argWall > rules.MaxWallDistanceMm + 1)
+                plan.Warnings.Add($"maxDistFromWallMm {argWall:0} exceeds the {code.DetectorType} limit of {rules.MaxWallDistanceMm:0} mm.");
+
+            var corridorMode = ToolArguments.GetString(args, "corridorMode", "auto").Trim().ToLowerInvariant();
+            if (corridorMode != "off" && argSpacing == null)
+            {
+                var corridor = FireAlarmRules.Corridor(room.Polygon, rules.CorridorSpacingMm, rules.CorridorEndDistanceMm);
+                if (corridor.IsCorridor)
+                {
+                    foreach (var p in corridor.Points) AddFree(plan, doc, code, room, cache, args, "corridor", p);
+                    plan.RoomNotes.Add(new
+                    {
+                        roomNumber = room.Number,
+                        layout = "corridor",
+                        rule = code.DetectorType == FireDeviceTypes.PointHeat ? "6.5.2.2" : "6.5.2.3",
+                        points = corridor.Points.Count,
+                        widthMm = Math.Round(corridor.WidthMm, 0),
+                        lengthMm = Math.Round(corridor.LengthMm, 0),
+                        maxSpacingMm = Math.Round(rules.CorridorSpacingMm, 0),
+                        maxEndDistanceMm = Math.Round(rules.CorridorEndDistanceMm, 0),
+                        slopeFactor = rules.SlopeFactor
+                    });
+                    return true;
+                }
+            }
+        }
+
+        var spacing = argSpacing ?? rules?.MaxSpacingMm ?? 0;
+        if (spacing <= 0)
+        {
+            error = $"strategy=grid needs maxSpacingMm (argument or code '{code.Code}'), or a detectorType with spacing rules.";
+            return false;
+        }
+        var maxWall = argWall ?? rules?.MaxWallDistanceMm ?? 0;
+
+        var grid = RoomGeometryMath.Grid(room.Polygon, spacing, maxWall, coverageRadiusMm: radius);
+        foreach (var p in grid.Points) AddFree(plan, doc, code, room, cache, args, "grid", p);
+        plan.RoomNotes.Add(new
+        {
+            roomNumber = room.Number,
+            layout = "grid",
+            rule = rules == null ? null : code.DetectorType == FireDeviceTypes.PointHeat ? "6.5.2.2" : "6.5.2.3",
+            points = grid.Points.Count,
+            stepXMm = Math.Round(grid.StepXMm, 0),
+            stepYMm = Math.Round(grid.StepYMm, 0),
+            maxSpacingMm = Math.Round(spacing, 0),
+            maxDistFromWallMm = Math.Round(maxWall, 0),
+            coverageRadiusMm = Math.Round(grid.CoverageRadiusMm, 0),
+            uncoveredAreaM2 = grid.UncoveredAreaM2,
+            slopeFactor = rules?.SlopeFactor
+        });
+        if (grid.SamplesUncovered > 0)
+            plan.Warnings.Add($"Room {room.Number}: about {grid.UncoveredAreaM2} m2 is farther than {grid.CoverageRadiusMm:0} mm from every point.");
+        return true;
+    }
+
+    /// <summary>
+    /// Table 1 check for fire detectors: the room height (linked ceiling, else room height) must suit
+    /// the detector type. Returns a block reason for unsuitable rooms (unless allowUnsuitableHeight);
+    /// conditional cells become plan warnings.
+    /// </summary>
+    private static string? CheckFireHeight(PlacementPlan plan, DeviceCode code, RoomRecord room, RoomCache cache, Dictionary<string, object?> args)
+    {
+        if (!code.IsFireDetector) return null;
+        var height = cache.Ceiling(room) ?? room.HeightMm;
+        if (height == null)
+        {
+            plan.Warnings.Add($"Room {room.Number}: height unknown - Table 1 suitability of {code.DetectorType} not checked.");
+            return null;
+        }
+
+        var check = FireAlarmRules.CheckHeight(code.DetectorType!, height.Value, code.DetectorClass);
+        var text = $"Room {room.Number} ({height.Value / 1000:0.0#} m, {check.Band ?? "> 45 m"}): {code.DetectorType} is {check.Status} per Table 1" +
+                   (check.Note.Length > 0 ? $" - {check.Note}" : ".");
+        if (check.IsUnsuitable)
+        {
+            if (ToolArguments.GetBool(args, "allowUnsuitableHeight"))
+            {
+                plan.Warnings.Add(text + " Placed anyway (allowUnsuitableHeight=true).");
+                return null;
+            }
+            return text;
+        }
+        if (check.Status == "conditional") plan.Warnings.Add(text);
+        return null;
+    }
+
+    private static bool HasNumber(Dictionary<string, object?> args, string key) =>
+        args.TryGetValue(key, out var v) && v != null && !(v is JValue { Type: JTokenType.Null });
 
     private static void AddFree(PlacementPlan plan, Document doc, DeviceCode code, RoomRecord room, RoomCache cache,
         Dictionary<string, object?> args, string strategy, P2 point)
@@ -582,7 +675,7 @@ internal static class DevicePlacementService
         return instance;
     }
 
-    private static void FixElevation(Document doc, FamilyInstance instance, Level level, double targetZMm, List<string> warnings)
+    internal static void FixElevation(Document doc, FamilyInstance instance, Level level, double targetZMm, List<string> warnings)
     {
         if (instance.Location is not LocationPoint lp) return;
         var currentMm = RoomUnits.FtToMm(lp.Point.Z);
