@@ -22,6 +22,7 @@ public class GraphBuildTool : IRevitMcpTool
 {
     public const int DefaultElementLimit = 250_000;
     public const int MaxElementLimit = 2_000_000;
+    public const int DefaultLinkElementLimit = 100_000;
 
     public string Name => "revit_graph_build";
     public string Description =>
@@ -30,7 +31,8 @@ public class GraphBuildTool : IRevitMcpTool
         "edges fed_by, located_in, hosted_on, type_of, tagged_in, on_sheet, in_workset, on_level. " +
         "Arguments: incremental (bool, default false — re-extract only elements added/changed/deleted since the last " +
         "build in this Revit session; falls back to a full rebuild when that is not safe, and says why), " +
-        "elementLimit (int, default 250000), sharedFolder (string, overrides graph.sharedFolder config), " +
+        "elementLimit (int, default 250000), includeLinks (bool, default true — also index elements and rooms of loaded " +
+        "linked models under ids link:<linkInstanceId>:<elementId>), linkElementLimit (int, default 100000), sharedFolder (string, overrides graph.sharedFolder config), " +
         "dbPath (string, explicit database path). Returns node/edge counts and elapsed time. The graph is a routing layer only.";
     public ToolPermission Permission => ToolPermission.ReadOnly;   // Writes only the local/shared graph file, not the Revit model
     public ToolCategory Category => ToolCategory.Elements;
@@ -45,6 +47,11 @@ public class GraphBuildTool : IRevitMcpTool
         var incremental = ToolArguments.GetBool(request.Arguments, "incremental", false);
         var elementLimit = GraphToolSupport.Clamp(
             ToolArguments.GetInt(request.Arguments, "elementLimit", DefaultElementLimit), 1_000, MaxElementLimit);
+
+        var includeLinks = ToolArguments.GetBool(request.Arguments, "includeLinks", true);
+        var linkElementLimit = includeLinks
+            ? GraphToolSupport.Clamp(ToolArguments.GetInt(request.Arguments, "linkElementLimit", DefaultLinkElementLimit), 1, MaxElementLimit)
+            : 0;
 
         var warnings = new List<string>();
 
@@ -66,7 +73,7 @@ public class GraphBuildTool : IRevitMcpTool
                 }
             }
 
-            return Task.FromResult(FullBuild(doc, location, signal, request, elementLimit, incremental, fallbackReason, total, warnings));
+            return Task.FromResult(FullBuild(doc, location, signal, request, elementLimit, linkElementLimit, incremental, fallbackReason, total, warnings));
         }
         catch (Exception ex)
         {
@@ -88,10 +95,10 @@ public class GraphBuildTool : IRevitMcpTool
 
     private static McpToolResult FullBuild(
         Document doc, GraphLocation location, ModelVersionSignal signal, McpToolRequest request,
-        int elementLimit, bool incrementalRequested, string? fallbackReason, Stopwatch total, List<string> warnings)
+        int elementLimit, int linkElementLimit, bool incrementalRequested, string? fallbackReason, Stopwatch total, List<string> warnings)
     {
         var extractWatch = Stopwatch.StartNew();
-        var extraction = RevitGraphExtractor.Extract(doc, elementLimit);
+        var extraction = RevitGraphExtractor.Extract(doc, elementLimit, linkElementLimit);
         extractWatch.Stop();
         warnings.AddRange(extraction.Warnings);
 
@@ -136,6 +143,14 @@ public class GraphBuildTool : IRevitMcpTool
                 danglingEdgesDropped = extraction.DanglingEdgesDropped,
                 elementLimit,
                 elementLimitReached = extraction.ElementLimitReached,
+                links = linkElementLimit > 0
+                    ? new
+                    {
+                        indexed = extraction.Links,
+                        linkElementLimit,
+                        linkElementLimitReached = extraction.LinkElementLimitReached
+                    }
+                    : null,
                 builtAt,
                 builtBy = signal.Username,
                 modelName = signal.ModelName,
@@ -330,6 +345,7 @@ public class GraphBuildTool : IRevitMcpTool
         {
             Level => GraphSchema.Kinds.Level,
             Room or Space => GraphSchema.Kinds.Space,
+            RevitLinkInstance or RevitLinkType => GraphSchema.Kinds.Link,
             _ => null
         };
     }

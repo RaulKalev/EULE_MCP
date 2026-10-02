@@ -113,8 +113,10 @@ public static class GraphRouting
                 plan.Steps.Add(Step("revit_graph_query", "Find the room/space id.",
                     Args(("operation", "find"), ("kind", "space"), ("nameContains", plan.NameHint), ("level", plan.Level), ("pageSize", 20))));
                 plan.Steps.Add(Step("revit_graph_query", "Everything located in it.",
-                    Args(("operation", "neighbors"), ("id", "<space id>"), ("rel", "located_in"), ("direction", "in"))));
+                    Args(("operation", "neighbors"), ("id", "<space id>"), ("rel", "located_in"), ("direction", "in"), ("link", "host"))));
                 plan.Steps.Add(LiveRead("Read live values only for those ids.", plan.Category));
+                plan.Notes.Add("Linked-model elements in the room: the same neighbors call with link=links; their ids (link:<instance>:<id>) " +
+                               "are read with revit_query_linked_elements, not the host tools.");
                 break;
 
             case "panel":
@@ -135,10 +137,14 @@ public static class GraphRouting
                 break;
 
             case "linked":
-                plan.Summary = "Linked models: query the link directly — linked elements are not in this graph version.";
-                plan.Steps.Add(Step("ifc_list_links", "Link instance ids.", Args(("includeAllRevitLinks", true))));
-                plan.Steps.Add(Step("revit_query_linked_elements", "Elements of one link by category or name.",
+                plan.Summary = "Linked models: the graph indexes loaded links (ids link:<instance>:<id>); narrow there, then read the link live.";
+                plan.Steps.Add(Step("revit_graph_query", "Link instances (id = linkInstanceId, extra.document = linked file).",
+                    Args(("operation", "find"), ("kind", "link"))));
+                plan.Steps.Add(Step("revit_graph_query", "Linked elements of the category; link=<instance id or part of the link name> narrows to one link.",
+                    Args(("operation", "find"), ("category", plan.Category), ("level", plan.Level), ("link", "links"), ("pageSize", 100))));
+                plan.Steps.Add(Step("revit_query_linked_elements", "Live values from the chosen link (host tools cannot read linked ids).",
                     Args(("linkInstanceId", "<link id>"), ("category", plan.Category), ("limit", 100))));
+                plan.Notes.Add("Linked content reflects the links as loaded at the last graph build; reloading a link does not mark the graph stale.");
                 break;
 
             case "category":

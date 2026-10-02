@@ -23,6 +23,13 @@ public static class GraphSchema
     /// <summary>Prefix for workset node ids — worksets have their own id space, separate from element ids.</summary>
     public const string WorksetIdPrefix = "ws:";
 
+    /// <summary>
+    /// Prefix for linked-model node ids (#62): <c>link:&lt;linkInstanceId&gt;:&lt;linkedElementId&gt;</c>. The link
+    /// instance id namespaces the linked document, so equal element ids in different links (or the host)
+    /// never collide. Host ids stay plain element ids.
+    /// </summary>
+    public const string LinkIdPrefix = "link:";
+
     public static class Kinds
     {
         public const string Element = "element";
@@ -34,10 +41,12 @@ public static class GraphSchema
         public const string Workset = "workset";
         public const string Sheet   = "sheet";
         public const string View    = "view";
+        /// <summary>A Revit link instance in the host model (#62). Its id is the host element id.</summary>
+        public const string Link    = "link";
 
         public static readonly string[] All =
         {
-            Element, Type, Panel, Circuit, Space, Level, Workset, Sheet, View
+            Element, Type, Panel, Circuit, Space, Level, Workset, Sheet, View, Link
         };
     }
 
@@ -59,10 +68,12 @@ public static class GraphSchema
         public const string InWorkset = "in_workset";
         /// <summary>any node → level.</summary>
         public const string OnLevel   = "on_level";
+        /// <summary>linked-model node → the link instance it was read through (#62).</summary>
+        public const string InLink    = "in_link";
 
         public static readonly string[] All =
         {
-            FedBy, LocatedIn, HostedOn, TypeOf, TaggedIn, OnSheet, InWorkset, OnLevel
+            FedBy, LocatedIn, HostedOn, TypeOf, TaggedIn, OnSheet, InWorkset, OnLevel, InLink
         };
     }
 

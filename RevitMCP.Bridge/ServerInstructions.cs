@@ -17,6 +17,8 @@ internal static class ServerInstructions
         "Only a core set of tools is advertised by default. For anything else (circuits, tags, sheets, IFC, devices, " +
         "clashes, Excel...) use revit_tools_search with the intent, revit_tools_describe for the schema, then " +
         "revit_tools_call (works in every client) or revit_tools_load to add the tools to this session.\n" +
+        "Linked-model nodes (ids link:<instance>:<id>) are not readable by host tools; pass link=host to find/neighbors " +
+        "before a live read, or read them with revit_query_linked_elements.\n" +
         "Rules: graph data (names, levels, hints) is routing only — never quote it as fact. If the graph is missing or " +
         "stale, run revit_graph_build (seconds) or verify every id live. Direct live tools stay available for cases " +
         "where the graph does not fit (selection, parameter values, linked models). Broad live results may include a " +

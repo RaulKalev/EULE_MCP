@@ -5974,13 +5974,16 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
 
     [McpServerTool(Name = "revit_graph_build", ReadOnly = true),
      Description("Builds the model knowledge graph for the open document into a per-model SQLite file. " +
-                 "Nodes: element, type, panel, circuit, space, level, workset, sheet, view. " +
-                 "Edges: fed_by, located_in, hosted_on, type_of, tagged_in, on_sheet, in_workset, on_level. " +
+                 "Nodes: element, type, panel, circuit, space, level, workset, sheet, view, link. " +
+                 "Edges: fed_by, located_in, hosted_on, type_of, tagged_in, on_sheet, in_workset, on_level, in_link. " +
+                 "Loaded linked models are indexed too (ids link:<linkInstanceId>:<elementId>). " +
                  "Writes only the graph file (never the model). Reports node/edge counts and elapsed time. " +
                  "The graph is a routing layer: use it to find ids, then fetch live values by id.")]
     public async Task<string> GraphBuild(
         [Description("Default false (full rebuild). true = re-extract only elements added/changed/deleted since the last build in this Revit session; falls back to a full rebuild when that is not safe and reports why in incremental.fallbackReason.")] bool incremental = false,
         [Description("Maximum model elements to index (safety cap). Default 250000.")] int elementLimit = 250000,
+        [Description("Also index elements and rooms of loaded linked models (ids link:<linkInstanceId>:<elementId>). Default true.")] bool includeLinks = true,
+        [Description("Maximum linked-model elements to index across all links. Default 100000.")] int linkElementLimit = 100000,
         [Description("Optional shared folder root overriding the graph.sharedFolder config for this call.")] string? sharedFolder = null,
         [Description("Optional explicit database file path overriding folder resolution entirely.")] string? dbPath = null,
         CancellationToken cancellationToken = default)
@@ -5989,6 +5992,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         {
             ["incremental"]  = incremental,
             ["elementLimit"] = elementLimit,
+            ["includeLinks"] = includeLinks,
+            ["linkElementLimit"] = linkElementLimit,
             ["sharedFolder"] = sharedFolder ?? string.Empty,
             ["dbPath"]       = dbPath ?? string.Empty
         };
@@ -6025,7 +6030,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     public async Task<string> GraphQuery(
         [Description("neighbors | find | path | subtree")] string operation,
         [Description("Node id for neighbors/subtree (Revit element id as string; worksets use ws:<id>).")] string? id = null,
-        [Description("Relationship filter: fed_by, located_in, hosted_on, type_of, tagged_in, on_sheet, in_workset, on_level. Required for subtree.")] string? rel = null,
+        [Description("Relationship filter: fed_by, located_in, hosted_on, type_of, tagged_in, on_sheet, in_workset, on_level, in_link. Required for subtree.")] string? rel = null,
         [Description("Edge direction relative to the node: in | out | both. Default both for neighbors, in for subtree.")] string? direction = null,
         [Description("neighbors only: maximum neighbours to return (1-500). Default 100.")] int limit = 100,
         [Description("find only: node kind filter.")] string? kind = null,
@@ -6033,6 +6038,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("find only: level name filter (exact, case-insensitive).")] string? level = null,
         [Description("find only: workset name filter (exact, case-insensitive).")] string? workset = null,
         [Description("find only: substring of the node name (case-insensitive for ASCII).")] string? nameContains = null,
+        [Description("find/neighbors: host (host model only — use before reading results live by id) | links (all linked models) | a link instance id | part of a link name.")] string? link = null,
         [Description("find only: zero-based page index. Default 0.")] int page = 0,
         [Description("find only: page size (default 100, max 500).")] int pageSize = 100,
         [Description("path only: start node id.")] string? fromId = null,
@@ -6056,6 +6062,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["level"]        = level ?? string.Empty,
             ["workset"]      = workset ?? string.Empty,
             ["nameContains"] = nameContains ?? string.Empty,
+            ["link"]         = link ?? string.Empty,
             ["page"]         = page,
             ["pageSize"]     = pageSize,
             ["fromId"]       = fromId ?? string.Empty,

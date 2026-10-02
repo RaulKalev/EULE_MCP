@@ -113,6 +113,9 @@ internal static class GraphToolSupport
         category = string.IsNullOrEmpty(node.Category) ? null : node.Category,
         level = string.IsNullOrEmpty(node.Level) ? null : node.Level,
         workset = string.IsNullOrEmpty(node.Workset) ? null : node.Workset,
+        // Linked-model nodes (#62): the link instance they were read through; extra carries linkName/linkDocument.
+        // Their element id inside the linked document is the last id segment — host tools cannot read it by that id.
+        linkInstanceId = GraphLinkIds.LinkInstanceOf(node.Id),
         extra = ParseExtra(node.Extra)
     };
 

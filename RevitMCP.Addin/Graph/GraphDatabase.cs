@@ -355,8 +355,9 @@ public sealed class GraphDatabase : IDisposable
 
         // 4. Type nodes exist only while something references them.
         result.TypesPruned += Exec(
-            "DELETE FROM nodes WHERE kind = $type AND NOT EXISTS " +
-            "(SELECT 1 FROM edges WHERE edges.dst = nodes.id AND edges.rel = $typeOf)",
+            // NOT IN evaluates the referenced set once; a correlated NOT EXISTS lets SQLite pick the
+            // low-selectivity rel index and costs ~1 s on a 30k-edge graph.
+            "DELETE FROM nodes WHERE kind = $type AND id NOT IN (SELECT dst FROM edges WHERE rel = $typeOf)",
             ("$type", GraphSchema.Kinds.Type), ("$typeOf", GraphSchema.Rels.TypeOf));
 
         // 5. Meta.
@@ -439,30 +440,34 @@ public sealed class GraphDatabase : IDisposable
     // ─── Read: neighbors ───────────────────────────────────────────────────
 
     /// <param name="direction">"out" (id is src), "in" (id is dst) or "both".</param>
-    public List<GraphNeighbor> Neighbors(string id, string? rel, string direction, int limit)
+    /// <param name="link">Optional link filter on the neighbours, as in <see cref="Find"/> (host | links | instance id | link name).</param>
+    public List<GraphNeighbor> Neighbors(string id, string? rel, string direction, int limit, string? link = null)
     {
         var dir = NormalizeDirection(direction, "both");
         var results = new List<GraphNeighbor>();
         if (limit <= 0) limit = 100;
 
         if (dir == "out" || dir == "both")
-            CollectNeighbors(id, rel, outgoing: true, limit - results.Count, results);
+            CollectNeighbors(id, rel, outgoing: true, limit - results.Count, results, link);
         if ((dir == "in" || dir == "both") && results.Count < limit)
-            CollectNeighbors(id, rel, outgoing: false, limit - results.Count, results);
+            CollectNeighbors(id, rel, outgoing: false, limit - results.Count, results, link);
 
         return results;
     }
 
-    private void CollectNeighbors(string id, string? rel, bool outgoing, int limit, List<GraphNeighbor> into)
+    private void CollectNeighbors(string id, string? rel, bool outgoing, int limit, List<GraphNeighbor> into, string? link = null)
     {
         if (limit <= 0) return;
+        var linkParameters = new List<(string Name, object Value)>();
+        var linkFilter = string.IsNullOrWhiteSpace(link) ? string.Empty : " AND " + LinkClause(link!.Trim(), linkParameters, "n.id");
         using var cmd = _connection.CreateCommand();
         var join = outgoing ? "n.id = e.dst" : "n.id = e.src";
         var where = outgoing ? "e.src = $id" : "e.dst = $id";
         var relFilter = string.IsNullOrWhiteSpace(rel) ? string.Empty : " AND e.rel = $rel";
         cmd.CommandText =
             $"SELECT e.rel, {NodeColumns("n")} FROM edges e JOIN nodes n ON {join} " +
-            $"WHERE {where}{relFilter} ORDER BY e.rel, n.kind, n.name, n.id LIMIT $limit";
+            $"WHERE {where}{relFilter}{linkFilter} ORDER BY e.rel, n.kind, n.name, n.id LIMIT $limit";
+        foreach (var (name, value) in linkParameters) cmd.Parameters.AddWithValue(name, value);
         cmd.Parameters.AddWithValue("$id", id);
         if (!string.IsNullOrWhiteSpace(rel)) cmd.Parameters.AddWithValue("$rel", rel!.Trim().ToLowerInvariant());
         cmd.Parameters.AddWithValue("$limit", limit);
@@ -481,10 +486,48 @@ public sealed class GraphDatabase : IDisposable
 
     // ─── Read: find ────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// SQL for the find <c>link</c> filter (#62): "host" = host-model nodes only; "links" = every linked
+    /// node; a number = nodes of that link instance; anything else = nodes of the link instances whose
+    /// name contains it.
+    /// </summary>
+    private string LinkClause(string link, List<(string Name, object Value)> parameters, string column = "id")
+    {
+        string Range(string? instance, int index)
+        {
+            var (from, to) = GraphLinkIds.Range(instance);
+            parameters.Add(($"$lf{index}", from));
+            parameters.Add(($"$lt{index}", to));
+            return $"({column} >= $lf{index} AND {column} < $lt{index})";
+        }
+
+        switch (link.ToLowerInvariant())
+        {
+            case "host": return "NOT " + Range(null, 0);
+            case "links":
+            case "linked":
+            case "any": return Range(null, 0);
+        }
+        if (long.TryParse(link, NumberStyles.Integer, CultureInfo.InvariantCulture, out var instanceId))
+            return Range(instanceId.ToString(CultureInfo.InvariantCulture), 0);
+
+        var instances = new List<string>();
+        using (var cmd = _connection.CreateCommand())
+        {
+            cmd.CommandText = "SELECT id FROM nodes WHERE kind = $k AND name LIKE $n ESCAPE '\\'";
+            cmd.Parameters.AddWithValue("$k", GraphSchema.Kinds.Link);
+            cmd.Parameters.AddWithValue("$n", "%" + EscapeLike(link) + "%");
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read()) instances.Add(reader.GetString(0));
+        }
+        if (instances.Count == 0) return "0";
+        return "(" + string.Join(" OR ", instances.Select((id, i) => Range(id, i))) + ")";
+    }
+
     /// <summary>Filtered, paginated node lookup. All filters are optional; matching is case-insensitive (ASCII).</summary>
     public PagedResult<GraphNode> Find(
         string? kind, string? category, string? level, string? workset, string? nameContains,
-        int page, int pageSize)
+        int page, int pageSize, string? link = null)
     {
         if (page < 0) page = 0;
         if (pageSize <= 0) pageSize = QueryLimits.Default.DefaultPageSize;
@@ -508,8 +551,10 @@ public sealed class GraphDatabase : IDisposable
             clauses.Add("name LIKE $name ESCAPE '\\'");
             parameters.Add(("$name", "%" + EscapeLike(nameContains!.Trim()) + "%"));
         }
+        if (!string.IsNullOrWhiteSpace(link))
+            clauses.Add(LinkClause(link!.Trim(), parameters));
 
-        var where = clauses.Count == 0 ? string.Empty : " WHERE " + string.Join(" AND ", clauses);
+        var where =clauses.Count == 0 ? string.Empty : " WHERE " + string.Join(" AND ", clauses);
 
         long total;
         using (var cmd = _connection.CreateCommand())
