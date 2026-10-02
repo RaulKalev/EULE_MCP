@@ -2493,6 +2493,57 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    [McpServerTool(Name = "revit_preview_create_cable_type", ReadOnly = true),
+     Description("Previews cable type creation WITHOUT changes: resolves the source cable type and reports, per new name, create | skipExisting | blocked plus a check of every parameter. Same arguments as revit_create_cable_type.")]
+    public async Task<string> PreviewCreateCableType(
+        [Description("Source (template) cable type name, e.g. 'Default' (see revit_get_available_cable_types)")] string? sourceTypeName = null,
+        [Description("Source cable type element ID (alternative to sourceTypeName)")] long sourceTypeId = 0,
+        [Description("Name of the new cable type")] string? newName = null,
+        [Description("Several new names in one call; parameters apply to each")] string[]? newNames = null,
+        [Description("Type parameter name-to-value object for the new type(s); numbers in project units")] object? parameters = null,
+        [Description("Batch form: [{newName, parameters}] — one entry per new type")] object[]? items = null,
+        [Description("When a type with the name exists: skip (default, returns its id) | error")] string ifExists = "skip",
+        CancellationToken cancellationToken = default)
+    {
+        var args = BuildCreateCableTypeArgs(sourceTypeName, sourceTypeId, newName, newNames, parameters, items, ifExists);
+        return FormatResult(await pipeClient.SendAsync("revit_preview_create_cable_type", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_create_cable_type"),
+     Description("Creates cable types by duplicating an existing one (like Duplicate in Revit). Requires approval; transaction-wrapped and undoable. Returns the new type ids for immediate use with revit_change_circuit_cable_or_wire_type / revit_set_circuit_parameter. Run revit_preview_create_cable_type first.")]
+    public async Task<string> CreateCableType(
+        [Description("Source (template) cable type name, e.g. 'Default' (see revit_get_available_cable_types)")] string? sourceTypeName = null,
+        [Description("Source cable type element ID (alternative to sourceTypeName)")] long sourceTypeId = 0,
+        [Description("Name of the new cable type")] string? newName = null,
+        [Description("Several new names in one call; parameters apply to each")] string[]? newNames = null,
+        [Description("Type parameter name-to-value object for the new type(s); numbers in project units")] object? parameters = null,
+        [Description("Batch form: [{newName, parameters}] — one entry per new type")] object[]? items = null,
+        [Description("When a type with the name exists: skip (default, returns its id) | error")] string ifExists = "skip",
+        CancellationToken cancellationToken = default)
+    {
+        var args = BuildCreateCableTypeArgs(sourceTypeName, sourceTypeId, newName, newNames, parameters, items, ifExists);
+        return FormatResult(await pipeClient.SendAsync("revit_create_cable_type", args, cancellationToken));
+    }
+
+    private static Dictionary<string, object?> BuildCreateCableTypeArgs(
+        string? sourceTypeName,
+        long sourceTypeId,
+        string? newName,
+        string[]? newNames,
+        object? parameters,
+        object[]? items,
+        string ifExists) =>
+        new()
+        {
+            ["sourceTypeName"] = sourceTypeName ?? string.Empty,
+            ["sourceTypeId"] = sourceTypeId,
+            ["newName"] = newName ?? string.Empty,
+            ["newNames"] = newNames ?? [],
+            ["parameters"] = ToJToken(parameters),
+            ["items"] = ToJToken(items),
+            ["ifExists"] = ifExists
+        };
+
     [McpServerTool(Name = "revit_get_available_wire_types", ReadOnly = true),
      Description("Lists all wire types available in the active Revit document.")]
     public async Task<string> GetAvailableWireTypes(CancellationToken cancellationToken = default)
