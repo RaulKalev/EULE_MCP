@@ -250,6 +250,17 @@ public class App : IExternalApplication
             handler.RegisterTool(new PreviewPlaceInRoomTool());
             handler.RegisterTool(new PlaceInRoomTool());
             handler.RegisterTool(new ExportViewImageTool());
+            handler.RegisterTool(new GetLinkedElementsInRoomTool());
+            handler.RegisterTool(new PreviewRotateElementsTool());
+            handler.RegisterTool(new RotateElementsTool());
+            handler.RegisterTool(new PreviewSetElevationTool());
+            handler.RegisterTool(new SetElevationTool());
+            handler.RegisterTool(new PreviewAssignRoomToElementsTool());
+            handler.RegisterTool(new AssignRoomToElementsTool());
+            handler.RegisterTool(new CheckDevicesPerRoomTool());
+            handler.RegisterTool(new CheckDeviceAlignmentTool());
+            handler.RegisterTool(new CheckCoverageTool());
+            handler.RegisterTool(new CheckFireAlarmTool());
 
             // Element Placement (issue #17)
             handler.RegisterTool(new PlaceFamilyInstancesTool());

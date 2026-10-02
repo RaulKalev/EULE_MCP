@@ -62,7 +62,7 @@ public sealed class SetDeviceCodesTool : IRevitMcpTool
         "Writes the device code map into the project config (section 'deviceCodes'). Requires approval; backs the file up first. " +
         "deviceCodes: {CODE: {family, type, mount: wall|ceiling|floor, heightMm, offsetFromWallMm, offsetFromCeilingMm, " +
         "doorSide: lock|hinge, doorOffsetMm, rotationOffsetDeg, avoidCategories[], clearanceMm, maxSpacingMm, " +
-        "maxDistFromWallMm, sourceType ('Type' or 'Family : Type'), typeParameters{}}}. replace=false (default) merges " +
+        "maxDistFromWallMm, coverageRadiusMm, fovDeg, rangeM (cameras), detectorType, detectorClass, soundLevelDb, tone (fire alarm), sourceType ('Type' or 'Family : Type'), typeParameters{}}}. replace=false (default) merges " +
         "by code; removeCodes[] deletes. Optional settings: {roomParameter, handOrientationPointsTo: latch|hinge, " +
         "swingTowardFacing}. Every entry is validated; invalid input writes nothing.";
     public ToolPermission Permission => ToolPermission.RequiresApproval;

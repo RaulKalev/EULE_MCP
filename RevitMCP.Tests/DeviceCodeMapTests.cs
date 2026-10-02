@@ -61,6 +61,49 @@ public class DeviceCodeMapTests
     }
 
     [Fact]
+    public void Parse_ReadsCoverageFields_AndRejectsBadFov()
+    {
+        var json = JsonNode.Parse("""
+        {
+          "CAM": { "family": "Kaamera", "type": "Dome", "mount": "ceiling", "fovDeg": 90, "rangeM": 15 },
+          "AP":  { "family": "WiFi AP", "type": "Lagi", "mount": "ceiling", "coverageRadiusMm": 12000 },
+          "BAD": { "family": "Kaamera", "type": "Dome", "mount": "ceiling", "fovDeg": 400 }
+        }
+        """) as JsonObject;
+        var errors = new List<string>();
+        var map = DeviceCodeMap.Parse(json, errors);
+        Assert.Equal(90, map["CAM"].FovDeg);
+        Assert.Equal(15, map["CAM"].RangeM);
+        Assert.Equal(12000, map["AP"].CoverageRadiusMm);
+        Assert.False(map.ContainsKey("BAD"));
+        Assert.Contains(errors, e => e.StartsWith("BAD") && e.Contains("fovDeg"));
+    }
+
+    [Fact]
+    public void Parse_ReadsFireAlarmFields()
+    {
+        var json = JsonNode.Parse("""
+        {
+          "ATS_SA":  { "family": "F", "type": "T", "mount": "ceiling", "detectorType": "PointSmoke" },
+          "ATS_TA":  { "family": "F", "type": "T", "mount": "ceiling", "detectorType": "pointHeat", "detectorClass": "A1" },
+          "ATS_SIR": { "family": "F", "type": "T", "mount": "wall", "heightMm": 2400, "detectorType": "sounder", "soundLevelDb": 97, "tone": "EN54-3 slow whoop" },
+          "NO_DB":   { "family": "F", "type": "T", "mount": "wall", "heightMm": 2400, "detectorType": "sounder" },
+          "BADTYPE": { "family": "F", "type": "T", "mount": "ceiling", "detectorType": "laser" }
+        }
+        """) as JsonObject;
+        var errors = new List<string>();
+        var map = DeviceCodeMap.Parse(json, errors);
+
+        Assert.Equal("pointSmoke", map["ATS_SA"].DetectorType);
+        Assert.True(map["ATS_SA"].IsFireDetector);
+        Assert.Equal("A1", map["ATS_TA"].DetectorClass);
+        Assert.True(map["ATS_SIR"].IsSounder);
+        Assert.Equal(97, map["ATS_SIR"].SoundLevelDb);
+        Assert.Contains(errors, e => e.StartsWith("NO_DB") && e.Contains("soundLevelDb"));
+        Assert.Contains(errors, e => e.StartsWith("BADTYPE") && e.Contains("detectorType"));
+    }
+
+    [Fact]
     public void SourceFamilyAndType_BareTypeUsesOwnFamily()
     {
         var code = new DeviceCode { Family = "Kaamera", SourceType = "Dome" };

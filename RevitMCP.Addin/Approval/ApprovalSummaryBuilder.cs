@@ -32,6 +32,9 @@ public static class ApprovalSummaryBuilder
             "revit_ensure_device_types" => BuildEnsureDeviceTypes(request),
             "revit_place_at_wall" => BuildPlaceAtWall(request),
             "revit_place_in_room" => BuildPlaceInRoom(request),
+            "revit_rotate_elements" => BuildAdjust(request, "rotations", "Rotate"),
+            "revit_set_elevation" => BuildAdjust(request, "elevations", "Set the elevation of"),
+            "revit_assign_room_to_elements" => BuildAssignRoom(request),
             "revit_select_circuit_elements" => BuildSelectCircuitElements(request),
             "revit_select_uncircuited_elements" => BuildSelectUncircuitedElements(request),
             "revit_apply_circuit_numbering" => BuildApplyCircuitNumbering(request),
@@ -467,6 +470,24 @@ public static class ApprovalSummaryBuilder
         var filter = ToolArguments.GetString(request.Arguments, "roomFilter");
         var target = rooms.Count > 0 ? $"room{(rooms.Count == 1 ? "" : "s")} {Summarize(rooms)}" : $"rooms matching '{filter}'";
         return $"Place '{code}' devices ({strategy}) in {target}. The preview lists the exact count.";
+    }
+
+    private static string BuildAdjust(McpToolRequest request, string arrayKey, string verb)
+    {
+        var count = RoomDevices.DevicePlacementService.ParseArray(request.Arguments, arrayKey).Count
+                    + ToolArguments.GetLongArray(request.Arguments, "elementIds").Length;
+        return $"{verb} {count} element{(count == 1 ? "" : "s")}. The preview lists every change.";
+    }
+
+    private static string BuildAssignRoom(McpToolRequest request)
+    {
+        var ids = ToolArguments.GetLongArray(request.Arguments, "elementIds");
+        var codes = ToolArguments.GetStringArray(request.Arguments, "codes");
+        var parameter = ToolArguments.GetString(request.Arguments, "roomParameter");
+        var target = ids.Length > 0 ? $"{ids.Length} element{(ids.Length == 1 ? "" : "s")}"
+            : codes.Length > 0 ? $"devices with codes {Summarize(codes.ToList())}" : "all devices of the device code map";
+        var into = parameter.Length > 0 ? $"'{parameter}'" : "the configured room parameter";
+        return $"Write room numbers into {into} for {target}.";
     }
 
     private static string BuildCreateCableType(McpToolRequest request)

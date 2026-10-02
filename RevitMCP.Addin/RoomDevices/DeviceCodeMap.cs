@@ -50,6 +50,24 @@ public sealed class DeviceCode
     public double? MaxSpacingMm { get; set; }
     public double? MaxDistFromWallMm { get; set; }
 
+    /// <summary>Fire alarm device type (FireDeviceTypes): pointSmoke, linearSmoke, aspirating, pointHeat, linearHeat, flame, co, sounder.</summary>
+    public string? DetectorType { get; set; }
+    /// <summary>Detector class for the Table 1 class limits, e.g. "A1", "A2", "B", "C".</summary>
+    public string? DetectorClass { get; set; }
+    /// <summary>Sounders: rated sound level in dB(A) at 1 m.</summary>
+    public double? SoundLevelDb { get; set; }
+    /// <summary>Sounders: alarm tone/signal id — must be the same for every sounder.</summary>
+    public string? Tone { get; set; }
+
+    public bool IsFireDetector => FireDeviceTypes.IsDetector(DetectorType);
+    public bool IsSounder => DetectorType == FireDeviceTypes.Sounder;
+
+    /// <summary>Coverage radius for revit_check_coverage (smoke detectors, APs).</summary>
+    public double? CoverageRadiusMm { get; set; }
+    /// <summary>Cameras: horizontal field of view and range for revit_check_coverage.</summary>
+    public double? FovDeg { get; set; }
+    public double? RangeM { get; set; }
+
     /// <summary>Type to duplicate when <see cref="Type"/> is missing: "Type" (same family) or "Family : Type".</summary>
     public string? SourceType { get; set; }
     /// <summary>Type parameter values written by revit_ensure_device_types on a created type.</summary>
@@ -121,6 +139,12 @@ public static class DeviceCodeMap
             ClearanceMm = Num(obj, "clearanceMm") ?? 300,
             MaxSpacingMm = Num(obj, "maxSpacingMm"),
             MaxDistFromWallMm = Num(obj, "maxDistFromWallMm"),
+            CoverageRadiusMm = Num(obj, "coverageRadiusMm"),
+            FovDeg = Num(obj, "fovDeg"),
+            DetectorClass = Str(obj, "detectorClass") is { Length: > 0 } dc ? dc : null,
+            SoundLevelDb = Num(obj, "soundLevelDb"),
+            Tone = Str(obj, "tone") is { Length: > 0 } tone ? tone : null,
+            RangeM = Num(obj, "rangeM"),
             SourceType = Str(obj, "sourceType") is { Length: > 0 } s ? s : null
         };
 
@@ -153,6 +177,20 @@ public static class DeviceCodeMap
             if (value is < 0) errors.Add($"{code}: '{name}' cannot be negative.");
         }
         if (entry.MaxSpacingMm is <= 0) errors.Add($"{code}: 'maxSpacingMm' must be positive.");
+        if (entry.CoverageRadiusMm is <= 0) errors.Add($"{code}: 'coverageRadiusMm' must be positive.");
+        if (entry.FovDeg is <= 0 or > 360) errors.Add($"{code}: 'fovDeg' must be between 0 and 360.");
+        if (entry.RangeM is <= 0) errors.Add($"{code}: 'rangeM' must be positive.");
+
+        var detectorType = Str(obj, "detectorType");
+        if (detectorType.Length > 0)
+        {
+            entry.DetectorType = FireDeviceTypes.Normalize(detectorType);
+            if (entry.DetectorType == null)
+                errors.Add($"{code}: 'detectorType' must be one of {string.Join(", ", FireDeviceTypes.All)}.");
+        }
+        if (entry.IsSounder && entry.SoundLevelDb == null)
+            errors.Add($"{code}: sounders need 'soundLevelDb' (rated dB(A) at 1 m).");
+        if (entry.SoundLevelDb is <= 0 or > 150) errors.Add($"{code}: 'soundLevelDb' must be between 0 and 150.");
 
         if (obj["avoidCategories"] is JsonArray avoid)
         {

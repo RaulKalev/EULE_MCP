@@ -72,7 +72,10 @@ public class VillageToolClassifierTests
         "standards_validate_source_config sync_ifc_space_room_data validate_ifc_space_room_conversion " +
         "revit_list_levels revit_get_room_geometry revit_get_room_walls revit_get_device_codes revit_set_device_codes " +
         "revit_preview_ensure_device_types revit_ensure_device_types revit_preview_place_at_wall revit_place_at_wall " +
-        "revit_preview_place_in_room revit_place_in_room revit_export_view_image";
+        "revit_preview_place_in_room revit_place_in_room revit_export_view_image " +
+        "revit_get_linked_elements_in_room revit_preview_rotate_elements revit_rotate_elements revit_preview_set_elevation " +
+        "revit_set_elevation revit_preview_assign_room_to_elements revit_assign_room_to_elements revit_check_devices_per_room " +
+        "revit_check_device_alignment revit_check_coverage revit_check_fire_alarm";
 
     public static IEnumerable<object[]> AllKnownToolNames() =>
         KnownToolNames.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(n => new object[] { n });

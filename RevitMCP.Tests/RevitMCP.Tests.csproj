@@ -98,6 +98,8 @@
     <Compile Include="..\RevitMCP.Addin\Electrical\CableTypeCreationPlanner.cs" Link="Electrical\CableTypeCreationPlanner.cs" />
     <Compile Include="..\RevitMCP.Addin\RoomDevices\RoomGeometryMath.cs" Link="RoomDevices\RoomGeometryMath.cs" />
     <Compile Include="..\RevitMCP.Addin\RoomDevices\DeviceCodeMap.cs" Link="RoomDevices\DeviceCodeMap.cs" />
+    <Compile Include="..\RevitMCP.Addin\RoomDevices\RoomAuditMath.cs" Link="RoomDevices\RoomAuditMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\RoomDevices\FireAlarmRules.cs" Link="RoomDevices\FireAlarmRules.cs" />
     <Compile Include="..\RevitMCP.Addin\Placement\AlignmentMath.cs" Link="Placement\AlignmentMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Placement\ViewAlignmentMath.cs" Link="Placement\ViewAlignmentMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Placement\MoveElementsMath.cs" Link="Placement\MoveElementsMath.cs" />
