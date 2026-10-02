@@ -14,7 +14,8 @@ public class BridgeToolGroupsTests
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !File.Exists(Path.Combine(dir.FullName, "RevitMCP.slnx"))) dir = dir.Parent;
-        var source = File.ReadAllText(Path.Combine(dir!.FullName, "RevitMCP.Bridge", "RevitMcpTools.cs"));
+        var source = File.ReadAllText(Path.Combine(dir!.FullName, "RevitMCP.Bridge", "RevitMcpTools.cs")) +
+                     File.ReadAllText(Path.Combine(dir.FullName, "RevitMCP.Bridge", "ToolDiscoveryTools.cs"));
         return Regex.Matches(source, @"McpServerTool\(Name = ""([^""]+)""").Select(m => m.Groups[1].Value).ToList();
     });
 
@@ -41,7 +42,8 @@ public class BridgeToolGroupsTests
                  {
                      "revit_get_connection_status", "revit_get_selected_elements", "revit_get_elements_info",
                      "revit_get_element_parameters", "revit_graph_route", "revit_graph_status", "revit_graph_summary",
-                     "revit_graph_query", "revit_graph_build"
+                     "revit_graph_query", "revit_graph_build",
+                     "revit_tools_search", "revit_tools_describe", "revit_tools_call", "revit_tools_load"
                  })
             Assert.Contains(required, core);
         Assert.True(core.Count <= 25, $"core profile has {core.Count} tools");

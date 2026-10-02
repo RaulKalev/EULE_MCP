@@ -14,9 +14,27 @@ response contracts.
 
 ## Reduced tool profiles
 
-The default profile remains `full` and advertises all tools (228 as of October 2026 — see
-[`benchmarks/`](benchmarks/README.md) for current measured sizes). Existing installations
-therefore continue to work unchanged.
+**The default profile is `core`** (since #65/#66): 17 tools — connection and instance routing,
+selection, live reads by id, the five graph tools and tool discovery — about 4.2k schema tokens
+instead of about 69k for all 233 tools. Every other tool stays reachable through discovery (below),
+so nothing was removed. To advertise every tool, as before, start the bridge with
+`--tool-profile full` (or set `RevitMCP:ToolProfile` to `full` in `appsettings.json`).
+
+### Tool discovery (#65)
+
+| Tool | Purpose |
+|---|---|
+| `revit_tools_search` | Search all tools by intent (English or Estonian, e.g. "circuit info", "ahela kaabel"); compact results: name, group, read-only, one-line summary, whether advertised. Without a query it lists the groups. |
+| `revit_tools_describe` | Full description and JSON input schema of the named tools only. |
+| `revit_tools_call` | Run any tool by name with its arguments, advertised or not. Behaves exactly like a direct call: write tools still go through the approval prompt in Revit. Works with every MCP client because it is an ordinary tool. |
+| `revit_tools_load` | Add tools or whole groups to the session's advertised list. The server sends `notifications/tools/list_changed`; clients that honour it (e.g. Claude Code) then show the tools natively. Clients that do not keep using `revit_tools_call`. |
+
+Typical flow: `revit_graph_route` / `revit_graph_query` to narrow ids → `revit_tools_search
+"electrical circuit info"` → `revit_tools_describe ["revit_get_circuit_info"]` →
+`revit_tools_call name="revit_get_circuit_info" arguments={"circuitId": 123}`.
+
+Measured on the Tarvastu EN model: reaching a specialist tool through discovery on `core` costs about
+4.6k tokens in total (schema + 2 calls) versus about 69k when every tool is advertised on `full`.
 
 For query-oriented sessions, start the bridge with:
 
@@ -30,8 +48,8 @@ Available profiles:
 
 | Profile | Purpose |
 |---|---|
-| `full` | All tools; backward-compatible profile for automations that call tools by name |
-| `core` | The graph-first core (#66): connection/instance routing, selection, live reads by id, the five graph tools and tool discovery — 13 tools, ≈ 3.5k schema tokens instead of ≈ 68k |
+| `core` | **Default.** The graph-first core: connection/instance routing, selection, live reads by id, the five graph tools and tool discovery — 17 tools, ≈ 4.2k schema tokens |
+| `full` | All tools; the compatibility profile for automations that call tools by name |
 | `query` | Common connection, graph, model-query, selection, view/sheet, family-type, electrical and coordination discovery tools |
 | `read-only` | Every tool marked read-only or preview-only |
 

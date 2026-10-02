@@ -75,7 +75,8 @@ public class VillageToolClassifierTests
         "revit_preview_place_in_room revit_place_in_room revit_export_view_image " +
         "revit_get_linked_elements_in_room revit_preview_rotate_elements revit_rotate_elements revit_preview_set_elevation " +
         "revit_set_elevation revit_preview_assign_room_to_elements revit_assign_room_to_elements revit_check_devices_per_room " +
-        "revit_check_device_alignment revit_check_coverage revit_check_fire_alarm revit_graph_route";
+        "revit_check_device_alignment revit_check_coverage revit_check_fire_alarm revit_graph_route " +
+        "revit_tools_search revit_tools_describe revit_tools_call revit_tools_load";
 
     public static IEnumerable<object[]> AllKnownToolNames() =>
         KnownToolNames.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(n => new object[] { n });

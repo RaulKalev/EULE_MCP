@@ -62,6 +62,7 @@ reported as *skipped* with the reason instead of producing misleading numbers. S
 |---|---|---|
 | [20261003-000623-baseline-73226_PP_EN](20261003-000623-baseline-73226_PP_EN.md) | Tarvastu EN (13.7k elements, 40 test devices, no circuits) | Baseline before #64/#65/#66: `full` = 228 tools ≈ 68k schema tokens; graph-first cuts the category scenario from ≈ 145k to ≈ 5k result tokens; the `query` profile has no graph tools, so graph-first fails there. |
 | [20261003-001954-tool-profiles-66](20261003-001954-tool-profiles-66.md) | Tarvastu EN | After #64 + #66: `core` = 13 tools ≈ 3.5k schema tokens (−95 % vs `full`); graph-first through `core` ≈ 8.5k tokens total for the category scenario vs ≈ 214k live on `full`. |
+| [20261003-002552-tool-discovery-65](20261003-002552-tool-discovery-65.md) | Tarvastu EN | After #65: `core` (default) = 17 tools ≈ 4.2k schema tokens; a specialist tool via `revit_tools_search` + `revit_tools_call` ≈ 4.6k tokens total vs ≈ 69k advertised on `full`. |
 
 A large model run is still to be recorded: open one (e.g. a full EN model with circuits) and run
 the benchmark with `--label <model>`; the panel and loop scenarios then also produce numbers.

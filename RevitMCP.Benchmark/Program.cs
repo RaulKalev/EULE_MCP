@@ -42,6 +42,13 @@ var run = new BenchmarkRun
     BridgePath = Path.GetFullPath(bridge)
 };
 
+if (options.ContainsKey("check-discovery"))
+{
+    await using var checker = new BenchmarkRunner(bridge);
+    Console.WriteLine(await checker.CheckDiscovery("core", options.GetValueOrDefault("check-discovery") is { } g && g != "true" ? g : "electrical"));
+    return 0;
+}
+
 await using (var runner = new BenchmarkRunner(bridge))
 {
     foreach (var profile in profiles)
