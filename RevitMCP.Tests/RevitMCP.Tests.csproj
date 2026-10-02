@@ -130,6 +130,7 @@
     <Compile Include="..\RevitMCP.Addin\Graph\GraphStore.cs" Link="Graph\GraphStore.cs" />
     <Compile Include="..\RevitMCP.Addin\Graph\GraphFreshness.cs" Link="Graph\GraphFreshness.cs" />
     <Compile Include="..\RevitMCP.Addin\Graph\GraphRouting.cs" Link="Graph\GraphRouting.cs" />
+    <Compile Include="..\RevitMCP.Addin\Graph\GraphIncremental.cs" Link="Graph\GraphIncremental.cs" />
     <!-- Project Village: only the add-in-side graph reader is linked here; the rest of the module comes from the RevitMCP.Village project reference above. -->
     <Compile Include="..\RevitMCP.Addin\Village\VillageGraphReader.cs" Link="Village\VillageGraphReader.cs" />
   </ItemGroup>

@@ -20,7 +20,7 @@ Schema: [`RevitMCP.Addin/Graph/SCHEMA.md`](../RevitMCP.Addin/Graph/SCHEMA.md).
 
 | Tool | Purpose |
 |---|---|
-| `revit_graph_build` | Full rebuild from the open document (Revit API thread, one collector pass). Reports node/edge counts and timings. `incremental=true` is accepted but **not implemented yet** — it is reported in `warnings` and falls back to a full rebuild. |
+| `revit_graph_build` | Full rebuild from the open document (Revit API thread, one collector pass), or with `incremental=true` an update of only the elements changed since the last build in this session (see [Incremental updates](#incremental-updates-61)). Reports node/edge counts and timings. |
 | `revit_graph_status` | Does a graph exist for the open model, where, `built_at`, `central_version`, the current document version, and `stale` with a human-readable reason. |
 | `revit_graph_query` | Structured queries only (no SQL): `neighbors`, `find`, `path`, `subtree`. |
 | `revit_graph_summary` | Counts per kind/category/level/workset/panel, orphan circuits, elements without a room/space. Cheap orientation at session start. |
@@ -113,6 +113,45 @@ When in doubt, rebuild — a full build of a 100k-element model takes a few seco
 
 ---
 
+## Incremental updates (#61)
+
+The add-in records every added, modified and deleted element id from Revit's `DocumentChanged`
+event, per open document. `revit_graph_build incremental=true` then re-extracts only those
+elements instead of walking the whole model:
+
+1. A private copy of the published graph is opened.
+2. For every changed id its node and the edges it **owns** are removed; for every deleted id every
+   edge touching it is removed as well.
+3. The changed elements are re-extracted (same rules as a full build) and their nodes and edges
+   inserted. Edges whose endpoints are not in the graph are dropped, as in a full build.
+4. Type nodes no longer referenced by a `type_of` edge are pruned; meta (`built_at`,
+   `central_version`, `element_count`, counts, `incremental_updates`) is refreshed.
+5. The copy is published atomically, exactly like a full build.
+
+Edge ownership (`edge_owners` table, schema 2) records which element produced each edge: the
+element itself for its `on_level`, `in_workset`, `type_of`, `hosted_on` and `located_in` edges, the
+circuit for `fed_by` (both circuit → panel and element → circuit), the sheet for `on_sheet` and the
+tag for `tagged_in`. Nodes whose stored data comes from another element are refreshed with it: the
+panel of a changed or deleted circuit, the circuits of a changed panel, the instances of a changed type.
+
+The update **falls back to a full rebuild** — and says why in `incremental.fallbackReason` and
+`warnings` — when it cannot be sure the result equals a full build:
+
+- no graph exists yet, or it was written with schema 1 (no edge ownership) — rebuilt once;
+- the changes since the last build were not tracked: the graph was built by another session or
+  machine, or Revit / the add-in was restarted or reloaded since (the first incremental request
+  after a restart is always a full build);
+- more than 50,000 element changes were tracked, or the last build hit `elementLimit`;
+- a level was changed or deleted (level names are stored on every node);
+- a room or space was added or changed (other elements change room without changing themselves);
+- a workset changed.
+
+Deleting a room only removes the `located_in` edges to it, so it stays incremental. An incremental
+build produces the same nodes and edges as a full build of the same model state; the full rebuild
+remains the recovery path (`incremental=false`, the default).
+
+---
+
 ## Graph-first routing (#64)
 
 The connector routes discovery through the graph by itself, without relying on repo prompt files:
@@ -160,7 +199,8 @@ about 214k.
 
 ## Limitations in this version
 
-- `incremental` builds are not implemented; every build is a full rebuild.
+- Incremental updates need a baseline built in the same Revit session (see above); changes made
+  while the add-in was not loaded are invisible to them.
 - Requests are capped at 30 s by the connector. On very large models the build can exceed that:
   the bridge reports `request_timeout` but the build keeps running on the Revit thread and still
   publishes the file — check `revit_graph_status` afterwards. Use `elementLimit` to bound the build.

@@ -111,7 +111,7 @@ public class VillageGraphReaderTests : IDisposable
         Assert.Equal("1626_PP_EN", s.ModelName);
         Assert.Equal("2026-09-10T10:00:00Z", s.BuiltAt);
         Assert.True(s.IsWorkshared);
-        Assert.Equal(1, s.SchemaVersion);
+        Assert.Equal(GraphSchema.SchemaVersion, s.SchemaVersion);
 
         Assert.Equal(3, s.Counts.Sheets);
         Assert.Equal(4, s.Counts.Views);

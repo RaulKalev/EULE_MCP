@@ -2,7 +2,7 @@
 
 One SQLite file per Revit model: `<root>\<project>\<model-name>.graph.db`
 (`root` = `graph.sharedFolder` from the user or company config, else
-`%LOCALAPPDATA%\RKTools\RevitMCP\Graph`). Schema version **1**.
+`%LOCALAPPDATA%\RKTools\RevitMCP\Graph`). Schema version **2** (2 added `edge_owners` for incremental updates, #61).
 
 The graph is a **routing layer**. It stores ids, names and relationships so an agent can find
 the right element ids cheaply. It never stores parameter values and must never be quoted as a
@@ -62,6 +62,18 @@ both in `nodes` are dropped at build time (reported as `danglingEdgesDropped`).
 at the panel, and elements point at their circuits. A sub-panel appears as a `panel` node with its
 own `fed_by` edge to the upstream circuit.
 
+### `edge_owners`
+
+| Column | Meaning |
+|---|---|
+| `src`, `dst`, `rel` | The edge (same values as in `edges`) |
+| `owner` | Id of the element whose state produced the edge |
+
+One edge can have several owners (two tags tagging the same element in the same view). Owners are
+the element itself for `on_level`, `in_workset`, `type_of`, `hosted_on`, `located_in`; the circuit
+for `fed_by`; the sheet for `on_sheet`; the tag for `tagged_in`. An incremental update deletes the
+edges owned by each changed element and re-derives them; an edge survives while any owner remains.
+
 ### `meta`
 
 | `key` | `value` |
@@ -71,7 +83,7 @@ own `fed_by` edge to the upstream circuit.
 | `built_at` | UTC ISO-8601 timestamp of the build |
 | `central_version` | Version signal captured at build time (see below) |
 | `element_count` | `FilteredElementCollector.WhereElementIsNotElementType().GetElementCount()` at build time |
-| `schema_version` | `1` |
+| `schema_version` | `2` |
 | `built_by` | Revit username |
 | `version_source` | Which API signal produced `central_version` |
 | `is_workshared` | `true` / `false` |
@@ -79,10 +91,13 @@ own `fed_by` edge to the upstream circuit.
 | `project_key` | Project Information → Number (fallback Name); the folder segment |
 | `node_count`, `edge_count` | Row counts written after the build |
 | `build_duration_ms` | Extraction time on the Revit API thread |
+| `element_limit_reached` | `true` when the last full build stopped at `elementLimit` (incremental updates then fall back) |
+| `last_full_build_at` | `built_at` of the last full build |
+| `incremental_updates` | Incremental updates applied since the last full build |
 
 ## Indexes
 
-`nodes(kind)`, `nodes(category)`, `nodes(level)`, `edges(src)`, `edges(dst)`, `edges(rel)`.
+`nodes(kind)`, `nodes(category)`, `nodes(level)`, `edges(src)`, `edges(dst)`, `edges(rel)`, `edge_owners(owner)`.
 
 ## Version signal (`central_version`)
 
