@@ -26,6 +26,8 @@ Rules:
 ## Development notes
 
 - Build: `dotnet build RevitMCP.slnx -c Release`; tests: `dotnet test RevitMCP.Tests/RevitMCP.Tests.csproj`.
+- Token/round-trip benchmark: `RevitMCP.Benchmark` (see `docs/benchmarks/README.md`). Run it before and after
+  changes to the tool surface or graph routing and commit the report.
 - New Addin tools implement `IRevitMcpTool`, are registered in `App.OnStartup`, and get a matching
   `[McpServerTool]` method in `RevitMCP.Bridge/RevitMcpTools.cs`. Pure logic goes in a domain folder
   and is linked into `RevitMCP.Tests.csproj` so it can be unit-tested without Revit.

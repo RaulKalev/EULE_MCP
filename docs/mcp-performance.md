@@ -14,7 +14,8 @@ response contracts.
 
 ## Reduced tool profiles
 
-The default profile remains `full` and advertises all 191 tools. Existing installations
+The default profile remains `full` and advertises all tools (228 as of October 2026 — see
+[`benchmarks/`](benchmarks/README.md) for current measured sizes). Existing installations
 therefore continue to work unchanged.
 
 For query-oriented sessions, start the bridge with:
@@ -46,7 +47,7 @@ The same values can be set as `RevitMCP:ToolProfile` and `RevitMCP:ToolNames` in
 `appsettings.json`. Restart the MCP client after changing a profile because tool
 discovery happens when the MCP process starts.
 
-In a local MCP handshake against this revision:
+In a local MCP handshake against an earlier revision (re-measure with `RevitMCP.Benchmark --schema-only`):
 
 | Catalog | Tools | `tools/list` JSON |
 |---|---:|---:|
