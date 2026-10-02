@@ -10,6 +10,8 @@ public sealed class SchemaMeasurement
     public int ToolCount { get; set; }
     public int SchemaBytes { get; set; }
     public int SchemaTokens { get; set; }
+    /// <summary>Server instructions sent in the initialize handshake (also context cost).</summary>
+    public int InstructionTokens { get; set; }
     public string? Error { get; set; }
 }
 
@@ -93,12 +95,12 @@ public static class BenchmarkReport
         sb.AppendLine();
         sb.AppendLine("Paid once per session (or per request when the client does not cache tool definitions).");
         sb.AppendLine();
-        sb.AppendLine("| Profile | Tools | `tools/list` bytes | ~tokens |");
-        sb.AppendLine("|---|---:|---:|---:|");
+        sb.AppendLine("| Profile | Tools | `tools/list` bytes | ~tokens | Instructions ~tokens |");
+        sb.AppendLine("|---|---:|---:|---:|---:|");
         foreach (var s in run.Schemas)
             sb.AppendLine(s.Error != null
-                ? $"| `{s.Profile}` | — | — | error: {s.Error} |"
-                : $"| `{s.Profile}` | {s.ToolCount} | {N(s.SchemaBytes)} | {N(s.SchemaTokens)} |");
+                ? $"| `{s.Profile}` | — | — | error: {s.Error} | |"
+                : $"| `{s.Profile}` | {s.ToolCount} | {N(s.SchemaBytes)} | {N(s.SchemaTokens)} | {N(s.InstructionTokens)} |");
         sb.AppendLine();
 
         if (run.GraphBuild != null || run.GraphIncremental != null)

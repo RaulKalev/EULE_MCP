@@ -46,6 +46,7 @@ public sealed class BenchmarkRunner : IAsyncDisposable
             m.ToolCount = tools.Count;
             m.SchemaBytes = BenchmarkMath.Utf8Bytes(payload);
             m.SchemaTokens = BenchmarkMath.EstimateTokens(payload);
+            m.InstructionTokens = BenchmarkMath.EstimateTokens(client.ServerInstructions);
         }
         catch (Exception ex)
         {

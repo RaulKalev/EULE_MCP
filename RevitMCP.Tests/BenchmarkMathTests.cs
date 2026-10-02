@@ -85,7 +85,7 @@ public class BenchmarkMathTests
             }
         };
         var md = BenchmarkReport.ToMarkdown(run);
-        Assert.Contains("| `full` | 228 | 272,323 | 68,081 |", md);
+        Assert.Contains("| `full` | 228 | 272,323 | 68,081 | 0 |", md);
         Assert.Contains("| graph | `full` | 1 | 400 | 100 | 68,081 | 68,181 | 0 | 5 ms | 0 |", md);
         Assert.Contains("skipped: profile not selected", md);
         Assert.Contains("Skipped: the model has no electrical panels", md);

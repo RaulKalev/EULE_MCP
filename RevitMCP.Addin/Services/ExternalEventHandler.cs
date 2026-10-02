@@ -286,6 +286,8 @@ public class ExternalEventHandler : IExternalEventHandler
                 throw new InvalidOperationException($"Tool '{tool.Name}' performed asynchronous work on the Revit API thread. Mark safe non-Revit I/O as background execution instead.");
 
             var result = execution.GetAwaiter().GetResult();
+            // Graph-first routing hint on broad live queries (#64); advisory, never fails the result.
+            RevitMCP.Addin.Tools.Graph.GraphRoutingSupport.TryAttachHint(app, request, result);
             tcs.TrySetResult(result);
             if (request.IsApproved)
                 _ = _activityLogger?.WriteAsync(request, result, _lastContext);

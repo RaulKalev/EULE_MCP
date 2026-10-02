@@ -14,6 +14,11 @@ internal static class McpToolCatalog
         new[]
         {
             "revit_get_connection_status",
+            "revit_graph_route",
+            "revit_graph_status",
+            "revit_graph_summary",
+            "revit_graph_query",
+            "revit_graph_build",
             "revit_list_instances",
             "revit_select_instance",
             "revit_get_selected_elements",
