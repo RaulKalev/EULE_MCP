@@ -88,6 +88,31 @@ public sealed class BenchmarkRunner : IAsyncDisposable
         return (step, json);
     }
 
+    /// <summary>
+    /// Discovery self-test (#65): on a fresh bridge with <paramref name="profile"/>, loads a group with
+    /// revit_tools_load and reports how the advertised tool list changed (needs list_changed support).
+    /// </summary>
+    public async Task<string> CheckDiscovery(string profile, string group)
+    {
+        var transport = new StdioClientTransport(new StdioClientTransportOptions
+        {
+            Name = "discovery-check",
+            Command = _bridgePath,
+            Arguments = ["--client", "Benchmark", "--tool-profile", profile]
+        });
+        await using var client = await McpClient.CreateAsync(transport);
+        var changed = 0;
+        await using var registration = client.RegisterNotificationHandler(
+            NotificationMethods.ToolListChangedNotification, (_, _) => { Interlocked.Increment(ref changed); return default; });
+        var before = (await client.ListToolsAsync()).Count;
+        var load = await client.CallToolAsync("revit_tools_load", new Dictionary<string, object?> { ["groups"] = new[] { group } });
+        await Task.Delay(500);
+        var after = (await client.ListToolsAsync()).Count;
+        var text = string.Concat(load.Content.OfType<TextContentBlock>().Select(c => c.Text));
+        return $"profile {profile}: {before} tools advertised; revit_tools_load groups=[{group}] -> {after} tools; " +
+               $"list_changed notifications received: {changed}; load result: {text}";
+    }
+
     public async ValueTask DisposeAsync()
     {
         foreach (var c in _clients.Values)

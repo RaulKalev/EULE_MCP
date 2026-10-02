@@ -88,6 +88,20 @@
       ]
     },
     {
+      "id": "specialist-discovery",
+      "title": "Use a specialist tool that is not in the core profile (list levels)",
+      "variants": [
+        { "name": "direct", "profile": "full", "steps": [
+          { "tool": "revit_list_levels", "args": {} }
+        ] },
+        { "name": "discovery", "profile": "core", "steps": [
+          { "tool": "revit_tools_search", "args": { "query": "list levels", "limit": 3 },
+            "bind": { "toolName": "$.results[0].name" } },
+          { "tool": "revit_tools_call", "args": { "name": "{{toolName}}", "arguments": {} } }
+        ] }
+      ]
+    },
+    {
       "id": "linked-target",
       "title": "Find a target in a linked model",
       "disabled": "needs linked elements in the model graph (#62)",

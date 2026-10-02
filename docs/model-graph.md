@@ -118,7 +118,7 @@ When in doubt, rebuild — a full build of a 100k-element model takes a few seco
 The connector routes discovery through the graph by itself, without relying on repo prompt files:
 
 - **Server instructions.** Every MCP client receives a short graph-first workflow in the `initialize`
-  handshake (`RevitMCP.Bridge/ServerInstructions.cs`, about 230 tokens).
+  handshake (`RevitMCP.Bridge/ServerInstructions.cs`, about 310 tokens).
 - **`revit_graph_route`.** Give it the user's intent in plain words; it returns the cheapest call plan
   and the graph's freshness. It understands rooms/spaces, panels/circuits/loops, levels, categories
   present in the graph, the selection and linked models, in English and Estonian. When the graph is

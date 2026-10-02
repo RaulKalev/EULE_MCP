@@ -108,12 +108,18 @@ internal static class McpToolCatalog
         }
 
         return selected
-            .OrderBy(item => item.Method.MetadataToken)
-            .Select(item => McpServerTool.Create(
-                item.Method,
-                context => context.Services!.GetRequiredService<RevitMcpTools>()))
+            .OrderBy(item => item.Method.DeclaringType == typeof(ToolDiscoveryTools) ? 1 : 0)
+            .ThenBy(item => item.Method.MetadataToken)
+            .Select(item => CreateTool(item.Method))
             .ToList();
     }
+
+    /// <summary>Every tool, advertised or not — the registry behind tool discovery and dispatch (#65).</summary>
+    public static IReadOnlyList<McpServerTool> CreateAllTools() =>
+        GetToolMethods().Select(item => CreateTool(item.Method)).ToList();
+
+    private static McpServerTool CreateTool(MethodInfo method) =>
+        McpServerTool.Create(method, context => context.Services!.GetRequiredService(method.DeclaringType!));
 
     public static bool IsFullProfile(string profile, string? explicitToolNames, string? toolGroups = null)
     {
@@ -135,9 +141,9 @@ internal static class McpToolCatalog
 
     private static List<(MethodInfo Method, McpServerToolAttribute Attribute)> GetToolMethods()
     {
-        return typeof(RevitMcpTools)
-            .GetMethods(BindingFlags.Instance | BindingFlags.Static |
-                        BindingFlags.Public | BindingFlags.NonPublic)
+        return new[] { typeof(RevitMcpTools), typeof(ToolDiscoveryTools) }
+            .SelectMany(type => type.GetMethods(BindingFlags.Instance | BindingFlags.Static |
+                                                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
             .Select(method => new
             {
                 Method = method,

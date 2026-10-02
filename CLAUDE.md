@@ -25,6 +25,13 @@ Rules:
   any id you act on against the live model before writing.
 - The graph never replaces approval-gated write tools; it only tells you where to look.
 
+## Tool surface
+
+The bridge advertises the compact `core` profile by default (graph tools, live reads by id, selection,
+connection). Find any other tool with `revit_tools_search`, read its schema with `revit_tools_describe`,
+and run it with `revit_tools_call` (or `revit_tools_load` it into the session). `--tool-profile full`
+advertises every tool. See `docs/mcp-performance.md`.
+
 ## Development notes
 
 - Build: `dotnet build RevitMCP.slnx -c Release`; tests: `dotnet test RevitMCP.Tests/RevitMCP.Tests.csproj`.

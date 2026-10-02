@@ -28,23 +28,27 @@ if (toolGroups != null)
     builder.Configuration["RevitMCP:ToolGroups"] = toolGroups;
 
 builder.Services.AddSingleton<RevitPipeClient>();
+builder.Services.AddSingleton<ToolCatalogRegistry>();
+builder.Services.AddTransient<RevitMcpTools>();
+builder.Services.AddTransient<ToolDiscoveryTools>();
 
 var mcpBuilder = builder.Services
     .AddMcpServer(options => options.ServerInstructions = ServerInstructions.Text)
     .WithStdioServerTransport();
 
-var configuredProfile = builder.Configuration["RevitMCP:ToolProfile"] ?? "full";
+// Default: the compact graph-first core profile (#66) with tool discovery and dispatch (#65).
+// "full" advertises every tool for clients/automations that call tools by name.
+var configuredProfile = builder.Configuration["RevitMCP:ToolProfile"] ?? "core";
 var configuredToolNames = builder.Configuration["RevitMCP:ToolNames"];
 var configuredToolGroups = builder.Configuration["RevitMCP:ToolGroups"];
 
 if (McpToolCatalog.IsFullProfile(configuredProfile, configuredToolNames, configuredToolGroups))
 {
-    // Preserve the existing registration path and complete 193-tool surface by default.
-    mcpBuilder.WithTools<RevitMcpTools>();
+    // Compatibility profile: every tool, through the SDK's attributed registration path.
+    mcpBuilder.WithTools<RevitMcpTools>().WithTools<ToolDiscoveryTools>();
 }
 else
 {
-    builder.Services.AddTransient<RevitMcpTools>();
     mcpBuilder.WithTools(McpToolCatalog.CreateSelectedTools(
         configuredProfile,
         configuredToolNames,

@@ -26,6 +26,10 @@ public sealed class VillageToolClassifier
     /// <summary>Exact tool name → area. Checked before the keyword rules.</summary>
     private static readonly Dictionary<string, string> DefaultAreaOverrides = new(StringComparer.OrdinalIgnoreCase)
     {
+        ["revit_tools_search"]          = VillageAreas.Project,
+        ["revit_tools_describe"]        = VillageAreas.Project,
+        ["revit_tools_call"]            = VillageAreas.Project,
+        ["revit_tools_load"]            = VillageAreas.Project,
         ["revit_get_connection_status"] = VillageAreas.Project,
         ["revit_list_instances"]        = VillageAreas.Project,
         ["revit_select_instance"]       = VillageAreas.Project,
@@ -120,6 +124,10 @@ public sealed class VillageToolClassifier
         ["revit_graph_build"]                    = VillageActivities.BuildGraph,
         ["revit_graph_query"]                    = VillageActivities.Search,
         ["revit_graph_route"]                    = VillageActivities.Search,
+        ["revit_tools_search"]                   = VillageActivities.Search,
+        ["revit_tools_describe"]                 = VillageActivities.Inspect,
+        ["revit_tools_call"]                     = VillageActivities.Analyze,
+        ["revit_tools_load"]                     = VillageActivities.Inspect,
         ["revit_graph_status"]                   = VillageActivities.Inspect,
         ["revit_graph_summary"]                  = VillageActivities.Inspect,
         ["revit_run_query_preset"]               = VillageActivities.Search,
