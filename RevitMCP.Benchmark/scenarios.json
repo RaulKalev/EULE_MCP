@@ -1,0 +1,97 @@
+{
+  "description": "MCP benchmark scenarios (issue #67). Variables can be overridden with --var name=value. Setup steps resolve ids from the model and are not measured; a scenario whose setup bindings do not resolve is skipped with the reason. Variants: 'live' = broad live Revit queries, 'graph' = graph-first discovery then narrow live reads, 'graph-reduced' = the same graph-first calls through a reduced tool profile (only the schema cost differs).",
+  "variables": {
+    "category": "Rooms",
+    "roomNumber": "08",
+    "deviceCategory": "Fire Alarm Devices",
+    "reducedProfile": "query"
+  },
+  "scenarios": [
+    {
+      "id": "category-inspect",
+      "title": "Inspect a category across the model",
+      "setup": [
+        { "tool": "revit_graph_query", "args": { "operation": "find", "category": "{{category}}", "pageSize": 1 },
+          "bind": { "probe": "$.data.items[0].id" }, "skipReason": "the graph has no elements of the category" }
+      ],
+      "variants": [
+        { "name": "live", "profile": "full", "steps": [
+          { "tool": "revit_count_elements", "args": { "category": "{{category}}" } },
+          { "tool": "revit_get_elements_info", "args": { "category": "{{category}}", "pageSize": 100 } }
+        ] },
+        { "name": "graph", "profile": "full", "steps": [
+          { "tool": "revit_graph_summary", "args": { "topN": 10 } },
+          { "tool": "revit_graph_query", "args": { "operation": "find", "category": "{{category}}", "pageSize": 100 },
+            "bind": { "ids": "$.data.items[:10].id" } },
+          { "tool": "revit_get_elements_info", "args": { "elementIds": "{{ids}}", "compact": true, "parameterNames": ["Number", "Name", "Area", "Level"] } }
+        ] },
+        { "name": "graph-reduced", "profile": "{{reducedProfile}}", "sameStepsAs": "graph" }
+      ]
+    },
+    {
+      "id": "room-devices",
+      "title": "Locate devices in a specific room",
+      "setup": [
+        { "tool": "revit_graph_query", "args": { "operation": "find", "kind": "space", "nameContains": "{{roomNumber}}", "pageSize": 1 },
+          "bind": { "roomId": "$.data.items[0].id" }, "skipReason": "the room is not in the graph" }
+      ],
+      "variants": [
+        { "name": "live", "profile": "full", "steps": [
+          { "tool": "revit_get_elements_info", "args": { "category": "{{deviceCategory}}", "compact": true, "pageSize": 100, "parameterNames": ["Room", "Level"] } }
+        ] },
+        { "name": "graph", "profile": "full", "steps": [
+          { "tool": "revit_graph_query", "args": { "operation": "neighbors", "id": "{{roomId}}", "rel": "located_in", "direction": "in" },
+            "bind": { "deviceIds": "$.data.neighbors[*].id" }, "skipReason": "no devices are located in the room" },
+          { "tool": "revit_get_elements_info", "args": { "elementIds": "{{deviceIds}}", "compact": true } }
+        ] },
+        { "name": "graph-reduced", "profile": "{{reducedProfile}}", "sameStepsAs": "graph" }
+      ]
+    },
+    {
+      "id": "panel-feed",
+      "title": "Find everything fed by a panel",
+      "setup": [
+        { "tool": "revit_graph_query", "args": { "operation": "find", "kind": "panel", "pageSize": 1 },
+          "bind": { "panelId": "$.data.items[0].id", "panelName": "$.data.items[0].extra.panelName" }, "skipReason": "the model has no electrical panels" }
+      ],
+      "variants": [
+        { "name": "live", "profile": "full", "steps": [
+          { "tool": "revit_get_electrical_circuits", "args": { "panelName": "{{panelName}}", "includeElements": true } }
+        ] },
+        { "name": "graph", "profile": "full", "steps": [
+          { "tool": "revit_graph_query", "args": { "operation": "subtree", "id": "{{panelId}}", "rel": "fed_by", "depth": 2 },
+            "bind": { "fedIds": "$.data.nodes[:50].id" } },
+          { "tool": "revit_get_elements_info", "args": { "elementIds": "{{fedIds}}", "compact": true, "parameterNames": ["Circuit Number", "Panel"] } }
+        ] },
+        { "name": "graph-reduced", "profile": "{{reducedProfile}}", "sameStepsAs": "graph" }
+      ]
+    },
+    {
+      "id": "level-devices",
+      "title": "Find fire alarm devices on a level and inspect loop assignments",
+      "setup": [
+        { "tool": "revit_graph_query", "args": { "operation": "find", "kind": "element", "category": "{{deviceCategory}}", "pageSize": 1 },
+          "bind": { "level": "$.data.items[0].level" }, "skipReason": "the model has no devices of that category on a level" }
+      ],
+      "variants": [
+        { "name": "live", "profile": "full", "steps": [
+          { "tool": "revit_get_elements_info", "args": { "category": "{{deviceCategory}}", "compact": true, "pageSize": 100, "parameterNames": ["Level", "Circuit Number", "Panel"] } },
+          { "tool": "revit_get_electrical_circuits", "args": { "systemType": "FireAlarm", "includeElements": true } }
+        ] },
+        { "name": "graph", "profile": "full", "steps": [
+          { "tool": "revit_graph_query", "args": { "operation": "find", "kind": "element", "category": "{{deviceCategory}}", "level": "{{level}}", "pageSize": 200 },
+            "bind": { "deviceIds": "$.data.items[:50].id", "firstDevice": "$.data.items[0].id" } },
+          { "tool": "revit_graph_query", "args": { "operation": "neighbors", "id": "{{firstDevice}}", "rel": "fed_by", "direction": "out" } },
+          { "tool": "revit_get_elements_info", "args": { "elementIds": "{{deviceIds}}", "compact": true, "parameterNames": ["Circuit Number", "Panel"] } }
+        ] },
+        { "name": "graph-reduced", "profile": "{{reducedProfile}}", "sameStepsAs": "graph" }
+      ]
+    },
+    {
+      "id": "linked-target",
+      "title": "Find a target in a linked model",
+      "disabled": "needs linked elements in the model graph (#62)",
+      "variants": []
+    }
+  ]
+}
