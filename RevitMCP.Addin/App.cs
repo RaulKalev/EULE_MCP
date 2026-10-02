@@ -88,6 +88,8 @@ public class App : IExternalApplication
             handler.RegisterTool(new GetAvailablePanelsTool());
             handler.RegisterTool(new GetAvailableCableTypesTool());
             handler.RegisterTool(new GetAvailableWireTypesTool());
+            handler.RegisterTool(new PreviewCreateCableTypeTool());
+            handler.RegisterTool(new CreateCableTypeTool());
             handler.RegisterTool(new GetCircuitCompatibleElementsTool());
             handler.RegisterTool(new CreateElectricalCircuitTool());
             handler.RegisterTool(new AddElementsToCircuitTool());
@@ -441,7 +443,7 @@ public class App : IExternalApplication
                     ?? application.CreateRibbonPanel(tabName, "MCP");
 
         var isDark = Autodesk.Revit.UI.UIThemeManager.CurrentTheme == Autodesk.Revit.UI.UITheme.Dark;
-        var iconName = isDark ? "Light - AI1.tiff" : "Dark - AI1.tiff";
+        var iconName = isDark ? "Dark - AI1.tiff" : "Light - AI1.tiff";
 
         var buttonData = new PushButtonData(
             "RevitMCPConnector",

@@ -20,7 +20,7 @@ public class VillageToolClassifierTests
         "revit_apply_sheet_naming revit_apply_view_template revit_assign_data_devices_to_patch_panels " +
         "revit_change_circuit_cable_or_wire_type revit_check_circuit_health revit_check_circuit_parameter_completeness " +
         "revit_check_panel_utilization revit_check_parameter_completeness revit_compare_skill_override_to_master " +
-        "revit_configure_sheet_naming_skill revit_copy_cad_overrides revit_count_elements revit_create_clash_review_view " +
+        "revit_configure_sheet_naming_skill revit_copy_cad_overrides revit_count_elements revit_create_cable_type revit_create_clash_review_view " +
         "revit_create_electrical_circuit revit_create_lines revit_create_panel_schematic_symbol_from_dwg " +
         "revit_create_project_skill_override revit_create_revision revit_create_sheets_from_table revit_create_skill " +
         "revit_create_text_notes revit_delete revit_delete_elements revit_delete_sheets revit_delete_views revit_detect_clashes " +
@@ -54,7 +54,7 @@ public class VillageToolClassifierTests
         "revit_preview_align_elements revit_preview_align_in_view revit_preview_apply_sheet_naming " +
         "revit_preview_assign_data_devices_to_patch_panels revit_preview_circuit_load_names revit_preview_circuit_numbering " +
         "revit_preview_copy_cad_overrides revit_preview_create_sheets_from_table revit_preview_delete revit_preview_delete_elements " +
-        "revit_preview_delete_sheets revit_preview_delete_views revit_preview_duplicate revit_preview_duplicate_family_types " +
+        "revit_preview_delete_sheets revit_preview_delete_views revit_preview_create_cable_type revit_preview_duplicate revit_preview_duplicate_family_types " +
         "revit_preview_duplicate_sheets revit_preview_duplicate_views revit_preview_edit_family_types revit_preview_move_elements " +
         "revit_preview_place_from_cad revit_preview_place_from_cad_shapes revit_preview_place_tags revit_preview_place_views_on_sheets " +
         "revit_preview_rename revit_preview_rename_sheets revit_preview_rename_views revit_preview_retag revit_preview_set_cad_overrides " +
