@@ -93,3 +93,24 @@ back instead, so the model never ends up with a half-configured type.
   so a failure on one type does not abandon the others.
 - Both write tools are approval-gated.
 - Renaming a type changes it for every placed instance of that type — preview first.
+
+## Cable types
+
+Electrical cable types are not family types, so they have their own pair of tools:
+
+| Tool | Permission | Purpose |
+|---|---|---|
+| `revit_preview_create_cable_type` | Read-only | Resolve the source cable type and report, per new name, `create`, `skipExisting` or `blocked`, plus a check of every parameter |
+| `revit_create_cable_type` | Requires approval | Duplicate the source cable type under each new name and set its parameters |
+
+- Source: `sourceTypeName` or `sourceTypeId` (see `revit_get_available_cable_types`).
+  When the model has exactly one cable type it is used by default.
+- New types: `newName` (+ `parameters`), `newNames` (batch, shared `parameters`), or
+  `items=[{newName, parameters}]`.
+- `ifExists`: `skip` (default) returns the existing type's id; `error` blocks that name.
+- The result returns each new type's `id`, ready for `revit_change_circuit_cable_or_wire_type`
+  or `revit_set_circuit_parameter` ("Cable Type").
+- Revit 2026 has `Autodesk.Revit.DB.Electrical.CableType`; its `Duplicate()` takes no
+  name, so the copy is renamed afterwards. Where the class does not exist (Revit 2024),
+  the tool duplicates `WireType` instead and says so in a warning.
+- One transaction, one sub-transaction per new type; Undo removes them all.

@@ -27,6 +27,7 @@ public static class ApprovalSummaryBuilder
             "revit_move_elements_between_circuits" => CircuitPreviewBuilder.BuildMoveElements(request),
             "revit_reassign_circuit_panel" => CircuitPreviewBuilder.BuildReassignPanel(request),
             "revit_change_circuit_cable_or_wire_type" => CircuitPreviewBuilder.BuildChangeWireType(request),
+            "revit_create_cable_type" => BuildCreateCableType(request),
             "revit_set_device_codes" => BuildSetDeviceCodes(request),
             "revit_ensure_device_types" => BuildEnsureDeviceTypes(request),
             "revit_place_at_wall" => BuildPlaceAtWall(request),
@@ -466,6 +467,21 @@ public static class ApprovalSummaryBuilder
         var filter = ToolArguments.GetString(request.Arguments, "roomFilter");
         var target = rooms.Count > 0 ? $"room{(rooms.Count == 1 ? "" : "s")} {Summarize(rooms)}" : $"rooms matching '{filter}'";
         return $"Place '{code}' devices ({strategy}) in {target}. The preview lists the exact count.";
+    }
+
+    private static string BuildCreateCableType(McpToolRequest request)
+    {
+        var parsed = CableTypeDuplicator.ParseRequest(request.Arguments);
+        var source = parsed.SourceTypeId != 0
+            ? $"type ID:{parsed.SourceTypeId}"
+            : $"'{(parsed.SourceTypeName.Length > 0 ? parsed.SourceTypeName : "(only cable type)")}'";
+        var names = parsed.Items.Select(i => i.NewName).ToList();
+        var parameterCount = parsed.Items.Sum(i => i.Parameters.Count);
+        var parameterDesc = parameterCount > 0
+            ? $" Sets {parameterCount} type parameter value{(parameterCount == 1 ? "" : "s")}."
+            : string.Empty;
+        return $"Create {names.Count} cable type{(names.Count == 1 ? "" : "s")} by duplicating {source}: " +
+               $"{Summarize(names)}. Existing names: {parsed.IfExists}.{parameterDesc}";
     }
 
     /// <summary>Renders a short, bounded preview of a name list for the approval summary.</summary>
