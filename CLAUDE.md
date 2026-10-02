@@ -6,6 +6,8 @@ The connector ships a per-model routing graph (`revit_graph_*` tools, see
 [`docs/model-graph.md`](docs/model-graph.md)). Use it to locate element ids cheaply before
 querying Revit:
 
+0. `revit_graph_route intent="<what you need>"` returns the cheapest call plan (graph steps, then live
+   reads by id) together with the graph's freshness — the quickest way in.
 1. Call `revit_graph_status` at the start of a session. If `exists` is false or `stale` is true,
    run `revit_graph_build` (a full rebuild takes seconds) or treat every graph result as a hint
    that must be re-verified against the live model.

@@ -27,7 +27,7 @@ if (toolNames != null)
 builder.Services.AddSingleton<RevitPipeClient>();
 
 var mcpBuilder = builder.Services
-    .AddMcpServer()
+    .AddMcpServer(options => options.ServerInstructions = ServerInstructions.Text)
     .WithStdioServerTransport();
 
 var configuredProfile = builder.Configuration["RevitMCP:ToolProfile"] ?? "full";

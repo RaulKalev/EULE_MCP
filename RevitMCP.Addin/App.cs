@@ -368,6 +368,7 @@ public class App : IExternalApplication
             handler.RegisterTool(new GraphStatusTool());
             handler.RegisterTool(new GraphQueryTool());
             handler.RegisterTool(new GraphSummaryTool());
+            handler.RegisterTool(new GraphRouteTool());
 
             var eventService = new ExternalEventService(handler);
 

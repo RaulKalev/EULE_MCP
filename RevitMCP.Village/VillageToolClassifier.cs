@@ -119,6 +119,7 @@ public sealed class VillageToolClassifier
     {
         ["revit_graph_build"]                    = VillageActivities.BuildGraph,
         ["revit_graph_query"]                    = VillageActivities.Search,
+        ["revit_graph_route"]                    = VillageActivities.Search,
         ["revit_graph_status"]                   = VillageActivities.Inspect,
         ["revit_graph_summary"]                  = VillageActivities.Inspect,
         ["revit_run_query_preset"]               = VillageActivities.Search,

@@ -356,6 +356,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     public async Task<string> GroupByParameter(
         [Description("Parameter name or partial name to match (case-insensitive)")] string parameterName,
         [Description("Optional category name to restrict search (e.g. 'Fire Alarm Devices')")] string? category = null,
+        [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -363,6 +364,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["parameterName"] = parameterName,
             ["category"] = category ?? string.Empty
         };
+        args["graphHint"] = graphHint;
         var result = await pipeClient.SendAsync("revit_group_by_parameter", args, cancellationToken);
         return FormatResult(result);
     }
@@ -621,6 +623,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("If true, return category/family summary counts only without building element DTOs. Allows broad model scans.")] bool summaryOnly = false,
         [Description("If true, list the annotation tags attached to each returned element (tag text, tag family/type, owner view). An element can carry multiple tags; an empty list means it has none.")] bool includeTags = false,
         [Description("If true, return identity fields and parameter name/value pairs only, omitting verbose parameter metadata. Default false preserves the full response.")] bool compact = false,
+        [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
         CancellationToken cancellationToken = default)
     {
         if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
@@ -644,6 +647,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["includeTags"] = includeTags,
             ["compact"] = compact
         };
+        args["graphHint"] = graphHint;
         var result = await pipeClient.SendAsync("revit_find_elements_by_parameter", args, cancellationToken);
         return FormatResult(result);
     }
@@ -666,6 +670,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("If true, return category/family summary counts only without element DTOs. Allows broad model scans without category/selection scope.")] bool summaryOnly = false,
         [Description("If true, list the annotation tags attached to each returned element (tag text, tag family/type, owner view). An element can carry multiple tags; an empty list means it has none.")] bool includeTags = false,
         [Description("If true, return identity fields and parameter name/value pairs only, omitting verbose parameter metadata. Default false preserves the full response.")] bool compact = false,
+        [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
         CancellationToken cancellationToken = default)
     {
         if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
@@ -689,6 +694,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["includeTags"] = includeTags,
             ["compact"] = compact
         };
+        args["graphHint"] = graphHint;
         var result = await pipeClient.SendAsync("revit_get_elements_info", args, cancellationToken);
         return FormatResult(result);
     }
@@ -701,6 +707,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("JSON array of parameter filters")] string? filters = null,
         [Description("If true, include element IDs in each group")] bool includeElements = false,
         [Description("Max elements to scan (default 5000)")] int limit = 5000,
+        [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
         CancellationToken cancellationToken = default)
     {
         if (!TryParseJsonArray(groupBy, "groupBy", out var parsedGroupBy, out var groupByError))
@@ -717,6 +724,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["includeElements"] = includeElements,
             ["limit"] = limit
         };
+        args["graphHint"] = graphHint;
         var result = await pipeClient.SendAsync("revit_group_elements", args, cancellationToken);
         return FormatResult(result);
     }
@@ -731,6 +739,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("What to export: Elements, Groups, or Both")] string outputMode = "Both",
         [Description("Output file name (default RevitMCP_Export.xlsx)")] string fileName = "RevitMCP_Export.xlsx",
         [Description("Max elements (default 5000)")] int limit = 5000,
+        [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
         CancellationToken cancellationToken = default)
     {
         if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
@@ -749,6 +758,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["fileName"] = fileName,
             ["limit"] = limit
         };
+        args["graphHint"] = graphHint;
         var result = await pipeClient.SendAsync("revit_export_query_to_excel", args, cancellationToken);
         return FormatResult(result);
     }
@@ -6057,6 +6067,26 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["dbPath"]       = dbPath ?? string.Empty
         };
         var result = await pipeClient.SendAsync("revit_graph_query", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_graph_route", ReadOnly = true),
+     Description("Start here for element discovery. Give an intent in plain words (\"devices in room 1.12\", \"everything fed by panel JK-1\", \"fire alarm devices on 2. korrus\"); returns the cheapest call plan: graph steps that narrow ids, then a live read by id, plus the graph's freshness (when missing or stale the plan starts with revit_graph_build). Read-only; graph data is routing hints, never facts.")]
+    public async Task<string> GraphRoute(
+        [Description("What you want to find, in plain words.")] string intent,
+        [Description("Optional category (overrides detection), e.g. 'Fire Alarm Devices'.")] string? category = null,
+        [Description("Optional level name (overrides detection).")] string? level = null,
+        [Description("Optional room number / panel name / other name to look for.")] string? name = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["intent"] = intent,
+            ["category"] = category ?? string.Empty,
+            ["level"] = level ?? string.Empty,
+            ["name"] = name ?? string.Empty
+        };
+        var result = await pipeClient.SendAsync("revit_graph_route", args, cancellationToken);
         return FormatResult(result);
     }
 

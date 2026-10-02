@@ -113,8 +113,42 @@ When in doubt, rebuild — a full build of a 100k-element model takes a few seco
 
 ---
 
+## Graph-first routing (#64)
+
+The connector routes discovery through the graph by itself, without relying on repo prompt files:
+
+- **Server instructions.** Every MCP client receives a short graph-first workflow in the `initialize`
+  handshake (`RevitMCP.Bridge/ServerInstructions.cs`, about 230 tokens).
+- **`revit_graph_route`.** Give it the user's intent in plain words; it returns the cheapest call plan
+  and the graph's freshness. It understands rooms/spaces, panels/circuits/loops, levels, categories
+  present in the graph, the selection and linked models, in English and Estonian. When the graph is
+  missing or stale the plan starts with `revit_graph_build` and says that ids are hints to verify.
+- **Hints on broad live queries.** `revit_get_elements_info`, `revit_find_elements_by_parameter`,
+  `revit_group_by_parameter`, `revit_group_elements` and `revit_export_query_to_excel`, when called
+  with a category scope (no `elementIds`, no selection) that matches 50 or more elements, return a
+  `routingHint` in `data` naming the equivalent `revit_graph_query find` call. The live result is
+  never changed or blocked. Opt out per call with `graphHint=false`, or for a user with
+  `config_update scope=user updates={"$.graph.routingHints": false}`.
+
+Examples:
+
+```
+revit_graph_route intent="which devices are in room 1.12?"
+  → find kind=space nameContains=1.12 → neighbors rel=located_in direction=in → get_elements_info elementIds=[…]
+revit_graph_route intent="everything fed by panel JK-1"
+  → find kind=panel nameContains=JK-1 → subtree rel=fed_by depth=2 → get_circuit_info
+revit_graph_route intent="fire alarm devices on Teine korrus"
+  → find kind=element category="Fire Alarm Devices" level="Teine korrus" → get_elements_info elementIds=[…]
+```
+
+Measured on the Tarvastu EN model (`docs/benchmarks/`): inspecting a category costs about 145k result
+tokens through broad live calls and about 5k graph-first; with the `query` profile (which now includes
+the graph tools) the whole graph-first workflow, schema included, is about 13.5k tokens instead of
+about 214k.
+
 ## Agent workflow
 
+0. `revit_graph_route` with the intent gives the plan below in one call.
 1. `revit_graph_status` at session start. If `exists` is false or `stale` is true, run
    `revit_graph_build` (or re-verify ids against the live model if a rebuild is not appropriate).
 2. `revit_graph_summary` for orientation: which panels, levels, categories exist.
