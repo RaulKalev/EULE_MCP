@@ -10,8 +10,9 @@
     Device codes are passed inline, so the project config is not touched.
 
     With -IncludeWrites the script also sends the write tools. Each one stops at the connector's
-    approval prompt: approve it in Revit, press Enter here, and the script verifies the result with
-    read tools. Undo the changes in Revit afterwards (or close without saving).
+    approval prompt: approve it in Revit and the script notices the change (it polls a read-only check
+    every 2 s, up to -ApprovalTimeoutSec) and verifies the result. Undo the changes in Revit afterwards
+    (or close without saving).
 
     Matching manual checklist: TESTING.md sections 53-56.
 
@@ -41,6 +42,8 @@ param(
     [string] $RoomParameter = "",
     # Also send write tools (approve each in Revit, then Undo afterwards).
     [switch] $IncludeWrites,
+    # How long a write test waits for its approval in Revit before failing.
+    [int] $ApprovalTimeoutSec = 300,
     [int] $TimeoutSec = 180
 )
 
@@ -121,12 +124,22 @@ function Assert-Ok($Result, [string] $Tool) {
     }
 }
 
-function Assert-Approval($Result, [string] $Tool) {
+# Waits until a write tool's change is visible in the model. The connector answers a write with
+# approval_required at once and applies it only after Approve is clicked in Revit, so the script polls
+# $Done (a read-only check) every 2 s instead of waiting for a key press - it also runs unattended.
+function Assert-Approval($Result, [string] $Tool, [scriptblock] $Done) {
     Assert ($null -ne $Result) "$Tool returned nothing."
     if ($Result.Success -and $Result.Status -ne "approval_required") { return "applied directly (Direct Edit on)" }
     Assert ($Result.Status -eq "approval_required") "$Tool expected approval_required, got status '$($Result.Status)': $($Result.Message)"
-    Read-Host "    -> Approve '$Tool' in the Revit connector window, then press Enter" | Out-Null
-    return "approved"
+    Write-Host "    -> Approve '$Tool' in the Revit connector window (waiting up to $ApprovalTimeoutSec s)" -ForegroundColor Yellow
+    $deadline = (Get-Date).AddSeconds($ApprovalTimeoutSec)
+    while ((Get-Date) -lt $deadline) {
+        Start-Sleep -Seconds 2
+        $ok = $false
+        try { $ok = [bool](& $Done) } catch { $ok = $false }
+        if ($ok) { return "approved" }
+    }
+    throw "$Tool was not approved (or did not take effect) within $ApprovalTimeoutSec s."
 }
 
 # -- Geometry helpers (host mm) ------------------------------------------------
@@ -197,7 +210,7 @@ Write-Host "Section 54 - room geometry" -ForegroundColor Cyan
 Test-Case "54.1" "connection status" {
     $r = Invoke-RevitTool "revit_get_connection_status"
     Assert-Ok $r "revit_get_connection_status"
-    "doc: $($r.Data.documentTitle)$($r.Data.DocumentTitle)"
+    "doc: $($r.Data.documentTitle)"
 }
 
 Test-Case "54.2" "list levels (+ link levels mapped)" {
@@ -475,7 +488,10 @@ if ($IncludeWrites) {
         $face = @($script:Context.Walls | Where-Object { $_.index -eq $script:Context.WallIndex })[0]
         $placement = @{ deviceCode = "T_WALL"; roomNumber = $RoomNumber; wallIndex = $face.index; alongFraction = 0.5 }
         $r = Invoke-RevitTool "revit_place_at_wall" (New-RoomArgs @{ deviceCodes = (Get-InlineCodes); placements = @($placement); roomParameter = $RoomParameter })
-        $how = Assert-Approval $r "revit_place_at_wall"
+        $how = Assert-Approval $r "revit_place_at_wall" {
+            $p = Invoke-RevitTool "revit_preview_place_at_wall" (New-RoomArgs @{ deviceCodes = (Get-InlineCodes); placements = @($placement) })
+            (@($p.Data.devices)[0].warnings -join " ") -match "existing"
+        }
         $again = Invoke-RevitTool "revit_preview_place_at_wall" (New-RoomArgs @{ deviceCodes = (Get-InlineCodes); placements = @($placement) })
         Assert-Ok $again "revit_preview_place_at_wall"
         Assert ((@($again.Data.devices)[0].warnings -join " ") -match "existing") "The placed device is not found (no duplicate warning on re-preview)."
@@ -507,7 +523,10 @@ if ($IncludeWrites) {
         $id = $script:Context.PlacedId
         if (-not $id) { return "SKIP: needs W.1" }
         $r = Invoke-RevitTool "revit_set_elevation" @{ elementIds = @($id); elevationFromLevelMm = 1200 }
-        $how = Assert-Approval $r "revit_set_elevation"
+        $how = Assert-Approval $r "revit_set_elevation" {
+            $c = Invoke-RevitTool "revit_preview_set_elevation" @{ elementIds = @($id); elevationFromLevelMm = 1200 }
+            (@($c.Data.elements)[0].status) -eq "unchanged"
+        }
         $check = Invoke-RevitTool "revit_preview_set_elevation" @{ elementIds = @($id); elevationFromLevelMm = 1200 }
         Assert ((@($check.Data.elements)[0].status) -eq "unchanged") "Element is not at 1200 mm after the change."
         "$how"
@@ -518,8 +537,12 @@ if ($IncludeWrites) {
         if (-not $id) { return "SKIP: needs W.1" }
         $before = Invoke-RevitTool "revit_preview_rotate_elements" @{ elementIds = @($id); rotateByDeg = 0.001 }
         $start = [double](@($before.Data.elements)[0].current -replace "[^0-9.\-]", "")
+        $target = ($start + 90) % 360
         $r = Invoke-RevitTool "revit_rotate_elements" @{ elementIds = @($id); rotateByDeg = 90 }
-        $how = Assert-Approval $r "revit_rotate_elements"
+        $how = Assert-Approval $r "revit_rotate_elements" {
+            $c = Invoke-RevitTool "revit_preview_rotate_elements" @{ elementIds = @($id); angleDeg = $target }
+            (@($c.Data.elements)[0].status) -eq "unchanged"
+        }
         $after = Invoke-RevitTool "revit_preview_rotate_elements" @{ elementIds = @($id); angleDeg = (($start + 90) % 360) }
         Assert ((@($after.Data.elements)[0].status) -eq "unchanged") "Device does not face start + 90 deg after rotating."
         "$how, $start -> $(($start + 90) % 360) deg"
@@ -535,7 +558,10 @@ if ($IncludeWrites) {
         Assert ($e.target -eq $RoomNumber) "Room found is '$($e.target)', expected '$RoomNumber'."
         if ($e.status -eq "unchanged") { return "already '$RoomNumber' (written on placement)" }
         $r = Invoke-RevitTool "revit_assign_room_to_elements" (New-RoomArgs @{ elementIds = @($id); roomParameter = $RoomParameter })
-        $how = Assert-Approval $r "revit_assign_room_to_elements"
+        $how = Assert-Approval $r "revit_assign_room_to_elements" {
+            $c = Invoke-RevitTool "revit_preview_assign_room_to_elements" (New-RoomArgs @{ elementIds = @($id); roomParameter = $RoomParameter })
+            (@($c.Data.elements)[0].status) -eq "unchanged"
+        }
         $q = Invoke-RevitTool "revit_preview_assign_room_to_elements" (New-RoomArgs @{ elementIds = @($id); roomParameter = $RoomParameter })
         Assert ((@($q.Data.elements)[0].status) -eq "unchanged") "Room number was not written."
         "$how"
@@ -544,7 +570,10 @@ if ($IncludeWrites) {
     Test-Case "W.6" "create cable type, then it is skipped as existing" {
         if (-not $script:Context.CableNew) { return "SKIP: needs 53.1" }
         $r = Invoke-RevitTool "revit_create_cable_type" @{ sourceTypeName = $script:Context.CableSource; newName = $script:Context.CableNew }
-        $how = Assert-Approval $r "revit_create_cable_type"
+        $how = Assert-Approval $r "revit_create_cable_type" {
+            $c = Invoke-RevitTool "revit_preview_create_cable_type" @{ sourceTypeName = $script:Context.CableSource; newName = $script:Context.CableNew }
+            (@($c.Data.proposals)[0].action) -eq "skipExisting"
+        }
         $p = Invoke-RevitTool "revit_preview_create_cable_type" @{ sourceTypeName = $script:Context.CableSource; newName = $script:Context.CableNew }
         Assert ((@($p.Data.proposals)[0].action) -eq "skipExisting") "New cable type '$($script:Context.CableNew)' was not created."
         "$how, '$($script:Context.CableNew)'"
