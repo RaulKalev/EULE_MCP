@@ -437,7 +437,7 @@ internal sealed class RoomSourceService
             AssignHostLevel(record);
             if (!MatchesLevel(record, filter)) continue;
 
-            var footprint = extractor.Extract(element, _source.Transform, RoomUnits.MmToFt(record.HostLevelElevationMm), options);
+            var footprint = extractor.Extract(element, _source.Transform, RoomUnits.MmToFt(record.HostLevelElevationMm), options, meta.AreaM2);
             if (footprint.OuterLoop == null)
             {
                 warnings.Add($"IfcSpace {number} ({element.Id.Value}): no footprint — {string.Join("; ", footprint.Errors)}");

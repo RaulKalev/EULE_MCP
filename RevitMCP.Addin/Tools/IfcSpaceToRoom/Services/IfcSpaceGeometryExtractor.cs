@@ -33,11 +33,16 @@ public class IfcSpaceGeometryExtractor
     /// Used as the Z coordinate for the placement point.
     /// </param>
     /// <param name="options">Geometry extraction options.</param>
+    /// <param name="declaredAreaM2">
+    /// The space's area from its IFC data, when known. A footprint whose area differs from it by more
+    /// than <see cref="AreaMismatchWarningPercent"/> gets a warning (#68).
+    /// </param>
     public IfcSpaceFootprint Extract(
         Element linkedElement,
         Transform linkTransform,
         double levelElevationFeet,
-        IfcGeometryExtractionOptions options)
+        IfcGeometryExtractionOptions options,
+        double? declaredAreaM2 = null)
     {
         var footprint = new IfcSpaceFootprint
         {
@@ -62,6 +67,8 @@ public class IfcSpaceGeometryExtractor
             var bottomFace = _faceFinder.Find(
                 solids,
                 out string? faceWarning,
+                out FootprintFaceChoice? choice,
+                out Solid? ownerSolid,
                 options.HorizontalFaceToleranceDegrees,
                 minAreaFt2);
 
@@ -70,6 +77,27 @@ public class IfcSpaceGeometryExtractor
                 footprint.Status = IfcGeometryStatus.NoUsableBottomFace;
                 footprint.Errors.Add(faceWarning ?? "No horizontal bottom face found.");
                 return footprint;
+            }
+            if (faceWarning != null)
+                footprint.Warnings.Add(faceWarning);
+
+            // A stepped or split floor: the largest floor face is only part of the space. Use the
+            // plan outline (shadow) of the whole space instead when Revit can compute it.
+            if (choice is { IsStepped: true })
+            {
+                var outline = PlanOutline(solids, ownerSolid, bottomFace, choice);
+                if (outline != null)
+                {
+                    footprint.Warnings.Add(
+                        $"Stepped floor ({choice.FloorLevels} level(s)): the footprint is the plan outline of the whole space.");
+                    bottomFace = outline;
+                }
+                else
+                {
+                    footprint.Warnings.Add(
+                        $"Stepped floor ({choice.FloorLevels} level(s)): the footprint is the largest floor face, " +
+                        $"{choice.AreaFt2 * SquareMetresPerSquareFoot:0.#} of {choice.TotalFloorAreaFt2 * SquareMetresPerSquareFoot:0.#} m².");
+                }
             }
 
             // ── 3. Extract CurveLoops from face ───────────────────────────────
@@ -132,6 +160,12 @@ public class IfcSpaceGeometryExtractor
             // ── 7. Area calculation ───────────────────────────────────────────
             double area = LoopAreaCalculator.ComputeAreaFt2(cleanedLoop);
 
+            var mismatch = FootprintFaceSelector.AreaMismatchPercent(area * SquareMetresPerSquareFoot, declaredAreaM2);
+            if (mismatch > AreaMismatchWarningPercent)
+                footprint.Warnings.Add(
+                    $"Footprint area {area * SquareMetresPerSquareFoot:0.#} m² differs from the declared IFC area " +
+                    $"{declaredAreaM2:0.#} m² by {mismatch:0} % — check the space geometry.");
+
             // ── 8. Placement point ────────────────────────────────────────────
             var placement = _placementService.Find(cleanedLoop, levelElevationFeet);
 
@@ -165,6 +199,49 @@ public class IfcSpaceGeometryExtractor
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+
+    public const double SquareMetresPerSquareFoot = 0.09290304;
+
+    /// <summary>Declared vs. extracted area difference that triggers a warning, in percent.</summary>
+    public const double AreaMismatchWarningPercent = 20;
+
+    /// <summary>
+    /// The plan outline of the space at the chosen floor's elevation: the shadow of its solid
+    /// (all solids united when there are several) projected down onto that plane. Accepted only when
+    /// its area lies between the chosen floor face and the whole floor (+5 %), so a bad projection
+    /// never replaces a usable face. Null when Revit cannot compute it.
+    /// </summary>
+    private static PlanarFace? PlanOutline(List<Solid> solids, Solid? ownerSolid, PlanarFace floor, FootprintFaceChoice choice)
+    {
+        try
+        {
+            Solid? solid = ownerSolid;
+            if (solids.Count > 1)
+            {
+                Solid? union = null;
+                foreach (var s in solids)
+                {
+                    union = union == null
+                        ? s
+                        : BooleanOperationsUtils.ExecuteBooleanOperation(union, s, BooleanOperationsType.Union);
+                }
+                solid = union ?? ownerSolid;
+            }
+            if (solid == null) return null;
+
+            var plane = Plane.CreateByNormalAndOrigin(XYZ.BasisZ, new XYZ(0, 0, floor.Origin.Z));
+            var analyzer = ExtrusionAnalyzer.Create(solid, plane, XYZ.BasisZ);
+            if (analyzer.GetExtrusionBase() is not PlanarFace outline) return null;
+
+            var area = outline.Area;
+            if (area < choice.AreaFt2 * 0.99 || area > choice.TotalFloorAreaFt2 * 1.05) return null;
+            return outline;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     /// Transforms every curve in <paramref name="loop"/> to host coordinates using
