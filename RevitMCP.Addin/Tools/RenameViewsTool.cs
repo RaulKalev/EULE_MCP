@@ -80,7 +80,7 @@ public class RenameViewsTool : IRevitMcpTool
             try
             {
                 foreach (var proposal in toApply)
-                    proposal.View.Name = "~MCP-" + Guid.NewGuid().ToString("N").Substring(0, 16);
+                    proposal.View.Name = "MCP-rename-" + Guid.NewGuid().ToString("N").Substring(0, 16); // "~" is not allowed in view names
                 foreach (var proposal in toApply)
                     proposal.View.Name = proposal.Proposed;
                 renaming.Commit();

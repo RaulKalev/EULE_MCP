@@ -37,6 +37,8 @@ dotnet RevitMCP.Benchmark/bin/Release/net8.0/RevitMCP.Benchmark.dll --label <nam
 | `--schema-only` | off | Only measure tool-schema sizes (no Revit needed) |
 | `--no-graph-build` | off | Skip the graph build measurement |
 | `--out <dir>` | `docs/benchmarks` | Where `<timestamp>-<label>.md` and `.json` are written |
+| `--dump-tools <file>` | — | Write every advertised tool (name, description, input schema) of `--profile` (default `full`) to a JSON file and exit |
+| `--calls <file> --results <file>` | — | Smoke-suite mode: run `[{"id","tool","args"}]` in order through the `full` profile, print ok/FAIL per call and write the results (status, error, result excerpt) as JSON |
 
 The process exits with 1 when any measured call failed, so it can gate a CI or pre-merge check.
 

@@ -205,8 +205,7 @@ public class JsonConfigService
             var dir      = Path.GetDirectoryName(filePath) ?? string.Empty;
             var stem     = Path.GetFileNameWithoutExtension(filePath);
             var ext      = Path.GetExtension(filePath);
-            var ts       = DateTime.UtcNow.ToString("yyyy-MM-dd_HHmmss");
-            var bakPath  = Path.Combine(dir, $"{stem}_backup_{ts}{ext}");
+            var bakPath  = RevitMCP.Addin.FileSystem.BackupPathNaming.Unique(dir, stem, "backup", DateTime.UtcNow, ext);
             File.Copy(filePath, bakPath, overwrite: false);
             return (bakPath, null);
         }

@@ -139,7 +139,9 @@ internal static class SheetDuplicationService
             var sourceTitleBlock = GetTitleBlock(doc, source);
             var targetTitleBlock = GetTitleBlock(doc, newSheet);
             if (sourceTitleBlock != null && targetTitleBlock != null)
-                CopyWritableParameters(sourceTitleBlock, targetTitleBlock, skipSheetIdentity: false, result.Warnings);
+                // The title block instance exposes the sheet's own Sheet Number/Name; copying them posts
+                // "Sheet Number is already in use" even though the number is replaced below.
+                CopyWritableParameters(sourceTitleBlock, targetTitleBlock, skipSheetIdentity: true, result.Warnings);
         }
 
         if (options.CopyRevisions)

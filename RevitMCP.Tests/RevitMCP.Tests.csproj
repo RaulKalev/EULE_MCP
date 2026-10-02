@@ -65,6 +65,7 @@
     <!-- FileSystem pure-logic files -->
     <Compile Include="..\RevitMCP.Addin\FileSystem\FilePathPolicy.cs" Link="FileSystem\FilePathPolicy.cs" />
     <Compile Include="..\RevitMCP.Addin\FileSystem\FileSystemService.cs" Link="FileSystem\FileSystemService.cs" />
+    <Compile Include="..\RevitMCP.Addin\FileSystem\BackupPathNaming.cs" Link="FileSystem\BackupPathNaming.cs" />
     <!-- Excel pure-logic files (ClosedXML, no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Excel\ExcelBackupService.cs" Link="Excel\ExcelBackupService.cs" />
     <Compile Include="..\RevitMCP.Addin\Excel\ExcelHeaderDetector.cs" Link="Excel\ExcelHeaderDetector.cs" />

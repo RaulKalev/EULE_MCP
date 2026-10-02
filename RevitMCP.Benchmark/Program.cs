@@ -49,6 +49,42 @@ if (options.ContainsKey("check-discovery"))
     return 0;
 }
 
+if (options.GetValueOrDefault("dump-tools") is { } dumpPath && dumpPath != "true")
+{
+    await using var dumper = new BenchmarkRunner(bridge);
+    File.WriteAllText(dumpPath, await dumper.DumpTools(options.GetValueOrDefault("profile") ?? "full"));
+    Console.WriteLine($"Tools written to {dumpPath}");
+    return 0;
+}
+
+if (options.GetValueOrDefault("calls") is { } callsPath && callsPath != "true")
+{
+    // Smoke suite: [{ "id", "tool", "args" }] run in order through the full profile; results as JSON.
+    await using var caller = new BenchmarkRunner(bridge);
+    var calls = JsonNode.Parse(File.ReadAllText(callsPath)) as JsonArray ?? [];
+    var results = new JsonArray();
+    foreach (var call in calls.OfType<JsonObject>())
+    {
+        var tool = call["tool"]!.ToString();
+        var id = call["id"]?.ToString() ?? tool;
+        var (step, result) = await caller.Call("full", tool, call["args"] as JsonObject ?? new JsonObject());
+        var text = result?.ToJsonString() ?? string.Empty;
+        Console.WriteLine($"{(step.Success ? "ok  " : "FAIL")} {id} ({step.ElapsedMs} ms){(step.Success ? "" : " - " + step.Error)}");
+        results.Add(new JsonObject
+        {
+            ["id"] = id,
+            ["tool"] = tool,
+            ["success"] = step.Success,
+            ["error"] = step.Error,
+            ["status"] = result?["status"]?.DeepClone(),
+            ["elapsedMs"] = step.ElapsedMs,
+            ["result"] = text.Length > 4000 ? text.Substring(0, 4000) + " ..." : text
+        });
+    }
+    File.WriteAllText(options.GetValueOrDefault("results") ?? "results.json", results.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+    return 0;
+}
+
 await using (var runner = new BenchmarkRunner(bridge))
 {
     foreach (var profile in profiles)
