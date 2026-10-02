@@ -4,7 +4,7 @@
     "category": "Rooms",
     "roomNumber": "08",
     "deviceCategory": "Fire Alarm Devices",
-    "reducedProfile": "query"
+    "reducedProfile": "core"
   },
   "scenarios": [
     {

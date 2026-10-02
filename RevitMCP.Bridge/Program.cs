@@ -7,6 +7,7 @@ var clientName = GetArg(args, "--client");
 var pipeName = GetArg(args, "--pipe");
 var toolProfile = GetArg(args, "--tool-profile");
 var toolNames = GetArg(args, "--tool-names");
+var toolGroups = GetArg(args, "--tool-groups");
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -23,6 +24,8 @@ if (toolProfile != null)
     builder.Configuration["RevitMCP:ToolProfile"] = toolProfile;
 if (toolNames != null)
     builder.Configuration["RevitMCP:ToolNames"] = toolNames;
+if (toolGroups != null)
+    builder.Configuration["RevitMCP:ToolGroups"] = toolGroups;
 
 builder.Services.AddSingleton<RevitPipeClient>();
 
@@ -32,8 +35,9 @@ var mcpBuilder = builder.Services
 
 var configuredProfile = builder.Configuration["RevitMCP:ToolProfile"] ?? "full";
 var configuredToolNames = builder.Configuration["RevitMCP:ToolNames"];
+var configuredToolGroups = builder.Configuration["RevitMCP:ToolGroups"];
 
-if (McpToolCatalog.IsFullProfile(configuredProfile, configuredToolNames))
+if (McpToolCatalog.IsFullProfile(configuredProfile, configuredToolNames, configuredToolGroups))
 {
     // Preserve the existing registration path and complete 193-tool surface by default.
     mcpBuilder.WithTools<RevitMcpTools>();
@@ -43,7 +47,8 @@ else
     builder.Services.AddTransient<RevitMcpTools>();
     mcpBuilder.WithTools(McpToolCatalog.CreateSelectedTools(
         configuredProfile,
-        configuredToolNames));
+        configuredToolNames,
+        configuredToolGroups));
 }
 
 await builder.Build().RunAsync();

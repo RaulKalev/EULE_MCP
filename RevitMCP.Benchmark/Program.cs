@@ -19,7 +19,7 @@ var bridge = options.GetValueOrDefault("bridge")
 var scenarioFile = options.GetValueOrDefault("scenarios") ?? Path.Combine(AppContext.BaseDirectory, "scenarios.json");
 var outDir = options.GetValueOrDefault("out") ?? Path.Combine(root ?? ".", "docs", "benchmarks");
 var schemaOnly = options.ContainsKey("schema-only");
-var profiles = (options.GetValueOrDefault("profiles") ?? "full,query,read-only")
+var profiles = (options.GetValueOrDefault("profiles") ?? "full,core,query,read-only")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
 if (!File.Exists(bridge))
