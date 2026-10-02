@@ -39,9 +39,32 @@ public class SolidExtractionService
         return result;
     }
 
+    /// <summary>
+    /// Solids and meshes of the element. IFC import can bring a space in as a mesh (or as a solid
+    /// with a mesh for most of its volume); the footprint fallback needs those too (#68).
+    /// </summary>
+    public (List<Solid> Solids, List<Mesh> Meshes) GetSolidsAndMeshes(Element element)
+    {
+        var solids = new List<Solid>();
+        var meshes = new List<Mesh>();
+        try
+        {
+            var geomElem = element.get_Geometry(GeomOptions);
+            if (geomElem != null) Collect(geomElem, solids, meshes);
+        }
+        catch
+        {
+            // Non-fatal — caller checks for empty lists
+        }
+        return (solids, meshes);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
 
-    private static void CollectSolids(GeometryElement geomElem, List<Solid> result)
+    private static void CollectSolids(GeometryElement geomElem, List<Solid> result) =>
+        Collect(geomElem, result, null);
+
+    private static void Collect(GeometryElement geomElem, List<Solid> solids, List<Mesh>? meshes)
     {
         foreach (var obj in geomElem)
         {
@@ -49,7 +72,12 @@ public class SolidExtractionService
             {
                 // Accept solids with positive volume AND at least one face
                 if (solid.Volume > MinVolumeFt3 && solid.Faces.Size > 0)
-                    result.Add(solid);
+                    solids.Add(solid);
+            }
+            else if (obj is Mesh mesh)
+            {
+                if (meshes != null && mesh.NumTriangles > 0)
+                    meshes.Add(mesh);
             }
             else if (obj is GeometryInstance gi)
             {
@@ -57,10 +85,9 @@ public class SolidExtractionService
                 // coordinate system (instance transform already applied).
                 var instanceGeom = gi.GetInstanceGeometry();
                 if (instanceGeom != null)
-                    CollectSolids(instanceGeom, result);
+                    Collect(instanceGeom, solids, meshes);
             }
-            // Meshes, PolyLines, and Curves are intentionally skipped —
-            // they cannot be used for room boundary extraction.
+            // PolyLines and Curves are skipped — they cannot bound a room.
         }
     }
 }
