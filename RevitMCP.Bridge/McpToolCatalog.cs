@@ -53,18 +53,35 @@ internal static class McpToolCatalog
         },
         StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Profiles the bridge understands (shown in errors and docs).</summary>
+    public const string SupportedProfiles = "core, full, query, read-only";
+
     public static IReadOnlyList<McpServerTool> CreateSelectedTools(
         string profile,
-        string? explicitToolNames)
+        string? explicitToolNames,
+        string? toolGroups = null)
     {
         var methods = GetToolMethods();
         var requestedNames = ParseExplicitNames(explicitToolNames);
+        var extraGroups = ParseExplicitNames(toolGroups);
 
         IEnumerable<(MethodInfo Method, McpServerToolAttribute Attribute)> selected;
         if (requestedNames.Count > 0)
         {
             selected = methods.Where(item => requestedNames.Contains(GetToolName(item)));
             ValidateNames(requestedNames, methods);
+        }
+        else if (profile.Equals("core", StringComparison.OrdinalIgnoreCase))
+        {
+            var names = new HashSet<string>(
+                BridgeToolGroups.SelectByGroups(methods.Select(GetToolName), extraGroups, out var unknown),
+                StringComparer.OrdinalIgnoreCase);
+            ThrowOnUnknownGroups(unknown);
+            selected = methods.Where(item => names.Contains(GetToolName(item)));
+        }
+        else if (profile.Equals("full", StringComparison.OrdinalIgnoreCase))
+        {
+            selected = methods;
         }
         else if (profile.Equals("query", StringComparison.OrdinalIgnoreCase))
         {
@@ -77,7 +94,17 @@ internal static class McpToolCatalog
         else
         {
             throw new InvalidOperationException(
-                $"Unknown RevitMCP tool profile '{profile}'. Supported profiles: full, query, read-only.");
+                $"Unknown RevitMCP tool profile '{profile}'. Supported profiles: {SupportedProfiles}.");
+        }
+
+        // --tool-groups adds whole groups to any non-core profile as well.
+        if (extraGroups.Count > 0 && !profile.Equals("core", StringComparison.OrdinalIgnoreCase) && requestedNames.Count == 0)
+        {
+            var groupNames = new HashSet<string>(
+                BridgeToolGroups.SelectByGroups(methods.Select(GetToolName), extraGroups, out var unknown),
+                StringComparer.OrdinalIgnoreCase);
+            ThrowOnUnknownGroups(unknown);
+            selected = selected.Concat(methods.Where(item => groupNames.Contains(GetToolName(item)))).Distinct();
         }
 
         return selected
@@ -88,10 +115,22 @@ internal static class McpToolCatalog
             .ToList();
     }
 
-    public static bool IsFullProfile(string profile, string? explicitToolNames)
+    public static bool IsFullProfile(string profile, string? explicitToolNames, string? toolGroups = null)
     {
         return string.IsNullOrWhiteSpace(explicitToolNames) &&
+               string.IsNullOrWhiteSpace(toolGroups) &&
                profile.Equals("full", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>All tool names the bridge defines (for discovery and tests).</summary>
+    public static IReadOnlyList<string> AllToolNames() => GetToolMethods().Select(GetToolName).ToList();
+
+    private static void ThrowOnUnknownGroups(List<string> unknown)
+    {
+        if (unknown.Count > 0)
+            throw new InvalidOperationException(
+                "Unknown RevitMCP tool group(s): " + string.Join(", ", unknown) +
+                ". Known groups: " + string.Join(", ", BridgeToolGroups.Descriptions.Keys) + ", all.");
     }
 
     private static List<(MethodInfo Method, McpServerToolAttribute Attribute)> GetToolMethods()

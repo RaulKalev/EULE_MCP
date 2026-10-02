@@ -30,9 +30,39 @@ Available profiles:
 
 | Profile | Purpose |
 |---|---|
-| `full` | All tools; backward-compatible default |
-| `query` | 32 common connection, model-query, selection, view/sheet, family-type, electrical, and coordination discovery tools |
+| `full` | All tools; backward-compatible profile for automations that call tools by name |
+| `core` | The graph-first core (#66): connection/instance routing, selection, live reads by id, the five graph tools and tool discovery — 13 tools, ≈ 3.5k schema tokens instead of ≈ 68k |
+| `query` | Common connection, graph, model-query, selection, view/sheet, family-type, electrical and coordination discovery tools |
 | `read-only` | Every tool marked read-only or preview-only |
+
+### Tool groups
+
+Every tool belongs to exactly one group (`RevitMCP.Bridge/BridgeToolGroups.cs`; a unit test fails when a
+new tool has no group). `--tool-groups` adds whole groups to a profile:
+
+```toml
+args = ["--client", "Codex", "--tool-profile", "core", "--tool-groups", "electrical,devices"]
+```
+
+| Group | Contents |
+|---|---|
+| `core` | Connection, instance routing, selection and live reads by element id |
+| `discovery` | Search, describe, load and call any connector tool |
+| `graph` | Model graph: build, status, summary, query, route |
+| `query` | Broad element queries, parameter filters, grouping, query presets, parameter QA |
+| `edit` | Parameters, move/align/rotate/elevation, delete/duplicate/rename, family types, placement |
+| `devices` | Room geometry, device codes, room-based device placement, device and fire-alarm audits |
+| `electrical` | Circuits, panels, wires/cables, voltage drop, fire alarm circuits, patch panels |
+| `ifc` | IFC links, IFC spaces to rooms, linked-model element queries |
+| `views` | Views, sheets, schedules, title blocks, revisions, view templates |
+| `tags` | Tags, dimensions, text notes, detail lines, view alignment |
+| `coordination` | Clash detection, clash review, issue reports |
+| `cad` | DWG/CAD imports, overrides and placement from CAD |
+| `skills` | Skill builder and skill runs |
+| `office` | Configuration, files, Excel, standards lookup, delivery checks |
+
+`core` always includes `core`, `discovery` and `graph`; `all` adds every group (same tools as `full`).
+The same values can be set in `appsettings.json` as `RevitMCP:ToolGroups`.
 
 An exact allow-list gives the smallest possible catalog:
 

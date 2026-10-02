@@ -31,7 +31,7 @@ dotnet RevitMCP.Benchmark/bin/Release/net8.0/RevitMCP.Benchmark.dll --label <nam
 | Option | Default | |
 |---|---|---|
 | `--bridge <exe>` | `RevitMCP.Bridge/bin/Release/net8.0/RevitMCP.Bridge.exe` | Bridge build to measure |
-| `--profiles a,b` | `full,query,read-only` | Profiles whose schema is measured and whose variants run |
+| `--profiles a,b` | `full,core,query,read-only` | Profiles whose schema is measured and whose variants run |
 | `--scenarios <file>` | `scenarios.json` next to the exe | Scenario definitions |
 | `--var name=value` | — | Override a scenario variable (`category`, `roomNumber`, `deviceCategory`, `reducedProfile`) |
 | `--schema-only` | off | Only measure tool-schema sizes (no Revit needed) |
@@ -61,6 +61,7 @@ reported as *skipped* with the reason instead of producing misleading numbers. S
 | Report | Model | Notes |
 |---|---|---|
 | [20261003-000623-baseline-73226_PP_EN](20261003-000623-baseline-73226_PP_EN.md) | Tarvastu EN (13.7k elements, 40 test devices, no circuits) | Baseline before #64/#65/#66: `full` = 228 tools ≈ 68k schema tokens; graph-first cuts the category scenario from ≈ 145k to ≈ 5k result tokens; the `query` profile has no graph tools, so graph-first fails there. |
+| [20261003-001954-tool-profiles-66](20261003-001954-tool-profiles-66.md) | Tarvastu EN | After #64 + #66: `core` = 13 tools ≈ 3.5k schema tokens (−95 % vs `full`); graph-first through `core` ≈ 8.5k tokens total for the category scenario vs ≈ 214k live on `full`. |
 
 A large model run is still to be recorded: open one (e.g. a full EN model with circuits) and run
 the benchmark with `--label <model>`; the panel and loop scenarios then also produce numbers.
