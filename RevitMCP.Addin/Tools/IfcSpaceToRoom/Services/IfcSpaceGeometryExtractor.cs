@@ -102,30 +102,74 @@ public class IfcSpaceGeometryExtractor
             // No usable floor face, or one far from the declared area (a mesh body, faceted or
             // non-planar floor): project the whole space geometry, meshes included, onto the floor
             // plane and keep that outline when it is closer to the declared area (#68).
+            CurveLoop? footprintLoopOverride = null;
+            double? footprintElevationOverride = null;
             var faceMismatch = bottomFace == null
                 ? null
                 : FootprintFaceSelector.AreaMismatchPercent(bottomFace.Area * SquareMetresPerSquareFoot, declaredAreaM2);
             if (bottomFace == null || faceMismatch > AreaMismatchWarningPercent)
             {
-                var shadow = GeometryShadow(solids, meshes, bottomFace?.Origin.Z);
-                var shadowMismatch = shadow == null
-                    ? null
-                    : FootprintFaceSelector.AreaMismatchPercent(shadow.Area * SquareMetresPerSquareFoot, declaredAreaM2);
-                var better = shadow != null && (bottomFace == null || (shadowMismatch != null && shadowMismatch < faceMismatch));
-                if (better)
+                // Try the visible geometry first, then the element's non-visible geometry, where IFC
+                // import may keep the space body. Keep the outline closest to the declared area, and
+                // only when it is a real improvement (≥ 10 points) over the floor face.
+                var (hiddenSolids, hiddenMeshes) = _solidService.GetSolidsAndMeshes(linkedElement, includeNonVisible: true);
+                var attempts = new List<(PlanarFace Face, string Source)>();
+                var visibleShadow = GeometryShadow(solids, meshes, bottomFace?.Origin.Z);
+                if (visibleShadow != null) attempts.Add((visibleShadow, "visible geometry"));
+                if (hiddenSolids.Count + hiddenMeshes.Count > solids.Count + meshes.Count)
+                {
+                    var hiddenShadow = GeometryShadow(hiddenSolids, hiddenMeshes, bottomFace?.Origin.Z);
+                    if (hiddenShadow != null) attempts.Add((hiddenShadow, "geometry including non-visible objects"));
+                }
+
+                (PlanarFace Face, string Source, double? Mismatch)? best = null;
+                foreach (var (face, source) in attempts)
+                {
+                    var m = FootprintFaceSelector.AreaMismatchPercent(face.Area * SquareMetresPerSquareFoot, declaredAreaM2);
+                    if (best == null || (m ?? double.MaxValue) < (best.Value.Mismatch ?? double.MaxValue))
+                        best = (face, source, m);
+                }
+
+                var (segments, curveCount, curvesZ) = _solidService.GetPlanSegments(linkedElement);
+                var diagnosis = $"{DescribeGeometry(solids, meshes)}; with non-visible objects: " +
+                                $"{DescribeGeometry(hiddenSolids, hiddenMeshes)}; {curveCount} curve(s); element box {DescribeBox(linkedElement)}";
+                var improves = best != null && (bottomFace == null ||
+                    (best.Value.Mismatch != null && faceMismatch != null && best.Value.Mismatch < faceMismatch - 10));
+                var currentMismatch = faceMismatch;
+                if (improves)
                 {
                     footprint.Warnings.Add(
-                        $"The footprint is the plan outline of the whole space geometry ({DescribeGeometry(solids, meshes)}); " +
-                        "no flat floor face matched the space.");
-                    bottomFace = shadow;
+                        $"The footprint is the plan outline of the space's {best!.Value.Source}; no flat floor face matched the space ({diagnosis}).");
+                    bottomFace = best.Value.Face;
+                    currentMismatch = best.Value.Mismatch;
                 }
-                else if (bottomFace != null)
+
+                // Last resort: the space's 2D footprint curves (IFC "FootPrint" representation),
+                // which survive even when the 3D body imports as a sliver.
+                var stillWrong = bottomFace == null || currentMismatch > AreaMismatchWarningPercent;
+                var curveLoop = stillWrong ? LargestCurveLoop(segments, bottomFace?.Origin.Z ?? curvesZ) : null;
+                if (curveLoop != null)
                 {
-                    footprint.Warnings.Add($"Space geometry: {DescribeGeometry(solids, meshes)}.");
+                    var loopM2 = curveLoop.Value.AreaFt2 * SquareMetresPerSquareFoot;
+                    var curveMismatch = FootprintFaceSelector.AreaMismatchPercent(loopM2, declaredAreaM2);
+                    var curveImproves = bottomFace == null ||
+                        (curveMismatch != null && currentMismatch != null && curveMismatch < currentMismatch - 10);
+                    if (curveImproves)
+                    {
+                        footprintLoopOverride = curveLoop.Value.Loop;
+                        footprintElevationOverride = bottomFace?.Origin.Z ?? curvesZ;
+                        footprint.Warnings.Add(
+                            $"The footprint comes from the space's 2D footprint curves ({loopM2:0.#} m²); the 3D body " +
+                            $"does not describe the floor ({diagnosis}).");
+                        improves = true;
+                    }
                 }
+
+                if (!improves)
+                    footprint.Warnings.Add($"Space geometry: {diagnosis}.");
             }
 
-            if (bottomFace == null)
+            if (bottomFace == null && footprintLoopOverride == null)
             {
                 footprint.Status = IfcGeometryStatus.NoUsableBottomFace;
                 footprint.Errors.Add((faceWarning ?? "No horizontal bottom face found.") +
@@ -133,14 +177,23 @@ public class IfcSpaceGeometryExtractor
                 return footprint;
             }
 
-            // ── 3. Extract CurveLoops from face ───────────────────────────────
-            _loopExtractor.Extract(
-                bottomFace,
-                out CurveLoop? rawOuterLoop,
-                out List<CurveLoop> rawInnerLoops,
-                out List<string> extractWarnings);
-
-            footprint.Warnings.AddRange(extractWarnings);
+            // ── 3. Extract CurveLoops from face (or take the footprint curves) ─
+            CurveLoop? rawOuterLoop;
+            List<CurveLoop> rawInnerLoops;
+            if (footprintLoopOverride != null)
+            {
+                rawOuterLoop = footprintLoopOverride;
+                rawInnerLoops = new List<CurveLoop>();
+            }
+            else
+            {
+                _loopExtractor.Extract(
+                    bottomFace!,
+                    out rawOuterLoop,
+                    out rawInnerLoops,
+                    out List<string> extractWarnings);
+                footprint.Warnings.AddRange(extractWarnings);
+            }
 
             if (rawOuterLoop == null)
             {
@@ -156,7 +209,8 @@ public class IfcSpaceGeometryExtractor
                 .ToList();
 
             // Capture bottom elevation from the transformed face origin
-            footprint.BottomElevationFeet = linkTransform.OfPoint(bottomFace.Origin).Z;
+            var floorZ = footprintElevationOverride ?? bottomFace!.Origin.Z;
+            footprint.BottomElevationFeet = linkTransform.OfPoint(new XYZ(0, 0, floorZ)).Z;
 
             // ── 5. Clean the outer loop ───────────────────────────────────────
             var cleanedLoop = _loopCleaner.Clean(
@@ -361,6 +415,46 @@ public class IfcSpaceGeometryExtractor
         return z == double.MaxValue ? 0 : z;
     }
 
+    /// <summary>
+    /// The largest closed outline the element's plan curves form, as a CurveLoop of lines at
+    /// <paramref name="z"/> (link coordinates). Null when the curves form no closed loop.
+    /// </summary>
+    private static (CurveLoop Loop, double AreaFt2)? LargestCurveLoop(List<PlanSegment> segments, double z)
+    {
+        if (segments.Count < 3) return null;
+        var loop = FootprintCurveChainer.Largest(FootprintCurveChainer.ClosedLoops(segments, 0.01));
+        if (loop == null) return null;
+
+        try
+        {
+            var curveLoop = new CurveLoop();
+            for (int i = 0; i < loop.Count; i++)
+            {
+                var a = loop[i];
+                var b = loop[(i + 1) % loop.Count];
+                curveLoop.Append(Line.CreateBound(new XYZ(a.X, a.Y, z), new XYZ(b.X, b.Y, z)));
+            }
+            return (curveLoop, FootprintCurveChainer.Area(loop));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Bounding box size of the element in its own model, mm — for diagnostics.</summary>
+    private static string DescribeBox(Element element)
+    {
+        try
+        {
+            var box = element.get_BoundingBox(null);
+            if (box == null) return "unknown";
+            var d = box.Max - box.Min;
+            return $"{d.X * 304.8:0} x {d.Y * 304.8:0} x {d.Z * 304.8:0} mm";
+        }
+        catch { return "unknown"; }
+    }
+
     /// <summary>"2 solid(s), 1 mesh(es), 14 non-planar face(s), floor faces 1.1 m²" — for diagnostics.</summary>
     private static string DescribeGeometry(List<Solid> solids, List<Mesh> meshes)
     {
@@ -374,7 +468,8 @@ public class IfcSpaceGeometryExtractor
                 if (pf.FaceNormal.Z < -0.99) { floorFaces++; floorArea += pf.Area; }
             }
         }
-        return $"{solids.Count} solid(s), {meshes.Count} mesh(es), {nonPlanar} non-planar face(s), " +
+        var volume = solids.Sum(sd => { try { return sd.Volume; } catch { return 0.0; } }) * 0.0283168466;
+        return $"{solids.Count} solid(s) {volume:0.#} m³, {meshes.Count} mesh(es), {nonPlanar} non-planar face(s), " +
                $"{floorFaces} flat floor face(s) totalling {floorArea * SquareMetresPerSquareFoot:0.#} m²";
     }
 
