@@ -27,6 +27,10 @@ public static class ApprovalSummaryBuilder
             "revit_move_elements_between_circuits" => CircuitPreviewBuilder.BuildMoveElements(request),
             "revit_reassign_circuit_panel" => CircuitPreviewBuilder.BuildReassignPanel(request),
             "revit_change_circuit_cable_or_wire_type" => CircuitPreviewBuilder.BuildChangeWireType(request),
+            "revit_set_device_codes" => BuildSetDeviceCodes(request),
+            "revit_ensure_device_types" => BuildEnsureDeviceTypes(request),
+            "revit_place_at_wall" => BuildPlaceAtWall(request),
+            "revit_place_in_room" => BuildPlaceInRoom(request),
             "revit_select_circuit_elements" => BuildSelectCircuitElements(request),
             "revit_select_uncircuited_elements" => BuildSelectUncircuitedElements(request),
             "revit_apply_circuit_numbering" => BuildApplyCircuitNumbering(request),
@@ -425,6 +429,43 @@ public static class ApprovalSummaryBuilder
             ? $" Set {parameters.Count} parameter value{(parameters.Count == 1 ? "" : "s")}: {Summarize(parameters.Keys.ToList())}."
             : string.Empty;
         return $"Edit {target}.{renameDesc}{valueDesc}";
+    }
+
+    private static string BuildSetDeviceCodes(McpToolRequest request)
+    {
+        var codes = RoomDevices.DeviceCodeContext.InlineCodes(request.Arguments)?.Select(p => p.Key).ToList() ?? [];
+        var remove = ToolArguments.GetStringArray(request.Arguments, "removeCodes");
+        var mode = ToolArguments.GetBool(request.Arguments, "replace") ? "Replace" : "Merge";
+        var removeDesc = remove.Length > 0 ? $" Remove: {Summarize(remove.ToList())}." : string.Empty;
+        return $"{mode} {codes.Count} device code{(codes.Count == 1 ? "" : "s")} into the project config" +
+               (codes.Count > 0 ? $": {Summarize(codes)}." : ".") + removeDesc;
+    }
+
+    private static string BuildEnsureDeviceTypes(McpToolRequest request)
+    {
+        var codes = ToolArguments.GetStringArray(request.Arguments, "codes");
+        return codes.Length > 0
+            ? $"Create missing family types for device codes {Summarize(codes.ToList())} by duplicating their sourceType."
+            : "Create every missing family type of the device code map by duplicating its sourceType.";
+    }
+
+    private static string BuildPlaceAtWall(McpToolRequest request)
+    {
+        var items = RoomDevices.DevicePlacementService.ParseArray(request.Arguments, "placements");
+        var codes = items.Select(i => ToolArguments.GetString(i, "deviceCode")).Distinct().ToList();
+        var rooms = items.Select(i => ToolArguments.GetString(i, "roomNumber")).Distinct().ToList();
+        return $"Place {items.Count} wall device placement{(items.Count == 1 ? "" : "s")} ({Summarize(codes)}) " +
+               $"in room{(rooms.Count == 1 ? "" : "s")} {Summarize(rooms)}.";
+    }
+
+    private static string BuildPlaceInRoom(McpToolRequest request)
+    {
+        var code = ToolArguments.GetString(request.Arguments, "deviceCode");
+        var strategy = ToolArguments.GetString(request.Arguments, "strategy", "center");
+        var rooms = ToolArguments.GetStringArray(request.Arguments, "roomNumbers").ToList();
+        var filter = ToolArguments.GetString(request.Arguments, "roomFilter");
+        var target = rooms.Count > 0 ? $"room{(rooms.Count == 1 ? "" : "s")} {Summarize(rooms)}" : $"rooms matching '{filter}'";
+        return $"Place '{code}' devices ({strategy}) in {target}. The preview lists the exact count.";
     }
 
     /// <summary>Renders a short, bounded preview of a name list for the approval summary.</summary>

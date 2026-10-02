@@ -95,6 +95,8 @@
     <Compile Include="..\RevitMCP.Addin\Tagging\TagTemplateMath.cs" Link="Tagging\TagTemplateMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Documentation\Placement\PlaceViewsNameMatcher.cs" Link="Documentation\Placement\PlaceViewsNameMatcher.cs" />
     <Compile Include="..\RevitMCP.Addin\Families\FamilyTypeNamePlanner.cs" Link="Families\FamilyTypeNamePlanner.cs" />
+    <Compile Include="..\RevitMCP.Addin\RoomDevices\RoomGeometryMath.cs" Link="RoomDevices\RoomGeometryMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\RoomDevices\DeviceCodeMap.cs" Link="RoomDevices\DeviceCodeMap.cs" />
     <Compile Include="..\RevitMCP.Addin\Placement\AlignmentMath.cs" Link="Placement\AlignmentMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Placement\ViewAlignmentMath.cs" Link="Placement\ViewAlignmentMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Placement\MoveElementsMath.cs" Link="Placement\MoveElementsMath.cs" />

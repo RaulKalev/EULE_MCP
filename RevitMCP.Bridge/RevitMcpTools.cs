@@ -2404,6 +2404,308 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    // ── Room geometry & device placement (issue #52) ─────────────────────────────
+
+    [McpServerTool(Name = "revit_list_levels", ReadOnly = true),
+     Description("Lists host levels (id, name, elevationMm, projectElevationMm = host internal Z) and, with linkInstanceId, the link's levels mapped to host levels by elevation.")]
+    public async Task<string> ListLevels(
+        [Description("Optional link instance id to also list and map the link's levels")] long linkInstanceId = 0,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["linkInstanceId"] = linkInstanceId };
+        return FormatResult(await pipeClient.SendAsync("revit_list_levels", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_get_room_geometry", ReadOnly = true),
+     Description("Reads rooms for device placement in host internal mm: boundary (outer clockwise + holes), centroid, interiorPoint, areaM2, heightMm, ceilingHeightMm (lowest linked ceiling, null if none), doors[] (location, widthMm, wallIndex, along range, facingIntoRoom, swingIntoRoom, hingeSide, lockSide) and windows[] (sillHeightMm). source=host|link; IFC links without Rooms fall back to IfcSpace geometry (Revit 2026). Values are live.")]
+    public async Task<string> GetRoomGeometry(
+        [Description("host | link (default: link when linkInstanceId is set, else host)")] string? source = null,
+        [Description("Link instance id (AR link); optional when only one link is loaded")] long linkInstanceId = 0,
+        [Description("Host or link level name filter")] string? levelName = null,
+        [Description("Room numbers to read")] string[]? roomNumbers = null,
+        [Description("Room name filter (text or regex, case-insensitive)")] string? nameFilter = null,
+        [Description("Include doors (default true)")] bool includeDoors = true,
+        [Description("Include windows (default true)")] bool includeWindows = true,
+        [Description("Include ceiling height (default true)")] bool includeCeilingHeight = true,
+        [Description("Max rooms (default 200)")] int limit = 200,
+        [Description("Project root with .rktools config (optional; found above the model file)")] string? projectRoot = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = RoomArgs(source, linkInstanceId, levelName, projectRoot);
+        args["roomNumbers"] = roomNumbers ?? [];
+        args["nameFilter"] = nameFilter ?? string.Empty;
+        args["includeDoors"] = includeDoors;
+        args["includeWindows"] = includeWindows;
+        args["includeCeilingHeight"] = includeCeilingHeight;
+        args["limit"] = limit;
+        return FormatResult(await pipeClient.SendAsync("revit_get_room_geometry", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_get_room_walls", ReadOnly = true),
+     Description("Lists one room's wall faces seen from inside (host mm): index (= wallIndex for revit_place_at_wall), wallId, typeName, thicknessMm, axis, innerFace, normalIntoRoom, lengthMm, isCurved, isSeparationLine and openings (fromMm/toMm along the face).")]
+    public async Task<string> GetRoomWalls(
+        [Description("Room number")] string? roomNumber = null,
+        [Description("Room element id in the source model (alternative to roomNumber)")] long roomId = 0,
+        [Description("host | link")] string? source = null,
+        [Description("Link instance id")] long linkInstanceId = 0,
+        [Description("Level name, when room numbers repeat across levels")] string? levelName = null,
+        [Description("Project root (optional)")] string? projectRoot = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = RoomArgs(source, linkInstanceId, levelName, projectRoot);
+        args["roomNumber"] = roomNumber ?? string.Empty;
+        args["roomId"] = roomId;
+        return FormatResult(await pipeClient.SendAsync("revit_get_room_walls", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_get_device_codes", ReadOnly = true),
+     Description("Reads the device code map ('deviceCodes' in the project config) and 'devicePlacement' settings, and checks every code against the model: ok | missingType | missingSource | missingFamily.")]
+    public async Task<string> GetDeviceCodes(
+        [Description("Project root (optional when a .rktools folder exists above the model file)")] string? projectRoot = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["projectRoot"] = projectRoot ?? string.Empty };
+        return FormatResult(await pipeClient.SendAsync("revit_get_device_codes", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_set_device_codes"),
+     Description("Writes device codes into the project config (requires approval, backs up first). deviceCodes: {CODE: {family, type, mount: wall|ceiling|floor, heightMm, offsetFromWallMm, offsetFromCeilingMm, doorSide: lock|hinge, doorOffsetMm, rotationOffsetDeg, avoidCategories[], clearanceMm, maxSpacingMm, maxDistFromWallMm, sourceType, typeParameters{}}}. Merges by code unless replace=true; removeCodes[] deletes. settings: {roomParameter, handOrientationPointsTo: latch|hinge, swingTowardFacing}. Invalid entries write nothing.")]
+    public async Task<string> SetDeviceCodes(
+        [Description("Device code entries keyed by code")] object? deviceCodes = null,
+        [Description("Codes to remove")] string[]? removeCodes = null,
+        [Description("Replace the whole map instead of merging (default false)")] bool replace = false,
+        [Description("devicePlacement settings to merge: {roomParameter, handOrientationPointsTo, swingTowardFacing}")] object? settings = null,
+        [Description("Project root (optional when a .rktools folder exists above the model file)")] string? projectRoot = null,
+        [Description("Back up the config before writing (default true)")] bool backupBeforeOverwrite = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["deviceCodes"] = ToJToken(deviceCodes),
+            ["removeCodes"] = removeCodes ?? [],
+            ["replace"] = replace,
+            ["settings"] = ToJToken(settings),
+            ["projectRoot"] = projectRoot ?? string.Empty,
+            ["backupBeforeOverwrite"] = backupBeforeOverwrite
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_set_device_codes", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_preview_ensure_device_types", ReadOnly = true),
+     Description("Previews which device-code family types exist, will be created by duplicating sourceType (same family), or are blocked, with a check of every typeParameters value. No changes.")]
+    public async Task<string> PreviewEnsureDeviceTypes(
+        [Description("Codes to process (default all)")] string[]? codes = null,
+        [Description("Also write Type Comments = code")] bool setTypeCommentsToCode = false,
+        [Description("Write typeParameters onto types that already exist")] bool updateExisting = false,
+        [Description("Inline device codes overriding the config")] object? deviceCodes = null,
+        [Description("Project root (optional)")] string? projectRoot = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = EnsureTypeArgs(codes, setTypeCommentsToCode, updateExisting, deviceCodes, projectRoot);
+        return FormatResult(await pipeClient.SendAsync("revit_preview_ensure_device_types", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_ensure_device_types"),
+     Description("Creates missing device-code family types by duplicating each code's sourceType in the same family and naming the copy after the code's type, then writes typeParameters. Requires approval; undoable. Run revit_preview_ensure_device_types first.")]
+    public async Task<string> EnsureDeviceTypes(
+        [Description("Codes to process (default all)")] string[]? codes = null,
+        [Description("Also write Type Comments = code")] bool setTypeCommentsToCode = false,
+        [Description("Write typeParameters onto types that already exist")] bool updateExisting = false,
+        [Description("Inline device codes overriding the config")] object? deviceCodes = null,
+        [Description("Project root (optional)")] string? projectRoot = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = EnsureTypeArgs(codes, setTypeCommentsToCode, updateExisting, deviceCodes, projectRoot);
+        return FormatResult(await pipeClient.SendAsync("revit_ensure_device_types", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_preview_place_at_wall", ReadOnly = true),
+     Description("Previews unhosted wall devices by device code against room walls (host or linked/IFC rooms), no changes. placements=[{deviceCode, roomNumber, levelName?, wallIndex | wallId | nearestToPoint{x,y} | nearDoorId, alongMm | alongFraction | nearDoorId + doorSide (lock|hinge) + offsetMm, heightMm?, count?, spacingMm?}]. Point = inner face + normal x offsetFromWallMm, facing into the room, z = level + heightMm. Warns: openings +-100 mm, door leaves, corners <200 mm, outside room, duplicates <200 mm.")]
+    public async Task<string> PreviewPlaceAtWall(
+        [Description("Placement entries (see description)")] object[] placements,
+        [Description("host | link")] string? source = null,
+        [Description("Link instance id (AR link)")] long linkInstanceId = 0,
+        [Description("Default level name for room lookup")] string? levelName = null,
+        [Description("Inline device codes overriding the config")] object? deviceCodes = null,
+        [Description("Project root (optional)")] string? projectRoot = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = RoomArgs(source, linkInstanceId, levelName, projectRoot);
+        args["placements"] = ToJToken(placements);
+        args["deviceCodes"] = ToJToken(deviceCodes);
+        return FormatResult(await pipeClient.SendAsync("revit_preview_place_at_wall", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_place_at_wall"),
+     Description("Places unhosted wall devices by device code. Requires approval; one undoable transaction. Same arguments as revit_preview_place_at_wall (run it first) plus skipDevicesWithWarnings and roomParameter (room number target parameter).")]
+    public async Task<string> PlaceAtWall(
+        [Description("Placement entries (see revit_preview_place_at_wall)")] object[] placements,
+        [Description("host | link")] string? source = null,
+        [Description("Link instance id (AR link)")] long linkInstanceId = 0,
+        [Description("Default level name for room lookup")] string? levelName = null,
+        [Description("Skip devices whose preview had warnings (default false)")] bool skipDevicesWithWarnings = false,
+        [Description("Instance parameter that receives the room number (overrides config)")] string? roomParameter = null,
+        [Description("Inline device codes overriding the config")] object? deviceCodes = null,
+        [Description("Project root (optional)")] string? projectRoot = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = RoomArgs(source, linkInstanceId, levelName, projectRoot);
+        args["placements"] = ToJToken(placements);
+        args["deviceCodes"] = ToJToken(deviceCodes);
+        args["skipDevicesWithWarnings"] = skipDevicesWithWarnings;
+        args["roomParameter"] = roomParameter ?? string.Empty;
+        return FormatResult(await pipeClient.SendAsync("revit_place_at_wall", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_preview_place_in_room", ReadOnly = true),
+     Description("Previews unhosted devices inside rooms, no changes. strategy: center | grid (maxSpacingMm, maxDistFromWallMm, coverageRadiusMm; reports uncovered m2) | nearDoor (side inside|outside, doorSide lock|hinge, offsetMm) | points ([{u,v}] 0..1 of the room bbox). Ceiling codes: z = ceiling - offsetFromCeilingMm; others level + heightMm. Warns about avoidCategories within clearanceMm, outside-room points, duplicates.")]
+    public async Task<string> PreviewPlaceInRoom(
+        [Description("Device code")] string deviceCode,
+        [Description("Room numbers")] string[]? roomNumbers = null,
+        [Description("Room name filter (text or regex)")] string? roomFilter = null,
+        [Description("center | grid | nearDoor | points (default center)")] string strategy = "center",
+        [Description("grid: max spacing between devices (default from code)")] double? maxSpacingMm = null,
+        [Description("grid: max distance from walls (default from code)")] double? maxDistFromWallMm = null,
+        [Description("grid: coverage radius to verify (default half the cell diagonal)")] double? coverageRadiusMm = null,
+        [Description("nearDoor: inside | outside")] string side = "inside",
+        [Description("nearDoor: lock | hinge (default from code)")] string? doorSide = null,
+        [Description("nearDoor: clearance from the door edge (default from code)")] double? offsetMm = null,
+        [Description("points: [{u, v}] relative to the room bounding box")] object[]? points = null,
+        [Description("Override height (wall/floor: above level; ceiling: above floor)")] double? heightMm = null,
+        [Description("host | link")] string? source = null,
+        [Description("Link instance id")] long linkInstanceId = 0,
+        [Description("Level name filter")] string? levelName = null,
+        [Description("Inline device codes overriding the config")] object? deviceCodes = null,
+        [Description("Project root (optional)")] string? projectRoot = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = InRoomArgs(deviceCode, roomNumbers, roomFilter, strategy, maxSpacingMm, maxDistFromWallMm, coverageRadiusMm,
+            side, doorSide, offsetMm, points, heightMm, source, linkInstanceId, levelName, deviceCodes, projectRoot);
+        return FormatResult(await pipeClient.SendAsync("revit_preview_place_in_room", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_place_in_room"),
+     Description("Places unhosted devices inside rooms by device code (center | grid | nearDoor | points). Requires approval; one undoable transaction. Same arguments as revit_preview_place_in_room (run it first) plus skipDevicesWithWarnings and roomParameter.")]
+    public async Task<string> PlaceInRoom(
+        [Description("Device code")] string deviceCode,
+        [Description("Room numbers")] string[]? roomNumbers = null,
+        [Description("Room name filter (text or regex)")] string? roomFilter = null,
+        [Description("center | grid | nearDoor | points (default center)")] string strategy = "center",
+        [Description("grid: max spacing between devices")] double? maxSpacingMm = null,
+        [Description("grid: max distance from walls")] double? maxDistFromWallMm = null,
+        [Description("grid: coverage radius to verify")] double? coverageRadiusMm = null,
+        [Description("nearDoor: inside | outside")] string side = "inside",
+        [Description("nearDoor: lock | hinge")] string? doorSide = null,
+        [Description("nearDoor: clearance from the door edge")] double? offsetMm = null,
+        [Description("points: [{u, v}]")] object[]? points = null,
+        [Description("Override height")] double? heightMm = null,
+        [Description("host | link")] string? source = null,
+        [Description("Link instance id")] long linkInstanceId = 0,
+        [Description("Level name filter")] string? levelName = null,
+        [Description("Skip devices whose preview had warnings (default false)")] bool skipDevicesWithWarnings = false,
+        [Description("Instance parameter that receives the room number (overrides config)")] string? roomParameter = null,
+        [Description("Inline device codes overriding the config")] object? deviceCodes = null,
+        [Description("Project root (optional)")] string? projectRoot = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = InRoomArgs(deviceCode, roomNumbers, roomFilter, strategy, maxSpacingMm, maxDistFromWallMm, coverageRadiusMm,
+            side, doorSide, offsetMm, points, heightMm, source, linkInstanceId, levelName, deviceCodes, projectRoot);
+        args["skipDevicesWithWarnings"] = skipDevicesWithWarnings;
+        args["roomParameter"] = roomParameter ?? string.Empty;
+        return FormatResult(await pipeClient.SendAsync("revit_place_in_room", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_export_view_image", ReadOnly = true),
+     Description("Exports a view as PNG and returns the image so you can check placements visually. viewId (default active view); cropToRoom (room number, plan views) or bboxMm {minX,minY,maxX,maxY}; marginMm (default 1000); pixelSize (default 2000); highlightElementIds drawn red. Temporary crop/highlight is rolled back.")]
+    public async Task<IEnumerable<ModelContextProtocol.Protocol.ContentBlock>> ExportViewImage(
+        [Description("View id (default: active view)")] long viewId = 0,
+        [Description("Room number to crop to (plan views)")] string? cropToRoom = null,
+        [Description("Crop box in host internal mm: {minX, minY, maxX, maxY}")] object? bboxMm = null,
+        [Description("Margin around the crop (default 1000 mm)")] double marginMm = 1000,
+        [Description("Image width in pixels (default 2000)")] int pixelSize = 2000,
+        [Description("Element ids to highlight in red")] long[]? highlightElementIds = null,
+        [Description("host | link (for cropToRoom)")] string? source = null,
+        [Description("Link instance id (for cropToRoom)")] long linkInstanceId = 0,
+        [Description("Level name (for cropToRoom)")] string? levelName = null,
+        [Description("Return the image inline (default true); false returns only the path")] bool returnImage = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = RoomArgs(source, linkInstanceId, levelName, null);
+        args["viewId"] = viewId;
+        args["cropToRoom"] = cropToRoom ?? string.Empty;
+        args["bboxMm"] = ToJToken(bboxMm);
+        args["marginMm"] = marginMm;
+        args["pixelSize"] = pixelSize;
+        args["highlightElementIds"] = highlightElementIds ?? [];
+
+        var result = await pipeClient.SendAsync("revit_export_view_image", args, cancellationToken);
+        var blocks = new List<ModelContextProtocol.Protocol.ContentBlock>
+        {
+            new ModelContextProtocol.Protocol.TextContentBlock { Text = FormatResult(result) }
+        };
+
+        if (returnImage && result.Success && result.Data != null)
+        {
+            try
+            {
+                var path = Newtonsoft.Json.Linq.JToken.FromObject(result.Data)["imagePath"]?.ToString();
+                if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                    blocks.Add(ModelContextProtocol.Protocol.ImageContentBlock.FromBytes(
+                        await File.ReadAllBytesAsync(path, cancellationToken), "image/png"));
+            }
+            catch (Exception ex)
+            {
+                blocks.Add(new ModelContextProtocol.Protocol.TextContentBlock { Text = $"Image could not be attached: {ex.Message}" });
+            }
+        }
+
+        return blocks;
+    }
+
+    private static Dictionary<string, object?> RoomArgs(string? source, long linkInstanceId, string? levelName, string? projectRoot) =>
+        new()
+        {
+            ["source"] = source ?? string.Empty,
+            ["linkInstanceId"] = linkInstanceId,
+            ["levelName"] = levelName ?? string.Empty,
+            ["projectRoot"] = projectRoot ?? string.Empty
+        };
+
+    private static Dictionary<string, object?> EnsureTypeArgs(
+        string[]? codes, bool setTypeCommentsToCode, bool updateExisting, object? deviceCodes, string? projectRoot) =>
+        new()
+        {
+            ["codes"] = codes ?? [],
+            ["setTypeCommentsToCode"] = setTypeCommentsToCode,
+            ["updateExisting"] = updateExisting,
+            ["deviceCodes"] = ToJToken(deviceCodes),
+            ["projectRoot"] = projectRoot ?? string.Empty
+        };
+
+    private static Dictionary<string, object?> InRoomArgs(
+        string deviceCode, string[]? roomNumbers, string? roomFilter, string strategy,
+        double? maxSpacingMm, double? maxDistFromWallMm, double? coverageRadiusMm,
+        string side, string? doorSide, double? offsetMm, object[]? points, double? heightMm,
+        string? source, long linkInstanceId, string? levelName, object? deviceCodes, string? projectRoot)
+    {
+        var args = RoomArgs(source, linkInstanceId, levelName, projectRoot);
+        args["deviceCode"] = deviceCode;
+        args["roomNumbers"] = roomNumbers ?? [];
+        args["roomFilter"] = roomFilter ?? string.Empty;
+        args["strategy"] = strategy;
+        args["side"] = side;
+        args["points"] = ToJToken(points);
+        args["deviceCodes"] = ToJToken(deviceCodes);
+        // Optional numbers are only sent when given, so the add-in falls back to the code's defaults.
+        if (maxSpacingMm != null) args["maxSpacingMm"] = maxSpacingMm;
+        if (maxDistFromWallMm != null) args["maxDistFromWallMm"] = maxDistFromWallMm;
+        if (coverageRadiusMm != null) args["coverageRadiusMm"] = coverageRadiusMm;
+        if (doorSide != null) args["doorSide"] = doorSide;
+        if (offsetMm != null) args["offsetMm"] = offsetMm;
+        if (heightMm != null) args["heightMm"] = heightMm;
+        return args;
+    }
+
     private static readonly JsonSerializerSettings ResultSerializerSettings = new()
     {
         Formatting = Formatting.None,

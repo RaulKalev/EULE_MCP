@@ -46,6 +46,9 @@ public sealed class VillageToolClassifier
     private static readonly (string Keyword, string Area)[] AreaRules =
     {
         ("graph",              VillageAreas.Graph),
+        ("device_code",        VillageAreas.Office),
+        ("device_type",        VillageAreas.FamiliesTypes),
+        ("level",              VillageAreas.Elements),
         ("clash",              VillageAreas.Coordination),
         ("tag",                VillageAreas.TagsAnnotations),
         ("retag",              VillageAreas.TagsAnnotations),
@@ -153,6 +156,7 @@ public sealed class VillageToolClassifier
         // create
         ["create"] = VillageActivities.Create, ["place"] = VillageActivities.Create, ["duplicate"] = VillageActivities.Create,
         ["annotate"] = VillageActivities.Create, ["convert"] = VillageActivities.Create,
+        ["ensure"] = VillageActivities.Create,
         // modify
         ["set"] = VillageActivities.Modify, ["apply"] = VillageActivities.Modify, ["rename"] = VillageActivities.Modify,
         ["reassign"] = VillageActivities.Modify, ["change"] = VillageActivities.Modify, ["assign"] = VillageActivities.Modify,
