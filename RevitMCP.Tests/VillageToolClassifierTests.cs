@@ -69,7 +69,10 @@ public class VillageToolClassifierTests
         "revit_set_view_crop_regions revit_set_view_parameters_bulk revit_skill_builder_guide revit_trace_circuit " +
         "revit_update_project_skill_override revit_update_skill revit_validate_clash_preset revit_validate_view_sheet_preset " +
         "standards_get_document_chunk standards_index_sources standards_list_sources standards_search " +
-        "standards_validate_source_config sync_ifc_space_room_data validate_ifc_space_room_conversion";
+        "standards_validate_source_config sync_ifc_space_room_data validate_ifc_space_room_conversion " +
+        "revit_list_levels revit_get_room_geometry revit_get_room_walls revit_get_device_codes revit_set_device_codes " +
+        "revit_preview_ensure_device_types revit_ensure_device_types revit_preview_place_at_wall revit_place_at_wall " +
+        "revit_preview_place_in_room revit_place_in_room revit_export_view_image";
 
     public static IEnumerable<object[]> AllKnownToolNames() =>
         KnownToolNames.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(n => new object[] { n });

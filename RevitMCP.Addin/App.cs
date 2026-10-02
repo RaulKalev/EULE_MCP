@@ -237,6 +237,20 @@ public class App : IExternalApplication
             handler.RegisterTool(new PreviewEditFamilyTypesTool());
             handler.RegisterTool(new EditFamilyTypesTool());
 
+            // Room geometry, device codes and room-based device placement (issue #52)
+            handler.RegisterTool(new ListLevelsTool());
+            handler.RegisterTool(new GetRoomGeometryTool());
+            handler.RegisterTool(new GetRoomWallsTool());
+            handler.RegisterTool(new GetDeviceCodesTool());
+            handler.RegisterTool(new SetDeviceCodesTool());
+            handler.RegisterTool(new PreviewEnsureDeviceTypesTool());
+            handler.RegisterTool(new EnsureDeviceTypesTool());
+            handler.RegisterTool(new PreviewPlaceAtWallTool());
+            handler.RegisterTool(new PlaceAtWallTool());
+            handler.RegisterTool(new PreviewPlaceInRoomTool());
+            handler.RegisterTool(new PlaceInRoomTool());
+            handler.RegisterTool(new ExportViewImageTool());
+
             // Element Placement (issue #17)
             handler.RegisterTool(new PlaceFamilyInstancesTool());
 
