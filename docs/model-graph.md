@@ -33,8 +33,8 @@ milliseconds.
 
 | `operation` | Arguments | Returns |
 |---|---|---|
-| `neighbors` | `id`, `rel?`, `direction?` (`in` \| `out` \| `both`, default `both`), `limit?` (1–500, default 100) | The node plus its neighbours with `rel` and `direction` |
-| `find` | `kind?`, `category?`, `level?`, `workset?`, `nameContains?`, `page?`, `pageSize?` (default 100, max 500) | Paginated ids + names (`itemsReturned`, `totalAvailable`, `hasMore`, `nextPage`) |
+| `neighbors` | `id`, `rel?`, `direction?` (`in` \| `out` \| `both`, default `both`), `limit?` (1–500, default 100), `link?` | The node plus its neighbours with `rel` and `direction` |
+| `find` | `kind?`, `category?`, `level?`, `workset?`, `nameContains?`, `link?`, `param?`, `paramValue?`, `paramContains?`, `page?`, `pageSize?` (default 100, max 500) | Paginated ids + names (`itemsReturned`, `totalAvailable`, `hasMore`, `nextPage`); items carry `routingParams` when the graph indexes any |
 | `path` | `fromId`, `toId`, `maxHops?` (1–10, default 6) | Shortest undirected path; each step has `rel` and `direction` |
 | `subtree` | `id`, `rel`, `depth?` (1–10, default 3), `direction?` (`in` \| `out`, default `in`), `maxNodes?` (1–2000, default 500) | Everything reachable via one relationship, with `depth` and `parentId` |
 
@@ -46,6 +46,7 @@ revit_graph_query operation=subtree id=123456 rel=fed_by depth=2        # everyt
 revit_graph_query operation=neighbors id=234567 rel=located_in direction=out
 revit_graph_query operation=path fromId=234567 toId=123456 maxHops=4
 revit_graph_query operation=find kind=element category="Lighting Fixtures" level="2. korrus" page=0 pageSize=200
+revit_graph_query operation=find param="Loop number" paramValue=L1 link=host   # needs graph.routingParameters
 ```
 
 Name matching (`nameContains`) is a SQLite `LIKE`, so it is case-insensitive for ASCII letters only.
@@ -110,6 +111,47 @@ Known limitations: unsaved edits that do not change the element count (parameter
 are not detected; freshness is relative to the open local document's last synchronised version,
 not to a newer central version that the document has not reloaded.
 When in doubt, rebuild — a full build of a 100k-element model takes a few seconds.
+
+---
+
+## Routing parameters (#63)
+
+By default the graph stores no parameter values. When a distinction exists only in a parameter
+(loop number, device number, system code, a project classification), a **bounded allowlist** of
+parameters can be indexed as routing hints:
+
+```json
+{
+  "graph": {
+    "routingParameters": [
+      "Loop number",
+      { "name": "Seadme Nr.", "categories": ["Fire Alarm Devices"] },
+      { "guid": "0d8b5b3a-3c3b-4c41-9a35-4c8c9a1b2c3d", "name": "System code" }
+    ]
+  }
+}
+```
+
+- **Where:** the project config (`<projectRoot>\.rktools\mcp.project.config.json`, found above the
+  model file), else the user config, else the company config. The first scope that defines the key
+  wins, so a project can narrow a company list or switch it off with `[]`.
+  `config_set_project_config` / `config_update` write these files.
+- **Bounds:** at most 20 parameters. Values are trimmed, collapsed to one line and cut at 200
+  characters. Names that look like secrets (password, token, secret, API key, credential) are never
+  indexed, even when listed. Only allowlisted parameters are read — never all parameters.
+- **Reading:** the instance parameter first, then the type parameter; by shared-parameter GUID when
+  one is given, else by name. Empty values are not stored. `categories` limits a parameter to those
+  categories. Host and linked elements, panels, circuits and rooms/spaces are covered.
+- **Querying:** `find param=<name>` (has a value), `paramValue=<exact>`, `paramContains=<substring>`.
+  Matching is case-insensitive for any script (values are lower-cased with the invariant culture),
+  and combines with every other filter, including `link`. Without `param` the value filters match any
+  indexed parameter. Returned items carry `routingParams`, and the response says they are hints.
+- **Staleness:** values are captured at `built_at` like everything else in the graph. Incremental
+  builds refresh the parameters of changed elements; changing the allowlist forces a full rebuild.
+  **Never report or act on a graph parameter value** — read it live by id first.
+- `revit_graph_build` and `revit_graph_status` report the indexed parameters with node and
+  distinct-value counts. Graphs built without the feature still work: their param filters simply
+  match nothing, with a warning saying how to enable them.
 
 ---
 
@@ -189,6 +231,7 @@ The update **falls back to a full rebuild** — and says why in `incremental.fal
 - a level was changed or deleted (level names are stored on every node);
 - a room or space was added or changed (other elements change room without changing themselves);
 - a workset changed;
+- the routing-parameter allowlist changed;
 - a linked model changed (link added, moved, reloaded or removed).
 
 Deleting a room only removes the `located_in` edges to it, so it stays incremental. An incremental
@@ -250,7 +293,8 @@ about 214k.
   the bridge reports `request_timeout` but the build keeps running on the Revit thread and still
   publishes the file — check `revit_graph_status` afterwards. Use `elementLimit` to bound the build.
 - `tagged_in` links an element to the **view** its tag sits in, not to the tag element itself.
-- Annotation elements other than tags and parameter values are not indexed; inside linked models
+- Annotation elements other than tags are not indexed, and parameter values only when allowlisted
+  (see [Routing parameters](#routing-parameters-63)); inside linked models
   only elements, rooms/spaces and types are (see [Linked models](#linked-models-62)).
 - The add-in uses the SQLite that ships with Windows 10/11 (`winsqlite3.dll`) through
   `SQLitePCLRaw.bundle_winsqlite3`, so no native binary is deployed; the unit tests use the

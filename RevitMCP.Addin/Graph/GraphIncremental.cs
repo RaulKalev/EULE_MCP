@@ -63,6 +63,8 @@ public sealed class IncrementalInputs
     public bool Overflow { get; set; }
     public bool HasEdgeOwners { get; set; }
     public bool ElementLimitReached { get; set; }
+    /// <summary>The routing-parameter allowlist (#63) differs from the one the graph was built with.</summary>
+    public bool RoutingParametersChanged { get; set; }
     /// <summary>Changes a partial update cannot represent safely (level renamed, room boundary changed, …).</summary>
     public List<string> UnsafeChanges { get; set; } = [];
 }
@@ -87,6 +89,7 @@ public static class GraphIncrementalPlanner
         else if (!i.BaselineMatches) why = "changes since the last build were not tracked in this session (graph built elsewhere, or the add-in was reloaded since)";
         else if (i.Overflow) why = $"more than {GraphChangeSet.MaxTrackedIds:N0} element changes since the last build";
         else if (i.ElementLimitReached) why = "the last build hit the element limit, so the graph is partial";
+        else if (i.RoutingParametersChanged) why = "the routing-parameter allowlist (graph.routingParameters) changed since the last build";
         else if (i.UnsafeChanges.Count > 0) why = string.Join("; ", i.UnsafeChanges.Distinct());
 
         return why == null

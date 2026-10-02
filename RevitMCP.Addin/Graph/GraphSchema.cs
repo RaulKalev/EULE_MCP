@@ -101,6 +101,9 @@ public static class GraphSchema
         public const string ElementLimitReached = "element_limit_reached";
         public const string LastFullBuildAt     = "last_full_build_at";
         public const string IncrementalUpdates  = "incremental_updates";
+        // #63: the routing-parameter allowlist the graph was built with, and where it came from.
+        public const string RoutingParameters       = "routing_parameters";
+        public const string RoutingParametersSource = "routing_parameters_source";
     }
 
     /// <summary>DDL executed on a fresh database. Kept flat on purpose.</summary>
@@ -127,6 +130,13 @@ CREATE TABLE IF NOT EXISTS edge_owners (
     owner TEXT NOT NULL,
     PRIMARY KEY (src, dst, rel, owner)
 );
+CREATE TABLE IF NOT EXISTS node_params (
+    node_id TEXT NOT NULL,
+    name    TEXT NOT NULL,
+    value   TEXT NOT NULL,
+    norm    TEXT NOT NULL,
+    PRIMARY KEY (node_id, name)
+);
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT
@@ -138,6 +148,7 @@ CREATE INDEX IF NOT EXISTS ix_edges_src      ON edges(src);
 CREATE INDEX IF NOT EXISTS ix_edges_dst      ON edges(dst);
 CREATE INDEX IF NOT EXISTS ix_edges_rel      ON edges(rel);
 CREATE INDEX IF NOT EXISTS ix_edge_owners_owner ON edge_owners(owner);
+CREATE INDEX IF NOT EXISTS ix_node_params_name_norm ON node_params(name, norm);
 ";
 
     public static bool IsKind(string? value) =>

@@ -171,6 +171,8 @@ public sealed class GraphDatabase : IDisposable
             }
         }
 
+        WriteParams(tx, nodes);
+
         using (var cmd = _connection.CreateCommand())
         using (var ownerCmd = _connection.CreateCommand())
         {
@@ -258,8 +260,81 @@ public sealed class GraphDatabase : IDisposable
     }
 
     /// <summary>True when the file records edge ownership (schema 2+), which incremental updates need.</summary>
-    public bool HasEdgeOwners() =>
-        Scalar<long>("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'edge_owners'") > 0;
+    public bool HasEdgeOwners() => HasTable("edge_owners");
+
+    private bool HasTable(string name)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = $n";
+        cmd.Parameters.AddWithValue("$n", name);
+        return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture) > 0;
+    }
+
+    // ─── Routing parameters (#63) ────────────────────────────────────────────
+
+    private void WriteParams(SqliteTransaction tx, IEnumerable<GraphNode> nodes)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "INSERT OR REPLACE INTO node_params (node_id, name, value, norm) VALUES ($id, $name, $value, $norm)";
+        var pId = cmd.Parameters.Add("$id", SqliteType.Text);
+        var pName = cmd.Parameters.Add("$name", SqliteType.Text);
+        var pValue = cmd.Parameters.Add("$value", SqliteType.Text);
+        var pNorm = cmd.Parameters.Add("$norm", SqliteType.Text);
+        foreach (var n in nodes)
+        {
+            if (n.Params == null || string.IsNullOrEmpty(n.Id)) continue;
+            foreach (var kv in n.Params)
+            {
+                var value = GraphRoutingParameters.Clean(kv.Value);
+                if (string.IsNullOrEmpty(kv.Key) || value == null) continue;
+                pId.Value = n.Id;
+                pName.Value = kv.Key;
+                pValue.Value = value;
+                pNorm.Value = GraphRoutingParameters.Normalize(value)!;
+                cmd.ExecuteNonQuery();
+            }
+        }
+    }
+
+    /// <summary>True when this graph file can hold routing parameters (older files simply have none).</summary>
+    public bool HasRoutingParameters() => HasTable("node_params");
+
+    /// <summary>Indexed routing parameters with node and distinct-value counts.</summary>
+    public List<(string Name, long Nodes, long DistinctValues)> RoutingParameterStats()
+    {
+        var result = new List<(string, long, long)>();
+        if (!HasTable("node_params")) return result;
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "SELECT name, COUNT(*), COUNT(DISTINCT norm) FROM node_params GROUP BY name ORDER BY name";
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read()) result.Add((reader.GetString(0), reader.GetInt64(1), reader.GetInt64(2)));
+        return result;
+    }
+
+    /// <summary>Routing parameter values of the given nodes (node id → name → value).</summary>
+    public Dictionary<string, Dictionary<string, string>> ParamsOf(IEnumerable<string> ids)
+    {
+        var result = new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal);
+        if (!HasTable("node_params")) return result;
+        foreach (var chunk in ids.Distinct(StringComparer.Ordinal).Select((id, i) => (id, i)).GroupBy(x => x.i / 400, x => x.id))
+        {
+            var list = chunk.ToList();
+            using var cmd = _connection.CreateCommand();
+            var names = list.Select((_, i) => "$p" + i.ToString(CultureInfo.InvariantCulture)).ToList();
+            cmd.CommandText = $"SELECT node_id, name, value FROM node_params WHERE node_id IN ({string.Join(",", names)})";
+            for (var i = 0; i < list.Count; i++) cmd.Parameters.AddWithValue(names[i], list[i]);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                var id = reader.GetString(0);
+                if (!result.TryGetValue(id, out var map))
+                    result[id] = map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                map[reader.GetString(1)] = reader.GetString(2);
+            }
+        }
+        return result;
+    }
 
     /// <summary>
     /// Applies an incremental update in one transaction: (1) removes the nodes of the refreshed and
@@ -298,10 +373,12 @@ public sealed class GraphDatabase : IDisposable
             return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
         }
 
-        // 1. Changed and deleted ids: their nodes and the edges they own.
+        // 1. Changed and deleted ids: their nodes, routing parameters and the edges they own.
+        var hasParams = HasTable("node_params");
         foreach (var id in refreshedIds.Concat(deletedIds).Distinct(StringComparer.Ordinal))
         {
             Exec("DELETE FROM edge_owners WHERE owner = $id", ("$id", id));
+            if (hasParams) Exec("DELETE FROM node_params WHERE node_id = $id", ("$id", id));
             result.NodesRemoved += Exec("DELETE FROM nodes WHERE id = $id", ("$id", id));
         }
         result.EdgesRemoved += Exec(
@@ -316,7 +393,9 @@ public sealed class GraphDatabase : IDisposable
         }
 
         // 3. Upsert the re-extracted nodes, then their owned edges (only when both endpoints exist).
-        foreach (var n in nodes)
+        var nodeList = nodes.ToList();
+        if (hasParams) WriteParams(tx, nodeList);
+        foreach (var n in nodeList)
         {
             if (string.IsNullOrEmpty(n.Id)) continue;
             Exec("INSERT OR REPLACE INTO nodes (id, kind, name, category, level, workset, extra) " +
@@ -487,6 +566,35 @@ public sealed class GraphDatabase : IDisposable
     // ─── Read: find ────────────────────────────────────────────────────────
 
     /// <summary>
+    /// SQL for the find routing-parameter filters (#63): the node has <paramref name="param"/> (any
+    /// non-empty value), equal to <paramref name="paramValue"/>, or containing <paramref name="paramContains"/>
+    /// — case-insensitive. Without a name the value filters match any indexed parameter.
+    /// </summary>
+    private string ParamClause(string? param, string? paramValue, string? paramContains, List<(string Name, object Value)> parameters)
+    {
+        if (!HasTable("node_params")) return "0";
+        var conditions = new List<string> { "p.node_id = nodes.id" };
+        if (!string.IsNullOrWhiteSpace(param))
+        {
+            conditions.Add("p.name = $pname COLLATE NOCASE");
+            parameters.Add(("$pname", param!.Trim()));
+        }
+        var exact = GraphRoutingParameters.Normalize(paramValue);
+        if (exact != null)
+        {
+            conditions.Add("p.norm = $pvalue");
+            parameters.Add(("$pvalue", exact));
+        }
+        var contains = GraphRoutingParameters.Normalize(paramContains);
+        if (contains != null)
+        {
+            conditions.Add("p.norm LIKE $pcontains ESCAPE '\\'");
+            parameters.Add(("$pcontains", "%" + EscapeLike(contains) + "%"));
+        }
+        return $"EXISTS (SELECT 1 FROM node_params p WHERE {string.Join(" AND ", conditions)})";
+    }
+
+    /// <summary>
     /// SQL for the find <c>link</c> filter (#62): "host" = host-model nodes only; "links" = every linked
     /// node; a number = nodes of that link instance; anything else = nodes of the link instances whose
     /// name contains it.
@@ -527,7 +635,8 @@ public sealed class GraphDatabase : IDisposable
     /// <summary>Filtered, paginated node lookup. All filters are optional; matching is case-insensitive (ASCII).</summary>
     public PagedResult<GraphNode> Find(
         string? kind, string? category, string? level, string? workset, string? nameContains,
-        int page, int pageSize, string? link = null)
+        int page, int pageSize, string? link = null,
+        string? param = null, string? paramValue = null, string? paramContains = null)
     {
         if (page < 0) page = 0;
         if (pageSize <= 0) pageSize = QueryLimits.Default.DefaultPageSize;
@@ -553,6 +662,8 @@ public sealed class GraphDatabase : IDisposable
         }
         if (!string.IsNullOrWhiteSpace(link))
             clauses.Add(LinkClause(link!.Trim(), parameters));
+        if (!string.IsNullOrWhiteSpace(param) || !string.IsNullOrWhiteSpace(paramValue) || !string.IsNullOrWhiteSpace(paramContains))
+            clauses.Add(ParamClause(param, paramValue, paramContains, parameters));
 
         var where =clauses.Count == 0 ? string.Empty : " WHERE " + string.Join(" AND ", clauses);
 

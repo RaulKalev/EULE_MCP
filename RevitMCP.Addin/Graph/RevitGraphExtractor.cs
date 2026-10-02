@@ -49,9 +49,14 @@ public static class RevitGraphExtractor
     /// Full extraction of the document. <paramref name="linkElementLimit"/> &gt; 0 also indexes the
     /// elements of loaded linked models (#62), up to that many in total; 0 leaves links out.
     /// </summary>
-    public static GraphExtractionResult Extract(Document doc, int elementLimit, int linkElementLimit = 0)
+    public static GraphExtractionResult Extract(Document doc, int elementLimit, int linkElementLimit = 0,
+        IReadOnlyList<RoutingParameterSpec>? routingParameters = null)
     {
-        var builder = new Builder(doc, elementLimit, subset: false) { LinkElementLimit = linkElementLimit };
+        var builder = new Builder(doc, elementLimit, subset: false)
+        {
+            LinkElementLimit = linkElementLimit,
+            RoutingParameters = routingParameters ?? Array.Empty<RoutingParameterSpec>()
+        };
         return builder.Run();
     }
 
@@ -60,9 +65,13 @@ public static class RevitGraphExtractor
     /// edges, plus panel nodes for the panels of re-extracted circuits. Edges are not checked for
     /// dangling endpoints here — the graph database does that against the existing nodes.
     /// </summary>
-    public static GraphExtractionResult ExtractSubset(Document doc, IEnumerable<long> ids)
+    public static GraphExtractionResult ExtractSubset(Document doc, IEnumerable<long> ids,
+        IReadOnlyList<RoutingParameterSpec>? routingParameters = null)
     {
-        var builder = new Builder(doc, int.MaxValue, subset: true);
+        var builder = new Builder(doc, int.MaxValue, subset: true)
+        {
+            RoutingParameters = routingParameters ?? Array.Empty<RoutingParameterSpec>()
+        };
         return builder.RunSubset(ids);
     }
 
@@ -82,6 +91,7 @@ public static class RevitGraphExtractor
         private int _linkedCount;
 
         public int LinkElementLimit { get; set; }
+        public IReadOnlyList<RoutingParameterSpec> RoutingParameters { get; set; } = Array.Empty<RoutingParameterSpec>();
 
         public Builder(Document doc, int elementLimit, bool subset)
         {
@@ -325,7 +335,7 @@ public static class RevitGraphExtractor
             }
             catch { }
 
-            AddNode(new GraphNode
+            AttachParams(AddNode(new GraphNode
             {
                 Id = id,
                 Kind = GraphSchema.Kinds.Space,
@@ -334,7 +344,7 @@ public static class RevitGraphExtractor
                 Level = levelName,
                 Workset = WorksetName(spatial),
                 Extra = Extra(("number", number), ("name", name), ("spatialType", spatial is Room ? "Room" : "Space"))
-            });
+            }), spatial);
             if (levelId != null) AddEdge(id, Id(levelId), GraphSchema.Rels.OnLevel, owner: id);
             AddWorksetEdge(spatial, id);
         }
@@ -353,7 +363,7 @@ public static class RevitGraphExtractor
         {
             var id = Id(panel.Id);
             var (levelName, levelId) = LevelOf(panel);
-            AddNode(new GraphNode
+            AttachParams(AddNode(new GraphNode
             {
                 Id = id,
                 Kind = GraphSchema.Kinds.Panel,
@@ -365,7 +375,7 @@ public static class RevitGraphExtractor
                     ("family", SafeString(() => panel.Symbol?.Family?.Name)),
                     ("type", SafeString(() => panel.Symbol?.Name)),
                     ("panelName", SafeString(() => panel.get_Parameter(BuiltInParameter.RBS_ELEC_PANEL_NAME)?.AsString())))
-            });
+            }), panel);
             if (levelId != null) AddEdge(id, Id(levelId), GraphSchema.Rels.OnLevel, owner: id);
             AddWorksetEdge(panel, id);
             AddInstanceEdges(panel, id);
@@ -409,7 +419,7 @@ public static class RevitGraphExtractor
             var label = $"{panelName}/{circuitNumber}".Trim('/');
             if (!string.IsNullOrEmpty(loadName)) label = $"{label} {loadName}".Trim();
 
-            AddNode(new GraphNode
+            AttachParams(AddNode(new GraphNode
             {
                 Id = id,
                 Kind = GraphSchema.Kinds.Circuit,
@@ -423,7 +433,7 @@ public static class RevitGraphExtractor
                     ("panel", panelName),
                     ("panelId", panel != null ? Id(panel.Id) : null),
                     ("systemType", SafeString(() => circuit.SystemType.ToString())))
-            });
+            }), circuit);
             AddWorksetEdge(circuit, id);
             if (panel != null)
             {
@@ -506,7 +516,7 @@ public static class RevitGraphExtractor
                 extra = Extra(("type", typeElem != null ? SafeName(typeElem) : null));
             }
 
-            AddNode(new GraphNode
+            AttachParams(AddNode(new GraphNode
             {
                 Id = id,
                 Kind = GraphSchema.Kinds.Element,
@@ -515,7 +525,7 @@ public static class RevitGraphExtractor
                 Level = levelName,
                 Workset = WorksetName(element),
                 Extra = extra
-            });
+            }), element);
 
             if (levelId != null) AddEdge(id, Id(levelId), GraphSchema.Rels.OnLevel, owner: id);
             AddWorksetEdge(element, id);
@@ -676,7 +686,7 @@ public static class RevitGraphExtractor
                 var number = SafeString(() => spatial.Number);
                 var name = SafeString(() => spatial.get_Parameter(BuiltInParameter.ROOM_NAME)?.AsString());
                 if (string.IsNullOrEmpty(name)) name = SafeName(spatial);
-                AddNode(new GraphNode
+                AttachParams(AddNode(new GraphNode
                 {
                     Id = id,
                     Kind = GraphSchema.Kinds.Space,
@@ -685,7 +695,7 @@ public static class RevitGraphExtractor
                     Level = LinkedLevelName(link, spatial),
                     Extra = Extra(("number", number), ("name", name), ("spatialType", spatial is Room ? "Room" : "Space"),
                         ("linkName", link.Name), ("linkDocument", link.DocumentTitle))
-                });
+                }), spatial, link.Doc);
                 AddEdge(id, link.InstanceNodeId, GraphSchema.Rels.InLink, owner: id);
                 summary.Spaces++;
             }
@@ -712,7 +722,7 @@ public static class RevitGraphExtractor
                 ElementType? type;
                 try { type = link.Doc.GetElement(element.GetTypeId()) as ElementType; } catch { type = null; }
                 var fi = element as FamilyInstance;
-                AddNode(new GraphNode
+                AttachParams(AddNode(new GraphNode
                 {
                     Id = id,
                     Kind = GraphSchema.Kinds.Element,
@@ -723,7 +733,7 @@ public static class RevitGraphExtractor
                         ("family", fi != null ? SafeString(() => fi.Symbol?.Family?.Name) : type != null ? SafeString(() => type.FamilyName) : null),
                         ("type", type != null ? SafeName(type) : null),
                         ("linkName", link.Name), ("linkDocument", link.DocumentTitle))
-                });
+                }), element, link.Doc);
                 AddEdge(id, link.InstanceNodeId, GraphSchema.Rels.InLink, owner: id);
                 summary.Elements++;
 
@@ -933,7 +943,68 @@ public static class RevitGraphExtractor
 
         // ─── Helpers ───────────────────────────────────────────────────────
 
-        private void AddNode(GraphNode node) => _nodes[node.Id] = node;
+        private GraphNode AddNode(GraphNode node)
+        {
+            _nodes[node.Id] = node;
+            return node;
+        }
+
+        /// <summary>Reads the allowlisted routing parameters (#63) of an element onto its node (instance first, then type).</summary>
+        private void AttachParams(GraphNode node, Element element, Document? owner = null)
+        {
+            if (RoutingParameters.Count == 0) return;
+            Dictionary<string, string>? values = null;
+            foreach (var spec in RoutingParameters)
+            {
+                if (!spec.AppliesTo(node.Category)) continue;
+                var value = GraphRoutingParameters.Clean(ReadParameter(element, spec, owner ?? _doc));
+                if (value == null) continue;
+                (values ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase))[spec.Name] = value;
+            }
+            node.Params = values;
+        }
+
+        private static string? ReadParameter(Element element, RoutingParameterSpec spec, Document doc)
+        {
+            var text = ParameterText(Lookup(element, spec));
+            if (text != null) return text;
+            try
+            {
+                var typeId = element.GetTypeId();
+                if (typeId == null || typeId == ElementId.InvalidElementId) return null;
+                var type = doc.GetElement(typeId);
+                return type == null ? null : ParameterText(Lookup(type, spec));
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static Parameter? Lookup(Element element, RoutingParameterSpec spec)
+        {
+            try { return spec.Guid != null ? element.get_Parameter(spec.Guid.Value) : element.LookupParameter(spec.Name); }
+            catch { return null; }
+        }
+
+        private static string? ParameterText(Parameter? p)
+        {
+            if (p == null) return null;
+            try
+            {
+                if (!p.HasValue) return null;
+                return p.StorageType switch
+                {
+                    StorageType.String => p.AsString(),
+                    StorageType.Integer => p.AsValueString() ?? p.AsInteger().ToString(CultureInfo.InvariantCulture),
+                    _ => p.AsValueString()
+                };
+            }
+            catch
+            {
+                return null;
+            }
+        }
 
         private void AddEdge(string src, string dst, string rel, string owner)
         {

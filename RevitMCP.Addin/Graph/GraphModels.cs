@@ -12,6 +12,12 @@ public sealed class GraphNode
 
     /// <summary>Small JSON object with routing hints (family, type, sheet number ...). Never parameter values.</summary>
     public string? Extra { get; set; }
+
+    /// <summary>
+    /// Values of allowlisted routing parameters (#63), stored in the separate node_params table.
+    /// Routing hints captured at build time — never authoritative.
+    /// </summary>
+    public Dictionary<string, string>? Params { get; set; }
 }
 
 /// <summary>One row of the <c>edges</c> table. Direction is always src → dst.</summary>
