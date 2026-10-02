@@ -37,7 +37,7 @@ public class ExistingRoomPreviewMatcher
             .Select(r => new RoomSnapshot(
                 LevelId: GetRoomLevelId(r),
                 Number:  r.Number ?? string.Empty,
-                Name:    r.Name   ?? string.Empty
+                Name:    RoomNameReader.GetName(r)
             ))
             .ToList();
     }

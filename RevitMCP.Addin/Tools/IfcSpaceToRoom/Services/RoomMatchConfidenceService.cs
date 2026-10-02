@@ -49,7 +49,7 @@ public class RoomMatchConfidenceService
                     RoomId:        r.Id.Value,
                     LevelId:       GetLevelId(r),
                     Number:        (r.Number ?? string.Empty).Trim(),
-                    Name:          (r.Name   ?? string.Empty).Trim(),
+                    Name:          RoomNameReader.GetName(r),
                     LocationXFeet: loc?.X,
                     LocationYFeet: loc?.Y,
                     AreaSqFt:      r.Area);

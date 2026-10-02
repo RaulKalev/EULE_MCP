@@ -2462,9 +2462,11 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
      Description("Reads the device code map ('deviceCodes' in the project config) and 'devicePlacement' settings, and checks every code against the model: ok | missingType | missingSource | missingFamily.")]
     public async Task<string> GetDeviceCodes(
         [Description("Project root (optional when a .rktools folder exists above the model file)")] string? projectRoot = null,
+        [Description("Inline device codes overriding the project config: {CODE: {family, type, mount, ...}}")] object? deviceCodes = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?> { ["projectRoot"] = projectRoot ?? string.Empty };
+        args["deviceCodes"] = ToJToken(deviceCodes);
         return FormatResult(await pipeClient.SendAsync("revit_get_device_codes", args, cancellationToken));
     }
 
@@ -2771,9 +2773,11 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Room source link instance id")] long linkInstanceId = 0,
         [Description("Level name")] string? levelName = null,
         [Description("Project root (optional)")] string? projectRoot = null,
+        [Description("Inline device codes overriding the project config: {CODE: {family, type, mount, ...}}")] object? deviceCodes = null,
         CancellationToken cancellationToken = default)
     {
         var args = AssignRoomArgs(elementIds, codes, roomParameter, onlyEmpty, source, linkInstanceId, levelName, projectRoot);
+        args["deviceCodes"] = ToJToken(deviceCodes);
         return FormatResult(await pipeClient.SendAsync("revit_preview_assign_room_to_elements", args, cancellationToken));
     }
 
@@ -2789,10 +2793,12 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Level name")] string? levelName = null,
         [Description("Project root (optional)")] string? projectRoot = null,
         [Description("Any failure undoes all (default true)")] bool atomic = true,
+        [Description("Inline device codes overriding the project config: {CODE: {family, type, mount, ...}}")] object? deviceCodes = null,
         CancellationToken cancellationToken = default)
     {
         var args = AssignRoomArgs(elementIds, codes, roomParameter, onlyEmpty, source, linkInstanceId, levelName, projectRoot);
         args["atomic"] = atomic;
+        args["deviceCodes"] = ToJToken(deviceCodes);
         return FormatResult(await pipeClient.SendAsync("revit_assign_room_to_elements", args, cancellationToken));
     }
 
@@ -2806,12 +2812,14 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Room source link instance id")] long linkInstanceId = 0,
         [Description("Level name")] string? levelName = null,
         [Description("Project root (optional)")] string? projectRoot = null,
+        [Description("Inline device codes overriding the project config: {CODE: {family, type, mount, ...}}")] object? deviceCodes = null,
         CancellationToken cancellationToken = default)
     {
         var args = RoomArgs(source, linkInstanceId, levelName, projectRoot);
         args["rules"] = ToJToken(rules);
         args["codes"] = codes ?? [];
         args["heightToleranceMm"] = heightToleranceMm;
+        args["deviceCodes"] = ToJToken(deviceCodes);
         return FormatResult(await pipeClient.SendAsync("revit_check_devices_per_room", args, cancellationToken));
     }
 
@@ -2824,11 +2832,13 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Room source link instance id")] long linkInstanceId = 0,
         [Description("Level name")] string? levelName = null,
         [Description("Project root (optional)")] string? projectRoot = null,
+        [Description("Inline device codes overriding the project config: {CODE: {family, type, mount, ...}}")] object? deviceCodes = null,
         CancellationToken cancellationToken = default)
     {
         var args = RoomArgs(source, linkInstanceId, levelName, projectRoot);
         args["codes"] = codes ?? [];
         args["toleranceMm"] = toleranceMm;
+        args["deviceCodes"] = ToJToken(deviceCodes);
         return FormatResult(await pipeClient.SendAsync("revit_check_device_alignment", args, cancellationToken));
     }
 
@@ -2847,6 +2857,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Room source link instance id")] long linkInstanceId = 0,
         [Description("Level name")] string? levelName = null,
         [Description("Project root (optional)")] string? projectRoot = null,
+        [Description("Inline device codes overriding the project config: {CODE: {family, type, mount, ...}}")] object? deviceCodes = null,
         CancellationToken cancellationToken = default)
     {
         var args = RoomArgs(source, linkInstanceId, levelName, projectRoot);
@@ -2858,6 +2869,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         args["stepMm"] = stepMm;
         args["maxRegionsPerRoom"] = maxRegionsPerRoom;
         args["ceilingSlopeDeg"] = ceilingSlopeDeg;
+        args["deviceCodes"] = ToJToken(deviceCodes);
         return FormatResult(await pipeClient.SendAsync("revit_check_coverage", args, cancellationToken));
     }
 
@@ -2878,6 +2890,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Room source link instance id")] long linkInstanceId = 0,
         [Description("Level name")] string? levelName = null,
         [Description("Project root (optional)")] string? projectRoot = null,
+        [Description("Inline device codes overriding the project config: {CODE: {family, type, mount, ...}}")] object? deviceCodes = null,
         CancellationToken cancellationToken = default)
     {
         var args = RoomArgs(source, linkInstanceId, levelName, projectRoot);
@@ -2891,6 +2904,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         args["ceilingSlopeDeg"] = ceilingSlopeDeg;
         args["stepMm"] = stepMm;
         args["codes"] = codes ?? [];
+        args["deviceCodes"] = ToJToken(deviceCodes);
         return FormatResult(await pipeClient.SendAsync("revit_check_fire_alarm", args, cancellationToken));
     }
 
