@@ -238,7 +238,7 @@ public class IfcSpaceConversionService
                 LevelMatchToleranceMm   = options.LevelMatchToleranceMm
             };
 
-            var footprint = _extractor.Extract(element, linkTransform, levelElevFeet, geomOptions);
+            var footprint = _extractor.Extract(element, linkTransform, levelElevFeet, geomOptions, meta.AreaM2);
 
             if (!footprint.Success || footprint.OuterLoop == null || footprint.PlacementPoint == null)
             {

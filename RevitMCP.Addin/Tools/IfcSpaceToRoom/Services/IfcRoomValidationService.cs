@@ -162,7 +162,7 @@ public class IfcRoomValidationService
                     LevelMatchToleranceMm    = options.LevelMatchToleranceMm
                 };
 
-                var footprint = _extractor.Extract(element, linkTransform, levelElevFeet, geomOptions);
+                var footprint = _extractor.Extract(element, linkTransform, levelElevFeet, geomOptions, meta.AreaM2);
 
                 if (footprint.Success && footprint.PlacementPoint != null)
                 {

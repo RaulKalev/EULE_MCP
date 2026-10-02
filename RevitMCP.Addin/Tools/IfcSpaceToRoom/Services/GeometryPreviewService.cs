@@ -157,7 +157,7 @@ public class GeometryPreviewService
             double levelElevFeet = levelMatch.LevelElevationFeet;
 
             // — Geometry extraction ────────────────────────────────────────────
-            var footprint = _extractor.Extract(element, linkTransform, levelElevFeet, options);
+            var footprint = _extractor.Extract(element, linkTransform, levelElevFeet, options, meta.AreaM2);
 
             // — Map footprint → item ───────────────────────────────────────────
             item.Status              = footprint.Status;
