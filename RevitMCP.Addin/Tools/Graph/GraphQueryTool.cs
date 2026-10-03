@@ -27,12 +27,15 @@ public class GraphQueryTool : IRevitMcpTool
     public string Name => "revit_graph_query";
     public string Description =>
         "Structured queries against the model graph (build it first with revit_graph_build). operation: " +
-        "neighbors (id, rel?, direction? in|out|both, limit?) | " +
-        "find (kind?, category?, level?, workset?, nameContains?, page?, pageSize?) → ids + names, paginated | " +
+        "neighbors (id, rel?, direction? in|out|both, limit?, link?) | " +
+        "find (kind?, category?, level?, workset?, nameContains?, link?, page?, pageSize?) → ids + names, paginated; " +
+        "link = host | links | <linkInstanceId> | <part of the link name> | " +
         "path (fromId, toId, maxHops?) → shortest undirected path | " +
         "subtree (id, rel, depth?, direction? in|out, maxNodes?) e.g. everything fed_by a panel. " +
-        "Kinds: element, type, panel, circuit, space, level, workset, sheet, view. " +
-        "Rels: fed_by, located_in, hosted_on, type_of, tagged_in, on_sheet, in_workset, on_level. " +
+        "Kinds: element, type, panel, circuit, space, level, workset, sheet, view, link. " +
+        "Rels: fed_by, located_in, hosted_on, type_of, tagged_in, on_sheet, in_workset, on_level, in_link. " +
+        "Linked-model nodes have ids link:<linkInstanceId>:<linkedElementId> and a linkInstanceId field; host tools cannot " +
+        "read them by id (use revit_query_linked_elements) — pass link=host before reading results live by id. " +
         "Returns ids and structure only — fetch live values by id afterwards.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Elements;
@@ -85,13 +88,15 @@ public class GraphQueryTool : IRevitMcpTool
 
                     var direction = ToolArguments.GetString(args, "direction", "both");
                     var limit = GraphToolSupport.Clamp(ToolArguments.GetInt(args, "limit", DefaultNeighborLimit), 1, MaxNeighborLimit);
-                    var neighbors = opened.Database.Neighbors(id, rel.Length > 0 ? rel : null, direction, limit);
+                    var neighborLink = ToolArguments.GetString(args, "link");
+                    var neighbors = opened.Database.Neighbors(id, rel.Length > 0 ? rel : null, direction, limit, NullIfEmpty(neighborLink));
                     payload = new
                     {
                         operation,
                         node = GraphToolSupport.NodeDto(node),
                         rel = rel.Length > 0 ? rel : null,
                         direction,
+                        link = NullIfEmpty(neighborLink),
                         limit,
                         count = neighbors.Count,
                         truncated = neighbors.Count >= limit,
@@ -105,6 +110,7 @@ public class GraphQueryTool : IRevitMcpTool
                             category = NullIfEmpty(n.Node.Category),
                             level = NullIfEmpty(n.Node.Level),
                             workset = NullIfEmpty(n.Node.Workset),
+                            linkInstanceId = GraphLinkIds.LinkInstanceOf(n.Node.Id),
                             extra = GraphToolSupport.ParseExtra(n.Node.Extra)
                         }).ToList()
                     };
@@ -117,12 +123,13 @@ public class GraphQueryTool : IRevitMcpTool
                     var level = ToolArguments.GetString(args, "level");
                     var workset = ToolArguments.GetString(args, "workset");
                     var nameContains = ToolArguments.GetString(args, "nameContains");
+                    var link = ToolArguments.GetString(args, "link");
                     var page = Math.Max(0, ToolArguments.GetInt(args, "page", 0));
                     var pageSize = QueryGuard.NormalizePageSize(ToolArguments.GetInt(args, "pageSize", 0));
 
                     var result = opened.Database.Find(
                         NullIfEmpty(kind), NullIfEmpty(category), NullIfEmpty(level), NullIfEmpty(workset), NullIfEmpty(nameContains),
-                        page, pageSize);
+                        page, pageSize, NullIfEmpty(link));
                     payload = new
                     {
                         operation,
@@ -132,7 +139,8 @@ public class GraphQueryTool : IRevitMcpTool
                             category = NullIfEmpty(category),
                             level = NullIfEmpty(level),
                             workset = NullIfEmpty(workset),
-                            nameContains = NullIfEmpty(nameContains)
+                            nameContains = NullIfEmpty(nameContains),
+                            link = NullIfEmpty(link)
                         },
                         itemsReturned = result.ItemsReturned,
                         totalAvailable = result.TotalAvailable,

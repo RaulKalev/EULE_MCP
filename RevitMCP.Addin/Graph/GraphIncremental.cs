@@ -149,6 +149,8 @@ public static class GraphIncrementalPlanner
                     : "a room/space was changed (its boundary may now contain different elements)";
             case GraphSchema.Kinds.Workset:
                 return "a workset changed";
+            case GraphSchema.Kinds.Link:
+                return "a linked model changed (link added, moved, reloaded or removed)";
             default:
                 return null;
         }

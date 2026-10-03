@@ -363,7 +363,7 @@ public class GraphDatabaseTests
         Assert.False(GraphSchema.IsKind("wall"));
         Assert.True(GraphSchema.IsRel("FED_BY"));
         Assert.False(GraphSchema.IsRel("feeds"));
-        Assert.Equal(9, GraphSchema.Kinds.All.Length);
-        Assert.Equal(8, GraphSchema.Rels.All.Length);
+        Assert.Equal(10, GraphSchema.Kinds.All.Length);
+        Assert.Equal(9, GraphSchema.Rels.All.Length);
     }
 }

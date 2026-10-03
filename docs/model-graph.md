@@ -113,6 +113,50 @@ When in doubt, rebuild — a full build of a 100k-element model takes a few seco
 
 ---
 
+## Linked models (#62)
+
+A full build also indexes every **loaded** Revit or IFC link of the host model (`includeLinks`,
+default true; `linkElementLimit`, default 100,000 linked elements in total).
+
+| Node | Id | Notes |
+|---|---|---|
+| Link instance | its host element id (kind `link`) | `extra.document` = linked file, `extra.loaded` |
+| Linked element | `link:<linkInstanceId>:<linkedElementId>` | kind `element`; physical elements only (a bounding box is required) |
+| Linked room/space | `link:<linkInstanceId>:<linkedElementId>` | kind `space` |
+| Linked type | `link:<linkInstanceId>:<linkedTypeId>` | kind `type`, only when referenced |
+
+The link instance id namespaces each linked document, so equal element ids in the host and in
+different links never collide; two instances of the same link are indexed separately. Every linked
+node carries `extra.linkName` / `extra.linkDocument`, and query results add a `linkInstanceId` field
+(null for host nodes).
+
+Linked relationships:
+
+| `rel` | Meaning |
+|---|---|
+| `in_link` | linked node → its link instance (`subtree id=<link> rel=in_link` lists a link's content) |
+| `type_of` | linked element → linked type |
+| `located_in` | linked element → linked room/space (`FamilyInstance.Room/Space` inside the link) |
+| `located_in` | linked element → **host** room/space, computed geometrically through the link transform: a family instance's insertion point, otherwise the bounding-box centre of elements no larger than 3 m (IFC DirectShapes have no location); retried 1 m lower for ceiling-mounted items |
+
+Levels, worksets, hosts, circuits and tags inside links are not indexed (a linked element's `level`
+is the linked level's name, without an `on_level` edge). Nested links are not followed. An unloaded
+link appears as a `link` node with `loaded: false` and a warning; its content is simply absent.
+
+Querying:
+
+- `find link=host` — host nodes only; `link=links` — every linked node; `link=<instance id>` or
+  `link=<part of the link name>` — one link. Combines with the other filters.
+- `neighbors` takes the same `link` filter. **Pass `link=host` before reading results live by id**:
+  host tools (`revit_get_elements_info`, …) cannot read `link:` ids. Read linked elements live with
+  `revit_query_linked_elements linkInstanceId=<id>`.
+
+Linked content reflects the links as loaded at the last build. Reloading or moving a link marks
+nothing stale by itself; an incremental build falls back to a full one when a link instance or link
+type changed.
+
+---
+
 ## Incremental updates (#61)
 
 The add-in records every added, modified and deleted element id from Revit's `DocumentChanged`
@@ -144,7 +188,8 @@ The update **falls back to a full rebuild** — and says why in `incremental.fal
 - more than 50,000 element changes were tracked, or the last build hit `elementLimit`;
 - a level was changed or deleted (level names are stored on every node);
 - a room or space was added or changed (other elements change room without changing themselves);
-- a workset changed.
+- a workset changed;
+- a linked model changed (link added, moved, reloaded or removed).
 
 Deleting a room only removes the `located_in` edges to it, so it stays incremental. An incremental
 build produces the same nodes and edges as a full build of the same model state; the full rebuild
@@ -205,7 +250,8 @@ about 214k.
   the bridge reports `request_timeout` but the build keeps running on the Revit thread and still
   publishes the file — check `revit_graph_status` afterwards. Use `elementLimit` to bound the build.
 - `tagged_in` links an element to the **view** its tag sits in, not to the tag element itself.
-- Linked-model elements, annotation elements other than tags, and parameter values are not indexed.
+- Annotation elements other than tags and parameter values are not indexed; inside linked models
+  only elements, rooms/spaces and types are (see [Linked models](#linked-models-62)).
 - The add-in uses the SQLite that ships with Windows 10/11 (`winsqlite3.dll`) through
   `SQLitePCLRaw.bundle_winsqlite3`, so no native binary is deployed; the unit tests use the
   cross-platform `e_sqlite3` bundle instead.

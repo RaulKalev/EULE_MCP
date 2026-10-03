@@ -21,6 +21,20 @@ public sealed class GraphExtractionResult
 
     /// <summary>Subset extraction only: requested ids that no longer exist in the document.</summary>
     public List<long> Missing { get; } = new();
+
+    /// <summary>Linked models seen by a full build (#62), loaded or not.</summary>
+    public List<GraphLinkSummary> Links { get; } = new();
+    public bool LinkElementLimitReached { get; set; }
+}
+
+public sealed class GraphLinkSummary
+{
+    public string InstanceId { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Document { get; set; } = string.Empty;
+    public bool Loaded { get; set; }
+    public int Elements { get; set; }
+    public int Spaces { get; set; }
 }
 
 /// <summary>
@@ -31,10 +45,13 @@ public sealed class GraphExtractionResult
 /// </summary>
 public static class RevitGraphExtractor
 {
-    /// <summary>Full extraction of the document.</summary>
-    public static GraphExtractionResult Extract(Document doc, int elementLimit)
+    /// <summary>
+    /// Full extraction of the document. <paramref name="linkElementLimit"/> &gt; 0 also indexes the
+    /// elements of loaded linked models (#62), up to that many in total; 0 leaves links out.
+    /// </summary>
+    public static GraphExtractionResult Extract(Document doc, int elementLimit, int linkElementLimit = 0)
     {
-        var builder = new Builder(doc, elementLimit, subset: false);
+        var builder = new Builder(doc, elementLimit, subset: false) { LinkElementLimit = linkElementLimit };
         return builder.Run();
     }
 
@@ -62,6 +79,9 @@ public static class RevitGraphExtractor
         private readonly HashSet<string> _userWorksetIds = new(StringComparer.Ordinal);
         private readonly Dictionary<string, FamilyInstance> _panels = new(StringComparer.Ordinal);
         private readonly bool _isWorkshared;
+        private int _linkedCount;
+
+        public int LinkElementLimit { get; set; }
 
         public Builder(Document doc, int elementLimit, bool subset)
         {
@@ -83,6 +103,7 @@ public static class RevitGraphExtractor
             Step("panels", CollectPanels);
             Step("elements", CollectElements);
             Step("tags", CollectTags);
+            if (LinkElementLimit > 0) Step("links", CollectLinks);
             Finish();
             sw.Stop();
             _result.ElapsedMs = sw.ElapsedMilliseconds;
@@ -145,6 +166,7 @@ public static class RevitGraphExtractor
                 case IndependentTag tag: AddTag(tag); return;
                 case SpatialElementTag spatialTag: AddSpatialTag(spatialTag); return;
                 case ElementType type: EnsureTypeNode(type, force: true); return;
+                case RevitLinkInstance link: AddLinkInstance(link); return;
             }
             if (element is FamilyInstance fi && IsPanel(fi)) { AddPanel(fi); return; }
             AddModelElement(element);
@@ -464,6 +486,11 @@ public static class RevitGraphExtractor
             var id = Id(element.Id);
             if (_nodes.ContainsKey(id)) return false; // levels, spaces, panels, circuits already added
             if (element is Level || element is SpatialElement || element is View || element is ElectricalSystem) return false;
+            if (element is RevitLinkInstance link)
+            {
+                AddLinkInstance(link);
+                return true;
+            }
 
             var (levelName, levelId) = LevelOf(element);
             string? extra;
@@ -547,6 +574,278 @@ public static class RevitGraphExtractor
                 Extra = Extra(("family", family), ("type", typeName))
             });
             return id;
+        }
+
+        // ─── Linked models (#62) ───────────────────────────────────────────
+
+        /// <summary>The link instance itself: a host element, so its id stays the plain host id.</summary>
+        private void AddLinkInstance(RevitLinkInstance link)
+        {
+            var id = Id(link.Id);
+            var linkDoc = LinkDocument(link);
+            var (levelName, levelId) = LevelOf(link);
+            AddNode(new GraphNode
+            {
+                Id = id,
+                Kind = GraphSchema.Kinds.Link,
+                Name = SafeName(link),
+                Category = SafeString(() => link.Category?.Name),
+                Level = levelName,
+                Workset = WorksetName(link),
+                Extra = Extra(
+                    ("document", linkDoc != null ? SafeString(() => linkDoc.Title) : null),
+                    ("path", linkDoc != null ? SafeString(() => linkDoc.PathName) : null),
+                    ("loaded", linkDoc != null))
+            });
+            if (levelId != null) AddEdge(id, Id(levelId), GraphSchema.Rels.OnLevel, owner: id);
+            AddWorksetEdge(link, id);
+            AddTypeEdge(link, id);
+        }
+
+        private static Document? LinkDocument(RevitLinkInstance link)
+        {
+            try { return link.GetLinkDocument(); }
+            catch { return null; }
+        }
+
+        private void CollectLinks()
+        {
+            var hostHasSpaces = _nodes.Values.Any(n => n.Kind == GraphSchema.Kinds.Space);
+            var links = new FilteredElementCollector(_doc).OfClass(typeof(RevitLinkInstance)).Cast<RevitLinkInstance>().ToList();
+            foreach (var link in links)
+            {
+                var instanceId = Id(link.Id);
+                if (!_nodes.ContainsKey(instanceId)) AddLinkInstance(link);
+                var linkDoc = LinkDocument(link);
+                var summary = new GraphLinkSummary
+                {
+                    InstanceId = instanceId,
+                    Name = SafeName(link),
+                    Document = linkDoc != null ? SafeString(() => linkDoc.Title) : string.Empty,
+                    Loaded = linkDoc != null
+                };
+                _result.Links.Add(summary);
+                if (linkDoc == null)
+                {
+                    _result.Warnings.Add($"Link '{summary.Name}' ({instanceId}) is not loaded; its elements are not in the graph.");
+                    continue;
+                }
+                if (_result.LinkElementLimitReached) continue;
+
+                Transform? transform;
+                try { transform = link.GetTotalTransform(); } catch { transform = null; }
+                var scope = new LinkScope(link.Id.Value, summary.Name, summary.Document, linkDoc, transform);
+                Step($"link {instanceId}", () => CollectLinkContent(scope, summary, hostHasSpaces));
+            }
+        }
+
+        private sealed class LinkScope
+        {
+            public LinkScope(long instanceId, string name, string document, Document doc, Transform? transform)
+            {
+                InstanceId = instanceId;
+                InstanceNodeId = instanceId.ToString(CultureInfo.InvariantCulture);
+                Name = name;
+                DocumentTitle = document;
+                Doc = doc;
+                Transform = transform;
+            }
+
+            public long InstanceId { get; }
+            public string InstanceNodeId { get; }
+            public string Name { get; }
+            public string DocumentTitle { get; }
+            public Document Doc { get; }
+            public Transform? Transform { get; }
+            public Dictionary<long, string> LevelNames { get; } = new();
+
+            public string IdOf(ElementId id) => GraphLinkIds.Make(InstanceId, id.Value);
+        }
+
+        private void CollectLinkContent(LinkScope link, GraphLinkSummary summary, bool hostHasSpaces)
+        {
+            // Rooms and MEP spaces of the linked model.
+            foreach (var element in new FilteredElementCollector(link.Doc).OfClass(typeof(SpatialElement)))
+            {
+                if (element is not (Room or Space)) continue;
+                var spatial = (SpatialElement)element;
+                try { if (spatial.Location == null) continue; } catch { continue; }
+                if (!TakeLinkSlot()) return;
+
+                var id = link.IdOf(spatial.Id);
+                var number = SafeString(() => spatial.Number);
+                var name = SafeString(() => spatial.get_Parameter(BuiltInParameter.ROOM_NAME)?.AsString());
+                if (string.IsNullOrEmpty(name)) name = SafeName(spatial);
+                AddNode(new GraphNode
+                {
+                    Id = id,
+                    Kind = GraphSchema.Kinds.Space,
+                    Name = $"{number} {name}".Trim(),
+                    Category = SafeString(() => spatial.Category?.Name),
+                    Level = LinkedLevelName(link, spatial),
+                    Extra = Extra(("number", number), ("name", name), ("spatialType", spatial is Room ? "Room" : "Space"),
+                        ("linkName", link.Name), ("linkDocument", link.DocumentTitle))
+                });
+                AddEdge(id, link.InstanceNodeId, GraphSchema.Rels.InLink, owner: id);
+                summary.Spaces++;
+            }
+
+            // Model elements of the linked model (same rules as the host; nested links are not followed).
+            var collector = new FilteredElementCollector(link.Doc).WhereElementIsNotElementType().WhereElementIsViewIndependent();
+            foreach (var element in collector)
+            {
+                if (element == null || element is Level || element is SpatialElement || element is View ||
+                    element is ElectricalSystem || element is RevitLinkInstance || element is BasePoint) continue;
+                Category? category;
+                try { category = element.Category; } catch { continue; }
+                if (category == null) continue;
+                bool isModel;
+                try { isModel = category.CategoryType == CategoryType.Model && !category.IsTagCategory; } catch { continue; }
+                if (!isModel) continue;
+                // Physical elements only: materials, legend components, cameras etc. have no bounding box.
+                BoundingBoxXYZ? box;
+                try { box = element.get_BoundingBox(null); } catch { box = null; }
+                if (box == null) continue;
+                if (!TakeLinkSlot()) return;
+
+                var id = link.IdOf(element.Id);
+                ElementType? type;
+                try { type = link.Doc.GetElement(element.GetTypeId()) as ElementType; } catch { type = null; }
+                var fi = element as FamilyInstance;
+                AddNode(new GraphNode
+                {
+                    Id = id,
+                    Kind = GraphSchema.Kinds.Element,
+                    Name = SafeName(element),
+                    Category = category.Name,
+                    Level = LinkedLevelName(link, element),
+                    Extra = Extra(
+                        ("family", fi != null ? SafeString(() => fi.Symbol?.Family?.Name) : type != null ? SafeString(() => type.FamilyName) : null),
+                        ("type", type != null ? SafeName(type) : null),
+                        ("linkName", link.Name), ("linkDocument", link.DocumentTitle))
+                });
+                AddEdge(id, link.InstanceNodeId, GraphSchema.Rels.InLink, owner: id);
+                summary.Elements++;
+
+                if (type != null)
+                {
+                    var typeId = link.IdOf(type.Id);
+                    if (!_nodes.ContainsKey(typeId))
+                    {
+                        var family = SafeString(() => type.FamilyName);
+                        var typeName = SafeName(type);
+                        AddNode(new GraphNode
+                        {
+                            Id = typeId,
+                            Kind = GraphSchema.Kinds.Type,
+                            Name = string.IsNullOrEmpty(family) ? typeName : $"{family}: {typeName}",
+                            Category = SafeString(() => type.Category?.Name),
+                            Extra = Extra(("family", family), ("type", typeName), ("linkName", link.Name), ("linkDocument", link.DocumentTitle))
+                        });
+                        AddEdge(typeId, link.InstanceNodeId, GraphSchema.Rels.InLink, owner: typeId);
+                    }
+                    AddEdge(id, typeId, GraphSchema.Rels.TypeOf, owner: id);
+                }
+
+                // Room/space inside the linked model.
+                if (fi != null)
+                {
+                    ElementId? linkedSpace = null;
+                    try { linkedSpace = fi.Room?.Id; } catch { }
+                    if (linkedSpace == null) { try { linkedSpace = fi.Space?.Id; } catch { } }
+                    if (linkedSpace != null && linkedSpace != ElementId.InvalidElementId)
+                        AddEdge(id, link.IdOf(linkedSpace), GraphSchema.Rels.LocatedIn, owner: id);
+                }
+
+                // Host room/space containing the element (geometric, through the link transform).
+                if (hostHasSpaces && link.Transform != null)
+                {
+                    var hostSpace = HostSpaceAt(link.Transform, ContainmentPoint(fi, box));
+                    if (hostSpace != null) AddEdge(id, hostSpace, GraphSchema.Rels.LocatedIn, owner: id);
+                }
+            }
+        }
+
+        private const double MaxContainmentExtentFt = 3000 / 304.8; // 3 m: larger elements span rooms
+        private const double CeilingDropFt = 1000 / 304.8;
+
+        /// <summary>
+        /// The point that decides which room a linked element is in: a family instance's insertion point,
+        /// otherwise the bounding-box centre of a small element (IFC DirectShapes have no location).
+        /// Large elements (walls, slabs, long runs) get none — "the room it is in" is meaningless for them.
+        /// </summary>
+        private static XYZ? ContainmentPoint(FamilyInstance? fi, BoundingBoxXYZ box)
+        {
+            try
+            {
+                if (fi?.Location is LocationPoint lp) return lp.Point;
+                var size = box.Max - box.Min;
+                if (Math.Max(size.X, Math.Max(size.Y, size.Z)) > MaxContainmentExtentFt) return null;
+                var center = (box.Min + box.Max) / 2;
+                return box.Transform != null ? box.Transform.OfPoint(center) : center;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>Host room/space at a linked-model point; retried 1 m lower for ceiling-mounted items above the room's upper limit.</summary>
+        private string? HostSpaceAt(Transform transform, XYZ? linkPoint)
+        {
+            if (linkPoint == null) return null;
+            try
+            {
+                var point = transform.OfPoint(linkPoint);
+                foreach (var p in new[] { point, point - new XYZ(0, 0, CeilingDropFt) })
+                {
+                    Element? space = _doc.GetRoomAtPoint(p);
+                    space ??= _doc.GetSpaceAtPoint(p);
+                    if (space != null) return Id(space.Id);
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private bool TakeLinkSlot()
+        {
+            if (_linkedCount >= LinkElementLimit)
+            {
+                if (!_result.LinkElementLimitReached)
+                    _result.Warnings.Add($"Linked element limit of {LinkElementLimit} reached; remaining linked elements were not added. Raise linkElementLimit to include them.");
+                _result.LinkElementLimitReached = true;
+                return false;
+            }
+            _linkedCount++;
+            return true;
+        }
+
+        private static string LinkedLevelName(LinkScope link, Element element)
+        {
+            ElementId? levelId = null;
+            try { levelId = element.LevelId; } catch { }
+            if (levelId == null || levelId == ElementId.InvalidElementId)
+            {
+                foreach (var bip in new[] { BuiltInParameter.FAMILY_LEVEL_PARAM, BuiltInParameter.RBS_START_LEVEL_PARAM, BuiltInParameter.SCHEDULE_LEVEL_PARAM })
+                {
+                    try
+                    {
+                        var p = element.get_Parameter(bip);
+                        if (p == null || p.StorageType != StorageType.ElementId) continue;
+                        var candidate = p.AsElementId();
+                        if (candidate != null && candidate != ElementId.InvalidElementId) { levelId = candidate; break; }
+                    }
+                    catch { }
+                }
+            }
+            if (levelId == null || levelId == ElementId.InvalidElementId) return string.Empty;
+            if (!link.LevelNames.TryGetValue(levelId.Value, out var name))
+            {
+                try { name = (link.Doc.GetElement(levelId) as Level)?.Name ?? string.Empty; } catch { name = string.Empty; }
+                link.LevelNames[levelId.Value] = name;
+            }
+            return name;
         }
 
         // ─── Tags ──────────────────────────────────────────────────────────

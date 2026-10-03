@@ -14,8 +14,8 @@ source of truth — fetch live values by id with the regular `revit_*` tools.
 
 | Column | Type | Meaning |
 |---|---|---|
-| `id` | TEXT PK | Revit element id as a string (`"123456"`). Worksets use `ws:<worksetId>` because worksets have their own id space. |
-| `kind` | TEXT | One of `element`, `type`, `panel`, `circuit`, `space`, `level`, `workset`, `sheet`, `view`. |
+| `id` | TEXT PK | Revit element id as a string (`"123456"`). Worksets use `ws:<worksetId>` because worksets have their own id space. Linked-model nodes use `link:<linkInstanceId>:<linkedElementId>` (#62). |
+| `kind` | TEXT | One of `element`, `type`, `panel`, `circuit`, `space`, `level`, `workset`, `sheet`, `view`, `link`. |
 | `name` | TEXT | Display name. Sheets: `<number> - <name>`; spaces: `<number> <name>`; circuits: `<panel>/<circuit number> <load name>`; types: `<family>: <type>`. |
 | `category` | TEXT | Revit category name (`Lighting Fixtures`, `Walls`, …). Levels/worksets/sheets/views use `Levels`/`Worksets`/`Sheets`/`Views`. |
 | `level` | TEXT | Level name when the element has one (`LevelId`, `FAMILY_LEVEL_PARAM`, `RBS_START_LEVEL_PARAM`, `SCHEDULE_LEVEL_PARAM`, `LEVEL_PARAM`; plan views use `GenLevel`). Empty otherwise. |
@@ -35,6 +35,8 @@ source of truth — fetch live values by id with the regular `revit_*` tools.
 | `workset` | `owner`, `isOpen` |
 | `sheet` | `sheetNumber`, `sheetName` |
 | `view` | `viewType`, `isSchedule` |
+| `link` | `document`, `path`, `loaded` (a Revit/IFC link instance; its id is the host element id) |
+| linked nodes | the keys of their kind plus `linkName`, `linkDocument` |
 
 ### `edges`
 
@@ -57,6 +59,11 @@ both in `nodes` are dropped at build time (reported as `danglingEdgesDropped`).
 | `on_sheet` | view → sheet | `ViewSheet.GetAllPlacedViews()` |
 | `in_workset` | any → workset | `Element.WorksetId` (user worksets only) |
 | `on_level` | any → level | level resolution described under `nodes.level` |
+| `in_link` | linked node → link instance | the link the node was read through |
+
+Linked elements also get `type_of` (to linked types) and `located_in` — to linked rooms/spaces
+(`FamilyInstance.Room/Space` inside the link) and to host rooms/spaces, computed geometrically
+through the link transform (`Document.GetRoomAtPoint` / `GetSpaceAtPoint`).
 
 "Everything fed by panel P" is therefore `subtree(id=P, rel=fed_by, direction=in)`: circuits point
 at the panel, and elements point at their circuits. A sub-panel appears as a `panel` node with its
@@ -118,7 +125,7 @@ signal differs, or the element count differs.
 ## What is *not* in the graph
 
 Annotation elements other than tags/views/sheets, element types not referenced by an instance,
-detail items on views that are not model categories, linked-model elements, parameter values,
+detail items on views that are not model categories, linked-model levels/hosts/circuits/tags, parameter values,
 geometry. Model elements are read with
 `FilteredElementCollector.WhereElementIsNotElementType().WhereElementIsViewIndependent()` filtered
 to `CategoryType.Model` and non-tag categories, capped by `elementLimit` (default 250 000).
