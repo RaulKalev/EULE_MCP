@@ -2542,6 +2542,9 @@
     $('modeBtn').textContent = 'Drawn view';
     try { localStorage.setItem('village.mode', '3d'); } catch (e) { }
     resize();
+    // The first snapshot usually lands while the 3D script is still loading, when syncScene()
+    // returns early. Place the village now, or it stays empty until the next snapshot.
+    syncScene();
   }
 
   function disable3D() {
