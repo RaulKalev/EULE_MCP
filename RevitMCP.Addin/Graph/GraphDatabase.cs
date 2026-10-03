@@ -172,12 +172,20 @@ public sealed class GraphDatabase : IDisposable
         }
 
         using (var cmd = _connection.CreateCommand())
+        using (var ownerCmd = _connection.CreateCommand())
         {
             cmd.Transaction = tx;
             cmd.CommandText = "INSERT OR IGNORE INTO edges (src, dst, rel) VALUES ($src, $dst, $rel)";
             var pSrc = cmd.Parameters.Add("$src", SqliteType.Text);
             var pDst = cmd.Parameters.Add("$dst", SqliteType.Text);
             var pRel = cmd.Parameters.Add("$rel", SqliteType.Text);
+
+            ownerCmd.Transaction = tx;
+            ownerCmd.CommandText = "INSERT OR IGNORE INTO edge_owners (src, dst, rel, owner) VALUES ($src, $dst, $rel, $owner)";
+            var oSrc = ownerCmd.Parameters.Add("$src", SqliteType.Text);
+            var oDst = ownerCmd.Parameters.Add("$dst", SqliteType.Text);
+            var oRel = ownerCmd.Parameters.Add("$rel", SqliteType.Text);
+            var oOwner = ownerCmd.Parameters.Add("$owner", SqliteType.Text);
 
             foreach (var e in edges)
             {
@@ -186,6 +194,12 @@ public sealed class GraphDatabase : IDisposable
                 pDst.Value = e.Dst;
                 pRel.Value = e.Rel;
                 cmd.ExecuteNonQuery();
+                if (string.IsNullOrEmpty(e.Owner)) continue;
+                oSrc.Value = e.Src;
+                oDst.Value = e.Dst;
+                oRel.Value = e.Rel;
+                oOwner.Value = e.Owner;
+                ownerCmd.ExecuteNonQuery();
             }
         }
 
@@ -217,6 +231,165 @@ public sealed class GraphDatabase : IDisposable
             cmd.ExecuteNonQuery();
         }
         return counts;
+    }
+
+    // ─── Incremental update (#61) ────────────────────────────────────────────
+
+    /// <summary>Opens an existing private copy (never the shared file) for an incremental update.</summary>
+    public static GraphDatabase OpenReadWrite(string path)
+    {
+        EnsureProvider();
+        if (!File.Exists(path))
+            throw new FileNotFoundException("Graph database not found.", path);
+        var cs = new SqliteConnectionStringBuilder
+        {
+            DataSource = path,
+            Mode = SqliteOpenMode.ReadWrite,
+            Cache = SqliteCacheMode.Private,
+            Pooling = false
+        }.ToString();
+        var conn = new SqliteConnection(cs);
+        conn.Open();
+        var db = new GraphDatabase(conn, path, isReadOnly: false);
+        db.Execute("PRAGMA journal_mode=MEMORY;");
+        db.Execute("PRAGMA synchronous=OFF;");
+        db.Execute("PRAGMA temp_store=MEMORY;");
+        return db;
+    }
+
+    /// <summary>True when the file records edge ownership (schema 2+), which incremental updates need.</summary>
+    public bool HasEdgeOwners() =>
+        Scalar<long>("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'edge_owners'") > 0;
+
+    /// <summary>
+    /// Applies an incremental update in one transaction: (1) removes the nodes of the refreshed and
+    /// deleted ids and every edge they own (an edge another owner also produces survives); (2) removes
+    /// every edge touching a deleted id; (3) upserts the re-extracted nodes and inserts their edges with
+    /// owners, dropping edges whose endpoints do not exist, as a full build does; (4) prunes type nodes
+    /// no longer referenced by a type_of edge (a full build only creates referenced types); (5) merges
+    /// meta and refreshes the node/edge counts.
+    /// </summary>
+    public GraphDeltaResult ApplyDelta(
+        IReadOnlyCollection<string> refreshedIds,
+        IReadOnlyCollection<string> deletedIds,
+        IEnumerable<GraphNode> nodes,
+        IEnumerable<GraphEdge> edges,
+        IReadOnlyDictionary<string, string> meta)
+    {
+        if (IsReadOnly) throw new InvalidOperationException("Graph database was opened read-only.");
+        var result = new GraphDeltaResult();
+        using var tx = _connection.BeginTransaction();
+
+        int Exec(string sql, params (string Name, object? Value)[] args)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = sql;
+            foreach (var (name, value) in args) cmd.Parameters.AddWithValue(name, value ?? DBNull.Value);
+            return cmd.ExecuteNonQuery();
+        }
+
+        long Count(string sql, params (string Name, object? Value)[] args)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = sql;
+            foreach (var (name, value) in args) cmd.Parameters.AddWithValue(name, value ?? DBNull.Value);
+            return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+        }
+
+        // 1. Changed and deleted ids: their nodes and the edges they own.
+        foreach (var id in refreshedIds.Concat(deletedIds).Distinct(StringComparer.Ordinal))
+        {
+            Exec("DELETE FROM edge_owners WHERE owner = $id", ("$id", id));
+            result.NodesRemoved += Exec("DELETE FROM nodes WHERE id = $id", ("$id", id));
+        }
+        result.EdgesRemoved += Exec(
+            "DELETE FROM edges WHERE NOT EXISTS (SELECT 1 FROM edge_owners o " +
+            "WHERE o.src = edges.src AND o.dst = edges.dst AND o.rel = edges.rel)");
+
+        // 2. Edges touching deleted elements, whoever owns them.
+        foreach (var id in deletedIds)
+        {
+            Exec("DELETE FROM edge_owners WHERE src = $id OR dst = $id", ("$id", id));
+            result.EdgesRemoved += Exec("DELETE FROM edges WHERE src = $id OR dst = $id", ("$id", id));
+        }
+
+        // 3. Upsert the re-extracted nodes, then their owned edges (only when both endpoints exist).
+        foreach (var n in nodes)
+        {
+            if (string.IsNullOrEmpty(n.Id)) continue;
+            Exec("INSERT OR REPLACE INTO nodes (id, kind, name, category, level, workset, extra) " +
+                 "VALUES ($id, $kind, $name, $category, $level, $workset, $extra)",
+                ("$id", n.Id), ("$kind", n.Kind ?? GraphSchema.Kinds.Element), ("$name", n.Name), ("$category", n.Category),
+                ("$level", n.Level), ("$workset", n.Workset), ("$extra", n.Extra));
+            result.NodesUpserted++;
+        }
+
+        foreach (var e in edges)
+        {
+            if (string.IsNullOrEmpty(e.Src) || string.IsNullOrEmpty(e.Dst) || string.IsNullOrEmpty(e.Rel) || e.Src == e.Dst) continue;
+            result.EdgesAdded += Exec(
+                "INSERT OR IGNORE INTO edges (src, dst, rel) SELECT $src, $dst, $rel " +
+                "WHERE EXISTS (SELECT 1 FROM nodes WHERE id = $src) AND EXISTS (SELECT 1 FROM nodes WHERE id = $dst)",
+                ("$src", e.Src), ("$dst", e.Dst), ("$rel", e.Rel));
+            var present = Count("SELECT COUNT(*) FROM edges WHERE src = $src AND dst = $dst AND rel = $rel",
+                ("$src", e.Src), ("$dst", e.Dst), ("$rel", e.Rel));
+            if (present == 0)
+            {
+                result.DanglingEdgesDropped++;
+                continue;
+            }
+            if (!string.IsNullOrEmpty(e.Owner))
+                Exec("INSERT OR IGNORE INTO edge_owners (src, dst, rel, owner) VALUES ($src, $dst, $rel, $owner)",
+                    ("$src", e.Src), ("$dst", e.Dst), ("$rel", e.Rel), ("$owner", e.Owner));
+        }
+
+        // 3b. A refreshed id that no longer yields a node (e.g. it stopped being a model element)
+        // leaves edges owned by others pointing at it; drop them as a full build would.
+        result.DanglingEdgesDropped += Exec(
+            "DELETE FROM edges WHERE NOT EXISTS (SELECT 1 FROM nodes WHERE id = edges.src) " +
+            "OR NOT EXISTS (SELECT 1 FROM nodes WHERE id = edges.dst)");
+        Exec("DELETE FROM edge_owners WHERE NOT EXISTS (SELECT 1 FROM edges e " +
+             "WHERE e.src = edge_owners.src AND e.dst = edge_owners.dst AND e.rel = edge_owners.rel)");
+
+        // 4. Type nodes exist only while something references them.
+        result.TypesPruned += Exec(
+            "DELETE FROM nodes WHERE kind = $type AND NOT EXISTS " +
+            "(SELECT 1 FROM edges WHERE edges.dst = nodes.id AND edges.rel = $typeOf)",
+            ("$type", GraphSchema.Kinds.Type), ("$typeOf", GraphSchema.Rels.TypeOf));
+
+        // 5. Meta.
+        foreach (var kv in meta)
+            Exec("INSERT OR REPLACE INTO meta (key, value) VALUES ($k, $v)", ("$k", kv.Key), ("$v", kv.Value));
+
+        tx.Commit();
+
+        var counts = Counts();
+        result.NodeCount = counts.Nodes;
+        result.EdgeCount = counts.Edges;
+        using (var cmd = _connection.CreateCommand())
+        {
+            cmd.CommandText = "INSERT OR REPLACE INTO meta (key, value) VALUES ($k1, $v1), ($k2, $v2)";
+            cmd.Parameters.AddWithValue("$k1", GraphSchema.MetaKeys.NodeCount);
+            cmd.Parameters.AddWithValue("$v1", counts.Nodes.ToString(CultureInfo.InvariantCulture));
+            cmd.Parameters.AddWithValue("$k2", GraphSchema.MetaKeys.EdgeCount);
+            cmd.Parameters.AddWithValue("$v2", counts.Edges.ToString(CultureInfo.InvariantCulture));
+            cmd.ExecuteNonQuery();
+        }
+        return result;
+    }
+
+    /// <summary>Kinds of the given node ids that exist in the graph (used to judge deleted elements).</summary>
+    public Dictionary<string, string> KindsOf(IEnumerable<string> ids)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var id in ids)
+        {
+            var node = GetNode(id);
+            if (node != null) result[id] = node.Kind;
+        }
+        return result;
     }
 
     // ─── Read: meta / nodes ────────────────────────────────────────────────

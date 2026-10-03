@@ -8,7 +8,8 @@ namespace RevitMCP.Addin.Graph;
 public static class GraphSchema
 {
     /// <summary>Bump when the table layout or node/edge vocabulary changes incompatibly.</summary>
-    public const int SchemaVersion = 1;
+    /// <summary>2 = edge ownership (edge_owners) for incremental updates (#61). Version 1 graphs stay readable.</summary>
+    public const int SchemaVersion = 2;
 
     /// <summary>File name suffix of a graph database, e.g. <c>Project.graph.db</c>.</summary>
     public const string FileExtension = ".graph.db";
@@ -84,6 +85,11 @@ public static class GraphSchema
         public const string EdgeCount      = "edge_count";
         public const string BuildDurationMs = "build_duration_ms";
         public const string ProjectKey     = "project_key";
+
+        // Incremental updates (#61)
+        public const string ElementLimitReached = "element_limit_reached";
+        public const string LastFullBuildAt     = "last_full_build_at";
+        public const string IncrementalUpdates  = "incremental_updates";
     }
 
     /// <summary>DDL executed on a fresh database. Kept flat on purpose.</summary>
@@ -103,6 +109,13 @@ CREATE TABLE IF NOT EXISTS edges (
     rel TEXT NOT NULL,
     PRIMARY KEY (src, dst, rel)
 );
+CREATE TABLE IF NOT EXISTS edge_owners (
+    src   TEXT NOT NULL,
+    dst   TEXT NOT NULL,
+    rel   TEXT NOT NULL,
+    owner TEXT NOT NULL,
+    PRIMARY KEY (src, dst, rel, owner)
+);
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT
@@ -113,6 +126,7 @@ CREATE INDEX IF NOT EXISTS ix_nodes_level    ON nodes(level);
 CREATE INDEX IF NOT EXISTS ix_edges_src      ON edges(src);
 CREATE INDEX IF NOT EXISTS ix_edges_dst      ON edges(dst);
 CREATE INDEX IF NOT EXISTS ix_edges_rel      ON edges(rel);
+CREATE INDEX IF NOT EXISTS ix_edge_owners_owner ON edge_owners(owner);
 ";
 
     public static bool IsKind(string? value) =>

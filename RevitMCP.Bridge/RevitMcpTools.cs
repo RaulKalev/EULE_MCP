@@ -5973,13 +5973,13 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     // ── Model Graph (routing layer) ───────────────────────────────────────────
 
     [McpServerTool(Name = "revit_graph_build", ReadOnly = true),
-     Description("Builds the model knowledge graph for the open document into a per-model SQLite file (full rebuild). " +
+     Description("Builds the model knowledge graph for the open document into a per-model SQLite file. " +
                  "Nodes: element, type, panel, circuit, space, level, workset, sheet, view. " +
                  "Edges: fed_by, located_in, hosted_on, type_of, tagged_in, on_sheet, in_workset, on_level. " +
                  "Writes only the graph file (never the model). Reports node/edge counts and elapsed time. " +
                  "The graph is a routing layer: use it to find ids, then fetch live values by id.")]
     public async Task<string> GraphBuild(
-        [Description("Reserved: incremental rebuild. Not implemented yet — reported and falls back to a full rebuild. Default false.")] bool incremental = false,
+        [Description("Default false (full rebuild). true = re-extract only elements added/changed/deleted since the last build in this Revit session; falls back to a full rebuild when that is not safe and reports why in incremental.fallbackReason.")] bool incremental = false,
         [Description("Maximum model elements to index (safety cap). Default 250000.")] int elementLimit = 250000,
         [Description("Optional shared folder root overriding the graph.sharedFolder config for this call.")] string? sharedFolder = null,
         [Description("Optional explicit database file path overriding folder resolution entirely.")] string? dbPath = null,

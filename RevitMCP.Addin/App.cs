@@ -457,6 +457,7 @@ public class App : IExternalApplication
     private static void OnDocumentChanged(object? sender, DocumentChangedEventArgs e)
     {
         DocumentChangeTracker.MarkChanged(e.GetDocument());
+        RevitMCP.Addin.Graph.GraphChangeTracker.Record(e);
     }
 
     private static void AddRibbonButton(UIControlledApplication application)

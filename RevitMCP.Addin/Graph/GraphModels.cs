@@ -19,12 +19,20 @@ public sealed class GraphEdge
 {
     public GraphEdge() { }
 
-    public GraphEdge(string src, string dst, string rel)
+    public GraphEdge(string src, string dst, string rel, string? owner = null)
     {
         Src = src;
         Dst = dst;
         Rel = rel;
+        Owner = owner;
     }
+
+    /// <summary>
+    /// The element whose state produced the edge (#61): the element itself for its own
+    /// on_level/type_of/hosted_on/located_in/in_workset edges, the circuit for fed_by, the sheet for
+    /// on_sheet, the tag for tagged_in. Incremental updates re-derive exactly the edges of changed owners.
+    /// </summary>
+    public string? Owner { get; set; }
 
     public string Src { get; set; } = string.Empty;
     public string Dst { get; set; } = string.Empty;
@@ -165,4 +173,17 @@ public sealed class GraphSummaryResult
 
     /// <summary>True when any count list was cut at the requested top-N.</summary>
     public int TopN { get; set; }
+}
+
+/// <summary>What an incremental update changed (#61).</summary>
+public sealed class GraphDeltaResult
+{
+    public int NodesRemoved { get; set; }
+    public int NodesUpserted { get; set; }
+    public int EdgesRemoved { get; set; }
+    public int EdgesAdded { get; set; }
+    public int DanglingEdgesDropped { get; set; }
+    public int TypesPruned { get; set; }
+    public long NodeCount { get; set; }
+    public long EdgeCount { get; set; }
 }
