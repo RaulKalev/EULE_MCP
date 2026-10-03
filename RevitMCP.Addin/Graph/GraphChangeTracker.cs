@@ -12,19 +12,24 @@ internal static class GraphChangeTracker
 {
     private static readonly object SyncRoot = new();
 
-    // Revit hands out a new managed Document wrapper per access; Equals/GetHashCode identify the
-    // native document, so this must be a normal dictionary (ConditionalWeakTable compares references).
-    private static readonly Dictionary<Document, GraphChangeSet> Sets = new();
+    // Revit hands out a new managed Document wrapper per access; Equals identifies the native document,
+    // so lookups compare with Equals (ConditionalWeakTable compares references). Not a Dictionary:
+    // Equals/GetHashCode throw InvalidObjectException once a document is closed (#80), so closed
+    // entries are dropped by position before any comparison. Only a handful of documents are open.
+    private static readonly List<(Document Doc, GraphChangeSet Set)> Sets = new();
 
     public static GraphChangeSet For(Document doc)
     {
         lock (SyncRoot)
         {
-            if (!Sets.TryGetValue(doc, out var set))
+            PruneClosed();
+            foreach (var entry in Sets)
             {
-                PruneClosed();
-                Sets[doc] = set = new GraphChangeSet();
+                if (entry.Doc.Equals(doc)) return entry.Set;
             }
+
+            var set = new GraphChangeSet();
+            Sets.Add((doc, set));
             return set;
         }
     }
@@ -52,11 +57,11 @@ internal static class GraphChangeTracker
 
     private static void PruneClosed()
     {
-        foreach (var doc in Sets.Keys.ToList())
+        for (var i = Sets.Count - 1; i >= 0; i--)
         {
             bool valid;
-            try { valid = doc.IsValidObject; } catch { valid = false; }
-            if (!valid) Sets.Remove(doc);
+            try { valid = Sets[i].Doc.IsValidObject; } catch { valid = false; }
+            if (!valid) Sets.RemoveAt(i);
         }
     }
 }
