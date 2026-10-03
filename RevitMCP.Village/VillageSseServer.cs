@@ -49,6 +49,12 @@ public sealed class VillageSseServer : IDisposable
 {
     public const int MaxRequestHeadBytes = 8 * 1024;
     public const int RequestReadTimeoutMs = 5000;
+
+    /// <summary>Most body bytes read and dropped after a 413, so the client can read the refusal.</summary>
+    public const int MaxDiscardBytes = 1024 * 1024;
+
+    /// <summary>How long a refused upload may take to finish before the connection is cut.</summary>
+    public const int DiscardTimeoutMs = 2000;
     public const int HeartbeatIntervalMs = 15000;
     public const int PerClientQueueCapacity = 256;
     public const int MaxActionBodyBytes = 96 * 1024;
@@ -622,6 +628,10 @@ public sealed class VillageSseServer : IDisposable
         {
             lock (_gate) _stats.ActionsRefused++;
             await WriteSimpleAsync(stream, 413, "Payload Too Large", "text/plain", "body too large", ct).ConfigureAwait(false);
+            // Closing with the body still unread makes the OS reset the connection, and a client
+            // that is still uploading then sees the reset instead of the 413. Discard what it sends
+            // (bounded), never acting on it.
+            await DiscardBodyAsync(stream, request.ContentLength.Value - leftover.Length, ct).ConfigureAwait(false);
             return;
         }
         var length = (int)request.ContentLength.Value;
@@ -734,6 +744,31 @@ public sealed class VillageSseServer : IDisposable
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Reads and drops up to <paramref name="remaining"/> body bytes (at most
+    /// <see cref="MaxDiscardBytes"/>, within <see cref="DiscardTimeoutMs"/>) so a refused upload can
+    /// finish and read its response. Larger or slower uploads are simply cut off.
+    /// </summary>
+    private static async Task DiscardBodyAsync(NetworkStream stream, long remaining, CancellationToken ct)
+    {
+        remaining = Math.Min(remaining, MaxDiscardBytes);
+        if (remaining <= 0) return;
+        var buffer = new byte[8192];
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(DiscardTimeoutMs);
+        try
+        {
+            while (remaining > 0)
+            {
+                var read = await stream.ReadAsync(buffer, 0, (int)Math.Min(buffer.Length, remaining), timeout.Token).ConfigureAwait(false);
+                if (read <= 0) return;
+                remaining -= read;
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (IOException) { }
     }
 
     private static JObject? ParseBody(byte[] body)
