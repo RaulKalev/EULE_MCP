@@ -48,7 +48,7 @@ public class ConfigGetProjectConfigTool : IRevitMcpTool, IBackgroundMcpTool
             RequestId  = request.RequestId,
             Success    = true,
             Message    = $"Project config read from {filePath}",
-            Data       = new { projectRoot, filePath, config },
+            Data       = new { projectRoot, filePath, config = JsonNodeConversion.ToJToken(config) },
             DurationMs = sw.ElapsedMilliseconds
         });
     }

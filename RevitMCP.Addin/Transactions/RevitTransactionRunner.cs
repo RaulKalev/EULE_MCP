@@ -59,10 +59,7 @@ public static class RevitTransactionRunner
         var failureMessages = new List<string>();
         try
         {
-            var options = trans.GetFailureHandlingOptions();
-            options.SetFailuresPreprocessor(new FailureCapturePreprocessor(failureMessages));
-            options.SetClearAfterRollback(true);
-            trans.SetFailureHandlingOptions(options);
+            RollBackOnErrorPreprocessor.Attach(trans, failureMessages);
         }
         catch
         {
@@ -134,39 +131,4 @@ public static class RevitTransactionRunner
 
     private static TxStatus Map(TransactionStatus status) =>
         Enum.TryParse<TxStatus>(status.ToString(), out var mapped) ? mapped : TxStatus.Error;
-
-    /// <summary>
-    /// Records every failure message Revit raises during commit and deletes
-    /// plain warnings so they don't block the write. Errors are left for Revit
-    /// to resolve or roll back — the recorded text explains what happened.
-    /// </summary>
-    private sealed class FailureCapturePreprocessor : IFailuresPreprocessor
-    {
-        private readonly List<string> _messages;
-
-        public FailureCapturePreprocessor(List<string> messages) => _messages = messages;
-
-        public FailureProcessingResult PreprocessFailures(FailuresAccessor failuresAccessor)
-        {
-            try
-            {
-                foreach (var failure in failuresAccessor.GetFailureMessages())
-                {
-                    var severity = failure.GetSeverity();
-                    string text;
-                    try { text = failure.GetDescriptionText(); }
-                    catch { text = failure.GetFailureDefinitionId()?.Guid.ToString() ?? "(unknown failure)"; }
-                    _messages.Add($"[{severity}] {text}");
-
-                    if (severity == FailureSeverity.Warning)
-                        failuresAccessor.DeleteWarning(failure);
-                }
-            }
-            catch
-            {
-                // Diagnostics only — never fail the commit from the preprocessor.
-            }
-            return FailureProcessingResult.Continue;
-        }
-    }
 }

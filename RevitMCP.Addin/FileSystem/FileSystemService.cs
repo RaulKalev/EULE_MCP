@@ -168,13 +168,7 @@ public class FileSystemService
         if (string.IsNullOrWhiteSpace(suffix)) suffix = "backup";
         var stem      = Path.GetFileNameWithoutExtension(normalized!);
         var ext       = Path.GetExtension(normalized!);
-        var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd_HHmmss");
-        var backupName = $"{stem}_{suffix}_{timestamp}{ext}";
-        var backupPath = Path.Combine(targetDir, backupName);
-
-        if (File.Exists(backupPath))
-            return FileBackupResult.Fail(
-                $"Backup file already exists: {backupPath}. Try again in 1 second.");
+        var backupPath = BackupPathNaming.Unique(targetDir, stem, suffix, DateTime.UtcNow, ext);
 
         try
         {

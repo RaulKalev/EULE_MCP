@@ -15,8 +15,7 @@ public static class ExcelBackupService
         var dir = Path.GetDirectoryName(filePath) ?? string.Empty;
         var stem = Path.GetFileNameWithoutExtension(filePath);
         var ext = Path.GetExtension(filePath);
-        var stamp = DateTime.Now.ToString("yyyy-MM-dd_HHmmss");
-        var backupPath = Path.Combine(dir, $"{stem}_backup_{stamp}{ext}");
+        var backupPath = RevitMCP.Addin.FileSystem.BackupPathNaming.Unique(dir, stem, "backup", DateTime.Now, ext);
         File.Copy(filePath, backupPath, overwrite: false);
         return backupPath;
     }

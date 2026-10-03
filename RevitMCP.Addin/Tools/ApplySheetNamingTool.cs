@@ -72,8 +72,8 @@ public class ApplySheetNamingTool : IRevitMcpTool
             try
             {
                 for (var index = 0; index < toApply.Count; index++)
-                    toApply[index].Sheet.SheetNumber =
-                        "~MCP-" + Guid.NewGuid().ToString("N").Substring(0, 16);
+                    toApply[index].Sheet.SheetNumber = // no "~": Revit rejects it in view/sheet names
+                        "MCP-renum-" + Guid.NewGuid().ToString("N").Substring(0, 16);
 
                 foreach (var proposal in toApply)
                     SheetNamingService.SetTargetValue(proposal.Sheet, target, proposal.Proposed);

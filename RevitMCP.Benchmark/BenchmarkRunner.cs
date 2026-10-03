@@ -56,6 +56,14 @@ public sealed class BenchmarkRunner : IAsyncDisposable
         return m;
     }
 
+    /// <summary>Every advertised tool of a profile (name, description, input schema, annotations) as JSON.</summary>
+    public async Task<string> DumpTools(string profile)
+    {
+        var client = await ClientFor(profile);
+        var tools = await client.ListToolsAsync();
+        return JsonSerializer.Serialize(tools.Select(t => t.ProtocolTool).ToList(), new JsonSerializerOptions(McpJsonUtilities.DefaultOptions) { WriteIndented = true });
+    }
+
     public async Task<(StepMeasurement Measurement, JsonNode? Json)> Call(string profile, string tool, JsonObject args)
     {
         var step = new StepMeasurement { Tool = tool };

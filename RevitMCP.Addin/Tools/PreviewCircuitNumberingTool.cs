@@ -44,13 +44,28 @@ public class PreviewCircuitNumberingTool : IRevitMcpTool
 
         int num = startNumber;
         int changedCount = 0;
+        int notWritable = 0;
         var changes = new List<object>();
         foreach (var c in sorted)
         {
             var newNum = num.ToString();
-            bool willChange = !string.Equals(c.CircuitNumber, newNum);
+            // The apply step writes RBS_ELEC_CIRCUIT_NUMBER; Revit keeps it read-only for some circuits
+            // (e.g. by system type or panel naming), so say so here instead of promising a change.
+            bool writable;
+            try
+            {
+                var p = c.get_Parameter(BuiltInParameter.RBS_ELEC_CIRCUIT_NUMBER);
+                writable = p != null && !p.IsReadOnly;
+            }
+            catch { writable = false; }
+            bool willChange = writable && !string.Equals(c.CircuitNumber, newNum);
             if (willChange) changedCount++;
-            changes.Add(new { circuitId = c.Id.Value, oldCircuitNumber = c.CircuitNumber ?? "", newCircuitNumber = newNum, willChange });
+            if (!writable) notWritable++;
+            changes.Add(new
+            {
+                circuitId = c.Id.Value, oldCircuitNumber = c.CircuitNumber ?? "", newCircuitNumber = newNum, willChange,
+                reason = writable ? null : "Circuit Number is read-only for this circuit in Revit."
+            });
             num += increment;
         }
 
@@ -59,8 +74,9 @@ public class PreviewCircuitNumberingTool : IRevitMcpTool
         {
             RequestId = request.RequestId,
             Success = true,
-            Message = $"Previewed renumbering of {circuits.Count} circuit(s) on panel '{panelName}'. {changedCount} will change.",
-            Data = new { panelName, circuitCount = circuits.Count, changedCount, changes },
+            Message = $"Previewed renumbering of {circuits.Count} circuit(s) on panel '{panelName}'. {changedCount} will change." +
+                      (notWritable > 0 ? $" {notWritable} have a read-only Circuit Number and cannot be renumbered." : ""),
+            Data = new { panelName, circuitCount = circuits.Count, changedCount, notWritableCount = notWritable, changes },
             DurationMs = sw.ElapsedMilliseconds
         });
     }

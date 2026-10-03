@@ -49,7 +49,7 @@ public class ConfigReadTool : IRevitMcpTool, IBackgroundMcpTool
             RequestId  = request.RequestId,
             Success    = true,
             Message    = $"Config read from {filePath}",
-            Data       = new { scope, filePath, config },
+            Data       = new { scope, filePath, config = JsonNodeConversion.ToJToken(config) },
             DurationMs = sw.ElapsedMilliseconds
         });
     }

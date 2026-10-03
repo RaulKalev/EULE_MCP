@@ -75,7 +75,8 @@ public class ApplyCircuitLoadNamesTool : IRevitMcpTool
         return Task.FromResult(new McpToolResult
         {
             RequestId = request.RequestId,
-            Success = true,
+            // Every requested change failing is a failure, not a success with a footnote.
+            Success = modified.Count > 0 || failures.Count == 0,
             Message = $"Applied {modified.Count} load name change(s). {failures.Count} failed.",
             Data = new { modifiedCount = modified.Count, failedCount = failures.Count, modified, failures },
             DurationMs = sw.ElapsedMilliseconds

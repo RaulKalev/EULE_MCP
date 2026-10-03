@@ -161,7 +161,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     {
         var args = new Dictionary<string, object?>
         {
-            ["changes"] = changes,
+            ["changes"] = ToJToken(changes),
             ["viewId"] = viewId,
             ["viewIds"] = viewIds ?? [],
             ["useViewTemplate"] = useViewTemplate
@@ -180,7 +180,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     {
         var args = new Dictionary<string, object?>
         {
-            ["changes"] = changes,
+            ["changes"] = ToJToken(changes),
             ["viewId"] = viewId,
             ["viewIds"] = viewIds ?? [],
             ["useViewTemplate"] = useViewTemplate
@@ -5956,7 +5956,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         var args = new Dictionary<string, object?>
         {
             ["linkInstanceId"]               = linkInstanceId,
-            ["items"]                        = items,
+            ["items"]                        = ToJToken(items),
             ["dryRun"]                       = dryRun,
             ["allowMediumConfidenceUpdates"] = allowMediumConfidenceUpdates,
             ["allowLowConfidenceUpdates"]    = allowLowConfidenceUpdates,

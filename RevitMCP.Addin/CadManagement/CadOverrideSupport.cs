@@ -304,8 +304,9 @@ internal static class CadOverrideSupport
 
                 if (matchingImports.Count == 0)
                 {
-                    warnings.Add(
-                        $"No CAD import matched '{DescribeSelector(change)}' in view '{requestedView.Name}'.");
+                    // Copied overrides carry one change per layer of the same import; report it once.
+                    var warning = $"No CAD import matched '{DescribeSelector(change)}' in view '{requestedView.Name}'.";
+                    if (!warnings.Contains(warning)) warnings.Add(warning);
                     continue;
                 }
 

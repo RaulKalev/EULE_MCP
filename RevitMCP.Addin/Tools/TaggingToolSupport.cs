@@ -47,7 +47,8 @@ namespace RevitMCP.Addin.Tools
                 ? uidoc.Selection.GetElementIds().Select(id => id.Value).ToArray()
                 : ToolArguments.GetLongArray(arguments, "elementIds");
             var categoryIdValue = ToolArguments.GetLong(arguments, "categoryId");
-            var categoryId = categoryIdValue > 0
+            // Built-in categories have negative ids (Detail Items = -2002000); 0 means "not given".
+            var categoryId = categoryIdValue != 0
                 ? new ElementId(categoryIdValue)
                 : ElementId.InvalidElementId;
 
