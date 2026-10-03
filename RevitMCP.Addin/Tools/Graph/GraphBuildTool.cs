@@ -33,7 +33,9 @@ public class GraphBuildTool : IRevitMcpTool
         "build in this Revit session; falls back to a full rebuild when that is not safe, and says why), " +
         "elementLimit (int, default 250000), includeLinks (bool, default true — also index elements and rooms of loaded " +
         "linked models under ids link:<linkInstanceId>:<elementId>), linkElementLimit (int, default 100000), sharedFolder (string, overrides graph.sharedFolder config), " +
-        "dbPath (string, explicit database path). Returns node/edge counts and elapsed time. The graph is a routing layer only.";
+        "dbPath (string, explicit database path). Values of the parameters allowlisted in graph.routingParameters " +
+        "(project, user or company config) are indexed as routing hints. Returns node/edge counts and elapsed time. " +
+        "The graph is a routing layer only.";
     public ToolPermission Permission => ToolPermission.ReadOnly;   // Writes only the local/shared graph file, not the Revit model
     public ToolCategory Category => ToolCategory.Elements;
 
@@ -58,13 +60,15 @@ public class GraphBuildTool : IRevitMcpTool
         try
         {
             var (location, signal, _) = GraphToolSupport.Locate(uiapp, doc, request.Arguments);
+            var routing = GraphRoutingParameterConfig.Load(doc);
+            warnings.AddRange(routing.Warnings);
 
             string? fallbackReason = null;
             if (incremental)
             {
                 try
                 {
-                    var delta = TryIncremental(doc, location, signal, request, total, warnings, out fallbackReason);
+                    var delta = TryIncremental(doc, location, signal, routing.Specs, request, total, warnings, out fallbackReason);
                     if (delta != null) return Task.FromResult(delta);
                 }
                 catch (Exception ex)
@@ -73,7 +77,8 @@ public class GraphBuildTool : IRevitMcpTool
                 }
             }
 
-            return Task.FromResult(FullBuild(doc, location, signal, request, elementLimit, linkElementLimit, incremental, fallbackReason, total, warnings));
+            return Task.FromResult(FullBuild(doc, location, signal, routing.Specs, routing.Source, request, elementLimit, linkElementLimit,
+                incremental, fallbackReason, total, warnings));
         }
         catch (Exception ex)
         {
@@ -94,11 +99,12 @@ public class GraphBuildTool : IRevitMcpTool
     // ─── Full rebuild ──────────────────────────────────────────────────────
 
     private static McpToolResult FullBuild(
-        Document doc, GraphLocation location, ModelVersionSignal signal, McpToolRequest request,
+        Document doc, GraphLocation location, ModelVersionSignal signal,
+        List<RoutingParameterSpec> routingParameters, string? routingSource, McpToolRequest request,
         int elementLimit, int linkElementLimit, bool incrementalRequested, string? fallbackReason, Stopwatch total, List<string> warnings)
     {
         var extractWatch = Stopwatch.StartNew();
-        var extraction = RevitGraphExtractor.Extract(doc, elementLimit, linkElementLimit);
+        var extraction = RevitGraphExtractor.Extract(doc, elementLimit, linkElementLimit, routingParameters);
         extractWatch.Stop();
         warnings.AddRange(extraction.Warnings);
 
@@ -107,13 +113,19 @@ public class GraphBuildTool : IRevitMcpTool
         meta[GraphSchema.MetaKeys.ElementLimitReached] = extraction.ElementLimitReached ? "true" : "false";
         meta[GraphSchema.MetaKeys.LastFullBuildAt] = builtAt;
         meta[GraphSchema.MetaKeys.IncrementalUpdates] = "0";
+        meta[GraphSchema.MetaKeys.RoutingParameters] = GraphRoutingParameters.Signature(routingParameters);
+        meta[GraphSchema.MetaKeys.RoutingParametersSource] = routingSource ?? string.Empty;
 
         var store = new GraphStore();
         var tempPath = store.CreateBuildTempPath();
         (long Nodes, long Edges) counts;
+        List<(string Name, long Nodes, long DistinctValues)> paramStats;
         var writeWatch = Stopwatch.StartNew();
         using (var db = GraphDatabase.CreateNew(tempPath))
+        {
             counts = db.WriteGraph(extraction.Nodes, extraction.Edges, meta);
+            paramStats = db.RoutingParameterStats();
+        }
         writeWatch.Stop();
 
         var publishWatch = Stopwatch.StartNew();
@@ -143,6 +155,15 @@ public class GraphBuildTool : IRevitMcpTool
                 danglingEdgesDropped = extraction.DanglingEdgesDropped,
                 elementLimit,
                 elementLimitReached = extraction.ElementLimitReached,
+                routingParameters = routingParameters.Count == 0
+                    ? null
+                    : new
+                    {
+                        source = routingSource,
+                        configured = routingParameters.Select(s => s.Name).ToList(),
+                        indexed = paramStats.Select(s => new { name = s.Name, nodes = s.Nodes, distinctValues = s.DistinctValues }).ToList(),
+                        note = "Parameter values are routing hints captured at builtAt — read live before reporting or writing."
+                    },
                 links = linkElementLimit > 0
                     ? new
                     {
@@ -185,8 +206,8 @@ public class GraphBuildTool : IRevitMcpTool
     /// <paramref name="fallbackReason"/> set when a full rebuild is needed instead.
     /// </summary>
     private static McpToolResult? TryIncremental(
-        Document doc, GraphLocation location, ModelVersionSignal signal, McpToolRequest request,
-        Stopwatch total, List<string> warnings, out string? fallbackReason)
+        Document doc, GraphLocation location, ModelVersionSignal signal, List<RoutingParameterSpec> routingParameters,
+        McpToolRequest request, Stopwatch total, List<string> warnings, out string? fallbackReason)
     {
         fallbackReason = null;
         var changes = GraphChangeTracker.For(doc);
@@ -223,9 +244,12 @@ public class GraphBuildTool : IRevitMcpTool
                     HasEdgeOwners = hasOwners,
                     BaselineMatches = changes.MatchesBaseline(meta.BuiltAt, location.DatabasePath),
                     Overflow = changes.Overflow,
-                    ElementLimitReached = string.Equals(meta.Get(GraphSchema.MetaKeys.ElementLimitReached), "true", StringComparison.OrdinalIgnoreCase)
+                    ElementLimitReached = string.Equals(meta.Get(GraphSchema.MetaKeys.ElementLimitReached), "true", StringComparison.OrdinalIgnoreCase),
+                    RoutingParametersChanged = !string.Equals(
+                        meta.Get(GraphSchema.MetaKeys.RoutingParameters) ?? string.Empty,
+                        GraphRoutingParameters.Signature(routingParameters), StringComparison.Ordinal)
                 };
-                if (inputs.HasEdgeOwners && inputs.BaselineMatches && !inputs.Overflow && !inputs.ElementLimitReached)
+                if (inputs.HasEdgeOwners && inputs.BaselineMatches && !inputs.Overflow && !inputs.ElementLimitReached && !inputs.RoutingParametersChanged)
                 {
                     var known = db.KindsOf(modified.Concat(deleted));
                     foreach (var id in added)
@@ -256,7 +280,7 @@ public class GraphBuildTool : IRevitMcpTool
                     added.Concat(modified), deleted, KindOf,
                     (id, rel, outgoing) => db.Neighbors(id, rel, outgoing ? "out" : "in", 100_000).Select(n => n.Node.Id));
 
-                extraction = RevitGraphExtractor.ExtractSubset(doc, refresh.Select(long.Parse));
+                extraction = RevitGraphExtractor.ExtractSubset(doc, refresh.Select(long.Parse), routingParameters);
                 warnings.AddRange(extraction.Warnings);
                 // Ids that were added/changed and then vanished are deletions as far as the graph is concerned.
                 var missing = extraction.Missing.Select(Str).ToList();

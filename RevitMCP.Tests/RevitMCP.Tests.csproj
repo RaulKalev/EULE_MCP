@@ -132,6 +132,7 @@
     <Compile Include="..\RevitMCP.Addin\Graph\GraphRouting.cs" Link="Graph\GraphRouting.cs" />
     <Compile Include="..\RevitMCP.Addin\Graph\GraphIncremental.cs" Link="Graph\GraphIncremental.cs" />
     <Compile Include="..\RevitMCP.Addin\Graph\GraphLinkIds.cs" Link="Graph\GraphLinkIds.cs" />
+    <Compile Include="..\RevitMCP.Addin\Graph\GraphRoutingParameters.cs" Link="Graph\GraphRoutingParameters.cs" />
     <!-- Project Village: only the add-in-side graph reader is linked here; the rest of the module comes from the RevitMCP.Village project reference above. -->
     <Compile Include="..\RevitMCP.Addin\Village\VillageGraphReader.cs" Link="Village\VillageGraphReader.cs" />
   </ItemGroup>

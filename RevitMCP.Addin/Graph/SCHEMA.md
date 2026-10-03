@@ -81,6 +81,18 @@ the element itself for `on_level`, `in_workset`, `type_of`, `hosted_on`, `locate
 for `fed_by`; the sheet for `on_sheet`; the tag for `tagged_in`. An incremental update deletes the
 edges owned by each changed element and re-derives them; an edge survives while any owner remains.
 
+### `node_params` (#63)
+
+| Column | Meaning |
+|---|---|
+| `node_id` | Node id |
+| `name` | Allowlisted parameter name (`graph.routingParameters`) |
+| `value` | Value as read (trimmed, single-line, at most 200 characters) |
+| `norm` | `value` lower-cased (invariant), used for matching |
+
+Primary key `(node_id, name)`. Only parameters on the allowlist are stored; the table is empty when
+none is configured. Values are routing hints captured at `built_at`, never authoritative.
+
 ### `meta`
 
 | `key` | `value` |
@@ -101,10 +113,12 @@ edges owned by each changed element and re-derives them; an edge survives while 
 | `element_limit_reached` | `true` when the last full build stopped at `elementLimit` (incremental updates then fall back) |
 | `last_full_build_at` | `built_at` of the last full build |
 | `incremental_updates` | Incremental updates applied since the last full build |
+| `routing_parameters` | Signature of the routing-parameter allowlist the graph was built with (a change forces a full rebuild) |
+| `routing_parameters_source` | Config file the allowlist came from |
 
 ## Indexes
 
-`nodes(kind)`, `nodes(category)`, `nodes(level)`, `edges(src)`, `edges(dst)`, `edges(rel)`, `edge_owners(owner)`.
+`nodes(kind)`, `nodes(category)`, `nodes(level)`, `edges(src)`, `edges(dst)`, `edges(rel)`, `edge_owners(owner)`, `node_params(name, norm)`.
 
 ## Version signal (`central_version`)
 
@@ -125,7 +139,7 @@ signal differs, or the element count differs.
 ## What is *not* in the graph
 
 Annotation elements other than tags/views/sheets, element types not referenced by an instance,
-detail items on views that are not model categories, linked-model levels/hosts/circuits/tags, parameter values,
+detail items on views that are not model categories, linked-model levels/hosts/circuits/tags, parameter values other than allowlisted routing parameters,
 geometry. Model elements are read with
 `FilteredElementCollector.WhereElementIsNotElementType().WhereElementIsViewIndependent()` filtered
 to `CategoryType.Model` and non-tag categories, capped by `elementLimit` (default 250 000).

@@ -65,8 +65,12 @@ public class GraphStatusTool : IRevitMcpTool
         var store = new GraphStore();
         var handle = store.OpenForRead(location.DatabasePath);
         GraphMeta meta;
+        List<(string Name, long Nodes, long DistinctValues)> paramStats;
         using (var db = GraphDatabase.OpenReadOnly(handle.ReadPath))
+        {
             meta = db.ReadMeta();
+            paramStats = db.RoutingParameterStats();
+        }
         var freshness = GraphFreshness.Evaluate(meta, signal);
 
         sw.Stop();
@@ -98,6 +102,11 @@ public class GraphStatusTool : IRevitMcpTool
                 currentElementCount = signal.ElementCount,
                 nodeCount = meta.NodeCount,
                 edgeCount = meta.EdgeCount,
+                routingParameters = paramStats.Count == 0 ? null : new
+                {
+                    source = meta.Get(GraphSchema.MetaKeys.RoutingParametersSource),
+                    indexed = paramStats.Select(s => new { name = s.Name, nodes = s.Nodes, distinctValues = s.DistinctValues }).ToList()
+                },
                 schemaVersion = meta.SchemaVersion,
                 expectedSchemaVersion = GraphSchema.SchemaVersion
             }, meta, freshness),

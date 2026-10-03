@@ -105,7 +105,9 @@ internal static class GraphToolSupport
         return body;
     }
 
-    public static object NodeDto(GraphNode node) => new
+    public static object NodeDto(GraphNode node) => NodeDto(node, null);
+
+    public static object NodeDto(GraphNode node, Dictionary<string, string>? routingParams) => new
     {
         id = node.Id,
         kind = node.Kind,
@@ -116,7 +118,8 @@ internal static class GraphToolSupport
         // Linked-model nodes (#62): the link instance they were read through; extra carries linkName/linkDocument.
         // Their element id inside the linked document is the last id segment — host tools cannot read it by that id.
         linkInstanceId = GraphLinkIds.LinkInstanceOf(node.Id),
-        extra = ParseExtra(node.Extra)
+        extra = ParseExtra(node.Extra),
+        routingParams = routingParams is { Count: > 0 } ? routingParams : null
     };
 
     public static JObject? ParseExtra(string? extra)

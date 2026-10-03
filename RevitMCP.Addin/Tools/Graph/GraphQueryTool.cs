@@ -28,7 +28,8 @@ public class GraphQueryTool : IRevitMcpTool
     public string Description =>
         "Structured queries against the model graph (build it first with revit_graph_build). operation: " +
         "neighbors (id, rel?, direction? in|out|both, limit?, link?) | " +
-        "find (kind?, category?, level?, workset?, nameContains?, link?, page?, pageSize?) → ids + names, paginated; " +
+        "find (kind?, category?, level?, workset?, nameContains?, link?, param?, paramValue?, paramContains?, page?, pageSize?) " +
+        "→ ids + names, paginated; param filters match allowlisted routing parameters (graph.routingParameters), case-insensitive; " +
         "link = host | links | <linkInstanceId> | <part of the link name> | " +
         "path (fromId, toId, maxHops?) → shortest undirected path | " +
         "subtree (id, rel, depth?, direction? in|out, maxNodes?) e.g. everything fed_by a panel. " +
@@ -77,6 +78,7 @@ public class GraphQueryTool : IRevitMcpTool
         {
             object payload;
             string message;
+            var warnings = new List<string>();
             switch (operation)
             {
                 case "neighbors":
@@ -124,12 +126,24 @@ public class GraphQueryTool : IRevitMcpTool
                     var workset = ToolArguments.GetString(args, "workset");
                     var nameContains = ToolArguments.GetString(args, "nameContains");
                     var link = ToolArguments.GetString(args, "link");
+                    var param = ToolArguments.GetString(args, "param");
+                    var paramValue = ToolArguments.GetString(args, "paramValue");
+                    var paramContains = ToolArguments.GetString(args, "paramContains");
                     var page = Math.Max(0, ToolArguments.GetInt(args, "page", 0));
                     var pageSize = QueryGuard.NormalizePageSize(ToolArguments.GetInt(args, "pageSize", 0));
 
                     var result = opened.Database.Find(
                         NullIfEmpty(kind), NullIfEmpty(category), NullIfEmpty(level), NullIfEmpty(workset), NullIfEmpty(nameContains),
-                        page, pageSize, NullIfEmpty(link));
+                        page, pageSize, NullIfEmpty(link), NullIfEmpty(param), NullIfEmpty(paramValue), NullIfEmpty(paramContains));
+                    var paramFilter = NullIfEmpty(param) ?? NullIfEmpty(paramValue) ?? NullIfEmpty(paramContains);
+                    var hasParamTable = opened.Database.HasRoutingParameters();
+                    var routingParams = hasParamTable
+                        ? opened.Database.ParamsOf(result.Items.Select(n => n.Id))
+                        : new Dictionary<string, Dictionary<string, string>>();
+                    if (paramFilter != null && !hasParamTable)
+                        warnings.Add("This graph has no routing parameters (built before #63). Configure graph.routingParameters and rebuild.");
+                    else if (paramFilter != null && result.TotalAvailable == 0 && opened.Database.RoutingParameterStats().Count == 0)
+                        warnings.Add("No routing parameters are indexed. Allowlist them in graph.routingParameters (project, user or company config) and rebuild.");
                     payload = new
                     {
                         operation,
@@ -140,7 +154,10 @@ public class GraphQueryTool : IRevitMcpTool
                             level = NullIfEmpty(level),
                             workset = NullIfEmpty(workset),
                             nameContains = NullIfEmpty(nameContains),
-                            link = NullIfEmpty(link)
+                            link = NullIfEmpty(link),
+                            param = NullIfEmpty(param),
+                            paramValue = NullIfEmpty(paramValue),
+                            paramContains = NullIfEmpty(paramContains)
                         },
                         itemsReturned = result.ItemsReturned,
                         totalAvailable = result.TotalAvailable,
@@ -148,7 +165,11 @@ public class GraphQueryTool : IRevitMcpTool
                         pageSize = result.PageSize,
                         hasMore = result.HasMore,
                         nextPage = result.HasMore ? result.Page + 1 : (int?)null,
-                        items = result.Items.Select(GraphToolSupport.NodeDto).ToList()
+                        items = result.Items.Select(n => GraphToolSupport.NodeDto(n,
+                            routingParams.TryGetValue(n.Id, out var values) ? values : null)).ToList(),
+                        routingParamsNote = routingParams.Count > 0
+                            ? "routingParams are values captured at the graph's built_at (routing hints, possibly stale) — read live before reporting or writing."
+                            : null
                     };
                     message = $"{result.ItemsReturned} of {result.TotalAvailable} matching node(s) (page {result.Page}, pageSize {result.PageSize}).";
                     break;
@@ -240,8 +261,8 @@ public class GraphQueryTool : IRevitMcpTool
                 Message = message,
                 Data = GraphToolSupport.WithEnvelope(payload, opened.Meta, opened.Freshness),
                 Warnings = opened.Freshness.Stale
-                    ? new List<string> { "Graph is stale: " + opened.Freshness.Reason + " Re-verify ids against the live model." }
-                    : new List<string>(),
+                    ? new List<string> { "Graph is stale: " + opened.Freshness.Reason + " Re-verify ids against the live model." }.Concat(warnings).ToList()
+                    : warnings,
                 DurationMs = sw.ElapsedMilliseconds
             });
         }
