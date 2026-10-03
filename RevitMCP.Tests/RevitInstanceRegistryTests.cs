@@ -64,7 +64,7 @@ public class RevitInstanceRegistryTests : IDisposable
     }
 
     [Fact]
-    public void Unregister_RemovesEntry_AndClearsActiveMarkerForThatPid()
+    public void Unregister_RemovesEntry_AndKeepsActiveMarkerForThatPid()
     {
         _registry.Register(Instance(100, "2026"));
         _registry.Register(Instance(200, "2024"));
@@ -74,7 +74,8 @@ public class RevitInstanceRegistryTests : IDisposable
 
         var listed = Assert.Single(_registry.List());
         Assert.Equal(200, listed.ProcessId);
-        Assert.Null(_registry.GetActiveProcessId());
+        // A stopped pinned connector must stay pinned so requests fail instead of reaching pid 200.
+        Assert.Equal(100, _registry.GetActiveProcessId());
     }
 
     [Fact]
@@ -163,6 +164,72 @@ public class RevitInstanceRegistryTests : IDisposable
             activeProcessId: 999);
 
         Assert.Equal("2026", ordered[0].RevitVersion);
+    }
+
+    [Fact]
+    public void ResolveRoute_PinnedLive_TargetsOnlyPinned()
+    {
+        var route = RevitInstanceRegistry.ResolveRoute(
+            [Instance(1, "2026", "Work.rvt"), Instance(2, "2026", "AI.rvt")],
+            activeProcessId: 2);
+
+        Assert.Equal(2, route.Target?.ProcessId);
+        Assert.Null(route.Error);
+        Assert.False(route.UseLegacyPipe);
+    }
+
+    [Fact]
+    public void ResolveRoute_PinnedNotLive_FailsWithoutFallingBack()
+    {
+        var route = RevitInstanceRegistry.ResolveRoute(
+            [Instance(1, "2026", "Work.rvt")],
+            activeProcessId: 2);
+
+        Assert.Null(route.Target);
+        Assert.False(route.UseLegacyPipe);
+        Assert.Contains("pid 2", route.Error);
+    }
+
+    [Fact]
+    public void ResolveRoute_PinnedNoneLive_FailsWithoutLegacyPipe()
+    {
+        var route = RevitInstanceRegistry.ResolveRoute([], activeProcessId: 2);
+
+        Assert.NotNull(route.Error);
+        Assert.False(route.UseLegacyPipe);
+    }
+
+    [Fact]
+    public void ResolveRoute_UnpinnedSingle_TargetsIt()
+    {
+        var route = RevitInstanceRegistry.ResolveRoute([Instance(1, "2024")], activeProcessId: null);
+
+        Assert.Equal(1, route.Target?.ProcessId);
+        Assert.Null(route.Error);
+    }
+
+    [Fact]
+    public void ResolveRoute_UnpinnedSeveral_FailsAndListsThem()
+    {
+        var route = RevitInstanceRegistry.ResolveRoute(
+            [Instance(1, "2026", "Work.rvt"), Instance(2, "2026", "AI.rvt")],
+            activeProcessId: null);
+
+        Assert.Null(route.Target);
+        Assert.False(route.UseLegacyPipe);
+        Assert.Contains("Work.rvt", route.Error);
+        Assert.Contains("AI.rvt", route.Error);
+        Assert.Contains("revit_select_instance", route.Error);
+    }
+
+    [Fact]
+    public void ResolveRoute_UnpinnedNone_UsesLegacyPipe()
+    {
+        var route = RevitInstanceRegistry.ResolveRoute([], activeProcessId: null);
+
+        Assert.True(route.UseLegacyPipe);
+        Assert.Null(route.Target);
+        Assert.Null(route.Error);
     }
 
     [Fact]
