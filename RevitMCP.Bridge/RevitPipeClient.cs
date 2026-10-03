@@ -15,11 +15,11 @@ namespace RevitMCP.Bridge;
 /// lingering connections when the Revit connector is stopped and restarted.
 ///
 /// Each Revit process hosts its own unique pipe and registers itself in a shared
-/// instance registry. When no explicit pipe name is configured, the bridge discovers
-/// running instances and routes to them by preference: the user-selected active
-/// instance first, then the highest Revit version (2026 before 2024), then the most
-/// recently started. The legacy shared pipe name is kept as a final fallback for
-/// older add-in builds.
+/// instance registry. When no explicit pipe name is configured, the bridge never guesses
+/// between Revit windows (see <see cref="RevitInstanceRegistry.ResolveRoute"/>): a pinned
+/// instance is the only target, a single live instance is used, and several unpinned
+/// instances return an error asking for a selection. The legacy shared pipe name is tried
+/// only when no instance is registered, for older add-in builds.
 /// </summary>
 public class RevitPipeClient
 {
@@ -53,7 +53,11 @@ public class RevitPipeClient
             ClientName = _clientName
         };
 
-        var (connected, accessDenied) = await ConnectAsync(cancellationToken);
+        var (candidates, routeError) = ResolveCandidatePipeNames();
+        if (routeError != null)
+            return Error(request.RequestId, routeError);
+
+        var (connected, accessDenied) = await ConnectAsync(candidates, cancellationToken);
         if (connected == null)
             return accessDenied ? AccessDenied(request.RequestId) : NotConnected(request.RequestId);
         using var pipe = connected;
@@ -92,14 +96,14 @@ public class RevitPipeClient
     }
 
     /// <summary>
-    /// Connects to the preferred Revit instance, trying candidate pipes in order.
+    /// Connects to the routed Revit instance, trying candidate pipes in order.
     /// Returns a null pipe when no instance could be reached; <c>accessDenied</c> is true when at
     /// least one pipe existed but refused us (typically Revit running as administrator while the
     /// agent is not).
     /// </summary>
-    private async Task<(NamedPipeClientStream? Pipe, bool AccessDenied)> ConnectAsync(CancellationToken cancellationToken)
+    private async Task<(NamedPipeClientStream? Pipe, bool AccessDenied)> ConnectAsync(
+        List<string> candidates, CancellationToken cancellationToken)
     {
-        var candidates = ResolveCandidatePipeNames();
         var accessDenied = false;
 
         for (var i = 0; i < candidates.Count; i++)
@@ -133,26 +137,24 @@ public class RevitPipeClient
     }
 
     /// <summary>
-    /// Builds the ordered list of pipe names to try. An explicitly configured pipe name
-    /// (via --pipe or configuration) always wins; otherwise registered live instances are
-    /// preferred (active first, then highest Revit version, then most recent), with the
-    /// legacy shared pipe name as a final fallback.
+    /// Pipe names to try for this request, or an error when the request must not be sent.
+    /// An explicitly configured pipe name (via --pipe or configuration) always wins.
     /// </summary>
-    private List<string> ResolveCandidatePipeNames()
+    private (List<string> Candidates, string? Error) ResolveCandidatePipeNames()
     {
         if (!string.IsNullOrWhiteSpace(_explicitPipeName))
-            return [_explicitPipeName!];
+            return ([_explicitPipeName!], null);
 
-        var candidates = new List<string>();
-        foreach (var instance in DiscoverLiveInstances())
-            candidates.Add(instance.PipeName);
+        var route = ResolveRoute();
+        if (route.Error != null) return ([], route.Error);
 
         // Legacy fallback for add-in builds that pre-date the instance registry.
-        if (!candidates.Contains(RevitMcpDefaults.PipeName))
-            candidates.Add(RevitMcpDefaults.PipeName);
-
-        return candidates;
+        return ([route.Target?.PipeName ?? RevitMcpDefaults.PipeName], null);
     }
+
+    /// <summary>Where requests go right now (see <see cref="RevitInstanceRegistry.ResolveRoute"/>).</summary>
+    public InstanceRoute ResolveRoute() =>
+        RevitInstanceRegistry.ResolveRoute(DiscoverLiveInstances(), _registry.GetActiveProcessId());
 
     /// <summary>
     /// Lists registered Revit instances whose process is still alive, ordered by routing
@@ -207,8 +209,7 @@ public class RevitPipeClient
         RequestId = requestId,
         Success = false,
         Message = "Revit is not connected. Open Revit (2024 or 2026), open a model, and start the Revit MCP Connector. " +
-                  "If several Revit instances are running, use revit_list_instances to see them and " +
-                  "revit_select_instance (or the 'Make This Project Active' button in the plugin) to pick one."
+                  "Use revit_list_instances to see running instances."
     };
 
     private static McpToolResult AccessDenied(string requestId) => new()

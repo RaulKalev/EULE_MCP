@@ -55,20 +55,17 @@ public class RevitInstanceRegistry
         }
     }
 
-    /// <summary>Removes the registration for a process. Also clears the active marker if it points to it.</summary>
+    /// <summary>
+    /// Removes the registration for a process. The active marker is deliberately kept: a pinned
+    /// instance whose connector stops (Stop, Panic Stop, hot reload, crash) must stay pinned so the
+    /// bridge reports it unavailable instead of routing to another Revit window.
+    /// </summary>
     public void Unregister(int processId)
     {
         try
         {
             var path = InstanceFilePath(processId);
             if (File.Exists(path)) File.Delete(path);
-        }
-        catch { /* best effort */ }
-
-        try
-        {
-            if (GetActiveProcessId() == processId && File.Exists(ActiveMarkerPath))
-                File.Delete(ActiveMarkerPath);
         }
         catch { /* best effort */ }
     }
@@ -141,6 +138,40 @@ public class RevitInstanceRegistry
             .ThenByDescending(i => ParseVersion(i.RevitVersion))
             .ThenByDescending(i => i.UpdatedUtc)
             .ToList();
+    }
+
+    /// <summary>
+    /// Decides which instance a request goes to. Never guesses between Revit windows:
+    /// 1. A pinned (active) instance is the only target; if it is not live the request fails.
+    /// 2. Without a pin, a single live instance is used.
+    /// 3. Without a pin, two or more live instances fail and ask for a selection.
+    /// 4. No live instances: try the legacy shared pipe (add-in builds without the registry).
+    /// </summary>
+    public static InstanceRoute ResolveRoute(IReadOnlyList<RevitInstanceInfo> liveInstances, int? activeProcessId)
+    {
+        if (activeProcessId.HasValue)
+        {
+            var pinned = liveInstances.FirstOrDefault(i => i.ProcessId == activeProcessId.Value);
+            return pinned != null
+                ? InstanceRoute.To(pinned)
+                : InstanceRoute.Fail(
+                    $"The pinned Revit instance (pid {activeProcessId.Value}) is not reachable: it was closed or its MCP connector is stopped. " +
+                    "Requests are not sent to other Revit windows. Restart the connector in that Revit, or pin another one with " +
+                    "revit_select_instance (see revit_list_instances) or the 'Make This Project Active' button in the plugin.");
+        }
+
+        if (liveInstances.Count == 1) return InstanceRoute.To(liveInstances[0]);
+
+        if (liveInstances.Count > 1)
+        {
+            var listed = string.Join("; ", liveInstances.Select(i =>
+                $"pid {i.ProcessId}: Revit {i.RevitVersion}, {i.DocumentTitle ?? "unknown document"}"));
+            return InstanceRoute.Fail(
+                $"{liveInstances.Count} Revit instances are running and none is pinned ({listed}). " +
+                "Ask the user which one to use, then pin it with revit_select_instance, or click 'Make This Project Active' in that Revit's plugin window.");
+        }
+
+        return InstanceRoute.Legacy();
     }
 
     private static int ParseVersion(string? version) =>

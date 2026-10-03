@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
 using Newtonsoft.Json;
+using RevitMCP.Core.Instances;
 using RevitMCP.Core.Models;
 
 namespace RevitMCP.Bridge;
@@ -17,34 +18,38 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_list_instances", ReadOnly = true),
-     Description("Lists all running Revit instances that host a RevitMCP connector (useful when several Revit projects, e.g. 2024 and 2026, are open at the same time). Shows process id, Revit version, document title, and which instance requests are currently routed to.")]
+     Description("Lists all running Revit instances that host a RevitMCP connector (useful when several Revit windows are open, e.g. one for AI work and one for the user's own work). Shows process id, Revit version, document title, which instance is pinned, and where requests are routed. Requests never fall back to an unpinned window.")]
     public Task<string> ListInstances(CancellationToken cancellationToken)
     {
         var activePid = pipeClient.GetActiveProcessId();
         var instances = pipeClient.DiscoverLiveInstances();
+        var route = RevitInstanceRegistry.ResolveRoute(instances, activePid);
         var response = new
         {
             success = true,
             activeProcessId = activePid,
-            routingOrder = "user-selected active instance first, then highest Revit version, then most recently started",
-            instances = instances.Select((i, index) => new
+            routing = "only the pinned instance; without a pin, the single running instance; with several unpinned instances, nothing until one is pinned",
+            instances = instances.Select(i => new
             {
                 processId = i.ProcessId,
                 revitVersion = i.RevitVersion,
                 documentTitle = i.DocumentTitle ?? "(unknown)",
                 pipeName = i.PipeName,
                 isActive = activePid.HasValue && i.ProcessId == activePid.Value,
-                isCurrentTarget = index == 0
+                isCurrentTarget = route.Target?.ProcessId == i.ProcessId
             }).ToList(),
+            routeError = route.Error,
             message = instances.Count == 0
                 ? "No running Revit instances with an active MCP connector were found."
-                : $"{instances.Count} Revit instance(s) found. Requests are routed to the first entry."
+                : route.Target != null
+                    ? $"{instances.Count} Revit instance(s) found. Requests go to pid {route.Target.ProcessId}."
+                    : $"{instances.Count} Revit instance(s) found. Requests are blocked until an instance is pinned with revit_select_instance."
         };
         return Task.FromResult(JsonConvert.SerializeObject(response, ResultSerializerSettings));
     }
 
     [McpServerTool(Name = "revit_select_instance"),
-     Description("Selects which running Revit instance MCP requests should be routed to, by process id (see revit_list_instances). Use this when multiple Revit projects are open and the wrong one is being targeted.")]
+     Description("Pins the running Revit instance MCP requests are routed to, by process id (see revit_list_instances). Requests then go only to that instance and fail instead of reaching another Revit window. When several instances are running, ask the user which one is meant for AI work before pinning.")]
     public Task<string> SelectInstance(
         [Description("Process id of the Revit instance to route requests to.")] int processId,
         CancellationToken cancellationToken)
@@ -65,7 +70,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         {
             success = ok,
             message = ok
-                ? $"Requests will now be routed to Revit {match.RevitVersion} (pid {processId}, document: {match.DocumentTitle ?? "unknown"})."
+                ? $"Pinned: requests now go only to Revit {match.RevitVersion} (pid {processId}, document: {match.DocumentTitle ?? "unknown"})."
                 : "Failed to persist the instance selection."
         }, ResultSerializerSettings));
     }
