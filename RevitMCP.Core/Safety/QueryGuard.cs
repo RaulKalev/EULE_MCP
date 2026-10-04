@@ -116,6 +116,20 @@ public static class QueryGuard
     }
 
     /// <summary>
+    /// Element cap for aggregation queries (grouping, counting) that must see every matching
+    /// element rather than one page of them. Page size never applies; the cap is the caller's
+    /// <paramref name="requestedLimit"/> when positive, bounded by the hard
+    /// <see cref="QueryLimits.MaxScanElements"/> safety cap.
+    /// </summary>
+    public static int ResolveAggregateCap(int requestedLimit, QueryLimits? limits = null)
+    {
+        limits ??= QueryLimits.Default;
+        return requestedLimit > 0
+            ? Math.Min(requestedLimit, limits.MaxScanElements)
+            : limits.MaxScanElements;
+    }
+
+    /// <summary>
     /// Resolves effective page size, parameter cap, and string truncation length from
     /// caller-supplied sentinel values against the configured <see cref="QueryLimits"/>.
     /// <list type="bullet">

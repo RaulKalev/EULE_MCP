@@ -59,7 +59,11 @@ public class ElementQueryEngine
                 options.PageSize, options.Limit,
                 options.MaxParametersPerElement, options.TruncateStringLength);
 
-        int page = Math.Max(0, options.Page);
+        // Aggregation callers (grouping) need every matched element, not one page.
+        if (options.CollectAll)
+            effectivePageSize = QueryGuard.ResolveAggregateCap(options.Limit);
+
+        int page = options.CollectAll ? 0 : Math.Max(0, options.Page);
         int pageStart = page * effectivePageSize; // 0-based index of first element on this page
 
         // --- 4. Scan & filter ---
@@ -79,7 +83,7 @@ public class ElementQueryEngine
 
         // Warn when caller-supplied values were actually clamped
         var limits = QueryLimits.Default;
-        if (options.PageSize > limits.MaxPageSize)
+        if (!options.CollectAll && options.PageSize > limits.MaxPageSize)
             warnings.Add($"Requested pageSize {options.PageSize} exceeded the maximum ({limits.MaxPageSize}); clamped to {effectivePageSize}.");
         if (options.MaxParametersPerElement > limits.MaxParametersPerElement)
             warnings.Add($"Requested maxParametersPerElement {options.MaxParametersPerElement} exceeded the maximum ({limits.MaxParametersPerElement}); clamped to {effectiveMaxParameters}.");
@@ -176,7 +180,12 @@ public class ElementQueryEngine
         int pageEnd = pageStart + effectivePageSize;
         bool hasMore = totalMatched > pageEnd;
 
-        if (totalMatched > effectivePageSize && page == 0 && results.Count == effectivePageSize)
+        if (options.CollectAll)
+        {
+            if (hasMore)
+                warnings.Add($"Only the first {results.Count} of {totalMatched} matching elements were collected (limit {effectivePageSize}); aggregates cover those elements only. Narrow the scope or raise 'limit'.");
+        }
+        else if (totalMatched > effectivePageSize && page == 0 && results.Count == effectivePageSize)
             warnings.Add($"Results paged: showing {results.Count} of {totalMatched}. Use 'page' and 'pageSize' parameters to navigate.");
         else if (hasMore)
             warnings.Add($"More results available beyond this page ({totalMatched - pageEnd} remaining).");

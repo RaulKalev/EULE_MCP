@@ -149,6 +149,17 @@ are matched as whole names (case and spacing ignored); `Type Mark`, `Type Commen
 `Type Id` remain ordinary parameters, so use `Type Id` to match a numeric type id.
 Identity-only filters need no parameter read at all.
 
+## Grouping covers every match
+
+`revit_group_by_parameter` and `revit_group_elements` collect every matching element
+before grouping (`ElementQueryOptions.CollectAll`); page size never truncates the counts.
+Only `limit` (group_elements, default 5000) and the hard scan safety cap
+(`QueryLimits.MaxScanElements`) bound them, with a warning when hit. Both read only the
+grouped parameters. `revit_group_by_parameter` returns `totalMatched`, `elementsGrouped`,
+`matchedElements`, `notFoundElements` and the groups; with `includeElementIds=true` each
+group lists at most `maxElementIdsPerGroup` ids (default 100) and flags
+`elementIdsTruncated` — that id list is the only paged part.
+
 ## Automatic Revit-side optimization
 
 The shared element query engine now separates filter parameters from response

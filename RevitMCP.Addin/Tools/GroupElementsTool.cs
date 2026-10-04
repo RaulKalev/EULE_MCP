@@ -47,6 +47,14 @@ public class GroupElementsTool : IRevitMcpTool
             Filters = filtersParsed.Items,
             IncludeInstanceParameters = needsParameters,
             IncludeTypeParameters = needsParameters,
+            // Read only the grouped parameters, so the per-element parameter cap can't hide them.
+            ReturnParameters = groupByParsed.Items
+                .Where(g => g.Type == "Parameter" && !string.IsNullOrWhiteSpace(g.ParameterName))
+                .Select(g => g.ParameterName)
+                .ToList(),
+            ReturnParameterMatchMode = "ContainsNormalized",
+            // Group every matching element up to 'limit' (and the scan safety cap), not one page.
+            CollectAll = true,
             Limit = ToolArguments.GetInt(request.Arguments, "limit", 5000)
         };
 
@@ -86,6 +94,7 @@ public class GroupElementsTool : IRevitMcpTool
             Message = groupResult.Message,
             Data = new
             {
+                totalMatched = queryResult.TotalMatched,
                 totalElements = groupResult.TotalElements,
                 totalGroups = groupResult.TotalGroups,
                 groupsFlat = flatRows,

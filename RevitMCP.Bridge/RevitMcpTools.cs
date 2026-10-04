@@ -365,17 +365,21 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_group_by_parameter", ReadOnly = true),
-     Description("Groups model elements by a parameter value and returns counts. parameterName supports partial matching (e.g. 'ELENEA_Nimetus' matches 'ELENEA_ÜLD 001_Nimetus'). Optionally filter by category name.")]
+     Description("Groups model elements by a parameter value and returns counts computed over ALL matching elements (no page limit; only the hard scan safety cap applies). parameterName supports partial matching (e.g. 'ELENEA_Nimetus' matches 'ELENEA_ÜLD 001_Nimetus'); 'Type', 'Type Name', 'Family', 'Family Name' and 'Family and Type' group by the type/family names. Optionally filter by category name. Returns totalMatched, elementsGrouped, matchedElements, notFoundElements and groups; includeElementIds adds paged id lists per group.")]
     public async Task<string> GroupByParameter(
         [Description("Parameter name or partial name to match (case-insensitive)")] string parameterName,
         [Description("Optional category name to restrict search (e.g. 'Fire Alarm Devices')")] string? category = null,
+        [Description("If true, each group also lists its element ids (capped by maxElementIdsPerGroup; counts are always complete). Default false.")] bool includeElementIds = false,
+        [Description("Max element ids listed per group when includeElementIds=true (default 100).")] int maxElementIdsPerGroup = 100,
         [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
         {
             ["parameterName"] = parameterName,
-            ["category"] = category ?? string.Empty
+            ["category"] = category ?? string.Empty,
+            ["includeElementIds"] = includeElementIds,
+            ["maxElementIdsPerGroup"] = maxElementIdsPerGroup
         };
         args["graphHint"] = graphHint;
         var result = await pipeClient.SendAsync("revit_group_by_parameter", args, cancellationToken);
