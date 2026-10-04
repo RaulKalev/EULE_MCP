@@ -131,6 +131,7 @@
     <Compile Include="..\RevitMCP.Addin\Approval\PermissionModeStatus.cs" Link="Approval\PermissionModeStatus.cs" />
     <Compile Include="..\RevitMCP.Addin\Approval\PendingApprovalRequest.cs" Link="Approval\PendingApprovalRequest.cs" />
     <Compile Include="..\RevitMCP.Addin\Approval\ApprovalService.cs" Link="Approval\ApprovalService.cs" />
+    <Compile Include="..\RevitMCP.Addin\Approval\ApprovalOutcome.cs" Link="Approval\ApprovalOutcome.cs" />
     <Compile Include="..\RevitMCP.Addin\Services\ExternalEventWorkItem.cs" Link="Services\ExternalEventWorkItem.cs" />
     <Compile Include="..\RevitMCP.Addin\Services\ExternalEventWorkQueue.cs" Link="Services\ExternalEventWorkQueue.cs" />
     <Compile Include="..\RevitMCP.Addin\Services\RevitBusyDiagnosis.cs" Link="Services\RevitBusyDiagnosis.cs" />

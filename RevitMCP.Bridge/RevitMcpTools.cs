@@ -25,6 +25,22 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    [McpServerTool(Name = "revit_get_approval_status", ReadOnly = true),
+     Description("Reports what happened to an approval-gated request after approval_required was returned: pending, running, succeeded (with the tool's full result), failed (with the reason, e.g. the model changed after the request, the approval expired, or Revit was busy) or rejected. Pass the requestId from the approval_required response; omit it to list recent approvals.")]
+    public async Task<string> GetApprovalStatus(
+        [Description("requestId (or approvalId) from an approval_required response. Omit to list recent approvals.")] string? requestId = null,
+        [Description("Max recent approvals to list when requestId is omitted (default 20, max 100).")] int limit = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["requestId"] = requestId ?? string.Empty,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_get_approval_status", args, cancellationToken);
+        return FormatResult(result);
+    }
+
     [McpServerTool(Name = "revit_list_instances", ReadOnly = true),
      Description("Lists all running Revit instances that host a RevitMCP connector (useful when several Revit windows are open, e.g. one for AI work and one for the user's own work). Shows process id, Revit version, document title, which instance is pinned, and where requests are routed. Requests never fall back to an unpinned window.")]
     public Task<string> ListInstances(CancellationToken cancellationToken)

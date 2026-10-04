@@ -299,7 +299,15 @@ public class ExternalEventHandler : IExternalEventHandler
                 {
                     RequestId = request.RequestId,
                     Success = false,
-                    Message = $"'{summary}' is pending approval in Revit. Open the RevitMCP window and click Approve on the Pending tab to execute, or Reject to cancel."
+                    Message = $"'{summary}' is pending approval in Revit. Open the RevitMCP window and click Approve on the Pending tab to execute, or Reject to cancel. " +
+                              $"Call revit_get_approval_status with requestId '{request.RequestId}' to read the result after the decision.",
+                    Data = new
+                    {
+                        approvalId = pendingApproval.ApprovalId,
+                        requestId = request.RequestId,
+                        tool = tool.Name,
+                        summary
+                    }
                 };
                 try { approvalResult.Status = "approval_required"; } catch (MissingMethodException) { }
             tcs.TrySetResult(approvalResult);

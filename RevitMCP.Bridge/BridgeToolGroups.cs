@@ -35,7 +35,8 @@ public static class BridgeToolGroups
         (Core, new[]
         {
             "revit_get_connection_status", "revit_list_instances", "revit_select_instance", "revit_get_selected_elements",
-            "revit_inspect_selected_elements", "revit_get_elements_info", "revit_get_element_parameters", "revit_count_elements"
+            "revit_inspect_selected_elements", "revit_get_elements_info", "revit_get_element_parameters", "revit_count_elements",
+            "revit_get_approval_status"
         }),
         (Discovery, new[] { "revit_tools_search", "revit_tools_describe", "revit_tools_call", "revit_tools_load" }),
         ("devices", new[]

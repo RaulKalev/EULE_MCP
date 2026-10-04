@@ -378,6 +378,7 @@ public class App : IExternalApplication
             approvalService.SetRedispatch(eventService.Redispatch);
             handler.SetApprovalService(approvalService);
             handler.SetActivityLogger(logger);
+            handler.RegisterTool(new GetApprovalStatusTool(approvalService));
 
             // Each add-in load hosts its own unique pipe. The load id is essential for
             // AppLoader hot reloads: an orphan listener from the previous assembly can

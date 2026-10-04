@@ -37,7 +37,7 @@ public class VillageToolClassifierTests
         "revit_get_cad_placement_points revit_get_cad_shapes revit_get_circuit_compatible_elements revit_get_circuit_info " +
         "revit_get_circuit_load_summary revit_get_circuit_route_assumptions revit_get_circuits_for_selected_elements " +
         "revit_get_clash_candidates revit_get_clash_dashboard_summary revit_get_clash_preset revit_get_clash_summary " +
-        "revit_get_connection_status revit_get_electrical_circuits revit_get_electrical_dashboard_summary " +
+        "revit_get_approval_status revit_get_connection_status revit_get_electrical_circuits revit_get_electrical_dashboard_summary " +
         "revit_get_element_parameters revit_get_elements_info revit_get_fire_alarm_visualization_data " +
         "revit_get_fire_alarm_voltage_drop_summary revit_get_matching_cable_resistance_profile revit_get_next_clash " +
         "revit_get_panel_issue_summary revit_get_previous_clash revit_get_selected_elements revit_get_sheet_revisions " +
@@ -95,6 +95,7 @@ public class VillageToolClassifierTests
     [Theory]
     // project / graph
     [InlineData("revit_get_connection_status", "project", "inspect")]
+    [InlineData("revit_get_approval_status", "project", "inspect")]
     [InlineData("revit_list_instances", "project", "inspect")]
     [InlineData("revit_select_instance", "project", "inspect")]
     [InlineData("revit_graph_build", "graph", "build_graph")]

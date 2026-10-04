@@ -18,6 +18,14 @@ public class ApprovalService
     private int _count;
     private Action<PendingApprovalRequest>? _redispatch;
 
+    private const int MaxOutcomeHistory = 100;
+    private readonly object _outcomeGate = new();
+    private readonly Dictionary<string, ApprovalOutcome> _outcomes = new();
+    private readonly Queue<string> _outcomeOrder = new();
+
+    /// <summary>Raised when an approval-gated request reaches its final state (succeeded, failed, rejected).</summary>
+    public event Action<ApprovalOutcome>? OutcomeRecorded;
+
     public ApprovalService()
         : this(QueryLimits.Default.MaxPendingApprovals, TimeSpan.FromMinutes(QueryLimits.Default.ApprovalTimeoutMinutes))
     {
@@ -61,8 +69,87 @@ public class ApprovalService
             _count++;
         }
 
+        TrackOutcome(request);
         PendingChanged?.Invoke();
         return true;
+    }
+
+    /// <summary>
+    /// The outcome of an approval-gated request, looked up by approvalId or requestId. Null when unknown
+    /// (never seen, or evicted from the bounded history).
+    /// </summary>
+    public ApprovalOutcome? GetOutcome(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return null;
+        lock (_outcomeGate)
+        {
+            if (!_outcomes.TryGetValue(id, out var outcome))
+                outcome = _outcomes.Values.FirstOrDefault(o => o.RequestId == id);
+            outcome?.Refresh();
+            return outcome;
+        }
+    }
+
+    /// <summary>Most recent outcomes first.</summary>
+    public IReadOnlyList<ApprovalOutcome> GetRecentOutcomes(int max = 20)
+    {
+        lock (_outcomeGate)
+        {
+            foreach (var outcome in _outcomes.Values) outcome.Refresh();
+            return _outcomeOrder.Reverse().Take(Math.Max(1, max)).Select(id => _outcomes[id]).ToList();
+        }
+    }
+
+    private void TrackOutcome(PendingApprovalRequest request)
+    {
+        var outcome = new ApprovalOutcome
+        {
+            ApprovalId = request.ApprovalId,
+            RequestId = request.OriginalRequest.RequestId,
+            ToolName = request.ToolName,
+            Summary = request.Summary,
+            ClientName = request.ClientName,
+            CreatedAt = request.CreatedAt
+        };
+
+        lock (_outcomeGate)
+        {
+            _outcomes[outcome.ApprovalId] = outcome;
+            _outcomeOrder.Enqueue(outcome.ApprovalId);
+            // Bounded history: drop the oldest finished outcomes; pending ones stay until decided.
+            var scans = _outcomeOrder.Count;
+            while (_outcomes.Count > MaxOutcomeHistory && scans-- > 0)
+            {
+                var oldest = _outcomeOrder.Dequeue();
+                _outcomes[oldest].Refresh();
+                if (_outcomes[oldest].IsFinal)
+                    _outcomes.Remove(oldest);
+                else
+                    _outcomeOrder.Enqueue(oldest);
+            }
+        }
+
+        outcome.Completion = request.Completion.Task;
+        request.Completion.Task.ContinueWith(
+            t =>
+            {
+                lock (_outcomeGate)
+                    outcome.Complete(ApprovalOutcome.ResultOf(t, outcome.RequestId), DateTimeOffset.Now);
+                OutcomeRecorded?.Invoke(outcome);
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+    }
+
+    private void MarkDecided(string approvalId, string state)
+    {
+        lock (_outcomeGate)
+        {
+            if (!_outcomes.TryGetValue(approvalId, out var outcome) || outcome.IsFinal) return;
+            outcome.State = state;
+            outcome.DecidedAt = DateTimeOffset.Now;
+        }
     }
 
     public IReadOnlyList<PendingApprovalRequest> GetPending()
@@ -92,6 +179,7 @@ public class ApprovalService
         }
 
         request.OriginalRequest.IsApproved = true;
+        MarkDecided(request.ApprovalId, ApprovalOutcome.Running);
         _redispatch?.Invoke(request);
         PendingChanged?.Invoke();
     }
