@@ -2363,6 +2363,87 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
+    [McpServerTool(Name = "revit_preview_set_text_notes", ReadOnly = true),
+     Description("Previews editing the content of existing text notes in place, without changing Revit. Same arguments as revit_set_text_notes. Returns old text → new text per note with its view id/name, plus changed/unchanged/skipped counts.")]
+    public async Task<string> PreviewSetTextNotes(
+        [Description("set | findReplace | append | prepend | map. Omit to change only the width (widthMm/autoWidth).")] string? mode = null,
+        [Description("Text note element IDs to edit. Takes precedence over useSelection and viewId.")] long[]? elementIds = null,
+        [Description("Edit the text notes in the current Revit selection.")] bool useSelection = false,
+        [Description("Scope when no elementIds/useSelection: -1 or omit = active view, 0 = all views, >0 = that view.")] long viewId = -1,
+        [Description("Only edit notes whose current text contains this (case-insensitive).")] string? textFilter = null,
+        [Description("mode=set: the new text. Use \\n for line breaks.")] string? text = null,
+        [Description("mode=findReplace: text to find.")] string? find = null,
+        [Description("mode=findReplace: replacement (may be empty).")] string? replace = null,
+        [Description("mode=findReplace and map: case-sensitive match. Default false.")] bool matchCase = false,
+        [Description("mode=findReplace: only whole-word matches. Default false.")] bool wholeWord = false,
+        [Description("mode=append: text added at the end, e.g. ' // Data network connections'.")] string? suffix = null,
+        [Description("mode=prepend: text added at the start.")] string? prefix = null,
+        [Description("mode=map: JSON object {\"old text\": \"new text\"}. Matched against the whole note text, trimmed; notes not in the map stay unchanged.")] string? map = null,
+        [Description("Set the note width on paper in mm (applied to notes whose text changes, or to all targets when mode is omitted).")] double widthMm = 0,
+        [Description("Widen notes so the longest line fits (estimate from text size and width factor; never narrows).")] bool autoWidth = false,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryBuildSetTextNotesArgs(mode, elementIds, useSelection, viewId, textFilter, text, find, replace, matchCase, wholeWord,
+                suffix, prefix, map, widthMm, autoWidth, out var args, out var error))
+            return FormatBridgeError(error!);
+        var result = await pipeClient.SendAsync("revit_preview_set_text_notes", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_set_text_notes"),
+     Description("Edits the content of existing text notes in place; element ids are kept. Targets: elementIds, useSelection, or viewId (-1 active, 0 all views) narrowed by textFilter. Modes: set (text), findReplace (find/replace, matchCase, wholeWord), append (suffix), prepend (prefix), map (JSON old text → new text, whole trimmed text). Optional widthMm or autoWidth. Edits are spliced into the note's formatted text, so bold/italic/underline runs outside the edited range are kept (inserted text takes the neighbouring formatting); if Revit refuses that, the plain text is replaced and formattingPreserved=false. Notes borrowed by another user or out of date with central are skipped. One transaction; requires approval; reversible via Revit Undo. Run revit_preview_set_text_notes first.")]
+    public async Task<string> SetTextNotes(
+        [Description("set | findReplace | append | prepend | map. Omit to change only the width (widthMm/autoWidth).")] string? mode = null,
+        [Description("Text note element IDs to edit. Takes precedence over useSelection and viewId.")] long[]? elementIds = null,
+        [Description("Edit the text notes in the current Revit selection.")] bool useSelection = false,
+        [Description("Scope when no elementIds/useSelection: -1 or omit = active view, 0 = all views, >0 = that view.")] long viewId = -1,
+        [Description("Only edit notes whose current text contains this (case-insensitive).")] string? textFilter = null,
+        [Description("mode=set: the new text. Use \\n for line breaks.")] string? text = null,
+        [Description("mode=findReplace: text to find.")] string? find = null,
+        [Description("mode=findReplace: replacement (may be empty).")] string? replace = null,
+        [Description("mode=findReplace and map: case-sensitive match. Default false.")] bool matchCase = false,
+        [Description("mode=findReplace: only whole-word matches. Default false.")] bool wholeWord = false,
+        [Description("mode=append: text added at the end, e.g. ' // Data network connections'.")] string? suffix = null,
+        [Description("mode=prepend: text added at the start.")] string? prefix = null,
+        [Description("mode=map: JSON object {\"old text\": \"new text\"}. Matched against the whole note text, trimmed; notes not in the map stay unchanged.")] string? map = null,
+        [Description("Set the note width on paper in mm (applied to notes whose text changes, or to all targets when mode is omitted).")] double widthMm = 0,
+        [Description("Widen notes so the longest line fits (estimate from text size and width factor; never narrows).")] bool autoWidth = false,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryBuildSetTextNotesArgs(mode, elementIds, useSelection, viewId, textFilter, text, find, replace, matchCase, wholeWord,
+                suffix, prefix, map, widthMm, autoWidth, out var args, out var error))
+            return FormatBridgeError(error!);
+        var result = await pipeClient.SendAsync("revit_set_text_notes", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    private static bool TryBuildSetTextNotesArgs(
+        string? mode, long[]? elementIds, bool useSelection, long viewId, string? textFilter, string? text,
+        string? find, string? replace, bool matchCase, bool wholeWord, string? suffix, string? prefix,
+        string? map, double widthMm, bool autoWidth, out Dictionary<string, object?> args, out string? error)
+    {
+        args = new Dictionary<string, object?>();
+        if (!TryParseJsonObject(map, "map", out var parsedMap, out error))
+            return false;
+
+        args["mode"] = mode ?? string.Empty;
+        args["elementIds"] = elementIds ?? [];
+        args["useSelection"] = useSelection;
+        args["viewId"] = viewId;
+        args["textFilter"] = textFilter ?? string.Empty;
+        args["text"] = text ?? string.Empty;
+        args["find"] = find ?? string.Empty;
+        args["replace"] = replace ?? string.Empty;
+        args["matchCase"] = matchCase;
+        args["wholeWord"] = wholeWord;
+        args["suffix"] = suffix ?? string.Empty;
+        args["prefix"] = prefix ?? string.Empty;
+        args["map"] = parsedMap;
+        args["widthMm"] = widthMm;
+        args["autoWidth"] = autoWidth;
+        return true;
+    }
+
     [McpServerTool(Name = "revit_create_lines"),
      Description("Creates straight lines from segments given in millimetres. kind='detail' draws view-specific detail lines in a view (viewId, default active); kind='model' draws model lines in 3D space — each segment automatically gets a sketch plane that contains it. Optional lineStyle name applied to all created lines. Requires approval; reversible via Revit Undo.")]
     public async Task<string> CreateLines(

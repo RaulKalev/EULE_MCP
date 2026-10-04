@@ -298,6 +298,8 @@ public class App : IExternalApplication
             handler.RegisterTool(new RetagTool());
             handler.RegisterTool(new AnnotateDetailLinesTool());
             handler.RegisterTool(new CreateTextNotesTool());
+            handler.RegisterTool(new PreviewSetTextNotesTool());
+            handler.RegisterTool(new SetTextNotesTool());
             handler.RegisterTool(new CreateLinesTool());
             handler.RegisterTool(new PlaceDimensionsTool());
             handler.RegisterTool(new ListDimensionTypesTool());
