@@ -53,7 +53,7 @@ public class RevitPipeClient
             ClientName = _clientName
         };
 
-        var (candidates, routeError) = ResolveCandidatePipeNames();
+        var (candidates, targetProcessId, routeError) = ResolveCandidatePipeNames();
         if (routeError != null)
             return Error(request.RequestId, routeError);
 
@@ -77,7 +77,7 @@ public class RevitPipeClient
         }
         catch (OperationCanceledException)
         {
-            return Error(request.RequestId, "Request timed out while sending to Revit. Revit may be busy or the connector has stopped.");
+            return TimedOut(request.RequestId, "Request timed out while sending to Revit.", targetProcessId);
         }
 
         try
@@ -91,7 +91,7 @@ public class RevitPipeClient
         }
         catch (OperationCanceledException)
         {
-            return Error(request.RequestId, "Request timed out. Revit may be busy or the connector has stopped.");
+            return TimedOut(request.RequestId, $"Request timed out after {_requestTimeoutMs / 1000} s without an answer from Revit.", targetProcessId);
         }
     }
 
@@ -140,16 +140,16 @@ public class RevitPipeClient
     /// Pipe names to try for this request, or an error when the request must not be sent.
     /// An explicitly configured pipe name (via --pipe or configuration) always wins.
     /// </summary>
-    private (List<string> Candidates, string? Error) ResolveCandidatePipeNames()
+    private (List<string> Candidates, int? TargetProcessId, string? Error) ResolveCandidatePipeNames()
     {
         if (!string.IsNullOrWhiteSpace(_explicitPipeName))
-            return ([_explicitPipeName!], null);
+            return ([_explicitPipeName!], null, null);
 
         var route = ResolveRoute();
-        if (route.Error != null) return ([], route.Error);
+        if (route.Error != null) return ([], null, route.Error);
 
         // Legacy fallback for add-in builds that pre-date the instance registry.
-        return ([route.Target?.PipeName ?? RevitMcpDefaults.PipeName], null);
+        return ([route.Target?.PipeName ?? RevitMcpDefaults.PipeName], route.Target?.ProcessId, null);
     }
 
     /// <summary>Where requests go right now (see <see cref="RevitInstanceRegistry.ResolveRoute"/>).</summary>
@@ -220,6 +220,48 @@ public class RevitPipeClient
                   "while the AI agent is not. Start Revit and the agent at the same privilege level (normally both " +
                   "without 'Run as administrator')."
     };
+
+    /// <summary>
+    /// A request the add-in never answered. The bridge cannot see inside Revit, but it can tell whether the
+    /// Revit process still answers window messages, which separates "Revit is blocked" from "the connector
+    /// is gone" (#87). The add-in itself answers queued requests with status revit_busy before this fires.
+    /// </summary>
+    private static McpToolResult TimedOut(string requestId, string message, int? processId)
+    {
+        var responding = ProbeResponding(processId);
+        var diagnosis = responding switch
+        {
+            false => " Revit's main window is not responding: a long operation (synchronize, load, save, regenerate) " +
+                     "or a dialog is blocking it. Wait for it to finish, then retry.",
+            true => " Revit's window is responding, so the request is probably still running or the connector is stuck. " +
+                    "Call revit_get_connection_status (it answers even while Revit is busy) and retry.",
+            null => " Revit may be busy or the connector has stopped. Call revit_get_connection_status and retry."
+        };
+
+        return new McpToolResult
+        {
+            RequestId = requestId,
+            Success = false,
+            Status = responding == false ? "revit_busy" : "request_timeout",
+            Message = message + diagnosis,
+            Data = new { revitProcessId = processId, revitResponding = responding }
+        };
+    }
+
+    /// <summary>Process.Responding for the routed Revit instance; null when unknown.</summary>
+    private static bool? ProbeResponding(int? processId)
+    {
+        if (processId == null) return null;
+        try
+        {
+            using var process = Process.GetProcessById(processId.Value);
+            return process.HasExited ? null : process.Responding;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     private static McpToolResult Error(string requestId, string message) => new()
     {

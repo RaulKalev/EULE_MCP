@@ -124,6 +124,7 @@
     <Compile Include="..\RevitMCP.Addin\Approval\ApprovalService.cs" Link="Approval\ApprovalService.cs" />
     <Compile Include="..\RevitMCP.Addin\Services\ExternalEventWorkItem.cs" Link="Services\ExternalEventWorkItem.cs" />
     <Compile Include="..\RevitMCP.Addin\Services\ExternalEventWorkQueue.cs" Link="Services\ExternalEventWorkQueue.cs" />
+    <Compile Include="..\RevitMCP.Addin\Services\RevitBusyDiagnosis.cs" Link="Services\RevitBusyDiagnosis.cs" />
     <!-- Model graph pure-logic files (SQLite layer, path resolution, freshness; no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Graph\GraphSchema.cs" Link="Graph\GraphSchema.cs" />
     <Compile Include="..\RevitMCP.Addin\Graph\GraphModels.cs" Link="Graph\GraphModels.cs" />

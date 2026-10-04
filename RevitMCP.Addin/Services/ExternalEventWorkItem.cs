@@ -9,7 +9,9 @@ namespace RevitMCP.Addin.Services;
 public sealed class ExternalEventWorkItem : IDisposable
 {
     private readonly CancellationTokenSource _cancellation = new();
+    private const int NotStarted = 0, Started = 1, Abandoned = 2;
     private int _disposed;
+    private int _started;
 
     public ExternalEventWorkItem(
         McpToolRequest request,
@@ -42,7 +44,28 @@ public sealed class ExternalEventWorkItem : IDisposable
     public bool IsSelectionBound { get; }
     public IReadOnlyList<long> ExpectedSelectionIds { get; }
 
-    public void Cancel(string message, string status)
+    /// <summary>True once the Revit API thread picked the item up (it is no longer just waiting in the queue).</summary>
+    public bool IsStarted => Volatile.Read(ref _started) == Started;
+
+    /// <summary>
+    /// Marks the item as picked up by the Revit API thread. Returns false when it was already started or
+    /// was abandoned by <see cref="TryCancelBeforeStart"/>, in which case it must not run.
+    /// </summary>
+    public bool MarkStarted() => Interlocked.CompareExchange(ref _started, Started, NotStarted) == NotStarted;
+
+    /// <summary>
+    /// Cancels the item only if the Revit API thread has not picked it up yet. Atomic with
+    /// <see cref="MarkStarted"/>, so a request is never cancelled halfway through execution.
+    /// </summary>
+    public bool TryCancelBeforeStart(string message, string status, object? data = null)
+    {
+        if (Interlocked.CompareExchange(ref _started, Abandoned, NotStarted) != NotStarted)
+            return false;
+        Cancel(message, status, data);
+        return true;
+    }
+
+    public void Cancel(string message, string status, object? data = null)
     {
         try { _cancellation.Cancel(); } catch (ObjectDisposedException) { }
 
@@ -51,7 +74,8 @@ public sealed class ExternalEventWorkItem : IDisposable
             RequestId = Request.RequestId,
             Success = false,
             Status = status,
-            Message = message
+            Message = message,
+            Data = data
         };
         Completion.TrySetResult(result);
     }

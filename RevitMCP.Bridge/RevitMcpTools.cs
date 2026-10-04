@@ -10,7 +10,7 @@ namespace RevitMCP.Bridge;
 internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
 {
     [McpServerTool(Name = "revit_get_connection_status", ReadOnly = true),
-     Description("Returns current Revit connection and document status including model title, worksharing info, active view, and selected element count.")]
+     Description("Returns current Revit connection and document status including model title, worksharing info, active view, and selected element count. Answers within a few seconds even while Revit is busy: then status is 'revit_busy' with the reason (modal dialog and its title, running tool, active command, unresponsive window) and the last known document context.")]
     public async Task<string> GetConnectionStatus(CancellationToken cancellationToken)
     {
         var result = await pipeClient.SendAsync("revit_get_connection_status", [], cancellationToken);
