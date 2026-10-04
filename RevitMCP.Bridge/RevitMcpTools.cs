@@ -421,12 +421,14 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_run_query_preset", ReadOnly = true),
-     Description("Runs a saved query preset by name. Can return JSON results or export to Excel.")]
+     Description("Runs a saved query preset by name. Can return JSON results or export to Excel. Groups and the Excel export cover every matching element up to limit; the JSON element list is paged (page / pageSize).")]
     public async Task<string> RunQueryPreset(
         [Description("Name of the preset to run")] string presetName,
         [Description("If true, export results to Excel")] bool exportToExcel = false,
         [Description("Output file name for Excel export")] string? fileName = null,
         [Description("Max elements (default 5000)")] int limit = 5000,
+        [Description("Page size of the JSON element list. Defaults to 100, max 500.")] int pageSize = -1,
+        [Description("Zero-based page of the JSON element list.")] int page = 0,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -434,7 +436,9 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["presetName"] = presetName,
             ["exportToExcel"] = exportToExcel,
             ["fileName"] = fileName ?? string.Empty,
-            ["limit"] = limit
+            ["limit"] = limit,
+            ["pageSize"] = pageSize,
+            ["page"] = page
         };
         var result = await pipeClient.SendAsync("revit_run_query_preset", args, cancellationToken);
         return FormatResult(result);

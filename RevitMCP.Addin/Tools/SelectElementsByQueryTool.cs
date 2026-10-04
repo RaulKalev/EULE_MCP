@@ -34,6 +34,8 @@ public class SelectElementsByQueryTool : IRevitMcpTool
             Filters = filtersParsed.Items,
             IncludeInstanceParameters = true,
             IncludeTypeParameters = true,
+            // Select every match up to limit, not just the first result page.
+            CollectAll = true,
             Limit = limit
         };
 
