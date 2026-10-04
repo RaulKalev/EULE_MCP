@@ -1,4 +1,5 @@
 using Newtonsoft.Json.Linq;
+using RevitMCP.Addin.Annotation;
 using RevitMCP.Addin.Electrical;
 using RevitMCP.Addin.Families;
 using RevitMCP.Addin.Placement;
@@ -61,6 +62,8 @@ public static class ApprovalSummaryBuilder
             "revit_align_in_view"               => BuildAlignInView(request),
             "revit_move_elements"               => BuildMoveElements(request),
             "revit_place_from_cad"              => BuildPlaceFromCad(request),
+            // Text notes
+            "revit_set_text_notes"              => BuildSetTextNotes(request),
             // Family types
             "revit_duplicate_family_types"      => BuildDuplicateFamilyTypes(request),
             "revit_edit_family_types"           => BuildEditFamilyTypes(request),
@@ -286,6 +289,65 @@ public static class ApprovalSummaryBuilder
 
         return $"Move {target} against the nearest '{surface}' surface within {radiusMm:F0} mm " +
                $"(searching {scope}).{gapDesc}{rotateDesc}";
+    }
+
+    private static string BuildSetTextNotes(McpToolRequest request)
+    {
+        var args = request.Arguments;
+        var elementIds = ToolArguments.GetLongArray(args, "elementIds");
+        var viewId = ToolArguments.GetLong(args, "viewId", -1L);
+        var textFilter = ToolArguments.GetString(args, "textFilter");
+        var mode = TextNoteEditPlanner.NormalizeMode(ToolArguments.GetString(args, "mode"));
+
+        var target = elementIds.Length > 0 ? $"{elementIds.Length} text note{(elementIds.Length == 1 ? "" : "s")}"
+            : ToolArguments.GetBool(args, "useSelection") ? "the selected text notes"
+            : viewId == 0 ? "text notes in all views"
+            : viewId > 0 ? $"text notes in view {viewId}"
+            : "text notes in the active view";
+        if (!string.IsNullOrEmpty(textFilter))
+            target += $" containing \"{Clip(textFilter)}\"";
+
+        string action;
+        switch (mode)
+        {
+            case TextNoteEditMode.Set:
+                action = $"Set the text of {target} to \"{Clip(ToolArguments.GetString(args, "text"))}\"";
+                break;
+            case TextNoteEditMode.FindReplace:
+                var flags = new List<string>();
+                if (ToolArguments.GetBool(args, "matchCase")) flags.Add("match case");
+                if (ToolArguments.GetBool(args, "wholeWord")) flags.Add("whole word");
+                action = $"Replace \"{Clip(ToolArguments.GetString(args, "find"))}\" with " +
+                         $"\"{Clip(ToolArguments.GetString(args, "replace"))}\" in {target}" +
+                         (flags.Count > 0 ? $" ({string.Join(", ", flags)})" : string.Empty);
+                break;
+            case TextNoteEditMode.Append:
+                action = $"Append \"{Clip(ToolArguments.GetString(args, "suffix"))}\" to {target}";
+                break;
+            case TextNoteEditMode.Prepend:
+                action = $"Prepend \"{Clip(ToolArguments.GetString(args, "prefix"))}\" to {target}";
+                break;
+            case TextNoteEditMode.Map:
+                args.TryGetValue("map", out var rawMap);
+                var map = TextNoteEditPlanner.ParseMap(rawMap, ToolArguments.GetBool(args, "matchCase"), out _);
+                action = $"Translate {target} using a map of {map?.Count ?? 0} text value(s)";
+                break;
+            default:
+                action = $"Change the width of {target}";
+                break;
+        }
+
+        var widthMm = ToolArguments.GetDouble(args, "widthMm");
+        var width = widthMm > 0 ? $" Width set to {widthMm:F1} mm."
+            : ToolArguments.GetBool(args, "autoWidth") ? " Width widened to fit the longest line (estimate)."
+            : string.Empty;
+        return $"{action}.{width} Element ids are kept; one transaction, reversible via Undo.";
+
+        static string Clip(string value)
+        {
+            value = value.Replace("\r\n", " ").Replace('\r', ' ').Replace('\n', ' ');
+            return value.Length > 40 ? value.Substring(0, 37) + "..." : value;
+        }
     }
 
     private static string BuildAlignInView(McpToolRequest request)

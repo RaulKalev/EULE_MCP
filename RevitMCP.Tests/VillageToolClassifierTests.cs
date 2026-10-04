@@ -76,7 +76,7 @@ public class VillageToolClassifierTests
         "revit_get_linked_elements_in_room revit_preview_rotate_elements revit_rotate_elements revit_preview_set_elevation " +
         "revit_set_elevation revit_preview_assign_room_to_elements revit_assign_room_to_elements revit_check_devices_per_room " +
         "revit_check_device_alignment revit_check_coverage revit_check_fire_alarm revit_graph_route " +
-        "revit_tools_search revit_tools_describe revit_tools_call revit_tools_load";
+        "revit_tools_search revit_tools_describe revit_tools_call revit_tools_load revit_preview_set_text_notes revit_set_text_notes";
 
     public static IEnumerable<object[]> AllKnownToolNames() =>
         KnownToolNames.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(n => new object[] { n });
@@ -133,6 +133,8 @@ public class VillageToolClassifierTests
     [InlineData("revit_place_dimensions", "tags_annotations", "create")]
     [InlineData("revit_create_text_notes", "tags_annotations", "create")]
     [InlineData("revit_get_text_notes", "tags_annotations", "inspect")]
+    [InlineData("revit_preview_set_text_notes", "tags_annotations", "analyze")]
+    [InlineData("revit_set_text_notes", "tags_annotations", "modify")]
     [InlineData("revit_annotate_detail_lines", "tags_annotations", "create")]
     [InlineData("revit_create_lines", "tags_annotations", "create")]
     [InlineData("revit_align_in_view", "tags_annotations", "modify")]
