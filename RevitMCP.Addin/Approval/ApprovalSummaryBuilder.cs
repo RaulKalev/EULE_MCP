@@ -251,7 +251,13 @@ public static class ApprovalSummaryBuilder
             StringComparison.OrdinalIgnoreCase)
             ? $"{explicitIds.Length} explicit target element(s)"
             : $"scope '{scope}'";
-        return $"Tag {scopeDescription} like {source}. " +
+        var targetViewId = ToolArguments.GetLong(
+            request.Arguments,
+            "targetViewId");
+        var where = targetViewId > 0
+            ? $" in target view ID:{targetViewId} (instead of the example tag's view)"
+            : " in the example tag's view";
+        return $"Tag {scopeDescription}{where} like {source}. " +
                $"Skip already tagged: {(skipAlreadyTagged ? "yes" : "no")}. " +
                $"Collision detection: {(collision ? "on" : "off")}. " +
                "Runs in one transaction and supports one-step Undo.";

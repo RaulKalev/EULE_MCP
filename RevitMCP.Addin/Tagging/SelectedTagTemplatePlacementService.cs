@@ -30,7 +30,8 @@ namespace RevitMCP.Addin.Tagging
 
             options = options ?? new TagTemplateRequestOptions();
             var template = analysis.Template;
-            var view = analysis.SourceView;
+            // Tags go into the analysed target view (the source view unless targetViewId).
+            var view = analysis.TargetView ?? analysis.SourceView;
             var tagType = analysis.TagType;
             if (!tagType.IsActive)
             {

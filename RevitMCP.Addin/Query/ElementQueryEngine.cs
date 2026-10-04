@@ -59,7 +59,11 @@ public class ElementQueryEngine
                 options.PageSize, options.Limit,
                 options.MaxParametersPerElement, options.TruncateStringLength);
 
-        int page = Math.Max(0, options.Page);
+        // Aggregation callers (grouping) need every matched element, not one page.
+        if (options.CollectAll)
+            effectivePageSize = QueryGuard.ResolveAggregateCap(options.Limit);
+
+        int page = options.CollectAll ? 0 : Math.Max(0, options.Page);
         int pageStart = page * effectivePageSize; // 0-based index of first element on this page
 
         // --- 4. Scan & filter ---
@@ -79,7 +83,7 @@ public class ElementQueryEngine
 
         // Warn when caller-supplied values were actually clamped
         var limits = QueryLimits.Default;
-        if (options.PageSize > limits.MaxPageSize)
+        if (!options.CollectAll && options.PageSize > limits.MaxPageSize)
             warnings.Add($"Requested pageSize {options.PageSize} exceeded the maximum ({limits.MaxPageSize}); clamped to {effectivePageSize}.");
         if (options.MaxParametersPerElement > limits.MaxParametersPerElement)
             warnings.Add($"Requested maxParametersPerElement {options.MaxParametersPerElement} exceeded the maximum ({limits.MaxParametersPerElement}); clamped to {effectiveMaxParameters}.");
@@ -108,12 +112,8 @@ public class ElementQueryEngine
             // Filtering needs values only for parameters named by the filters.
             // Materializing every value here is especially expensive because this loop
             // continues past the requested page to preserve the exact totalMatched contract.
-            if (options.Filters.Count > 0)
-            {
-                var filterParams = reader.ReadParameters(doc, element, filterReadOpts);
-                if (!PassesFilters(filterParams, options.Filters))
-                    continue;
-            }
+            if (options.Filters.Count > 0 && !PassesFilters(doc, element, reader, filterReadOpts, options.Filters))
+                continue;
 
             // 0-based index of this matched element (capture before incrementing)
             var matchIndex = totalMatched;
@@ -180,7 +180,12 @@ public class ElementQueryEngine
         int pageEnd = pageStart + effectivePageSize;
         bool hasMore = totalMatched > pageEnd;
 
-        if (totalMatched > effectivePageSize && page == 0 && results.Count == effectivePageSize)
+        if (options.CollectAll)
+        {
+            if (hasMore)
+                warnings.Add($"Only the first {results.Count} of {totalMatched} matching elements were collected (limit {effectivePageSize}); aggregates cover those elements only. Narrow the scope or raise 'limit'.");
+        }
+        else if (totalMatched > effectivePageSize && page == 0 && results.Count == effectivePageSize)
             warnings.Add($"Results paged: showing {results.Count} of {totalMatched}. Use 'page' and 'pageSize' parameters to navigate.");
         else if (hasMore)
             warnings.Add($"More results available beyond this page ({totalMatched - pageEnd} remaining).");
@@ -246,34 +251,30 @@ public class ElementQueryEngine
         return map;
     }
 
-    private static bool PassesFilters(IReadOnlyList<ParameterValueDto> parameters, List<ParameterFilterDto> filters)
+    /// <summary>
+    /// Evaluates the filters for one element. Filters on the identity pseudo-parameters
+    /// (Type, Type Name, Family, Family Name, Family and Type) are answered from the
+    /// element's type; only the remaining filters trigger a parameter read.
+    /// </summary>
+    private static bool PassesFilters(
+        Document doc,
+        Element element,
+        ParameterReader reader,
+        ParameterReadOptions filterReadOpts,
+        List<ParameterFilterDto> filters)
     {
-        foreach (var filter in filters)
-        {
-            var candidates = parameters.Where(p =>
-                ScopeMatches(p.Scope, filter.Scope) &&
-                ParameterMatcher.Matches(p.Name, filter.ParameterName, filter.MatchMode)
-            ).ToList();
+        var identity = ParameterFilterEvaluator.NeedsIdentity(filters)
+            ? ParameterReader.ReadIdentity(doc, element)
+            : null;
 
-            if (candidates.Count == 0)
-            {
-                if (filter.Operator == "isEmpty") continue;
-                return false;
-            }
+        // No parameter-backed filters → skip the read (an empty selector list would
+        // otherwise mean "read everything").
+        IReadOnlyList<ParameterValueDto> parameters = filterReadOpts.ParameterSelectors.Count > 0
+            ? reader.ReadParameters(doc, element, filterReadOpts)
+            : Array.Empty<ParameterValueDto>();
 
-            if (!candidates.Any(p => EvaluateOperator(p.Value, filter.Operator, filter.Value)))
-                return false;
-        }
-        return true;
+        return ParameterFilterEvaluator.Passes(parameters, filters, identity);
     }
-
-    private static bool ScopeMatches(string paramScope, string filterScope) =>
-        filterScope switch
-        {
-            "Instance" => paramScope == "Instance",
-            "Type" => paramScope == "Type",
-            _ => true
-        };
 
     private static ParameterReadOptions CreateResponseReadOptions(ElementQueryOptions options)
     {
@@ -292,7 +293,8 @@ public class ElementQueryEngine
         {
             IncludeInstanceParameters = options.IncludeInstanceParameters,
             IncludeTypeParameters = options.IncludeTypeParameters,
-            ParameterSelectors = options.Filters
+            // Identity pseudo-parameters are resolved from the element type, not read.
+            ParameterSelectors = ParameterFilterEvaluator.ParameterBackedFilters(options.Filters)
                 .Select(filter => new ParameterSelector
                 {
                     Name = filter.ParameterName,
@@ -302,22 +304,6 @@ public class ElementQueryEngine
                 .ToList()
         };
     }
-
-    private static bool EvaluateOperator(string value, string op, string filterValue) =>
-        op switch
-        {
-            "equals" => string.Equals(value, filterValue, StringComparison.OrdinalIgnoreCase),
-            "notEquals" => !string.Equals(value, filterValue, StringComparison.OrdinalIgnoreCase),
-            "contains" => value.Contains(filterValue, StringComparison.OrdinalIgnoreCase),
-            "notContains" => !value.Contains(filterValue, StringComparison.OrdinalIgnoreCase),
-            "startsWith" => value.StartsWith(filterValue, StringComparison.OrdinalIgnoreCase),
-            "endsWith" => value.EndsWith(filterValue, StringComparison.OrdinalIgnoreCase),
-            "isEmpty" => string.IsNullOrEmpty(value),
-            "isNotEmpty" => !string.IsNullOrEmpty(value),
-            "greaterThan" => double.TryParse(value, out var v1) && double.TryParse(filterValue, out var f1) && v1 > f1,
-            "lessThan" => double.TryParse(value, out var v2) && double.TryParse(filterValue, out var f2) && v2 < f2,
-            _ => false
-        };
 
     private static string GetLevelName(Document doc, Element element)
     {
@@ -372,11 +358,8 @@ public class ElementQueryEngine
             var element = doc.GetElement(elementId);
             if (element?.Category == null) continue;
 
-            if (needsParamRead)
-            {
-                var allParams = reader.ReadParameters(doc, element, readOpts);
-                if (!PassesFilters(allParams, options.Filters)) continue;
-            }
+            if (needsParamRead && !PassesFilters(doc, element, reader, readOpts, options.Filters))
+                continue;
 
             totalMatched++;
 

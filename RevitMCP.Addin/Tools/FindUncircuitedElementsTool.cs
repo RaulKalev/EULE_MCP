@@ -103,7 +103,7 @@ public class FindUncircuitedElementsTool : IRevitMcpTool
             {
                 var readOpts = new ParameterReadOptions { IncludeInstanceParameters = true, IncludeTypeParameters = true };
                 var allParams = _paramReader.ReadParameters(doc, element, readOpts);
-                if (!PassesFilters(allParams, filtersParsed.Items)) continue;
+                if (!PassesFilters(doc, element, allParams, filtersParsed.Items)) continue;
             }
 
             uncircuited.Add(BuildDto(doc, element, returnParams));
@@ -165,25 +165,10 @@ public class FindUncircuitedElementsTool : IRevitMcpTool
         };
     }
 
-    private static bool PassesFilters(IReadOnlyList<ParameterValueDto> parameters, List<ParameterFilterDto> filters)
-    {
-        foreach (var filter in filters)
-        {
-            var matches = parameters.Where(p => ParameterMatcher.Matches(p.Name, filter.ParameterName, filter.MatchMode)).ToList();
-            if (matches.Count == 0) { if (filter.Operator == "isEmpty") continue; return false; }
-            if (!matches.Any(p => EvalOp(p.Value, filter.Operator, filter.Value))) return false;
-        }
-        return true;
-    }
-
-    private static bool EvalOp(string v, string op, string fv) => op switch
-    {
-        "equals" => string.Equals(v, fv, StringComparison.OrdinalIgnoreCase),
-        "contains" => v.Contains(fv, StringComparison.OrdinalIgnoreCase),
-        "isEmpty" => string.IsNullOrEmpty(v),
-        "isNotEmpty" => !string.IsNullOrEmpty(v),
-        _ => false
-    };
+    // Shared evaluation (incl. the Type / Family / Family and Type pseudo-parameters).
+    private static bool PassesFilters(Document doc, Element element, IReadOnlyList<ParameterValueDto> parameters, List<ParameterFilterDto> filters) =>
+        ParameterFilterEvaluator.Passes(parameters, filters,
+            ParameterFilterEvaluator.NeedsIdentity(filters) ? ParameterReader.ReadIdentity(doc, element) : null);
 
     private static McpToolResult Fail(McpToolRequest r, string msg) =>
         new() { RequestId = r.RequestId, Success = false, Message = msg };

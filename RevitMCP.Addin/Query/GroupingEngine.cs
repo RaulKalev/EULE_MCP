@@ -70,6 +70,17 @@ public class GroupingEngine
             case "Type":     return element.Type?.Trim()     ?? string.Empty;
             case "Level":    return element.Level?.Trim()    ?? string.Empty;
             default: // Parameter
+                // Type / Type Name / Family / Family Name / Family and Type: the built-in
+                // parameters hold ElementIds, so group by the resolved names instead.
+                if (ElementIdentityParameters.TryGetValue(
+                        g.ParameterName,
+                        new ElementIdentity { FamilyName = element.Family ?? string.Empty, TypeName = element.Type ?? string.Empty },
+                        out var identityValue))
+                {
+                    var trimmed = identityValue.Trim();
+                    return string.IsNullOrEmpty(trimmed) ? "(empty)" : trimmed;
+                }
+
                 foreach (var kv in element.Parameters)
                 {
                     var p = kv.Value;

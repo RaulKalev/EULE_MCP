@@ -53,6 +53,13 @@
     <Compile Include="..\RevitMCP.Addin\Query\ParameterReadOptions.cs" Link="Query\ParameterReadOptions.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\ParameterValueDto.cs" Link="Query\ParameterValueDto.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\TagInfoDto.cs" Link="Query\TagInfoDto.cs" />
+    <Compile Include="..\RevitMCP.Addin\Query\ParameterFilterDto.cs" Link="Query\ParameterFilterDto.cs" />
+    <Compile Include="..\RevitMCP.Addin\Query\ParameterFilterEvaluator.cs" Link="Query\ParameterFilterEvaluator.cs" />
+    <Compile Include="..\RevitMCP.Addin\Query\GroupingEngine.cs" Link="Query\GroupingEngine.cs" />
+    <Compile Include="..\RevitMCP.Addin\Query\GroupingOptions.cs" Link="Query\GroupingOptions.cs" />
+    <Compile Include="..\RevitMCP.Addin\Query\GroupingResult.cs" Link="Query\GroupingResult.cs" />
+    <Compile Include="..\RevitMCP.Addin\Query\GroupKeyOptions.cs" Link="Query\GroupKeyOptions.cs" />
+    <Compile Include="..\RevitMCP.Addin\Query\ParameterGroupSummary.cs" Link="Query\ParameterGroupSummary.cs" />
     <!-- Coordination / Clash Detection — pure-logic files only (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Coordination\Clash\DTOs\ClashElementRefDto.cs" Link="Coordination\Clash\DTOs\ClashElementRefDto.cs" />
     <Compile Include="..\RevitMCP.Addin\Coordination\Clash\DTOs\ClashResultDto.cs" Link="Coordination\Clash\DTOs\ClashResultDto.cs" />
@@ -102,6 +109,7 @@
     <Compile Include="..\RevitMCP.Addin\Transactions\TransactionSafetyCore.cs" Link="Transactions\TransactionSafetyCore.cs" />
     <Compile Include="..\RevitMCP.Addin\Tagging\TagCollisionMath.cs" Link="Tagging\TagCollisionMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Tagging\TagTemplateMath.cs" Link="Tagging\TagTemplateMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Tagging\TagTargetVisibilityMath.cs" Link="Tagging\TagTargetVisibilityMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Documentation\Placement\PlaceViewsNameMatcher.cs" Link="Documentation\Placement\PlaceViewsNameMatcher.cs" />
     <Compile Include="..\RevitMCP.Addin\Families\FamilyTypeNamePlanner.cs" Link="Families\FamilyTypeNamePlanner.cs" />
     <Compile Include="..\RevitMCP.Addin\Electrical\CableTypeCreationPlanner.cs" Link="Electrical\CableTypeCreationPlanner.cs" />
