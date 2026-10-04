@@ -93,16 +93,36 @@ namespace RevitMCP.Addin.Tagging
             }
             options.AnchorMode = template.AnchorMode;
 
+            // The learned rule (type, host-local offsets, orientation, rotation, leader) is
+            // view-independent once measured in the source view; targets, visibility and the
+            // new tags all live in the target view (the source view unless targetViewId).
+            if (!TryResolveTargetView(
+                    doc,
+                    sourceView,
+                    options,
+                    result.Warnings,
+                    out var targetView,
+                    out var targetViewError))
+            {
+                result.Errors.Add(targetViewError);
+                return result;
+            }
+            var separateTargetView = targetView.Id != sourceView.Id;
+            var viewLabel = separateTargetView ? "target view" : "source view";
+
             result.Template = template;
             result.SourceTag = sourceTag;
             result.SourceHost = sourceHost;
             result.SourceView = sourceView;
+            result.TargetView = targetView;
+            result.UsesSeparateTargetView = separateTargetView;
             result.SourceReference = sourceReference;
             result.TagType = tagType;
 
             var candidates = ResolveCandidates(
                 doc,
-                sourceView,
+                targetView,
+                separateTargetView,
                 sourceHost,
                 sourceTag,
                 selectedIds,
@@ -113,7 +133,7 @@ namespace RevitMCP.Addin.Tagging
                 item.Status == "Unsupported");
             var existingTagsByHost = BuildExistingMatchingTagIndex(
                 doc,
-                sourceView,
+                targetView,
                 tagType.Id);
 
             foreach (var element in candidates)
@@ -122,7 +142,10 @@ namespace RevitMCP.Addin.Tagging
                 var item = CreateTargetItem(element);
                 result.Targets.Add(item);
 
+                // The example tag only lives in the source view; in a separate target view
+                // the source host is an ordinary target (the existing-tag check still applies).
                 if (!options.IncludeSourceHost &&
+                    !separateTargetView &&
                     element.Id == sourceHost.Id)
                 {
                     item.Status = "Skipped";
@@ -150,7 +173,7 @@ namespace RevitMCP.Addin.Tagging
                 if (item.AlreadyTagged && options.SkipAlreadyTagged)
                 {
                     item.Status = "Skipped";
-                    item.Reason = "Already has a matching tag in the source view.";
+                    item.Reason = "Already has a matching tag in the " + viewLabel + ".";
                     result.AlreadyTaggedCount++;
                     continue;
                 }
@@ -158,7 +181,7 @@ namespace RevitMCP.Addin.Tagging
                 HostLocalFrame targetFrame;
                 if (!HostLocalFrameService.TryCreate(
                         element,
-                        sourceView,
+                        targetView,
                         template.AnchorMode,
                         out targetFrame,
                         out frameError))
@@ -585,9 +608,61 @@ namespace RevitMCP.Addin.Tagging
             return true;
         }
 
+        private static bool TryResolveTargetView(
+            Document doc,
+            View sourceView,
+            TagTemplateRequestOptions options,
+            IList<string> warnings,
+            out View targetView,
+            out string error)
+        {
+            targetView = sourceView;
+            error = null;
+            if (options.TargetViewId == 0 ||
+                options.TargetViewId == sourceView.Id.Value)
+                return true;
+
+            var view = options.TargetViewId > 0
+                ? doc.GetElement(new ElementId(options.TargetViewId)) as View
+                : null;
+            var view3D = view as View3D;
+            error = TagTargetVisibilityMath.ValidateTargetView(
+                options.TargetViewId,
+                view != null,
+                view?.Name,
+                view?.ViewType.ToString(),
+                view != null && view.IsTemplate,
+                view3D != null && !view3D.IsLocked);
+            if (error != null)
+                return false;
+
+            try
+            {
+                var sourceDirection = sourceView.ViewDirection;
+                var targetDirection = view.ViewDirection;
+                if (sourceDirection != null &&
+                    targetDirection != null &&
+                    !sourceDirection.Normalize().CrossProduct(targetDirection.Normalize()).IsZeroLength())
+                {
+                    warnings.Add(
+                        "Target view " +
+                        TagTargetVisibilityMath.DescribeView(view.Id.Value, view.Name) +
+                        " looks in a different direction than the source view; the learned host-local offsets are reapplied in the target view's plane.");
+                }
+            }
+            catch
+            {
+                // Direction comparison is advisory only.
+            }
+
+            targetView = view;
+            return true;
+        }
+
         private static List<Element> ResolveCandidates(
             Document doc,
             View view,
+            bool separateTargetView,
             FamilyInstance sourceHost,
             IndependentTag sourceTag,
             ICollection<ElementId> selectedIds,
@@ -622,7 +697,9 @@ namespace RevitMCP.Addin.Tagging
                             : selectedIds,
                         visibleInstances,
                         sourceTag,
-                        invalidItems);
+                        invalidItems,
+                        view,
+                        separateTargetView);
                     break;
                 case TagTemplateScopeMode.ExplicitElementIds:
                     candidates = ResolveIds(
@@ -632,7 +709,9 @@ namespace RevitMCP.Addin.Tagging
                             .ToList(),
                         visibleInstances,
                         sourceTag,
-                        invalidItems);
+                        invalidItems,
+                        view,
+                        separateTargetView);
                     break;
                 default:
                     if (!options.IncludeAllHostTypes)
@@ -661,7 +740,9 @@ namespace RevitMCP.Addin.Tagging
                 .Select(group => group.First())
                 .ToList();
             if (result.Count == 0 && invalidItems.Count == 0)
-                warnings.Add("No matching target elements were found in the source view.");
+                warnings.Add(
+                    "No matching target elements were found in the " +
+                    (separateTargetView ? "target" : "source") + " view.");
             return result;
         }
 
@@ -670,7 +751,9 @@ namespace RevitMCP.Addin.Tagging
             ICollection<ElementId> ids,
             ICollection<Element> visibleInstances,
             IndependentTag sourceTag,
-            IList<TagTemplateTargetItem> invalidItems)
+            IList<TagTemplateTargetItem> invalidItems,
+            View view,
+            bool separateTargetView)
         {
             var visibleIds = new HashSet<ElementId>(
                 visibleInstances.Select(element => element.Id));
@@ -697,13 +780,218 @@ namespace RevitMCP.Addin.Tagging
                     var invisible = CreateTargetItem(element);
                     invisible.Status = "Unsupported";
                     invisible.Reason =
-                        "Element is not visible or taggable in the source view.";
+                        TagTargetVisibilityMath.ComposeNotVisibleReason(
+                            DiagnoseNotVisible(doc, view, element),
+                            separateTargetView,
+                            view.Id.Value,
+                            view.Name);
                     invalidItems.Add(invisible);
                     continue;
                 }
                 result.Add(element);
             }
             return result;
+        }
+
+        /// <summary>
+        /// Best-effort specific causes for an element missing from the view's collector:
+        /// wrong element kind, view-specific to another view, hidden category or element,
+        /// later phase, outside the plan view range, or outside the crop region. Every check
+        /// is guarded; an empty list falls back to the generic message.
+        /// </summary>
+        private static List<string> DiagnoseNotVisible(
+            Document doc,
+            View view,
+            Element element)
+        {
+            var reasons = new List<string>();
+            try
+            {
+                if (!(element is FamilyInstance))
+                    reasons.Add("not a family instance");
+
+                if (element.ViewSpecific &&
+                    element.OwnerViewId != ElementId.InvalidElementId &&
+                    element.OwnerViewId != view.Id)
+                {
+                    var owner = doc.GetElement(element.OwnerViewId) as View;
+                    reasons.Add(
+                        "view-specific element owned by view " +
+                        TagTargetVisibilityMath.DescribeView(
+                            element.OwnerViewId.Value,
+                            owner?.Name));
+                }
+
+                var category = element.Category;
+                if (category != null)
+                {
+                    try
+                    {
+                        if (view.GetCategoryHidden(category.Id))
+                            reasons.Add(
+                                "category '" + category.Name +
+                                "' is hidden in the view");
+                    }
+                    catch
+                    {
+                        // Not every category is controllable in every view.
+                    }
+                }
+
+                try
+                {
+                    if (element.IsHidden(view))
+                        reasons.Add("element is hidden in the view (Hide in View)");
+                }
+                catch
+                {
+                }
+
+                try
+                {
+                    var phaseId = view.get_Parameter(
+                        BuiltInParameter.VIEW_PHASE)?.AsElementId();
+                    if (phaseId != null &&
+                        phaseId != ElementId.InvalidElementId &&
+                        element.GetPhaseStatus(phaseId) ==
+                        ElementOnPhaseStatus.Future)
+                        reasons.Add("created in a later phase than the view's phase");
+                }
+                catch
+                {
+                }
+
+                var box = element.get_BoundingBox(null);
+                if (box != null)
+                {
+                    var rangeReason = DescribeOutsideViewRange(doc, view, box);
+                    if (rangeReason != null)
+                        reasons.Add(rangeReason);
+                    if (IsOutsideCrop(view, box))
+                        reasons.Add("outside the view crop region");
+                }
+            }
+            catch
+            {
+                // Diagnostics are best effort; the generic reason remains.
+            }
+            return reasons;
+        }
+
+        private static string DescribeOutsideViewRange(
+            Document doc,
+            View view,
+            BoundingBoxXYZ box)
+        {
+            var plan = view as ViewPlan;
+            if (plan == null)
+                return null;
+
+            PlanViewRange range;
+            try
+            {
+                range = plan.GetViewRange();
+            }
+            catch
+            {
+                return null;
+            }
+            if (range == null)
+                return null;
+
+            var top = ResolvePlane(doc, range, PlanViewPlane.TopClipPlane, "Top");
+            var cut = ResolvePlane(doc, range, PlanViewPlane.CutPlane, "Cut Plane");
+            var bottom = ResolvePlane(doc, range, PlanViewPlane.BottomClipPlane, "Bottom");
+            var depth = ResolvePlane(doc, range, PlanViewPlane.ViewDepthPlane, "View Depth");
+
+            var minZ = box.Min.Z * FeetToMillimeters;
+            var maxZ = box.Max.Z * FeetToMillimeters;
+
+            if (view.ViewType == ViewType.CeilingPlan)
+            {
+                var planes = new[] { top, cut, bottom, depth }
+                    .Where(plane => plane.HasValue)
+                    .Select(plane => plane.Value)
+                    .ToList();
+                return TagTargetVisibilityMath.DescribeOutsideVerticalRange(
+                    minZ,
+                    maxZ,
+                    planes);
+            }
+
+            // Floor-style plans show what lies between the top clip plane and the
+            // view depth (elements below the bottom plane appear as "beyond").
+            return TagTargetVisibilityMath.DescribeOutsideVerticalRange(
+                minZ,
+                maxZ,
+                top,
+                depth ?? bottom);
+        }
+
+        private static ViewRangePlaneElevation? ResolvePlane(
+            Document doc,
+            PlanViewRange range,
+            PlanViewPlane plane,
+            string name)
+        {
+            try
+            {
+                var levelId = range.GetLevelId(plane);
+                if (levelId == null ||
+                    levelId == ElementId.InvalidElementId ||
+                    levelId.Value < 0)
+                    return null; // Unlimited / level above / level below: unbounded here.
+                var level = doc.GetElement(levelId) as Level;
+                if (level == null)
+                    return null;
+                var elevationFeet = level.ProjectElevation + range.GetOffset(plane);
+                return new ViewRangePlaneElevation(
+                    name,
+                    elevationFeet * FeetToMillimeters);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static bool IsOutsideCrop(View view, BoundingBoxXYZ box)
+        {
+            try
+            {
+                if (!view.CropBoxActive)
+                    return false;
+                var crop = view.CropBox;
+                if (crop == null)
+                    return false;
+                var inverse = crop.Transform.Inverse;
+                double minX = double.MaxValue, minY = double.MaxValue;
+                double maxX = double.MinValue, maxY = double.MinValue;
+                foreach (var x in new[] { box.Min.X, box.Max.X })
+                foreach (var y in new[] { box.Min.Y, box.Max.Y })
+                foreach (var z in new[] { box.Min.Z, box.Max.Z })
+                {
+                    var local = inverse.OfPoint(new XYZ(x, y, z));
+                    minX = Math.Min(minX, local.X);
+                    minY = Math.Min(minY, local.Y);
+                    maxX = Math.Max(maxX, local.X);
+                    maxY = Math.Max(maxY, local.Y);
+                }
+                return TagTargetVisibilityMath.IsOutsideCrop(
+                    minX,
+                    minY,
+                    maxX,
+                    maxY,
+                    crop.Min.X,
+                    crop.Min.Y,
+                    crop.Max.X,
+                    crop.Max.Y,
+                    1e-6);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static bool IsCompatibleHost(

@@ -51,6 +51,33 @@ Validate `sameFamily`, `sameFamilyAndType`, `sameCategory`, `selection`, and
 - a fatal transaction failure reports `retainedChanges=false`;
 - a per-element creation failure does not remove successful sibling tags.
 
+## Target view (`targetViewId`)
+
+Both tools accept an optional `targetViewId`. The rule is still learned from the
+example tag in its own view (tag type, host-local offsets, orientation, rotation,
+leader); targets, existing-tag checks, visibility and the new tags then use the
+target view. Validate:
+
+- tagging a second floor plan from an example tag on the first floor creates tags
+  only in the target view, with the same host-local offsets and leader state;
+- the source host is an ordinary target in a separate target view;
+- `targetViewId` of a missing element, a view template, a sheet/schedule/legend/
+  drafting view, or an unlocked 3D view fails before any change;
+- a target view looking in a different direction (e.g. a section) adds a warning;
+- the response's `targetView` block names the view and `isSourceView=false`, and
+  the approval summary names the target view ID.
+
+## Invisible-target reasons
+
+For `selection` / `explicitElementIds` targets that are not in the view, `reason`
+names the cause when it can be determined, after the generic text, e.g.
+`Element is not visible or taggable in the target view 'Level 2' (ID:123):
+outside view range (Z=7900 mm > Top 7500 mm).` Checked causes: not a family
+instance, view-specific to another view, hidden category, hidden element, later
+phase, outside the plan view range (Top / View Depth, resolved from level +
+offset; ceiling plans use the outermost planes), outside the active crop region.
+Otherwise only the generic sentence is returned.
+
 ## Collision option
 
 With `enableCollisionDetection=false`, positions must first reproduce the learned

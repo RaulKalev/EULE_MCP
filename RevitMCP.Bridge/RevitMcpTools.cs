@@ -2023,8 +2023,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("sameFamily (default), sameFamilyAndType, sameCategory, selection, or explicitElementIds.")] string scope = "sameFamily",
         [Description("Targets for scope=explicitElementIds.")] long[]? explicitElementIds = null,
         [Description("SmartTagCenter (default), LocationPoint, or ViewBoundingBoxCenter.")] string? anchorMode = null,
-        [Description("Include the source host as a target. Default false.")] bool includeSourceHost = false,
-        [Description("Skip targets with the same tag type in the source view. Default true.")] bool skipAlreadyTagged = true,
+        [Description("Include the source host as a target in the example tag's own view. Default false (with a separate targetViewId the source host is an ordinary target).")] bool includeSourceHost = false,
+        [Description("Skip targets that already have the same tag type in the target view (the example tag's view unless targetViewId). Default true.")] bool skipAlreadyTagged = true,
         [Description("Include every type in the source family for sameFamily. Default true.")] bool includeAllHostTypes = true,
         [Description("Optional learned local-right offset override in mm.")] double? localRightOffsetMm = null,
         [Description("Optional learned local-front offset override in mm.")] double? localFrontOffsetMm = null,
@@ -2034,6 +2034,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Optional leader on/off override.")] bool? hasLeader = null,
         [Description("1-based target-preview page.")] int page = 1,
         [Description("Target-preview page size, 1-500.")] int pageSize = 100,
+        [Description("Optional view ID to preview targets in instead of the example tag's view (e.g. another floor plan). Must be a non-template plan, ceiling plan, section, elevation, detail or locked 3D view. 0 = the example tag's view.")] long targetViewId = 0,
         CancellationToken cancellationToken = default)
     {
         var args = BuildSelectedTagTemplateArgs(
@@ -2042,6 +2043,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             includeAllHostTypes, false, 1, 0, localRightOffsetMm,
             localFrontOffsetMm, rotationMode, relativeRotationDegrees,
             orientation, hasLeader, null, page, pageSize);
+        if (targetViewId != 0)
+            args["targetViewId"] = targetViewId;
         var result = await pipeClient.SendAsync(
             "revit_analyze_selected_tag_template",
             args,
@@ -2050,14 +2053,14 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_apply_selected_tag_template"),
-     Description("Tags matching FamilyInstances like one selected example IndependentTag. Re-analyzes the live source, validates optional analyzedTemplateJson, and reconstructs head/leader positions from host-local right/front offsets so rotated, flipped, and mirrored targets preserve the visual rule. Uses the exact example tag type. Existing matching tags are skipped by default. Requires approval; successful placements are one Revit Undo operation.")]
+     Description("Tags matching FamilyInstances like one selected example IndependentTag. Re-analyzes the live source, validates optional analyzedTemplateJson, and reconstructs head/leader positions from host-local right/front offsets so rotated, flipped, and mirrored targets preserve the visual rule. Uses the exact example tag type. Optional targetViewId applies the learned rule in another view (e.g. another floor) instead of the example tag's view. Existing matching tags are skipped by default; invisible targets report a specific reason when known (outside view range/crop, hidden category, ...). Requires approval; successful placements are one Revit Undo operation.")]
     public async Task<string> ApplySelectedTagTemplate(
         [Description("Optional explicit source tag ID; normally leave 0 and keep the analyzed example tag selected.")] long sourceTagId = 0,
         [Description("sameFamily (default), sameFamilyAndType, sameCategory, selection, or explicitElementIds.")] string scope = "sameFamily",
         [Description("Targets for scope=explicitElementIds.")] long[]? explicitElementIds = null,
         [Description("SmartTagCenter, LocationPoint, or ViewBoundingBoxCenter. Omit to use the analyzed/default anchor.")] string? anchorMode = null,
-        [Description("Include the source host as a target. Default false.")] bool includeSourceHost = false,
-        [Description("Skip targets with the same tag type in the source view. Default true.")] bool skipAlreadyTagged = true,
+        [Description("Include the source host as a target in the example tag's own view. Default false (with a separate targetViewId the source host is an ordinary target).")] bool includeSourceHost = false,
+        [Description("Skip targets that already have the same tag type in the target view (the example tag's view unless targetViewId). Default true.")] bool skipAlreadyTagged = true,
         [Description("Replacement/deletion is intentionally unsupported; must remain false.")] bool replaceExistingTags = false,
         [Description("Include every type in the source family for sameFamily. Default true.")] bool includeAllHostTypes = true,
         [Description("Enable collision avoidance after reproducing the learned rule. Default false.")] bool enableCollisionDetection = false,
@@ -2070,6 +2073,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Optional Horizontal or Vertical orientation override.")] string? orientation = null,
         [Description("Optional leader on/off override.")] bool? hasLeader = null,
         [Description("Optional JSON object copied from the analysis response (source + inferredRule). Identity fields are revalidated before writing.")] string? analyzedTemplateJson = null,
+        [Description("Optional view ID to place the tags in instead of the example tag's view (e.g. another floor plan); the learned tag type, offsets, orientation, rotation and leader are reapplied there and targets/visibility are resolved in that view. Must be a non-template plan, ceiling plan, section, elevation, detail or locked 3D view. 0 = the example tag's view.")] long targetViewId = 0,
         CancellationToken cancellationToken = default)
     {
         if (replaceExistingTags)
@@ -2089,6 +2093,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             minimumOffsetMm, localRightOffsetMm, localFrontOffsetMm,
             rotationMode, relativeRotationDegrees, orientation, hasLeader,
             analyzedTemplate, 1, 100);
+        if (targetViewId != 0)
+            args["targetViewId"] = targetViewId;
         var result = await pipeClient.SendAsync(
             "revit_apply_selected_tag_template",
             args,
