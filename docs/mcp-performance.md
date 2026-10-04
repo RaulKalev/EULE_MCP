@@ -128,6 +128,27 @@ Also prefer:
 - smaller `pageSize` values;
 - `summaryOnly=true` before a broad detailed query.
 
+## Filtering by type or family name
+
+Revit's built-in `Type`, `Family` and `Family and Type` instance parameters are
+ElementId parameters, so their raw value is a numeric id, and a type's own name is
+not one of its readable parameters. Every tool built on the shared query engine
+(`revit_find_elements_by_parameter`, `revit_get_elements_info`,
+`revit_select_elements_by_query`, `revit_group_elements`, `revit_export_query_to_excel`,
+the circuit and uncircuited-element tools) therefore resolves these filter names
+from the element's type instead:
+
+| `parameterName` | Compared value |
+| --- | --- |
+| `Type`, `Type Name` | type name (`ElementType.Name`) |
+| `Family`, `Family Name` | family name (`ElementType.FamilyName`) |
+| `Family and Type` | `Family: Type` |
+
+For example `{"parameterName":"Type","operator":"contains","value":"WiFi"}`. The names
+are matched as whole names (case and spacing ignored); `Type Mark`, `Type Comments` and
+`Type Id` remain ordinary parameters, so use `Type Id` to match a numeric type id.
+Identity-only filters need no parameter read at all.
+
 ## Automatic Revit-side optimization
 
 The shared element query engine now separates filter parameters from response

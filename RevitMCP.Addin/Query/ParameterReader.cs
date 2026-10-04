@@ -142,5 +142,41 @@ public class ParameterReader
         };
     }
 
+    /// <summary>
+    /// Resolves the element's family and type names from its <see cref="ElementType"/>
+    /// (or the element itself when it is a type). Backs the Type / Family / Family and Type
+    /// filter pseudo-parameters, whose built-in counterparts are ElementId parameters.
+    /// </summary>
+    public static ElementIdentity ReadIdentity(Document doc, Element element)
+    {
+        try
+        {
+            ElementType? type = element as ElementType;
+            if (type == null)
+            {
+                var typeId = element.GetTypeId();
+                if (typeId != null && typeId != ElementId.InvalidElementId)
+                    type = doc.GetElement(typeId) as ElementType;
+            }
+
+            if (type == null)
+                return ElementIdentity.Empty;
+
+            var familyName = type.FamilyName;
+            if (string.IsNullOrEmpty(familyName) && type is FamilySymbol symbol)
+                familyName = symbol.Family?.Name ?? string.Empty;
+
+            return new ElementIdentity
+            {
+                FamilyName = familyName ?? string.Empty,
+                TypeName = type.Name ?? string.Empty
+            };
+        }
+        catch
+        {
+            return ElementIdentity.Empty;
+        }
+    }
+
     public void ClearCache() => _typeCache.Clear();
 }

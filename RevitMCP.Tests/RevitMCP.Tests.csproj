@@ -52,6 +52,8 @@
     <Compile Include="..\RevitMCP.Addin\Query\ParameterReadOptions.cs" Link="Query\ParameterReadOptions.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\ParameterValueDto.cs" Link="Query\ParameterValueDto.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\TagInfoDto.cs" Link="Query\TagInfoDto.cs" />
+    <Compile Include="..\RevitMCP.Addin\Query\ParameterFilterDto.cs" Link="Query\ParameterFilterDto.cs" />
+    <Compile Include="..\RevitMCP.Addin\Query\ParameterFilterEvaluator.cs" Link="Query\ParameterFilterEvaluator.cs" />
     <!-- Coordination / Clash Detection — pure-logic files only (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Coordination\Clash\DTOs\ClashElementRefDto.cs" Link="Coordination\Clash\DTOs\ClashElementRefDto.cs" />
     <Compile Include="..\RevitMCP.Addin\Coordination\Clash\DTOs\ClashResultDto.cs" Link="Coordination\Clash\DTOs\ClashResultDto.cs" />
