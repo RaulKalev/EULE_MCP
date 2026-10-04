@@ -3929,3 +3929,27 @@ check for the room's height, and `revit_check_fire_alarm`.
 | Elements | `revit_check_device_alignment` | RO | "Check device alignment after the AR update" | Off-mount devices + suggestedMoves | N/A | N/A | Wall, ceiling, floor |
 | Electrical | `revit_check_fire_alarm` | RO | "Check the fire alarm on level 1" | Table 1, gaps, sound levels, tone | N/A | N/A | Sound is an estimate |
 | Views | `revit_export_view_image` | RO | "Show me room 1.12" | PNG returned inline | N/A | N/A | Changes rolled back |
+
+---
+
+## 57. Editing Text Note Content (issue #85)
+
+Requires a view with several text notes, at least one with a bold or underlined word, and ideally a
+workshared model where another user has borrowed one note. Pure logic (modes, matchCase, wholeWord,
+map lookup, width estimate) is covered by `TextNoteEditPlannerTests`.
+
+**Verify:**
+1. `revit_preview_set_text_notes mode=append suffix=" // Data network connections" textFilter="Arvutivõrgu"` opens no transaction and lists old text → new text with the view name for every matching note.
+2. `revit_set_text_notes` with the same arguments requires approval; after approving, the element ids are unchanged and a single Revit undo restores every note.
+3. `mode=findReplace` with `wholeWord: true` leaves partial-word matches alone; `matchCase: true` leaves different-case matches alone.
+4. `mode=map` with a JSON object of 2–3 texts changes only notes whose whole (trimmed) text is a key; the rest are reported in `unchanged` with reason `text not in map`.
+5. Bold/underline runs outside the edited range survive (`formattingPreserved: true`).
+6. `autoWidth: true` widens notes whose text grew (never narrows); `widthMm: 60` sets the width; passing both is refused.
+7. A note borrowed by another user appears in `skipped` with a reason; the rest of the batch is still applied.
+
+### Matrix rows (Section 30)
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Elements | `revit_preview_set_text_notes` | RO | "Preview adding ' // Power' to every 'Toide' text note" | `{changedCount, unchangedCount, skippedCount, changed[], unchanged[], skipped[]}` | N/A | N/A | Same plan the write tool executes |
+| Elements | `revit_set_text_notes` | Approval | "Translate the rack labels with this map" | Per-note old → new text, `formattingPreserved` | Yes | One Undo | Element ids kept; worksharing-blocked notes skipped |

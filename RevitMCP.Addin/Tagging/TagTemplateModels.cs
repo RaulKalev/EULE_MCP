@@ -85,6 +85,11 @@ namespace RevitMCP.Addin.Tagging
     public sealed class TagTemplateRequestOptions
     {
         public long SourceTagId { get; set; }
+        /// <summary>
+        /// Optional view to tag in (and resolve targets / visibility against) instead of the
+        /// example tag's own view. 0 = the source tag's view.
+        /// </summary>
+        public long TargetViewId { get; set; }
         public TagTemplateScopeMode ScopeMode { get; set; } =
             TagTemplateScopeMode.SameFamily;
         public List<long> ExplicitElementIds { get; } = new List<long>();
@@ -144,6 +149,9 @@ namespace RevitMCP.Addin.Tagging
         internal IndependentTag SourceTag { get; set; }
         internal FamilyInstance SourceHost { get; set; }
         internal View SourceView { get; set; }
+        /// <summary>The view tags are placed in: the requested target view, else the source view.</summary>
+        internal View TargetView { get; set; }
+        public bool UsesSeparateTargetView { get; set; }
         internal Reference SourceReference { get; set; }
         internal FamilySymbol TagType { get; set; }
     }

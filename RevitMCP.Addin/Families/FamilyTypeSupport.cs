@@ -161,39 +161,15 @@ internal static class FamilyTypeSupport
     /// </summary>
     public static Parameter? FindParameter(Element element, string parameterName, out string? problem)
     {
-        problem = null;
-
-        Parameter? exact = null;
-        try { exact = element.LookupParameter(parameterName); }
-        catch { }
-        if (exact != null)
-            return exact;
-
-        var matches = new List<Parameter>();
         try
         {
-            foreach (Parameter p in element.Parameters)
-            {
-                var name = p.Definition?.Name ?? string.Empty;
-                if (ParameterMatcher.Matches(name, parameterName, "ContainsNormalized"))
-                    matches.Add(p);
-            }
+            return RevitMCP.Addin.Tools.ParameterFinder.Find(element, parameterName, out problem);
         }
-        catch { }
-
-        if (matches.Count == 1)
-            return matches[0];
-
-        if (matches.Count > 1)
+        catch (Exception ex)
         {
-            problem = $"'{parameterName}' matches {matches.Count} parameters " +
-                      $"({string.Join(", ", matches.Take(5).Select(p => p.Definition?.Name ?? "?"))}). " +
-                      "Use the exact parameter name.";
+            problem = $"Parameter '{parameterName}' could not be read: {ex.Message}";
             return null;
         }
-
-        problem = $"Parameter '{parameterName}' was not found on this type.";
-        return null;
     }
 
     /// <summary>

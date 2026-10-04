@@ -136,6 +136,51 @@ public class PipeServer
 #endif
     }
 
+    private const string ConnectionStatusTool = "revit_get_connection_status";
+
+    /// <summary>How long the connection status waits for the Revit API thread before answering from the pipe.</summary>
+    private const int ConnectionStatusTimeoutMs = 3000;
+
+    /// <summary>
+    /// Connection status must answer even while Revit is busy (#87). It asks the Revit API thread for live
+    /// document info, but if that does not happen within a few seconds it answers from the pipe thread with
+    /// the last known document context and the reason Revit is busy.
+    /// </summary>
+    private async Task<McpToolResult> GetConnectionStatusAsync(McpToolRequest request, CancellationToken ct)
+    {
+        var live = await _eventService.DispatchAsync(request, timeoutMs: ConnectionStatusTimeoutMs, cancellationToken: ct);
+        // queue_full counts too: repeated status checks against a blocked Revit must keep answering.
+        if (live.Success || live.Status is not (RevitBusyDiagnosis.BusyStatus or "request_timeout" or "queue_full"))
+            return live;
+
+        var snapshot = _eventService.GetBusySnapshot();
+        var context = _eventService.GetLastContext();
+        return new McpToolResult
+        {
+            RequestId = request.RequestId,
+            Success = true,
+            Status = RevitBusyDiagnosis.BusyStatus,
+            Message = $"Connector is running, but Revit is busy: {RevitBusyDiagnosis.Describe(snapshot)} {RevitBusyDiagnosis.Hint(snapshot)}",
+            Data = new
+            {
+                connectorStatus = "Running",
+                busy = ExternalEventService.BusyData(snapshot),
+                lastKnownContext = context == null ? null : new
+                {
+                    revitVersion = context.RevitVersion,
+                    documentTitle = context.ModelTitle,
+                    activeViewName = context.ActiveViewName,
+                    isWorkshared = context.IsWorkshared,
+                    centralModelPath = context.CentralPath,
+                    localModelPath = context.LocalPath,
+                    revitUsername = context.RevitUsername
+                },
+                note = "Document values are the last known context, captured when Revit last processed a request."
+            },
+            Warnings = new List<string> { "Revit API thread did not respond; document info is the last known context." }
+        };
+    }
+
     private async Task HandleClientAsync(NamedPipeServerStream pipe, CancellationToken ct)
     {
         DiagLog("HandleClientAsync started");
@@ -175,7 +220,9 @@ public class PipeServer
                     Village.Hosting.VillageHooks.ToolStarted(request, _eventService.GetLastContext());
                     // QueryLimits controls the maximum time a tool may run before the dispatch layer returns a timeout.
                     var timeoutMs = Math.Max(1, QueryLimits.Default.TimeoutSeconds) * 1000;
-                    result = await _eventService.DispatchAsync(request, timeoutMs: timeoutMs, cancellationToken: ct);
+                    result = request.ToolName == ConnectionStatusTool
+                        ? await GetConnectionStatusAsync(request, ct)
+                        : await _eventService.DispatchAsync(request, timeoutMs: timeoutMs, cancellationToken: ct);
                     DiagLog($"DispatchAsync returned: success={result.Success} in {sw.ElapsedMilliseconds}ms");
                 }
                 catch (Exception ex)

@@ -10,7 +10,7 @@ namespace RevitMCP.Addin.Tools;
 public class SetParameterTool : IRevitMcpTool
 {
     public string Name => "revit_set_parameter";
-    public string Description => "Sets a parameter value on elements. Requires approval. Supports String, Integer, Double, and ElementId storage types. ElementId values can be provided as a numeric element ID or exact element/type name. Runs inside a Revit Transaction.";
+    public string Description => "Sets a parameter value on elements. Requires approval. Supports String, Integer, Double, and ElementId storage types. ElementId values can be provided as a numeric element ID or exact element/type name. Resolves the parameter by exact name first and never guesses between ambiguous matches (use exactMatch, builtInParameter or parameterGuid). Runs inside a Revit Transaction.";
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Parameters;
 
@@ -33,8 +33,20 @@ public class SetParameterTool : IRevitMcpTool
         var filtersParsed = ToolArguments.GetFiltersWithWarnings(request.Arguments);
         var limit = ToolArguments.GetInt(request.Arguments, "limit", 500);
 
-        if (string.IsNullOrWhiteSpace(parameterName))
-            return Task.FromResult(Fail(request, "parameterName is required."));
+        var selector = new ParameterTarget
+        {
+            Name = parameterName,
+            ExactMatch = ToolArguments.GetBool(request.Arguments, "exactMatch"),
+            BuiltInParameter = NullIfBlank(ToolArguments.GetString(request.Arguments, "builtInParameter")),
+            Guid = NullIfBlank(ToolArguments.GetString(request.Arguments, "parameterGuid"))
+        };
+
+        if (string.IsNullOrWhiteSpace(parameterName) && selector.BuiltInParameter == null && selector.Guid == null)
+            return Task.FromResult(Fail(request, "parameterName is required (or builtInParameter / parameterGuid)."));
+        if (selector.BuiltInParameter != null && !Enum.TryParse<BuiltInParameter>(selector.BuiltInParameter, true, out _))
+            return Task.FromResult(Fail(request, $"Unknown builtInParameter '{selector.BuiltInParameter}'. Use the BuiltInParameter enum name, e.g. INSTANCE_ELEVATION_PARAM."));
+        if (selector.Guid != null && !System.Guid.TryParse(selector.Guid, out _))
+            return Task.FromResult(Fail(request, $"parameterGuid '{selector.Guid}' is not a valid GUID."));
 
         // Determine target elements
         IEnumerable<ElementId> sourceIds;
@@ -81,7 +93,8 @@ public class SetParameterTool : IRevitMcpTool
                     if (element?.Category == null) continue;
 
                     var allParams = reader.ReadParameters(doc, element, readOpts);
-                    if (PassesFilters(allParams, filtersParsed.Items))
+                    // Shared evaluator: also understands Type / Family names (#88).
+                    if (ParameterFilterEvaluator.Passes(allParams, filtersParsed.Items, ParameterReader.ReadIdentity(doc, element)))
                         filtered.Add(eid);
                 }
                 sourceIds = filtered;
@@ -102,7 +115,10 @@ public class SetParameterTool : IRevitMcpTool
 
         // Run in transaction
         var modifiedIds = new List<long>();
+        var changes = new List<object>();
         var failures = new List<object>();
+        var partialMatches = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var writtenParameters = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         cancellationToken.ThrowIfCancellationRequested();
         using (var tx = new Transaction(doc, "Revit MCP - Set Parameter"))
@@ -119,55 +135,40 @@ public class SetParameterTool : IRevitMcpTool
                     continue;
                 }
 
-                // Find the parameter
-                Parameter? param = null;
-                foreach (Parameter p in element.Parameters)
-                {
-                    if (ParameterMatcher.Matches(p.Definition?.Name ?? "", parameterName, "ContainsNormalized"))
-                    {
-                        // Respect scope filter
-                        if (scope == "Type" && element is not ElementType) continue;
-                        if (scope == "Instance" && element is ElementType) continue;
-                        param = p;
-                        break;
-                    }
-                }
-
-                // Also check type parameters if scope allows
-                if (param == null && scope != "Instance")
-                {
-                    var typeId = element.GetTypeId();
-                    if (typeId != null && typeId != ElementId.InvalidElementId)
-                    {
-                        var typeElem = doc.GetElement(typeId);
-                        if (typeElem != null)
-                        {
-                            foreach (Parameter p in typeElem.Parameters)
-                            {
-                                if (ParameterMatcher.Matches(p.Definition?.Name ?? "", parameterName, "ContainsNormalized"))
-                                {
-                                    param = p;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
+                // Resolve the parameter: exact name before partial, user/shared before built-in,
+                // and never guess between ties (#86).
+                var isTypeElement = element is ElementType;
+                var resolution = ParameterResolver.Resolve(
+                    doc, element, selector,
+                    includeInstance: scope != "Type" || isTypeElement,
+                    includeType: scope != "Instance" && !isTypeElement);
+                var param = ParameterResolver.Selected(resolution);
 
                 if (param == null)
                 {
-                    failures.Add(new { elementId = eid.Value, reason = $"Parameter '{parameterName}' not found." });
+                    failures.Add(new
+                    {
+                        elementId = eid.Value,
+                        reason = resolution.Problem ?? $"Parameter {selector.Describe()} not found.",
+                        candidates = resolution.IsAmbiguous
+                            ? resolution.Candidates.Select(ParameterResolution.DescribeCandidate).ToList()
+                            : null
+                    });
                     continue;
                 }
 
                 if (param.IsReadOnly)
                 {
-                    failures.Add(new { elementId = eid.Value, reason = "Parameter is read-only." });
+                    failures.Add(new { elementId = eid.Value, reason = $"Parameter '{param.Definition?.Name}' is read-only." });
                     continue;
                 }
 
+                if (resolution.MatchedBy == "partial")
+                    partialMatches.Add(param.Definition?.Name ?? string.Empty);
+
                 try
                 {
+                    var oldValue = ParameterResolver.DisplayValue(param);
                     bool set = param.StorageType == StorageType.ElementId
                         ? SetElementId(doc, param, value)
                         : param.StorageType switch
@@ -179,7 +180,20 @@ public class SetParameterTool : IRevitMcpTool
                         };
 
                     if (set)
+                    {
                         modifiedIds.Add(eid.Value);
+                        writtenParameters.Add(param.Definition?.Name ?? "?");
+                        changes.Add(new
+                        {
+                            elementId = eid.Value,
+                            parameter = param.Definition?.Name,
+                            builtInParameter = resolution.Selected!.BuiltInParameter,
+                            isTypeParameter = resolution.Selected.IsTypeParameter,
+                            storageType = param.StorageType.ToString(),
+                            oldValue,
+                            newValue = ParameterResolver.DisplayValue(param)
+                        });
+                    }
                     else
                         failures.Add(new { elementId = eid.Value, reason = $"Unsupported storage type: {param.StorageType}" });
                 }
@@ -193,13 +207,20 @@ public class SetParameterTool : IRevitMcpTool
         }
 
         var warnings = filtersParsed.Warnings;
+        if (partialMatches.Count > 0)
+            warnings.Add($"{selector.Describe()} was resolved by partial name match to: {string.Join(", ", partialMatches.Select(n => $"'{n}'"))}. " +
+                         "Check the changes list; pass the exact name with exactMatch=true to avoid partial matching.");
+
+        var writtenNames = writtenParameters.Count == 0
+            ? selector.Describe()
+            : string.Join(", ", writtenParameters.Select(n => $"'{n}'"));
 
         sw.Stop();
         return Task.FromResult(new McpToolResult
         {
             RequestId = request.RequestId,
             Success = true,
-            Message = $"Updated parameter '{parameterName}' on {modifiedIds.Count} elements. {failures.Count} failed.",
+            Message = $"Updated parameter {writtenNames} on {modifiedIds.Count} elements. {failures.Count} failed.",
             Data = new
             {
                 parameterName,
@@ -207,6 +228,7 @@ public class SetParameterTool : IRevitMcpTool
                 modifiedCount = modifiedIds.Count,
                 failedCount = failures.Count,
                 modifiedElementIds = modifiedIds,
+                changes,
                 failures
             },
             Warnings = warnings,
@@ -262,34 +284,7 @@ public class SetParameterTool : IRevitMcpTool
         return false;
     }
 
-    private static bool PassesFilters(IReadOnlyList<ParameterValueDto> parameters, List<ParameterFilterDto> filters)
-    {
-        foreach (var filter in filters)
-        {
-            var candidates = parameters.Where(p =>
-                ParameterMatcher.Matches(p.Name, filter.ParameterName, filter.MatchMode)).ToList();
-
-            if (candidates.Count == 0)
-            {
-                if (filter.Operator == "isEmpty") continue;
-                return false;
-            }
-
-            if (!candidates.Any(p => EvaluateOperator(p.Value, filter.Operator, filter.Value)))
-                return false;
-        }
-        return true;
-    }
-
-    private static bool EvaluateOperator(string value, string op, string filterValue) =>
-        op switch
-        {
-            "equals" => string.Equals(value, filterValue, StringComparison.OrdinalIgnoreCase),
-            "contains" => value.Contains(filterValue, StringComparison.OrdinalIgnoreCase),
-            "isEmpty" => string.IsNullOrEmpty(value),
-            "isNotEmpty" => !string.IsNullOrEmpty(value),
-            _ => false
-        };
+    private static string? NullIfBlank(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
     private static McpToolResult Fail(McpToolRequest r, string msg) =>
         new() { RequestId = r.RequestId, Success = false, Message = msg };

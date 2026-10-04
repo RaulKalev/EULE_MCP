@@ -297,6 +297,9 @@ namespace RevitMCP.Addin.Tools
                 SourceTagId = ToolArguments.GetLong(
                     arguments,
                     "sourceTagId"),
+                TargetViewId = ToolArguments.GetLong(
+                    arguments,
+                    "targetViewId"),
                 ScopeMode = scope,
                 AnchorMode = anchorMode,
                 IncludeSourceHost = ToolArguments.GetBool(

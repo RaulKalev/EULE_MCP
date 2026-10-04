@@ -25,6 +25,8 @@ public class ExternalEventHandler : IExternalEventHandler
     private ApprovalService? _approvalService;
     private ActivityLogger? _activityLogger;
     private Action? _requestNextDispatch;
+    private long _lastExecuteTicks;
+    private volatile ActiveToolInfo? _activeTool;
 
     public ExternalEventHandler()
         : this(QueryLimits.Default)
@@ -83,8 +85,28 @@ public class ExternalEventHandler : IExternalEventHandler
     public bool CancelPending(string requestId, string reason, string status)
         => _queue.TryCancel(requestId, reason, status);
 
+    /// <summary>
+    /// What is known about the Revit API thread right now, readable from any thread (#87).
+    /// </summary>
+    public RevitBusySnapshot GetBusySnapshot()
+    {
+        var lastTicks = Interlocked.Read(ref _lastExecuteTicks);
+        var active = _activeTool;
+        var snapshot = new RevitBusySnapshot
+        {
+            NowUtc = DateTime.UtcNow,
+            LastExecuteUtc = lastTicks == 0 ? null : new DateTime(lastTicks, DateTimeKind.Utc),
+            ActiveTool = active?.Tool,
+            ActiveSinceUtc = active?.SinceUtc,
+            QueueLength = _queue.Count
+        };
+        RevitWindowProbe.Fill(snapshot);
+        return snapshot;
+    }
+
     public void Execute(UIApplication app)
     {
+        Interlocked.Exchange(ref _lastExecuteTicks, DateTime.UtcNow.Ticks);
         _lastContext = CaptureContext(app);
 
         try
@@ -94,6 +116,13 @@ public class ExternalEventHandler : IExternalEventHandler
                 if (!_queue.TryDequeue(out var item))
                     break;
 
+                // Abandoned items (the caller was already told Revit is busy) must not run.
+                if (!item!.MarkStarted())
+                {
+                    item.Dispose();
+                    continue;
+                }
+
                 if (!_active.TryAdd(item!.Request.RequestId, item))
                 {
                     item.Cancel("A request with the same requestId is already executing.", "validation_failed");
@@ -101,12 +130,15 @@ public class ExternalEventHandler : IExternalEventHandler
                     continue;
                 }
                 var disposeAfterExecute = true;
+                _activeTool = new ActiveToolInfo(item.Request.ToolName, DateTime.UtcNow);
                 try
                 {
                     disposeAfterExecute = ExecuteItem(app, item!);
                 }
                 finally
                 {
+                    _activeTool = null;
+                    Interlocked.Exchange(ref _lastExecuteTicks, DateTime.UtcNow.Ticks);
                     if (disposeAfterExecute)
                     {
                         _active.TryRemove(item!.Request.RequestId, out _);
@@ -121,6 +153,8 @@ public class ExternalEventHandler : IExternalEventHandler
                 _requestNextDispatch?.Invoke();
         }
     }
+
+    private sealed record ActiveToolInfo(string Tool, DateTime SinceUtc);
 
     /// <returns>True when the caller should dispose the work item.</returns>
     private bool ExecuteItem(UIApplication app, ExternalEventWorkItem item)
@@ -265,7 +299,15 @@ public class ExternalEventHandler : IExternalEventHandler
                 {
                     RequestId = request.RequestId,
                     Success = false,
-                    Message = $"'{summary}' is pending approval in Revit. Open the RevitMCP window and click Approve on the Pending tab to execute, or Reject to cancel."
+                    Message = $"'{summary}' is pending approval in Revit. Open the RevitMCP window and click Approve on the Pending tab to execute, or Reject to cancel. " +
+                              $"Call revit_get_approval_status with requestId '{request.RequestId}' to read the result after the decision.",
+                    Data = new
+                    {
+                        approvalId = pendingApproval.ApprovalId,
+                        requestId = request.RequestId,
+                        tool = tool.Name,
+                        summary
+                    }
                 };
                 try { approvalResult.Status = "approval_required"; } catch (MissingMethodException) { }
             tcs.TrySetResult(approvalResult);

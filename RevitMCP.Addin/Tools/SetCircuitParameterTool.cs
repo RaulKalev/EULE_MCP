@@ -63,10 +63,10 @@ public class SetCircuitParameterTool : IRevitMcpTool
                 continue;
             }
 
-            var param = FindParameter(elem, parameterName);
+            var param = ParameterFinder.Find(elem, parameterName, out var problem);
             if (param == null)
             {
-                failures.Add(new { circuitId = cid, reason = $"Parameter '{parameterName}' not found on circuit." });
+                failures.Add(new { circuitId = cid, reason = problem ?? $"Parameter '{parameterName}' not found on circuit." });
                 continue;
             }
             if (param.IsReadOnly)
@@ -112,19 +112,6 @@ public class SetCircuitParameterTool : IRevitMcpTool
             Warnings = warnings,
             DurationMs = sw.ElapsedMilliseconds
         });
-    }
-
-    /// <summary>
-    /// Finds a parameter on the element using ContainsNormalized name matching.
-    /// </summary>
-    private static Parameter? FindParameter(Element element, string parameterName)
-    {
-        foreach (Parameter p in element.Parameters)
-        {
-            if (ParameterMatcher.Matches(p.Definition?.Name ?? "", parameterName, "ContainsNormalized"))
-                return p;
-        }
-        return null;
     }
 
     /// <summary>

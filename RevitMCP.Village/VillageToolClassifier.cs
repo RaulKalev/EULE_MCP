@@ -31,6 +31,7 @@ public sealed class VillageToolClassifier
         ["revit_tools_call"]            = VillageAreas.Project,
         ["revit_tools_load"]            = VillageAreas.Project,
         ["revit_get_connection_status"] = VillageAreas.Project,
+        ["revit_get_approval_status"]   = VillageAreas.Project,
         ["revit_list_instances"]        = VillageAreas.Project,
         ["revit_select_instance"]       = VillageAreas.Project,
         ["revit_skill_builder_guide"]   = VillageAreas.Office,

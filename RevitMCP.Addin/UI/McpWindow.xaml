@@ -258,6 +258,81 @@
                                 HorizontalAlignment="Stretch"
                                 Margin="0,6,0,0" />
 
+                        <!-- Recent decisions: what happened after Approve / Reject -->
+                        <StackPanel DockPanel.Dock="Bottom"
+                                    Visibility="{Binding HasRecentApprovalOutcomes, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="RECENT DECISIONS" Style="{StaticResource SectionHeaderStyle}" />
+                            <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding RecentApprovalOutcomes}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border CornerRadius="6"
+                                                    Padding="10,6"
+                                                    Margin="0,0,0,4"
+                                                    BorderThickness="1">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Background" Value="{DynamicResource SecondaryBackgroundBrush}" />
+                                                        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsFailed}" Value="True">
+                                                                <Setter Property="BorderBrush" Value="{DynamicResource StatusStoppedBrush}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <StackPanel>
+                                                    <DockPanel>
+                                                        <TextBlock DockPanel.Dock="Right"
+                                                                   Text="{Binding Time}"
+                                                                   Foreground="{DynamicResource IconForegroundBrush}"
+                                                                   FontSize="10"
+                                                                   VerticalAlignment="Center" />
+                                                        <TextBlock DockPanel.Dock="Left"
+                                                                   Text="{Binding StateLabel}"
+                                                                   FontSize="10"
+                                                                   FontWeight="SemiBold"
+                                                                   Margin="0,0,8,0"
+                                                                   VerticalAlignment="Center">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource IconForegroundBrush}" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsSucceeded}" Value="True">
+                                                                            <Setter Property="Foreground" Value="{DynamicResource StatusRunningBrush}" />
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding IsFailed}" Value="True">
+                                                                            <Setter Property="Foreground" Value="{DynamicResource StatusStoppedBrush}" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                        <TextBlock Text="{Binding Tool}"
+                                                                   Foreground="{DynamicResource ForegroundBrush}"
+                                                                   FontSize="11"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   VerticalAlignment="Center" />
+                                                    </DockPanel>
+                                                    <TextBlock Text="{Binding Summary}"
+                                                               Foreground="{DynamicResource IconForegroundBrush}"
+                                                               FontSize="10"
+                                                               TextWrapping="Wrap"
+                                                               Margin="0,2,0,0" />
+                                                    <TextBlock Text="{Binding Message}"
+                                                               Foreground="{DynamicResource ForegroundBrush}"
+                                                               FontSize="10"
+                                                               TextWrapping="Wrap"
+                                                               Margin="0,2,0,0"
+                                                               Visibility="{Binding HasMessage, Converter={StaticResource BoolToVisibility}}" />
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </StackPanel>
+
                         <!-- Pending items list -->
                         <Grid MinHeight="180">
                             <ItemsControl ItemsSource="{Binding PendingApprovals}">

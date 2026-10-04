@@ -49,9 +49,17 @@
     <Compile Include="..\RevitMCP.Addin\Query\ElementInfoDto.cs" Link="Query\ElementInfoDto.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\ElementQueryResponseFormatter.cs" Link="Query\ElementQueryResponseFormatter.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\ParameterMatcher.cs" Link="Query\ParameterMatcher.cs" />
+    <Compile Include="..\RevitMCP.Addin\Query\ParameterResolution.cs" Link="Query\ParameterResolution.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\ParameterReadOptions.cs" Link="Query\ParameterReadOptions.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\ParameterValueDto.cs" Link="Query\ParameterValueDto.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\TagInfoDto.cs" Link="Query\TagInfoDto.cs" />
+    <Compile Include="..\RevitMCP.Addin\Query\ParameterFilterDto.cs" Link="Query\ParameterFilterDto.cs" />
+    <Compile Include="..\RevitMCP.Addin\Query\ParameterFilterEvaluator.cs" Link="Query\ParameterFilterEvaluator.cs" />
+    <Compile Include="..\RevitMCP.Addin\Query\GroupingEngine.cs" Link="Query\GroupingEngine.cs" />
+    <Compile Include="..\RevitMCP.Addin\Query\GroupingOptions.cs" Link="Query\GroupingOptions.cs" />
+    <Compile Include="..\RevitMCP.Addin\Query\GroupingResult.cs" Link="Query\GroupingResult.cs" />
+    <Compile Include="..\RevitMCP.Addin\Query\GroupKeyOptions.cs" Link="Query\GroupKeyOptions.cs" />
+    <Compile Include="..\RevitMCP.Addin\Query\ParameterGroupSummary.cs" Link="Query\ParameterGroupSummary.cs" />
     <!-- Coordination / Clash Detection — pure-logic files only (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Coordination\Clash\DTOs\ClashElementRefDto.cs" Link="Coordination\Clash\DTOs\ClashElementRefDto.cs" />
     <Compile Include="..\RevitMCP.Addin\Coordination\Clash\DTOs\ClashResultDto.cs" Link="Coordination\Clash\DTOs\ClashResultDto.cs" />
@@ -101,6 +109,7 @@
     <Compile Include="..\RevitMCP.Addin\Transactions\TransactionSafetyCore.cs" Link="Transactions\TransactionSafetyCore.cs" />
     <Compile Include="..\RevitMCP.Addin\Tagging\TagCollisionMath.cs" Link="Tagging\TagCollisionMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Tagging\TagTemplateMath.cs" Link="Tagging\TagTemplateMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Tagging\TagTargetVisibilityMath.cs" Link="Tagging\TagTargetVisibilityMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Documentation\Placement\PlaceViewsNameMatcher.cs" Link="Documentation\Placement\PlaceViewsNameMatcher.cs" />
     <Compile Include="..\RevitMCP.Addin\Families\FamilyTypeNamePlanner.cs" Link="Families\FamilyTypeNamePlanner.cs" />
     <Compile Include="..\RevitMCP.Addin\Electrical\CableTypeCreationPlanner.cs" Link="Electrical\CableTypeCreationPlanner.cs" />
@@ -111,6 +120,7 @@
     <Compile Include="..\RevitMCP.Addin\Placement\AlignmentMath.cs" Link="Placement\AlignmentMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Placement\ViewAlignmentMath.cs" Link="Placement\ViewAlignmentMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Placement\MoveElementsMath.cs" Link="Placement\MoveElementsMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Annotation\TextNoteEditPlanner.cs" Link="Annotation\TextNoteEditPlanner.cs" />
     <Compile Include="..\RevitMCP.Addin\CadManagement\CadPointMath.cs" Link="CadManagement\CadPointMath.cs" />
     <Compile Include="..\RevitMCP.Addin\CadManagement\CadShapeMath.cs" Link="CadManagement\CadShapeMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Electrical\PatchPanelAssignment\PatchPanelAssignmentModels.cs" Link="Electrical\PatchPanelAssignment\PatchPanelAssignmentModels.cs" />
@@ -121,8 +131,10 @@
     <Compile Include="..\RevitMCP.Addin\Approval\PermissionModeStatus.cs" Link="Approval\PermissionModeStatus.cs" />
     <Compile Include="..\RevitMCP.Addin\Approval\PendingApprovalRequest.cs" Link="Approval\PendingApprovalRequest.cs" />
     <Compile Include="..\RevitMCP.Addin\Approval\ApprovalService.cs" Link="Approval\ApprovalService.cs" />
+    <Compile Include="..\RevitMCP.Addin\Approval\ApprovalOutcome.cs" Link="Approval\ApprovalOutcome.cs" />
     <Compile Include="..\RevitMCP.Addin\Services\ExternalEventWorkItem.cs" Link="Services\ExternalEventWorkItem.cs" />
     <Compile Include="..\RevitMCP.Addin\Services\ExternalEventWorkQueue.cs" Link="Services\ExternalEventWorkQueue.cs" />
+    <Compile Include="..\RevitMCP.Addin\Services\RevitBusyDiagnosis.cs" Link="Services\RevitBusyDiagnosis.cs" />
     <!-- Model graph pure-logic files (SQLite layer, path resolution, freshness; no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Graph\GraphSchema.cs" Link="Graph\GraphSchema.cs" />
     <Compile Include="..\RevitMCP.Addin\Graph\GraphModels.cs" Link="Graph\GraphModels.cs" />

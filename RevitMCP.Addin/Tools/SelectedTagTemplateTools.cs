@@ -23,7 +23,8 @@ namespace RevitMCP.Addin.Tools
             "rotation mode, orientation, leader/elbow/free-end geometry, and previews targets. " +
             "scope defaults to sameFamily; also supports sameFamilyAndType, sameCategory, selection, " +
             "and explicitElementIds. anchorMode supports SmartTagCenter, LocationPoint, and " +
-            "ViewBoundingBoxCenter. Returns paged target details and full counts without changing Revit.";
+            "ViewBoundingBoxCenter. Optional targetViewId previews targets in another view. " +
+            "Returns paged target details and full counts without changing Revit.";
 
         public ToolPermission Permission => ToolPermission.ReadOnly;
         public ToolCategory Category => ToolCategory.Documentation;
@@ -113,6 +114,7 @@ namespace RevitMCP.Addin.Tools
                 Data = new
                 {
                     source = SourceData(analysis.Template),
+                    targetView = TargetViewData(analysis),
                     inferredRule = RuleData(analysis.Template),
                     scope = new
                     {
@@ -137,6 +139,18 @@ namespace RevitMCP.Addin.Tools
                 },
                 Errors = analysis.Errors,
                 DurationMs = durationMilliseconds
+            };
+        }
+
+        internal static object TargetViewData(TagTemplateAnalysisResult analysis)
+        {
+            var view = analysis.TargetView ?? analysis.SourceView;
+            return new
+            {
+                viewId = view?.Id.Value ?? analysis.Template.SourceViewId,
+                viewName = view?.Name ?? string.Empty,
+                viewType = view?.ViewType.ToString() ?? string.Empty,
+                isSourceView = !analysis.UsesSeparateTargetView
             };
         }
 
@@ -239,7 +253,10 @@ namespace RevitMCP.Addin.Tools
             "Re-analyzes the live source tag, validates any analyzedTemplate JSON, and preserves " +
             "host-local right/front placement across rotated, flipped, and mirrored targets. " +
             "Uses the exact source tag type, orientation, inferred/overridden rotation mode, and " +
-            "leader geometry. scope defaults to sameFamily. Existing matching tags are skipped by " +
+            "leader geometry. Optional targetViewId applies the learned rule in another view (e.g. another " +
+            "floor plan) instead of the example tag's view; targets and visibility are then resolved in that view. " +
+            "Skipped invisible targets report a specific reason when known (view range, crop, hidden category, ...). " +
+            "scope defaults to sameFamily. Existing matching tags are skipped by " +
             "default. Optional collision detection runs after reproducing the learned rule. " +
             "Requires normal MCP approval; all successful tags commit as one Revit Undo operation.";
 
@@ -341,11 +358,8 @@ namespace RevitMCP.Addin.Tools
                 {
                     source = AnalyzeSelectedTagTemplateTool
                         .SourceData(analysis.Template),
-                    targetView = new
-                    {
-                        viewId = analysis.Template.SourceViewId,
-                        viewName = analysis.SourceView.Name
-                    },
+                    targetView = AnalyzeSelectedTagTemplateTool
+                        .TargetViewData(analysis),
                     inferredRule = AnalyzeSelectedTagTemplateTool
                         .RuleData(analysis.Template),
                     placement.CreatedCount,

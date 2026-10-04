@@ -9,11 +9,35 @@ namespace RevitMCP.Bridge;
 [McpServerToolType]
 internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
 {
+    /// <summary>Shared description of the JSON filter array accepted by the query-style tools.</summary>
+    private const string FiltersDescription =
+        "JSON array of parameter filters, ANDed: [{parameterName, operator, value, matchMode, scope}]. " +
+        "operator: equals (default), notEquals, contains, notContains, startsWith, endsWith, isEmpty, isNotEmpty, greaterThan, lessThan. " +
+        "matchMode (how parameterName is matched): ContainsNormalized (default), Contains, Exact, ExactNormalized. scope: InstanceAndType (default), Instance, Type. " +
+        "To filter by type or family name use the pseudo-parameters 'Type' / 'Type Name' (the type name), 'Family' / 'Family Name' and 'Family and Type' ('Family: Type'), " +
+        "e.g. {\"parameterName\":\"Type\",\"operator\":\"contains\",\"value\":\"WiFi\"}. Use 'Type Id' to match a numeric type id.";
+
     [McpServerTool(Name = "revit_get_connection_status", ReadOnly = true),
-     Description("Returns current Revit connection and document status including model title, worksharing info, active view, and selected element count.")]
+     Description("Returns current Revit connection and document status including model title, worksharing info, active view, and selected element count. Answers within a few seconds even while Revit is busy: then status is 'revit_busy' with the reason (modal dialog and its title, running tool, active command, unresponsive window) and the last known document context.")]
     public async Task<string> GetConnectionStatus(CancellationToken cancellationToken)
     {
         var result = await pipeClient.SendAsync("revit_get_connection_status", [], cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_get_approval_status", ReadOnly = true),
+     Description("Reports what happened to an approval-gated request after approval_required was returned: pending, running, succeeded (with the tool's full result), failed (with the reason, e.g. the model changed after the request, the approval expired, or Revit was busy) or rejected. Pass the requestId from the approval_required response; omit it to list recent approvals.")]
+    public async Task<string> GetApprovalStatus(
+        [Description("requestId (or approvalId) from an approval_required response. Omit to list recent approvals.")] string? requestId = null,
+        [Description("Max recent approvals to list when requestId is omitted (default 20, max 100).")] int limit = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["requestId"] = requestId ?? string.Empty,
+            ["limit"] = limit
+        };
+        var result = await pipeClient.SendAsync("revit_get_approval_status", args, cancellationToken);
         return FormatResult(result);
     }
 
@@ -357,17 +381,21 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_group_by_parameter", ReadOnly = true),
-     Description("Groups model elements by a parameter value and returns counts. parameterName supports partial matching (e.g. 'ELENEA_Nimetus' matches 'ELENEA_ÜLD 001_Nimetus'). Optionally filter by category name.")]
+     Description("Groups model elements by a parameter value and returns counts computed over ALL matching elements (no page limit; only the hard scan safety cap applies). parameterName supports partial matching (e.g. 'ELENEA_Nimetus' matches 'ELENEA_ÜLD 001_Nimetus'); 'Type', 'Type Name', 'Family', 'Family Name' and 'Family and Type' group by the type/family names. Optionally filter by category name. Returns totalMatched, elementsGrouped, matchedElements, notFoundElements and groups; includeElementIds adds paged id lists per group.")]
     public async Task<string> GroupByParameter(
         [Description("Parameter name or partial name to match (case-insensitive)")] string parameterName,
         [Description("Optional category name to restrict search (e.g. 'Fire Alarm Devices')")] string? category = null,
+        [Description("If true, each group also lists its element ids (capped by maxElementIdsPerGroup; counts are always complete). Default false.")] bool includeElementIds = false,
+        [Description("Max element ids listed per group when includeElementIds=true (default 100).")] int maxElementIdsPerGroup = 100,
         [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
         {
             ["parameterName"] = parameterName,
-            ["category"] = category ?? string.Empty
+            ["category"] = category ?? string.Empty,
+            ["includeElementIds"] = includeElementIds,
+            ["maxElementIdsPerGroup"] = maxElementIdsPerGroup
         };
         args["graphHint"] = graphHint;
         var result = await pipeClient.SendAsync("revit_group_by_parameter", args, cancellationToken);
@@ -409,12 +437,14 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_run_query_preset", ReadOnly = true),
-     Description("Runs a saved query preset by name. Can return JSON results or export to Excel.")]
+     Description("Runs a saved query preset by name. Can return JSON results or export to Excel. Groups and the Excel export cover every matching element up to limit; the JSON element list is paged (page / pageSize).")]
     public async Task<string> RunQueryPreset(
         [Description("Name of the preset to run")] string presetName,
         [Description("If true, export results to Excel")] bool exportToExcel = false,
         [Description("Output file name for Excel export")] string? fileName = null,
         [Description("Max elements (default 5000)")] int limit = 5000,
+        [Description("Page size of the JSON element list. Defaults to 100, max 500.")] int pageSize = -1,
+        [Description("Zero-based page of the JSON element list.")] int page = 0,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -422,7 +452,9 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["presetName"] = presetName,
             ["exportToExcel"] = exportToExcel,
             ["fileName"] = fileName ?? string.Empty,
-            ["limit"] = limit
+            ["limit"] = limit,
+            ["pageSize"] = pageSize,
+            ["page"] = page
         };
         var result = await pipeClient.SendAsync("revit_run_query_preset", args, cancellationToken);
         return FormatResult(result);
@@ -558,7 +590,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
      Description("Selects elements in the active Revit UI based on category and parameter filters.")]
     public async Task<string> SelectElementsByQuery(
         [Description("Category name")] string? category = null,
-        [Description("JSON array of parameter filters")] string? filters = null,
+        [Description(FiltersDescription)] string? filters = null,
         [Description("Replace current selection")] bool replaceSelection = true,
         [Description("Zoom to selected elements")] bool zoomToSelection = false,
         [Description("Max elements to select (default 500)")] int limit = 500,
@@ -580,10 +612,13 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_set_parameter"),
-     Description("Sets a parameter value on elements. Requires approval. Supports String, Integer, Double, and ElementId storage types. ElementId values can be provided as a numeric element ID or exact element/type name. Runs inside a Revit Transaction.")]
+     Description("Sets a parameter value on elements. Requires approval. Supports String, Integer, Double, and ElementId storage types. ElementId values can be provided as a numeric element ID or exact element/type name. Runs inside a Revit Transaction. The parameter is resolved by exact name first (a user/shared/family parameter before a built-in one with the same name); a partial name is used only when exactly one parameter matches, and ambiguous names are reported per element with candidates instead of written. The result lists each change with the parameter actually written and its old and new value.")]
     public async Task<string> SetParameter(
-        [Description("Parameter name to set (partial match supported)")] string parameterName,
+        [Description("Parameter name to set. Exact name preferred; a partial name is accepted only when it matches a single parameter.")] string parameterName,
         [Description("Value to set")] string value,
+        [Description("If true, only an exact (case-insensitive) name match is written, never a partial one. Recommended for short names such as 'Offset'.")] bool exactMatch = false,
+        [Description("Optional BuiltInParameter enum name (e.g. INSTANCE_ELEVATION_PARAM). When set it selects the parameter instead of parameterName.")] string? builtInParameter = null,
+        [Description("Optional shared parameter GUID. When set it selects the parameter instead of parameterName.")] string? parameterGuid = null,
         [Description("Parameter scope: Instance or Type")] string scope = "Instance",
         [Description("If true, modify current selection")] bool useSelection = false,
         [Description("Explicit element IDs")] long[]? elementIds = null,
@@ -599,6 +634,9 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         {
             ["parameterName"] = parameterName,
             ["value"] = value,
+            ["exactMatch"] = exactMatch,
+            ["builtInParameter"] = builtInParameter ?? string.Empty,
+            ["parameterGuid"] = parameterGuid ?? string.Empty,
             ["scope"] = scope,
             ["useSelection"] = useSelection,
             ["elementIds"] = elementIds ?? [],
@@ -613,7 +651,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     [McpServerTool(Name = "revit_find_elements_by_parameter", ReadOnly = true),
      Description("Finds model elements matching parameter filters. Supports category/selection/IDs, paging, safety caps, summaryOnly, tags, and compact responses. Requires category, filters, elementIds, useSelection, or summaryOnly=true; call revit_count_elements first when model categories are unknown.")]
     public async Task<string> FindElementsByParameter(
-        [Description("JSON array of filter objects: [{parameterName, operator, value, matchMode, scope}]")] string? filters = null,
+        [Description(FiltersDescription)] string? filters = null,
         [Description("Optional category name to restrict search (e.g. 'Fire Alarm Devices')")] string? category = null,
         [Description("If true, scan current Revit selection instead of category/elementIds.")] bool useSelection = false,
         [Description("Explicit element IDs to query.")] long[]? elementIds = null,
@@ -663,7 +701,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("If true, use current selection.")] bool useSelection = false,
         [Description("List of element IDs to retrieve.")] long[]? elementIds = null,
         [Description("Category name filter (e.g. 'Fire Alarm Devices').")] string? category = null,
-        [Description("JSON array of parameter filters: [{parameterName, operator, value, matchMode, scope}]")] string? filters = null,
+        [Description(FiltersDescription)] string? filters = null,
         [Description("Parameter names to return (partial match). Leave empty for all.")] string[]? parameterNames = null,
         [Description("Include instance parameters. Default true.")] bool includeInstanceParameters = true,
         [Description("Include type parameters. Heavy/repetitive per element; opt-in. Default false.")] bool includeTypeParameters = false,
@@ -709,7 +747,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     public async Task<string> GroupElements(
         [Description("JSON array of groupBy keys: [{type, parameterName, scope}]")] string groupBy,
         [Description("Optional category name to restrict search")] string? category = null,
-        [Description("JSON array of parameter filters")] string? filters = null,
+        [Description(FiltersDescription)] string? filters = null,
         [Description("If true, include element IDs in each group")] bool includeElements = false,
         [Description("Max elements to scan (default 5000)")] int limit = 5000,
         [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
@@ -738,7 +776,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
      Description("Queries model elements and exports results to an .xlsx file. Returns the file path. Accepts: category, filters (JSON array), groupBy (JSON array), parameters (string[] of param names to include), outputMode (Elements/Groups/Both), fileName, useSelection, elementIds, limit.")]
     public async Task<string> ExportQueryToExcel(
         [Description("Optional category name")] string? category = null,
-        [Description("JSON array of parameter filters")] string? filters = null,
+        [Description(FiltersDescription)] string? filters = null,
         [Description("JSON array of groupBy keys")] string? groupBy = null,
         [Description("Parameter names to include as columns")] string[]? parameters = null,
         [Description("What to export: Elements, Groups, or Both")] string outputMode = "Both",
@@ -2011,8 +2049,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("sameFamily (default), sameFamilyAndType, sameCategory, selection, or explicitElementIds.")] string scope = "sameFamily",
         [Description("Targets for scope=explicitElementIds.")] long[]? explicitElementIds = null,
         [Description("SmartTagCenter (default), LocationPoint, or ViewBoundingBoxCenter.")] string? anchorMode = null,
-        [Description("Include the source host as a target. Default false.")] bool includeSourceHost = false,
-        [Description("Skip targets with the same tag type in the source view. Default true.")] bool skipAlreadyTagged = true,
+        [Description("Include the source host as a target in the example tag's own view. Default false (with a separate targetViewId the source host is an ordinary target).")] bool includeSourceHost = false,
+        [Description("Skip targets that already have the same tag type in the target view (the example tag's view unless targetViewId). Default true.")] bool skipAlreadyTagged = true,
         [Description("Include every type in the source family for sameFamily. Default true.")] bool includeAllHostTypes = true,
         [Description("Optional learned local-right offset override in mm.")] double? localRightOffsetMm = null,
         [Description("Optional learned local-front offset override in mm.")] double? localFrontOffsetMm = null,
@@ -2022,6 +2060,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Optional leader on/off override.")] bool? hasLeader = null,
         [Description("1-based target-preview page.")] int page = 1,
         [Description("Target-preview page size, 1-500.")] int pageSize = 100,
+        [Description("Optional view ID to preview targets in instead of the example tag's view (e.g. another floor plan). Must be a non-template plan, ceiling plan, section, elevation, detail or locked 3D view. 0 = the example tag's view.")] long targetViewId = 0,
         CancellationToken cancellationToken = default)
     {
         var args = BuildSelectedTagTemplateArgs(
@@ -2030,6 +2069,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             includeAllHostTypes, false, 1, 0, localRightOffsetMm,
             localFrontOffsetMm, rotationMode, relativeRotationDegrees,
             orientation, hasLeader, null, page, pageSize);
+        if (targetViewId != 0)
+            args["targetViewId"] = targetViewId;
         var result = await pipeClient.SendAsync(
             "revit_analyze_selected_tag_template",
             args,
@@ -2038,14 +2079,14 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_apply_selected_tag_template"),
-     Description("Tags matching FamilyInstances like one selected example IndependentTag. Re-analyzes the live source, validates optional analyzedTemplateJson, and reconstructs head/leader positions from host-local right/front offsets so rotated, flipped, and mirrored targets preserve the visual rule. Uses the exact example tag type. Existing matching tags are skipped by default. Requires approval; successful placements are one Revit Undo operation.")]
+     Description("Tags matching FamilyInstances like one selected example IndependentTag. Re-analyzes the live source, validates optional analyzedTemplateJson, and reconstructs head/leader positions from host-local right/front offsets so rotated, flipped, and mirrored targets preserve the visual rule. Uses the exact example tag type. Optional targetViewId applies the learned rule in another view (e.g. another floor) instead of the example tag's view. Existing matching tags are skipped by default; invisible targets report a specific reason when known (outside view range/crop, hidden category, ...). Requires approval; successful placements are one Revit Undo operation.")]
     public async Task<string> ApplySelectedTagTemplate(
         [Description("Optional explicit source tag ID; normally leave 0 and keep the analyzed example tag selected.")] long sourceTagId = 0,
         [Description("sameFamily (default), sameFamilyAndType, sameCategory, selection, or explicitElementIds.")] string scope = "sameFamily",
         [Description("Targets for scope=explicitElementIds.")] long[]? explicitElementIds = null,
         [Description("SmartTagCenter, LocationPoint, or ViewBoundingBoxCenter. Omit to use the analyzed/default anchor.")] string? anchorMode = null,
-        [Description("Include the source host as a target. Default false.")] bool includeSourceHost = false,
-        [Description("Skip targets with the same tag type in the source view. Default true.")] bool skipAlreadyTagged = true,
+        [Description("Include the source host as a target in the example tag's own view. Default false (with a separate targetViewId the source host is an ordinary target).")] bool includeSourceHost = false,
+        [Description("Skip targets that already have the same tag type in the target view (the example tag's view unless targetViewId). Default true.")] bool skipAlreadyTagged = true,
         [Description("Replacement/deletion is intentionally unsupported; must remain false.")] bool replaceExistingTags = false,
         [Description("Include every type in the source family for sameFamily. Default true.")] bool includeAllHostTypes = true,
         [Description("Enable collision avoidance after reproducing the learned rule. Default false.")] bool enableCollisionDetection = false,
@@ -2058,6 +2099,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Optional Horizontal or Vertical orientation override.")] string? orientation = null,
         [Description("Optional leader on/off override.")] bool? hasLeader = null,
         [Description("Optional JSON object copied from the analysis response (source + inferredRule). Identity fields are revalidated before writing.")] string? analyzedTemplateJson = null,
+        [Description("Optional view ID to place the tags in instead of the example tag's view (e.g. another floor plan); the learned tag type, offsets, orientation, rotation and leader are reapplied there and targets/visibility are resolved in that view. Must be a non-template plan, ceiling plan, section, elevation, detail or locked 3D view. 0 = the example tag's view.")] long targetViewId = 0,
         CancellationToken cancellationToken = default)
     {
         if (replaceExistingTags)
@@ -2077,6 +2119,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             minimumOffsetMm, localRightOffsetMm, localFrontOffsetMm,
             rotationMode, relativeRotationDegrees, orientation, hasLeader,
             analyzedTemplate, 1, 100);
+        if (targetViewId != 0)
+            args["targetViewId"] = targetViewId;
         var result = await pipeClient.SendAsync(
             "revit_apply_selected_tag_template",
             args,
@@ -2355,6 +2399,87 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         };
         var result = await pipeClient.SendAsync("revit_create_text_notes", args, cancellationToken);
         return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_preview_set_text_notes", ReadOnly = true),
+     Description("Previews editing the content of existing text notes in place, without changing Revit. Same arguments as revit_set_text_notes. Returns old text → new text per note with its view id/name, plus changed/unchanged/skipped counts.")]
+    public async Task<string> PreviewSetTextNotes(
+        [Description("set | findReplace | append | prepend | map. Omit to change only the width (widthMm/autoWidth).")] string? mode = null,
+        [Description("Text note element IDs to edit. Takes precedence over useSelection and viewId.")] long[]? elementIds = null,
+        [Description("Edit the text notes in the current Revit selection.")] bool useSelection = false,
+        [Description("Scope when no elementIds/useSelection: -1 or omit = active view, 0 = all views, >0 = that view.")] long viewId = -1,
+        [Description("Only edit notes whose current text contains this (case-insensitive).")] string? textFilter = null,
+        [Description("mode=set: the new text. Use \\n for line breaks.")] string? text = null,
+        [Description("mode=findReplace: text to find.")] string? find = null,
+        [Description("mode=findReplace: replacement (may be empty).")] string? replace = null,
+        [Description("mode=findReplace and map: case-sensitive match. Default false.")] bool matchCase = false,
+        [Description("mode=findReplace: only whole-word matches. Default false.")] bool wholeWord = false,
+        [Description("mode=append: text added at the end, e.g. ' // Data network connections'.")] string? suffix = null,
+        [Description("mode=prepend: text added at the start.")] string? prefix = null,
+        [Description("mode=map: JSON object {\"old text\": \"new text\"}. Matched against the whole note text, trimmed; notes not in the map stay unchanged.")] string? map = null,
+        [Description("Set the note width on paper in mm (applied to notes whose text changes, or to all targets when mode is omitted).")] double widthMm = 0,
+        [Description("Widen notes so the longest line fits (estimate from text size and width factor; never narrows).")] bool autoWidth = false,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryBuildSetTextNotesArgs(mode, elementIds, useSelection, viewId, textFilter, text, find, replace, matchCase, wholeWord,
+                suffix, prefix, map, widthMm, autoWidth, out var args, out var error))
+            return FormatBridgeError(error!);
+        var result = await pipeClient.SendAsync("revit_preview_set_text_notes", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_set_text_notes"),
+     Description("Edits the content of existing text notes in place; element ids are kept. Targets: elementIds, useSelection, or viewId (-1 active, 0 all views) narrowed by textFilter. Modes: set (text), findReplace (find/replace, matchCase, wholeWord), append (suffix), prepend (prefix), map (JSON old text → new text, whole trimmed text). Optional widthMm or autoWidth. Edits are spliced into the note's formatted text, so bold/italic/underline runs outside the edited range are kept (inserted text takes the neighbouring formatting); if Revit refuses that, the plain text is replaced and formattingPreserved=false. Notes borrowed by another user or out of date with central are skipped. One transaction; requires approval; reversible via Revit Undo. Run revit_preview_set_text_notes first.")]
+    public async Task<string> SetTextNotes(
+        [Description("set | findReplace | append | prepend | map. Omit to change only the width (widthMm/autoWidth).")] string? mode = null,
+        [Description("Text note element IDs to edit. Takes precedence over useSelection and viewId.")] long[]? elementIds = null,
+        [Description("Edit the text notes in the current Revit selection.")] bool useSelection = false,
+        [Description("Scope when no elementIds/useSelection: -1 or omit = active view, 0 = all views, >0 = that view.")] long viewId = -1,
+        [Description("Only edit notes whose current text contains this (case-insensitive).")] string? textFilter = null,
+        [Description("mode=set: the new text. Use \\n for line breaks.")] string? text = null,
+        [Description("mode=findReplace: text to find.")] string? find = null,
+        [Description("mode=findReplace: replacement (may be empty).")] string? replace = null,
+        [Description("mode=findReplace and map: case-sensitive match. Default false.")] bool matchCase = false,
+        [Description("mode=findReplace: only whole-word matches. Default false.")] bool wholeWord = false,
+        [Description("mode=append: text added at the end, e.g. ' // Data network connections'.")] string? suffix = null,
+        [Description("mode=prepend: text added at the start.")] string? prefix = null,
+        [Description("mode=map: JSON object {\"old text\": \"new text\"}. Matched against the whole note text, trimmed; notes not in the map stay unchanged.")] string? map = null,
+        [Description("Set the note width on paper in mm (applied to notes whose text changes, or to all targets when mode is omitted).")] double widthMm = 0,
+        [Description("Widen notes so the longest line fits (estimate from text size and width factor; never narrows).")] bool autoWidth = false,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryBuildSetTextNotesArgs(mode, elementIds, useSelection, viewId, textFilter, text, find, replace, matchCase, wholeWord,
+                suffix, prefix, map, widthMm, autoWidth, out var args, out var error))
+            return FormatBridgeError(error!);
+        var result = await pipeClient.SendAsync("revit_set_text_notes", args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    private static bool TryBuildSetTextNotesArgs(
+        string? mode, long[]? elementIds, bool useSelection, long viewId, string? textFilter, string? text,
+        string? find, string? replace, bool matchCase, bool wholeWord, string? suffix, string? prefix,
+        string? map, double widthMm, bool autoWidth, out Dictionary<string, object?> args, out string? error)
+    {
+        args = new Dictionary<string, object?>();
+        if (!TryParseJsonObject(map, "map", out var parsedMap, out error))
+            return false;
+
+        args["mode"] = mode ?? string.Empty;
+        args["elementIds"] = elementIds ?? [];
+        args["useSelection"] = useSelection;
+        args["viewId"] = viewId;
+        args["textFilter"] = textFilter ?? string.Empty;
+        args["text"] = text ?? string.Empty;
+        args["find"] = find ?? string.Empty;
+        args["replace"] = replace ?? string.Empty;
+        args["matchCase"] = matchCase;
+        args["wholeWord"] = wholeWord;
+        args["suffix"] = suffix ?? string.Empty;
+        args["prefix"] = prefix ?? string.Empty;
+        args["map"] = parsedMap;
+        args["widthMm"] = widthMm;
+        args["autoWidth"] = autoWidth;
+        return true;
     }
 
     [McpServerTool(Name = "revit_create_lines"),
@@ -3171,7 +3296,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("If true, check current Revit selection")] bool useSelection = false,
         [Description("Explicit element IDs to check")] long[]? elementIds = null,
         [Description("Category name for query")] string? category = null,
-        [Description("JSON array of parameter filters")] string? filters = null,
+        [Description(FiltersDescription)] string? filters = null,
         [Description("Target circuit ID to validate membership against (optional)")] long targetCircuitId = 0,
         [Description("Max elements (default 500)")] int limit = 500,
         CancellationToken cancellationToken = default)
@@ -3198,7 +3323,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("If true, use current Revit selection")] bool useSelection = false,
         [Description("Explicit element IDs to add")] long[]? elementIds = null,
         [Description("Category name for query")] string? category = null,
-        [Description("JSON array of parameter filters")] string? filters = null,
+        [Description(FiltersDescription)] string? filters = null,
         [Description("Electrical system type (default PowerCircuit)")] string systemType = "PowerCircuit",
         [Description("Panel element ID (preferred over panelName)")] long panelElementId = 0,
         [Description("Panel name (fallback if panelElementId not provided)")] string? panelName = null,
@@ -3312,7 +3437,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("If true, use current Revit selection")] bool useSelection = false,
         [Description("Explicit element IDs to add")] long[]? elementIds = null,
         [Description("Category name for query")] string? category = null,
-        [Description("JSON array of parameter filters")] string? filters = null,
+        [Description(FiltersDescription)] string? filters = null,
         [Description("Max elements (default 500)")] int limit = 500,
         CancellationToken cancellationToken = default)
     {
@@ -3339,7 +3464,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("If true, use current Revit selection")] bool useSelection = false,
         [Description("Explicit element IDs to move")] long[]? elementIds = null,
         [Description("Category name for query")] string? category = null,
-        [Description("JSON array of parameter filters")] string? filters = null,
+        [Description(FiltersDescription)] string? filters = null,
         [Description("Max elements (default 500)")] int limit = 500,
         CancellationToken cancellationToken = default)
     {
@@ -3448,7 +3573,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     public async Task<string> FindUncircuitedElements(
         [Description("Category names to scan (empty = all default electrical categories)")] string[]? categories = null,
         [Description("If true, check current Revit selection instead of categories")] bool useSelection = false,
-        [Description("JSON array of parameter filters")] string? filters = null,
+        [Description(FiltersDescription)] string? filters = null,
         [Description("Parameter names to include in each result (partial match supported)")] string[]? returnParameters = null,
         [Description("Max uncircuited elements to return (default 1000)")] int limit = 1000,
         CancellationToken cancellationToken = default)
@@ -3518,7 +3643,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
      Description("Finds electrical circuits that contain elements matching category and parameter filters. Example uses: find circuits in room 201, find circuits containing devices of type X, find circuits where ELENEA_Osasüsteem = ATS. Returns distinct circuits with matched element IDs.")]
     public async Task<string> FindCircuitsByElementParameter(
         [Description("Category name for element search (e.g. 'Electrical Fixtures', 'Fire Alarm Devices')")] string? elementCategory = null,
-        [Description("JSON array of parameter filters on the elements")] string? filters = null,
+        [Description(FiltersDescription)] string? filters = null,
         [Description("Include matched element IDs in each circuit result")] bool includeElements = true,
         [Description("Max candidate elements to scan (default 500)")] int limit = 500,
         CancellationToken cancellationToken = default)
@@ -3625,7 +3750,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
      Description("Selects elements not assigned to any electrical circuit in the Revit UI. Requires approval.")]
     public async Task<string> SelectUncircuitedElements(
         [Description("Categories to search (default: all electrical categories)")] string[]? categories = null,
-        [Description("Parameter filters as JSON array")] string? filters = null,
+        [Description(FiltersDescription)] string? filters = null,
         [Description("Replace current selection (default true)")] bool replaceSelection = true,
         [Description("Zoom to selection after selecting (default false)")] bool zoomToSelection = false,
         [Description("Max elements to select (default 500)")] int limit = 500,
@@ -3667,7 +3792,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
      Description("Exports elements not assigned to any electrical circuit to a formatted .xlsx file. Returns the file path.")]
     public async Task<string> ExportUncircuitedElementsToExcel(
         [Description("Categories to search (default: all electrical categories)")] string[]? categories = null,
-        [Description("Parameter filters as JSON array")] string? filters = null,
+        [Description(FiltersDescription)] string? filters = null,
         [Description("Additional parameters to include as columns")] string[]? returnParameters = null,
         [Description("Output file name (default: Uncircuited_Elements.xlsx)")] string fileName = "Uncircuited_Elements.xlsx",
         [Description("Max elements to export (default 2000)")] int limit = 2000,

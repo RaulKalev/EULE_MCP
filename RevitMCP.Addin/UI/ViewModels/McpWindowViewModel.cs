@@ -60,8 +60,13 @@ public class McpWindowViewModel : BaseViewModel
                 : "PENDING";
         };
 
+        RecentApprovalOutcomes.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRecentApprovalOutcomes));
+
         if (_approvalService != null)
+        {
             _approvalService.PendingChanged += OnPendingChanged;
+            _approvalService.OutcomeRecorded += _ => RunOnUi(RefreshRecentOutcomes);
+        }
 
         StartCommand = new RelayCommand(_ => _connector.Start(), _ => !_isRunning);
         StopCommand = new RelayCommand(_ => _connector.Stop(), _ => _isRunning);
@@ -95,6 +100,11 @@ public class McpWindowViewModel : BaseViewModel
     // ── Pending tab ──────────────────────────────────────────────────────────
     public ObservableCollection<PendingApprovalItem> PendingApprovals { get; } = [];
     public bool HasNoPendingApprovals => PendingApprovals.Count == 0;
+
+    /// <summary>Approval requests already decided (running, done, failed, rejected), newest first.</summary>
+    public ObservableCollection<ApprovalOutcomeItem> RecentApprovalOutcomes { get; } = [];
+    public bool HasRecentApprovalOutcomes => RecentApprovalOutcomes.Count > 0;
+    private const int RecentOutcomeCount = 10;
     public string PendingTabHeader { get => _pendingTabHeader; private set => SetProperty(ref _pendingTabHeader, value); }
     public bool IsDirectEditEnabled { get => _isDirectEditEnabled; private set => SetProperty(ref _isDirectEditEnabled, value); }
     public int SelectedTabIndex { get => _selectedTabIndex; set => SetProperty(ref _selectedTabIndex, value); }
@@ -186,8 +196,43 @@ public class McpWindowViewModel : BaseViewModel
             if (PendingApprovals.Count > previousCount)
                 SelectedTabIndex = 1;
 
+            RefreshRecentOutcomes();
             CommandManager.InvalidateRequerySuggested();
         });
+    }
+
+    /// <summary>Rebuilds "Recent decisions" from the approval history. Must run on the UI thread.</summary>
+    private void RefreshRecentOutcomes()
+    {
+        RecentApprovalOutcomes.Clear();
+        if (_approvalService == null) return;
+
+        // Over-fetch: pending entries are shown above and skipped here.
+        foreach (var o in _approvalService.GetRecentOutcomes(RecentOutcomeCount * 3)
+                     .Where(o => o.State != ApprovalOutcome.Pending)
+                     .Take(RecentOutcomeCount))
+        {
+            var failed = o.State == ApprovalOutcome.Failed;
+            RecentApprovalOutcomes.Add(new ApprovalOutcomeItem
+            {
+                Time = (o.CompletedAt ?? o.DecidedAt ?? o.CreatedAt).ToString("HH:mm:ss"),
+                Tool = o.ToolName,
+                Summary = o.Summary,
+                StateLabel = o.State switch
+                {
+                    ApprovalOutcome.Running => "RUNNING",
+                    ApprovalOutcome.Succeeded => "DONE",
+                    ApprovalOutcome.Rejected => "REJECTED",
+                    _ => "FAILED"
+                },
+                // Successful results are in the activity log; show the message only where it explains something.
+                Message = o.State == ApprovalOutcome.Succeeded || o.State == ApprovalOutcome.Rejected
+                    ? string.Empty
+                    : o.Result?.Message ?? string.Empty,
+                IsSucceeded = o.State == ApprovalOutcome.Succeeded,
+                IsFailed = failed
+            });
+        }
     }
 
     private void ApproveItem(string? approvalId)

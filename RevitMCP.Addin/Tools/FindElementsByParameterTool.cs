@@ -11,7 +11,7 @@ namespace RevitMCP.Addin.Tools;
 public class FindElementsByParameterTool : IRevitMcpTool
 {
     public string Name => "revit_find_elements_by_parameter";
-    public string Description => "Finds model elements matching one or more parameter filters. Supports instance/type parameters, partial name matching, and value operators (equals, contains, startsWith, isEmpty, greaterThan, etc.). Requires a category, filters, elementIds, useSelection, or summaryOnly=true — call revit_count_elements first if you don't know the model's categories yet.";
+    public string Description => "Finds model elements matching one or more parameter filters. Supports instance/type parameters, partial name matching, and value operators (equals, contains, startsWith, isEmpty, greaterThan, etc.). Filter by type/family name with the pseudo-parameters Type, Type Name, Family, Family Name, Family and Type. Requires a category, filters, elementIds, useSelection, or summaryOnly=true — call revit_count_elements first if you don't know the model's categories yet.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Parameters;
 

@@ -35,7 +35,8 @@ public static class BridgeToolGroups
         (Core, new[]
         {
             "revit_get_connection_status", "revit_list_instances", "revit_select_instance", "revit_get_selected_elements",
-            "revit_inspect_selected_elements", "revit_get_elements_info", "revit_get_element_parameters", "revit_count_elements"
+            "revit_inspect_selected_elements", "revit_get_elements_info", "revit_get_element_parameters", "revit_count_elements",
+            "revit_get_approval_status"
         }),
         (Discovery, new[] { "revit_tools_search", "revit_tools_describe", "revit_tools_call", "revit_tools_load" }),
         ("devices", new[]
@@ -62,7 +63,7 @@ public static class BridgeToolGroups
             "revit_check_parameter_completeness", "revit_list_parameter_qa_rule_sets", "revit_run_parameter_qa_rule_set",
             "revit_export_query_to_excel", "revit_export_list_to_excel"
         }),
-        ("tags", new[] { "revit_create_text_notes", "revit_get_text_notes", "revit_annotate_detail_lines", "revit_preview_align_in_view", "revit_align_in_view" }),
+        ("tags", new[] { "revit_create_text_notes", "revit_get_text_notes", "revit_preview_set_text_notes", "revit_set_text_notes", "revit_annotate_detail_lines", "revit_preview_align_in_view", "revit_align_in_view" }),
         ("ifc", new[] { "revit_query_linked_elements", "revit_select_linked_elements" }),
         ("cad", new[] { "revit_create_panel_schematic_symbol_from_dwg" }),
         ("coordination", new[] { "revit_export_issues", "revit_merge_issue_reports" }));

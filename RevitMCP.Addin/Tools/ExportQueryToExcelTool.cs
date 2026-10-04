@@ -51,6 +51,8 @@ public class ExportQueryToExcelTool : IRevitMcpTool
             ReturnParameters = paramCols,
             IncludeInstanceParameters = true,
             IncludeTypeParameters = true,
+            // Export every match up to limit, not just the first result page.
+            CollectAll = true,
             Limit = ToolArguments.GetInt(request.Arguments, "limit", 5000)
         };
 

@@ -72,8 +72,8 @@ public class SetViewParametersBulkTool : IRevitMcpTool
             {
                 try
                 {
-                    var p = ParameterFinder.Find(v, pName);
-                    if (p == null) { warnings.Add($"View '{v.Name}': param '{pName}' not found."); continue; }
+                    var p = ParameterFinder.Find(v, pName, out var problem);
+                    if (p == null) { warnings.Add($"View '{v.Name}': {problem}"); continue; }
                     if (p.IsReadOnly) { warnings.Add($"View '{v.Name}': param '{pName}' is read-only."); continue; }
                     ViewParameterService.SetValue(p, pVal?.ToString() ?? "");
                     setCount++;

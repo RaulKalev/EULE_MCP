@@ -26,6 +26,11 @@ public class ElementQueryOptions
     // When true, attach the annotation tags referencing each returned element
     public bool IncludeTags { get; set; } = false;
 
+    // Aggregation mode (grouping/counting): return every matched element instead of one
+    // page — up to Limit when positive, always bounded by QueryLimits.MaxScanElements.
+    // PageSize/Page are ignored.
+    public bool CollectAll { get; set; } = false;
+
     // Opt-in identity/value projection; the full DTO remains the default contract.
     public bool CompactResponse { get; set; } = false;
 }

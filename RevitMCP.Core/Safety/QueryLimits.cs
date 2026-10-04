@@ -42,6 +42,12 @@ public sealed class QueryLimits
     /// <summary>Per-request execution timeout in seconds.</summary>
     public int TimeoutSeconds { get; set; } = 30;
 
+    /// <summary>
+    /// Seconds a request may wait for the Revit API thread to pick it up before it is answered with
+    /// status <c>revit_busy</c> and a reason (modal dialog, running tool, active command, ...).
+    /// </summary>
+    public int BusyTimeoutSeconds { get; set; } = 15;
+
     /// <summary>Maximum requests waiting for the Revit API thread.</summary>
     public int MaxQueuedRequests { get; set; } = 64;
 

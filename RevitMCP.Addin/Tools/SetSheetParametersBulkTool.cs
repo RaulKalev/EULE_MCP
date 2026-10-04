@@ -58,8 +58,8 @@ public class SetSheetParametersBulkTool : IRevitMcpTool
             {
                 try
                 {
-                    var p = ParameterFinder.Find(sheet, pName);
-                    if (p == null) { warnings.Add($"Sheet '{sheet.SheetNumber}': param '{pName}' not found."); continue; }
+                    var p = ParameterFinder.Find(sheet, pName, out var problem);
+                    if (p == null) { warnings.Add($"Sheet '{sheet.SheetNumber}': {problem}"); continue; }
                     if (p.IsReadOnly) { warnings.Add($"Sheet '{sheet.SheetNumber}': param '{pName}' is read-only."); continue; }
                     SetParam(p, pVal?.ToString() ?? "");
                     setCount++;

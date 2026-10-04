@@ -6,6 +6,7 @@ using RevitMCP.Addin.Presets;
 using RevitMCP.Addin.Query;
 using RevitMCP.Addin.Services;
 using RevitMCP.Core.Models;
+using RevitMCP.Core.Safety;
 
 namespace RevitMCP.Addin.Tools;
 
@@ -54,6 +55,8 @@ public class RunQueryPresetTool : IRevitMcpTool
             ReturnParameters = preset.Parameters,
             IncludeInstanceParameters = true,
             IncludeTypeParameters = true,
+            // Group and export over every match up to limit; the JSON element list is paged below.
+            CollectAll = true,
             Limit = limit
         };
 
@@ -119,21 +122,32 @@ public class RunQueryPresetTool : IRevitMcpTool
             });
         }
 
-        // Return JSON results
+        // Return JSON results. Groups cover every collected element; the element list is one page.
         sw.Stop();
         var warnings = queryResult.Warnings.Concat(groupingResult?.Warnings ?? []).ToList();
+        var pageSize = QueryGuard.ResolveEffectiveLimits(
+            ToolArguments.GetInt(request.Arguments, "pageSize", -1), limit, 0, 0).effectivePageSize;
+        var page = Math.Max(0, ToolArguments.GetInt(request.Arguments, "page", 0));
+        var pageElements = queryResult.Elements.Skip(page * pageSize).Take(pageSize).ToList();
+        var hasMore = queryResult.Elements.Count > (page + 1) * pageSize;
+        if (hasMore)
+            warnings.Add($"Element list paged: showing {pageElements.Count} of {queryResult.Elements.Count} (page {page}). Groups cover all of them; use 'page' / 'pageSize' or exportToExcel for the rest.");
 
         return Task.FromResult(new McpToolResult
         {
             RequestId = request.RequestId,
             Success = true,
-            Message = $"Preset '{preset.Name}' returned {queryResult.Elements.Count} elements.",
+            Message = $"Preset '{preset.Name}' matched {queryResult.TotalMatched} elements; returned {pageElements.Count}.",
             Data = new
             {
                 presetName = preset.Name,
                 totalElements = queryResult.TotalMatched,
-                returnedElements = queryResult.Elements.Count,
-                elements = queryResult.Elements,
+                collectedElements = queryResult.Elements.Count,
+                returnedElements = pageElements.Count,
+                page,
+                pageSize,
+                hasMore,
+                elements = pageElements,
                 groupRows = groupingResult?.TotalGroups ?? 0,
                 groups = groupingResult?.GroupsFlat
             },
