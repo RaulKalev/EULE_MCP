@@ -580,10 +580,13 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_set_parameter"),
-     Description("Sets a parameter value on elements. Requires approval. Supports String, Integer, Double, and ElementId storage types. ElementId values can be provided as a numeric element ID or exact element/type name. Runs inside a Revit Transaction.")]
+     Description("Sets a parameter value on elements. Requires approval. Supports String, Integer, Double, and ElementId storage types. ElementId values can be provided as a numeric element ID or exact element/type name. Runs inside a Revit Transaction. The parameter is resolved by exact name first (a user/shared/family parameter before a built-in one with the same name); a partial name is used only when exactly one parameter matches, and ambiguous names are reported per element with candidates instead of written. The result lists each change with the parameter actually written and its old and new value.")]
     public async Task<string> SetParameter(
-        [Description("Parameter name to set (partial match supported)")] string parameterName,
+        [Description("Parameter name to set. Exact name preferred; a partial name is accepted only when it matches a single parameter.")] string parameterName,
         [Description("Value to set")] string value,
+        [Description("If true, only an exact (case-insensitive) name match is written, never a partial one. Recommended for short names such as 'Offset'.")] bool exactMatch = false,
+        [Description("Optional BuiltInParameter enum name (e.g. INSTANCE_ELEVATION_PARAM). When set it selects the parameter instead of parameterName.")] string? builtInParameter = null,
+        [Description("Optional shared parameter GUID. When set it selects the parameter instead of parameterName.")] string? parameterGuid = null,
         [Description("Parameter scope: Instance or Type")] string scope = "Instance",
         [Description("If true, modify current selection")] bool useSelection = false,
         [Description("Explicit element IDs")] long[]? elementIds = null,
@@ -599,6 +602,9 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         {
             ["parameterName"] = parameterName,
             ["value"] = value,
+            ["exactMatch"] = exactMatch,
+            ["builtInParameter"] = builtInParameter ?? string.Empty,
+            ["parameterGuid"] = parameterGuid ?? string.Empty,
             ["scope"] = scope,
             ["useSelection"] = useSelection,
             ["elementIds"] = elementIds ?? [],

@@ -123,8 +123,15 @@ public static class ApprovalSummaryBuilder
             : !string.IsNullOrWhiteSpace(category) ? $"category '{category}'"
             : "specified elements";
 
+        var builtIn = ToolArguments.GetString(request.Arguments, "builtInParameter");
+        var guid = ToolArguments.GetString(request.Arguments, "parameterGuid");
+        var parameter = !string.IsNullOrWhiteSpace(guid) ? $"GUID {guid}"
+            : !string.IsNullOrWhiteSpace(builtIn) ? $"built-in {builtIn}"
+            : ToolArguments.GetBool(request.Arguments, "exactMatch") ? $"'{paramName}' (exact)"
+            : $"'{paramName}'";
+
         var displayValue = value.Length > 30 ? value[..27] + "..." : value;
-        return $"Set parameter '{paramName}' to \"{displayValue}\" on {target}. Limit: {limit}";
+        return $"Set parameter {parameter} to \"{displayValue}\" on {target}. Limit: {limit}";
     }
 
     private static string BuildSetCircuitParameter(McpToolRequest request)

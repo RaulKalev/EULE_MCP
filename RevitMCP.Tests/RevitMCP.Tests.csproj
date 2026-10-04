@@ -49,6 +49,7 @@
     <Compile Include="..\RevitMCP.Addin\Query\ElementInfoDto.cs" Link="Query\ElementInfoDto.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\ElementQueryResponseFormatter.cs" Link="Query\ElementQueryResponseFormatter.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\ParameterMatcher.cs" Link="Query\ParameterMatcher.cs" />
+    <Compile Include="..\RevitMCP.Addin\Query\ParameterResolution.cs" Link="Query\ParameterResolution.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\ParameterReadOptions.cs" Link="Query\ParameterReadOptions.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\ParameterValueDto.cs" Link="Query\ParameterValueDto.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\TagInfoDto.cs" Link="Query\TagInfoDto.cs" />
