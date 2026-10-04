@@ -93,7 +93,8 @@ public class SetParameterTool : IRevitMcpTool
                     if (element?.Category == null) continue;
 
                     var allParams = reader.ReadParameters(doc, element, readOpts);
-                    if (PassesFilters(allParams, filtersParsed.Items))
+                    // Shared evaluator: also understands Type / Family names (#88).
+                    if (ParameterFilterEvaluator.Passes(allParams, filtersParsed.Items, ParameterReader.ReadIdentity(doc, element)))
                         filtered.Add(eid);
                 }
                 sourceIds = filtered;
@@ -282,35 +283,6 @@ public class SetParameterTool : IRevitMcpTool
 
         return false;
     }
-
-    private static bool PassesFilters(IReadOnlyList<ParameterValueDto> parameters, List<ParameterFilterDto> filters)
-    {
-        foreach (var filter in filters)
-        {
-            var candidates = parameters.Where(p =>
-                ParameterMatcher.Matches(p.Name, filter.ParameterName, filter.MatchMode)).ToList();
-
-            if (candidates.Count == 0)
-            {
-                if (filter.Operator == "isEmpty") continue;
-                return false;
-            }
-
-            if (!candidates.Any(p => EvaluateOperator(p.Value, filter.Operator, filter.Value)))
-                return false;
-        }
-        return true;
-    }
-
-    private static bool EvaluateOperator(string value, string op, string filterValue) =>
-        op switch
-        {
-            "equals" => string.Equals(value, filterValue, StringComparison.OrdinalIgnoreCase),
-            "contains" => value.Contains(filterValue, StringComparison.OrdinalIgnoreCase),
-            "isEmpty" => string.IsNullOrEmpty(value),
-            "isNotEmpty" => !string.IsNullOrEmpty(value),
-            _ => false
-        };
 
     private static string? NullIfBlank(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
