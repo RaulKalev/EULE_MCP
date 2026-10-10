@@ -61,6 +61,7 @@ public static class ApprovalSummaryBuilder
             "revit_align_elements"              => BuildAlignElements(request),
             "revit_align_in_view"               => BuildAlignInView(request),
             "revit_move_elements"               => BuildMoveElements(request),
+            "revit_copy_elements"               => BuildCopyElements(request),
             "revit_place_from_cad"              => BuildPlaceFromCad(request),
             // Text notes
             "revit_set_text_notes"              => BuildSetTextNotes(request),
@@ -389,6 +390,27 @@ public static class ApprovalSummaryBuilder
         return $"{action}{where}. Elements move in the plane of that view only.";
     }
 
+    private static string BuildCopyElements(McpToolRequest request)
+    {
+        var copy = CopyElementsMath.Parse(request.Arguments, out _);
+        if (copy == null)
+            return "Copy elements (the request could not be read — it will be rejected).";
+
+        var what = copy.UseSelection
+            ? "the current selection"
+            : $"{copy.ElementIds.Count} element{(copy.ElementIds.Count == 1 ? "" : "s")}";
+
+        var by = copy.HasViewDelta
+            ? $"right {copy.DeltaRightMm ?? 0:0.###} mm, up {copy.DeltaUpMm ?? 0:0.###} mm along the view's axes"
+            : $"X {copy.DeltaXMm ?? 0:0.###}, Y {copy.DeltaYMm ?? 0:0.###}, Z {copy.DeltaZMm ?? 0:0.###} mm";
+
+        var where = copy.TargetViewId > 0 ? $" into view {copy.TargetViewId}" : string.Empty;
+
+        return $"Copy {what}{where}, shifted by {by}." +
+               $" {(copy.Atomic ? "Atomic: any refusal undoes the whole copy." : "Non-atomic: element by element, keeping what succeeds.")}" +
+               " The originals are not changed.";
+    }
+
     private static string BuildMoveElements(McpToolRequest request)
     {
         request.Arguments.TryGetValue("moves", out var rawMoves);
@@ -402,10 +424,18 @@ public static class ApprovalSummaryBuilder
 
         // Whether elevations are touched is the thing most worth seeing before approving: a batch
         // that leaves every Z alone is a plan-position correction, and a much smaller commitment.
-        var verticalMoves = moves?.Count(move => move.TargetZMm.HasValue) ?? 0;
-        var elevationDesc = verticalMoves == 0
-            ? " Every elevation is preserved."
-            : $" {verticalMoves} of them also change elevation.";
+        var verticalMoves = moves?.Count(move => move.TargetZMm.HasValue || (move.DeltaZMm ?? 0) != 0) ?? 0;
+        var viewAxisMoves = moves?.Count(move => move.HasViewDelta) ?? 0;
+        var elevationDesc = viewAxisMoves > 0
+            ? $" {viewAxisMoves} of them shift along a view's right/up axes."
+            : verticalMoves == 0
+                ? " Every elevation is preserved."
+                : $" {verticalMoves} of them also change elevation.";
+
+        var displaced = moves?.Count(move => move.HasDelta) ?? 0;
+        var what = displaced == 0
+            ? "to exact model coordinates"
+            : displaced == count ? "by a displacement" : $"({displaced} by a displacement, {count - displaced} to exact coordinates)";
 
         var checkedCount = moves?.Count(move => move.HasExpected) ?? 0;
         var checkDesc = checkedCount > 0
@@ -413,7 +443,7 @@ public static class ApprovalSummaryBuilder
               $"more than {tolerance:0.###} mm."
             : string.Empty;
 
-        return $"Move {count} element{(count == 1 ? "" : "s")} to exact model coordinates." +
+        return $"Move {count} element{(count == 1 ? "" : "s")} {what}." +
                elevationDesc + checkDesc +
                $" {(atomic ? "Atomic: any failure undoes the whole batch." : "Non-atomic: failures are reported per element and the rest still move.")}" +
                $" Pinned elements are {(skipPinned ? "skipped" : "reported as failures")}." +

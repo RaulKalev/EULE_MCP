@@ -22,9 +22,35 @@ public readonly struct PointMm
 
     public PointMm Minus(PointMm other) => new(X - other.X, Y - other.Y, Z - other.Z);
 
+    public PointMm Plus(PointMm other) => new(X + other.X, Y + other.Y, Z + other.Z);
+
+    public PointMm Times(double factor) => new(X * factor, Y * factor, Z * factor);
+
+    public double Dot(PointMm other) => X * other.X + Y * other.Y + Z * other.Z;
+
     public double Length => Math.Sqrt(X * X + Y * Y + Z * Z);
 
     public override string ToString() => $"({X:F2}, {Y:F2}, {Z:F2})";
+}
+
+/// <summary>
+/// The axes of a view expressed in model coordinates, as unit vectors: <see cref="Right"/> and
+/// <see cref="Up"/> span the view plane (what is horizontal and vertical on screen and on paper),
+/// <see cref="Normal"/> points out of the view towards the viewer. In a floor plan Right/Up are
+/// model X/Y; in a section or elevation Up is model Z and Right runs along the cut.
+/// </summary>
+public readonly struct ViewFrame
+{
+    public ViewFrame(PointMm right, PointMm up, PointMm normal)
+    {
+        Right = right;
+        Up = up;
+        Normal = normal;
+    }
+
+    public PointMm Right { get; }
+    public PointMm Up { get; }
+    public PointMm Normal { get; }
 }
 
 /// <summary>
@@ -45,7 +71,23 @@ public sealed class MoveRequest
     public double? ExpectedYMm { get; init; }
     public double? ExpectedZMm { get; init; }
 
+    /// <summary>Translation along the model axes. An omitted axis is zero — a displacement has no "keep".</summary>
+    public double? DeltaXMm { get; init; }
+    public double? DeltaYMm { get; init; }
+    public double? DeltaZMm { get; init; }
+
+    /// <summary>Translation along the view's own axes: right and up as seen in the view.</summary>
+    public double? DeltaRightMm { get; init; }
+    public double? DeltaUpMm { get; init; }
+
     public bool HasTarget => TargetXMm.HasValue || TargetYMm.HasValue || TargetZMm.HasValue;
+
+    public bool HasModelDelta => DeltaXMm.HasValue || DeltaYMm.HasValue || DeltaZMm.HasValue;
+
+    public bool HasViewDelta => DeltaRightMm.HasValue || DeltaUpMm.HasValue;
+
+    /// <summary>True when the entry is a displacement rather than an absolute target.</summary>
+    public bool HasDelta => HasModelDelta || HasViewDelta;
 
     public bool HasExpected => ExpectedXMm.HasValue || ExpectedYMm.HasValue || ExpectedZMm.HasValue;
 }
@@ -71,6 +113,14 @@ public static class MoveStatus
     /// <summary>The element has no LocationPoint — there is no insertion point to move to a coordinate.</summary>
     public const string UnsupportedLocation = "UnsupportedLocation";
 
+    /// <summary>The element is a member of a group; Revit only moves group members inside group edit mode.</summary>
+    public const string InGroup = "InGroup";
+
+    /// <summary>
+    /// The element belongs to a view and the requested move would take it off that view's plane.
+    /// </summary>
+    public const string OutOfViewPlane = "OutOfViewPlane";
+
     public const string Moved = "Moved";
     public const string Failed = "Failed";
 
@@ -79,6 +129,16 @@ public static class MoveStatus
 
     /// <summary>Movable, but never attempted — atomic=true and the batch was rejected up front.</summary>
     public const string NotAttempted = "NotAttempted";
+}
+
+/// <summary>How a move entry says where the element goes.</summary>
+public static class MoveMode
+{
+    /// <summary>targetXmm/Ymm/Zmm: put the insertion point on a coordinate. Needs a LocationPoint.</summary>
+    public const string Absolute = "Absolute";
+
+    /// <summary>deltaXmm/Ymm/Zmm or deltaRightMm/deltaUpMm: shift by a displacement. Works without a LocationPoint.</summary>
+    public const string Translation = "Translation";
 }
 
 /// <summary>
@@ -90,6 +150,33 @@ public sealed class MovePlan
     public long ElementId { get; init; }
     public string ElementName { get; set; } = string.Empty;
     public string CategoryName { get; set; } = string.Empty;
+
+    /// <summary><see cref="MoveMode.Absolute"/> or <see cref="MoveMode.Translation"/>.</summary>
+    public string Mode { get; init; } = MoveMode.Absolute;
+
+    /// <summary>Point, Curve, Other or None — what kind of Location the element has.</summary>
+    public string LocationKind { get; set; } = string.Empty;
+
+    /// <summary>The view that owns the element, when it is view-specific (detail items, detail lines, text).</summary>
+    public long? OwnerViewId { get; set; }
+    public string? OwnerViewName { get; set; }
+
+    /// <summary>The view axes used for the plane check and for deltaRightMm/deltaUpMm, when a view applies.</summary>
+    public ViewFrame? ViewFrame { get; set; }
+    public long? FrameViewId { get; set; }
+    public string? FrameViewName { get; set; }
+
+    /// <summary>The group the element belongs to, when it is a group member.</summary>
+    public long? GroupId { get; set; }
+
+    /// <summary>Insertion point after the move, read back from the model. Point-located elements only.</summary>
+    public PointMm? ResultPointMm { get; set; }
+
+    /// <summary>
+    /// How far the element actually travelled, measured after the move: from the insertion point when
+    /// there is one, otherwise from its bounding box. Differs from the request when Revit constrained it.
+    /// </summary>
+    public PointMm? ActualTranslationMm { get; set; }
 
     /// <summary>Null when the element is missing or has no LocationPoint.</summary>
     public PointMm? CurrentPointMm { get; init; }
@@ -130,13 +217,17 @@ public sealed class MoveSummary
     public List<long> Missing { get; } = new();
     public List<long> Pinned { get; } = new();
     public List<long> Unsupported { get; } = new();
+
+    /// <summary>Group members and moves that would leave the owner view's plane.</summary>
+    public List<long> Constrained { get; } = new();
+
     public List<long> Failed { get; } = new();
     public List<long> RolledBack { get; } = new();
     public List<long> NotAttempted { get; } = new();
 
     /// <summary>Everything that did not end up where it was asked to go.</summary>
     public int ProblemCount =>
-        Stale.Count + Missing.Count + Pinned.Count + Unsupported.Count +
+        Stale.Count + Missing.Count + Pinned.Count + Unsupported.Count + Constrained.Count +
         Failed.Count + RolledBack.Count + NotAttempted.Count;
 }
 
@@ -282,6 +373,117 @@ public static class MoveElementsMath
         return Plan(MoveStatus.Ready, true, false, null);
     }
 
+    /// <summary>
+    /// A move off the view plane smaller than this is rounding, not intent. Revit's own tolerance for
+    /// "in the plane" is far looser than a hundredth of a millimetre.
+    /// </summary>
+    public const double OutOfPlaneToleranceMm = 0.01;
+
+    /// <summary>
+    /// The displacement a delta entry asks for, in model coordinates. deltaXmm/Ymm/Zmm are model axes;
+    /// deltaRightMm/deltaUpMm are the view's axes and need <paramref name="frame"/>. Returns null with
+    /// <paramref name="error"/> set when view axes were asked for and no view defines them.
+    /// </summary>
+    public static PointMm? TranslationFromDelta(MoveRequest request, ViewFrame? frame, out string? error)
+    {
+        error = null;
+        var translation = new PointMm(request.DeltaXMm ?? 0, request.DeltaYMm ?? 0, request.DeltaZMm ?? 0);
+        if (!request.HasViewDelta)
+            return translation;
+
+        if (frame == null)
+        {
+            error = "deltaRightMm/deltaUpMm are measured along a view's axes, and this element is not owned by a view. " +
+                    "Pass viewId to name the view whose right/up directions to use, or use deltaXmm/deltaYmm/deltaZmm.";
+            return null;
+        }
+
+        return translation
+            .Plus(frame.Value.Right.Times(request.DeltaRightMm ?? 0))
+            .Plus(frame.Value.Up.Times(request.DeltaUpMm ?? 0));
+    }
+
+    /// <summary>How far a translation leaves the view plane: its component along the view normal, in mm.</summary>
+    public static double OutOfPlaneMm(PointMm translation, ViewFrame frame) => Math.Abs(translation.Dot(frame.Normal));
+
+    /// <summary>
+    /// Works out what happens to one element moved by a displacement. Unlike <see cref="Build"/> this
+    /// does not need an insertion point: <paramref name="current"/> is null for curves, text and other
+    /// elements without a LocationPoint, and then only the displacement is reported.
+    /// </summary>
+    public static MovePlan BuildTranslation(
+        MoveRequest request,
+        PointMm? current,
+        PointMm translation,
+        bool pinned,
+        bool skipPinned,
+        double positionToleranceMm)
+    {
+        var distance = translation.Length;
+        var deviation = current.HasValue ? ExpectedDeviationMm(current.Value, request) : null;
+
+        MovePlan Plan(string status, bool canMove, bool isFailure, string? reason) => new()
+        {
+            ElementId = request.ElementId,
+            Mode = MoveMode.Translation,
+            CurrentPointMm = current,
+            TargetPointMm = current?.Plus(translation),
+            TranslationMm = translation,
+            DistanceMm = distance,
+            Pinned = pinned,
+            StaleDeviationMm = deviation,
+            CanMove = canMove,
+            IsFailure = isFailure,
+            Status = status,
+            Reason = reason
+        };
+
+        if (request.HasExpected && !current.HasValue)
+        {
+            return Plan(MoveStatus.UnsupportedLocation, false, true,
+                "expectedXmm/Ymm/Zmm compare against the insertion point, and this element has no LocationPoint. " +
+                "Leave the expected coordinates out to move it by the displacement alone.");
+        }
+
+        if (deviation.HasValue && deviation.Value > positionToleranceMm)
+        {
+            return Plan(MoveStatus.Stale, false, true,
+                $"The element is {Round(deviation.Value)} mm from the expected point, which is more than the " +
+                $"{Round(positionToleranceMm)} mm tolerance. Something moved it since the displacement was worked out — " +
+                "re-read the positions and recalculate.");
+        }
+
+        if (pinned)
+        {
+            return skipPinned
+                ? Plan(MoveStatus.Pinned, false, false, "Pinned; skipped because skipPinned=true.")
+                : Plan(MoveStatus.Pinned, false, true,
+                    "Pinned, and skipPinned=false. Unpin it in Revit and run again — this tool never unpins elements.");
+        }
+
+        if (distance < NegligibleMoveMm)
+            return Plan(MoveStatus.AlreadyThere, false, false, "The displacement is zero, so there is nothing to move.");
+
+        return Plan(MoveStatus.Ready, true, false, null);
+    }
+
+    /// <summary>A plan that cannot go ahead for a reason found outside the maths: group membership, the view plane.</summary>
+    public static MovePlan Blocked(MovePlan plan, string status, string reason) => new()
+    {
+        ElementId = plan.ElementId,
+        Mode = plan.Mode,
+        CurrentPointMm = plan.CurrentPointMm,
+        TargetPointMm = plan.TargetPointMm,
+        TranslationMm = plan.TranslationMm,
+        DistanceMm = plan.DistanceMm,
+        Pinned = plan.Pinned,
+        StaleDeviationMm = plan.StaleDeviationMm,
+        CanMove = false,
+        IsFailure = true,
+        Status = status,
+        Reason = reason
+    };
+
     public static MovePlan Missing(long elementId) => new()
     {
         ElementId = elementId,
@@ -322,6 +524,8 @@ public static class MoveElementsMath
                 MoveStatus.Missing => summary.Missing,
                 MoveStatus.Pinned => summary.Pinned,
                 MoveStatus.UnsupportedLocation => summary.Unsupported,
+                MoveStatus.InGroup => summary.Constrained,
+                MoveStatus.OutOfViewPlane => summary.Constrained,
                 MoveStatus.RolledBack => summary.RolledBack,
                 MoveStatus.NotAttempted => summary.NotAttempted,
                 _ => summary.Failed
@@ -346,7 +550,9 @@ public static class MoveElementsMath
         if (array == null)
         {
             error = "Provide 'moves': a JSON array of " +
-                    "{elementId, targetXmm, targetYmm, targetZmm, expectedXmm, expectedYmm, expectedZmm}.";
+                    "{elementId, targetXmm, targetYmm, targetZmm} (absolute) or " +
+                    "{elementId, deltaXmm, deltaYmm, deltaZmm} / {elementId, deltaRightMm, deltaUpMm} (displacement), " +
+                    "each optionally with expectedXmm, expectedYmm, expectedZmm.";
             return null;
         }
 
@@ -400,13 +606,32 @@ public static class MoveElementsMath
                 TargetZMm = NullableDouble(fields, "targetZmm", "targetZ", "z"),
                 ExpectedXMm = NullableDouble(fields, "expectedXmm", "expectedX"),
                 ExpectedYMm = NullableDouble(fields, "expectedYmm", "expectedY"),
-                ExpectedZMm = NullableDouble(fields, "expectedZmm", "expectedZ")
+                ExpectedZMm = NullableDouble(fields, "expectedZmm", "expectedZ"),
+                DeltaXMm = NullableDouble(fields, "deltaXmm", "deltaX", "dx"),
+                DeltaYMm = NullableDouble(fields, "deltaYmm", "deltaY", "dy"),
+                DeltaZMm = NullableDouble(fields, "deltaZmm", "deltaZ", "dz"),
+                DeltaRightMm = NullableDouble(fields, "deltaRightMm", "deltaRight"),
+                DeltaUpMm = NullableDouble(fields, "deltaUpMm", "deltaUp")
             };
 
-            if (!move.HasTarget)
+            if (move.HasTarget && move.HasDelta)
+            {
+                error = $"moves[{index}] (element {move.ElementId}) gives both a target and a delta. " +
+                        "Use target* to place the insertion point on a coordinate, or delta* to shift by a displacement — not both.";
+                return null;
+            }
+
+            if (move.HasModelDelta && move.HasViewDelta)
+            {
+                error = $"moves[{index}] (element {move.ElementId}) mixes model-axis deltas (deltaXmm/Ymm/Zmm) with " +
+                        "view-axis deltas (deltaRightMm/deltaUpMm). Give the displacement in one set of axes.";
+                return null;
+            }
+
+            if (!move.HasTarget && !move.HasDelta)
             {
                 warnings.Add(
-                    $"moves[{index}] (element {move.ElementId}) has no target coordinate — " +
+                    $"moves[{index}] (element {move.ElementId}) has no target coordinate and no delta — " +
                     "it is reported as already there and nothing moves.");
             }
 

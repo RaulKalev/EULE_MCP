@@ -1,0 +1,43 @@
+{
+  "Label": "copy-move-91-92",
+  "Model": "",
+  "StartedAt": "2026-10-10 17:37:09 \u002B03:00",
+  "BridgePath": "C:\\Users\\RaulKalev\\Documents\\AntiGravity\\EULE_MCP\\.claude\\worktrees\\main-sync-check-2d876b\\RevitMCP.Bridge\\bin\\Release\\net8.0\\RevitMCP.Bridge.exe",
+  "Schemas": [
+    {
+      "Profile": "full",
+      "ToolCount": 248,
+      "SchemaBytes": 316321,
+      "SchemaTokens": 79081,
+      "InstructionTokens": 353,
+      "Error": null
+    },
+    {
+      "Profile": "core",
+      "ToolCount": 19,
+      "SchemaBytes": 20694,
+      "SchemaTokens": 5174,
+      "InstructionTokens": 353,
+      "Error": null
+    },
+    {
+      "Profile": "query",
+      "ToolCount": 38,
+      "SchemaBytes": 39900,
+      "SchemaTokens": 9975,
+      "InstructionTokens": 353,
+      "Error": null
+    },
+    {
+      "Profile": "read-only",
+      "ToolCount": 169,
+      "SchemaBytes": 202708,
+      "SchemaTokens": 50677,
+      "InstructionTokens": 353,
+      "Error": null
+    }
+  ],
+  "GraphBuild": null,
+  "GraphIncremental": null,
+  "Scenarios": []
+}

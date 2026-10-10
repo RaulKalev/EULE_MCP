@@ -11,15 +11,17 @@ public class PreviewMoveElementsTool : IRevitMcpTool
     public string Name => "revit_preview_move_elements";
 
     public string Description =>
-        "Previews moving existing elements onto exact model coordinates, without changing anything. " +
-        "Required: moves — a JSON array of {elementId, targetXmm, targetYmm, targetZmm, expectedXmm, " +
-        "expectedYmm, expectedZmm}. An omitted target axis keeps its current value, so leaving out " +
-        "targetZmm preserves the elevation. The expected coordinates are an optional concurrency " +
-        "check: an element further than positionToleranceMm (default 1.0) from them is reported " +
-        "stale and would not move. Optional: skipPinned (default true). Returns per element the " +
-        "current point, the target point, the translation and distance in mm, whether it is pinned, " +
-        "and whether it can move. Elements without a LocationPoint are reported as unsupported " +
-        "rather than guessed at. Run this before revit_move_elements.";
+        "Previews moving existing elements — onto exact model coordinates or by a displacement — without " +
+        "changing anything. Same arguments as revit_move_elements. Each moves entry is one of: " +
+        "{elementId, targetXmm, targetYmm, targetZmm} (absolute, needs a LocationPoint; an omitted axis keeps " +
+        "its value), {elementId, deltaXmm, deltaYmm, deltaZmm} (displacement along the model axes), or " +
+        "{elementId, deltaRightMm, deltaUpMm} (displacement along the owner view's axes — for Detail Items, " +
+        "detail lines, text and other view-specific elements). Optional expectedXmm/Ymm/Zmm are a concurrency " +
+        "check against positionToleranceMm (default 1.0). Optional: viewId, skipPinned (default true). Returns " +
+        "per element the mode, the current and target point, the translation and distance in mm, the owner view " +
+        "and its axes in model coordinates, whether it is pinned or a group member, and whether it can move. " +
+        "Absolute targets on elements without a LocationPoint are reported as unsupported rather than guessed " +
+        "at from a bounding box. Run this before revit_move_elements.";
 
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Elements;

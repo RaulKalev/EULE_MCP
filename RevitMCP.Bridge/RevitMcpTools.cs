@@ -1784,26 +1784,28 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     // ── Moving Elements To Exact Coordinates ──────────────────────────────────
 
     [McpServerTool(Name = "revit_preview_move_elements", ReadOnly = true),
-     Description("Previews moving existing elements onto exact model coordinates, WITHOUT changes. Same arguments as revit_move_elements. Returns per element its current point, target point, translation and distance in mm, whether it is pinned, and whether it can move. An omitted targetZmm keeps the element's elevation. Optional expected coordinates are a concurrency check — an element that has drifted further than positionToleranceMm is reported stale. Elements without a LocationPoint (walls, pipes, ducts and anything else placed on a curve) are reported as unsupported rather than guessed at from a bounding box.")]
+     Description("Previews moving existing elements, WITHOUT changes. Same arguments as revit_move_elements. Two ways to say where an element goes: an absolute target (targetXmm/Ymm/Zmm — the insertion point lands on that model coordinate; needs a LocationPoint; an omitted targetZmm keeps the elevation) or a displacement (deltaXmm/Ymm/Zmm along the model axes, or deltaRightMm/deltaUpMm along the owner view's right/up axes). Displacements are how Detail Items, detail lines, text notes and other view-specific elements are moved in plans, sections, elevations and drafting views, and they also work for elements without a LocationPoint (walls, pipes, lines). Returns per element the mode, current and target point, translation and distance in mm, owner view and its axes in model coordinates, pinned/group state and whether it can move. Optional expected coordinates are a concurrency check — an element that has drifted further than positionToleranceMm is reported stale. An absolute target on an element without a LocationPoint is reported as unsupported rather than guessed at from a bounding box.")]
     public Task<string> PreviewMoveElements(
-        [Description("JSON array of moves: [{elementId, targetXmm, targetYmm, targetZmm, expectedXmm, expectedYmm, expectedZmm}]. Omit an axis to keep it.")] string moves,
+        [Description("JSON array of moves. Each entry is one of: {elementId, targetXmm, targetYmm, targetZmm} (absolute; omit an axis to keep it), {elementId, deltaXmm, deltaYmm, deltaZmm} (displacement along the model axes), {elementId, deltaRightMm, deltaUpMm} (displacement along the owner view's right/up axes). Optional per entry: expectedXmm, expectedYmm, expectedZmm.")] string moves,
         [Description("How far the element may sit from expectedXmm/Ymm/Zmm before it counts as stale, in mm (default 1.0)")] double positionToleranceMm = 1.0,
         [Description("All or nothing: any failure undoes the whole batch (default true)")] bool atomic = true,
         [Description("Skip pinned elements instead of failing on them (default true)")] bool skipPinned = true,
+        [Description("Only for deltaRightMm/deltaUpMm on model elements: the view whose right/up axes to follow. View-specific elements always use their owner view.")] long viewId = 0,
         CancellationToken cancellationToken = default) =>
         SendMoveElements(
-            "revit_preview_move_elements", moves, positionToleranceMm, atomic, skipPinned, cancellationToken);
+            "revit_preview_move_elements", moves, positionToleranceMm, atomic, skipPinned, viewId, cancellationToken);
 
     [McpServerTool(Name = "revit_move_elements"),
-     Description("Moves existing elements onto exact model coordinates. Requires approval. Nothing is deleted or recreated, so element ids, types, parameters, circuits and tags survive; an omitted targetZmm preserves the elevation the family and level gave the element. Optional expected coordinates guard against the model having changed since the targets were worked out. atomic=true (default) undoes the whole batch on any failure; atomic=false moves what it can and reports the rest. Up to 2000 moves per call, in one transaction, reversible with a single Revit undo. Run revit_preview_move_elements first.")]
+     Description("Moves existing elements onto exact model coordinates or by a displacement. Requires approval. Nothing is deleted or recreated, so element ids, types, parameters, circuits and tags survive. Absolute: targetXmm/Ymm/Zmm put the insertion point on a model coordinate (needs a LocationPoint; an omitted targetZmm preserves the elevation). Displacement: deltaXmm/Ymm/Zmm along the model axes, or deltaRightMm/deltaUpMm along the owner view's right/up axes — use this for Detail Items, detail lines, text notes and other view-specific elements in plans, sections, elevations and drafting views, and for elements without a LocationPoint (walls, pipes, lines). View-specific elements only move within their view's plane; group members and pinned elements are reported, not moved. Optional expected coordinates guard against the model having changed. atomic=true (default) undoes the whole batch on any failure; atomic=false moves what it can. The response reports where each element ended up. Up to 2000 moves per call, one transaction, one Revit undo. Run revit_preview_move_elements first.")]
     public Task<string> MoveElements(
-        [Description("JSON array of moves: [{elementId, targetXmm, targetYmm, targetZmm, expectedXmm, expectedYmm, expectedZmm}]. Omit an axis to keep it.")] string moves,
+        [Description("JSON array of moves. Each entry is one of: {elementId, targetXmm, targetYmm, targetZmm} (absolute; omit an axis to keep it), {elementId, deltaXmm, deltaYmm, deltaZmm} (displacement along the model axes), {elementId, deltaRightMm, deltaUpMm} (displacement along the owner view's right/up axes). Optional per entry: expectedXmm, expectedYmm, expectedZmm.")] string moves,
         [Description("How far the element may sit from expectedXmm/Ymm/Zmm before it counts as stale, in mm (default 1.0)")] double positionToleranceMm = 1.0,
         [Description("All or nothing: any failure undoes the whole batch (default true)")] bool atomic = true,
         [Description("Skip pinned elements instead of failing on them (default true)")] bool skipPinned = true,
+        [Description("Only for deltaRightMm/deltaUpMm on model elements: the view whose right/up axes to follow. View-specific elements always use their owner view.")] long viewId = 0,
         CancellationToken cancellationToken = default) =>
         SendMoveElements(
-            "revit_move_elements", moves, positionToleranceMm, atomic, skipPinned, cancellationToken);
+            "revit_move_elements", moves, positionToleranceMm, atomic, skipPinned, viewId, cancellationToken);
 
     private async Task<string> SendMoveElements(
         string toolName,
@@ -1811,10 +1813,11 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         double positionToleranceMm,
         bool atomic,
         bool skipPinned,
+        long viewId,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(moves))
-            return FormatBridgeError("Provide 'moves': a JSON array of {elementId, targetXmm, targetYmm, targetZmm}.");
+            return FormatBridgeError("Provide 'moves': a JSON array of {elementId, targetXmm, targetYmm, targetZmm} or {elementId, deltaXmm, deltaYmm, deltaZmm} / {elementId, deltaRightMm, deltaUpMm}.");
         if (!TryParseJsonArray(moves, "moves", out var parsedMoves, out var movesError))
             return FormatBridgeError(movesError!);
 
@@ -1823,8 +1826,75 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["moves"] = parsedMoves,
             ["positionToleranceMm"] = positionToleranceMm,
             ["atomic"] = atomic,
-            ["skipPinned"] = skipPinned
+            ["skipPinned"] = skipPinned,
+            ["viewId"] = viewId
         };
+        var result = await pipeClient.SendAsync(toolName, args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    // ── Copying Elements ──────────────────────────────────────────────────────
+
+    private const string CopyElementsScope =
+        "Works for every element Revit can copy — family instances, Detail Items, detail and model lines, text notes, tags, dimensions, walls, pipes and other curve-based elements, hosted and face-based instances — with no category whitelist and no LocationPoint requirement. Views, sheets and family types are not copied here: use revit_duplicate.";
+
+    [McpServerTool(Name = "revit_preview_copy_elements", ReadOnly = true),
+     Description("Previews copying elements by a translation, WITHOUT changing the model. Same arguments as revit_copy_elements. " + CopyElementsScope + " Returns per element whether it can be copied and why not, the Revit copy operation that would be used, and — from a trial run that is rolled back — how many elements Revit would create, including dependents. Incompatible view combinations and translations off the destination view's plane come back with the specific reason.")]
+    public Task<string> PreviewCopyElements(
+        [Description("Elements to copy. Leave empty with useSelection=true.")] long[]? elementIds = null,
+        [Description("Copy the current Revit selection instead of elementIds.")] bool useSelection = false,
+        [Description("Translation along model X, in mm.")] double? deltaXmm = null,
+        [Description("Translation along model Y, in mm.")] double? deltaYmm = null,
+        [Description("Translation along model Z, in mm.")] double? deltaZmm = null,
+        [Description("Translation along the view's right direction, in mm. View-specific elements use their owner view (or targetViewId); model elements need sourceViewId. Do not mix with deltaX/Y/Zmm.")] double? deltaRightMm = null,
+        [Description("Translation along the view's up direction, in mm.")] double? deltaUpMm = null,
+        [Description("Destination view. Copies view-specific elements into another plan, section, elevation or drafting view; 0 = stay in the owner view / in the model.")] long targetViewId = 0,
+        [Description("The view model elements are copied from when targetViewId is given, and the view whose axes deltaRightMm/deltaUpMm follow for model elements.")] long sourceViewId = 0,
+        [Description("true (default): each set is copied together and any refusal undoes everything. false: element by element, keeping what succeeds.")] bool atomic = true,
+        [Description("Let Revit try the copy in a transaction that is rolled back, for an accurate prediction (default true).")] bool dryRun = true,
+        CancellationToken cancellationToken = default) =>
+        SendCopyElements("revit_preview_copy_elements", elementIds, useSelection, deltaXmm, deltaYmm, deltaZmm,
+            deltaRightMm, deltaUpMm, targetViewId, sourceViewId, atomic, dryRun, cancellationToken);
+
+    [McpServerTool(Name = "revit_copy_elements"),
+     Description("Copies elements by a translation in mm. Requires approval. " + CopyElementsScope + " Translation: deltaXmm/Ymm/Zmm along the model axes, or deltaRightMm/deltaUpMm along a view's right/up. View-specific elements are copied within their owner view, or into targetViewId (both views must be plans, sections, elevations or drafting views; the translation must lie in the destination view's plane). Model elements are copied in the model with rehosting, or into targetViewId's level when sourceViewId is given. Originals are untouched. Returns source-to-copy id pairs, every new element id including dependents, and a result per element. atomic=true (default) copies each set together and undoes everything on any refusal; atomic=false copies element by element. One transaction, one Revit undo. Run revit_preview_copy_elements first.")]
+    public Task<string> CopyElements(
+        [Description("Elements to copy. Leave empty with useSelection=true.")] long[]? elementIds = null,
+        [Description("Copy the current Revit selection instead of elementIds.")] bool useSelection = false,
+        [Description("Translation along model X, in mm.")] double? deltaXmm = null,
+        [Description("Translation along model Y, in mm.")] double? deltaYmm = null,
+        [Description("Translation along model Z, in mm.")] double? deltaZmm = null,
+        [Description("Translation along the view's right direction, in mm. View-specific elements use their owner view (or targetViewId); model elements need sourceViewId. Do not mix with deltaX/Y/Zmm.")] double? deltaRightMm = null,
+        [Description("Translation along the view's up direction, in mm.")] double? deltaUpMm = null,
+        [Description("Destination view. Copies view-specific elements into another plan, section, elevation or drafting view; 0 = stay in the owner view / in the model.")] long targetViewId = 0,
+        [Description("The view model elements are copied from when targetViewId is given, and the view whose axes deltaRightMm/deltaUpMm follow for model elements.")] long sourceViewId = 0,
+        [Description("true (default): each set is copied together and any refusal undoes everything. false: element by element, keeping what succeeds.")] bool atomic = true,
+        CancellationToken cancellationToken = default) =>
+        SendCopyElements("revit_copy_elements", elementIds, useSelection, deltaXmm, deltaYmm, deltaZmm,
+            deltaRightMm, deltaUpMm, targetViewId, sourceViewId, atomic, null, cancellationToken);
+
+    private async Task<string> SendCopyElements(
+        string toolName, long[]? elementIds, bool useSelection, double? deltaXmm, double? deltaYmm, double? deltaZmm,
+        double? deltaRightMm, double? deltaUpMm, long targetViewId, long sourceViewId, bool atomic, bool? dryRun,
+        CancellationToken cancellationToken)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["elementIds"] = elementIds ?? [],
+            ["useSelection"] = useSelection,
+            ["targetViewId"] = targetViewId,
+            ["sourceViewId"] = sourceViewId,
+            ["atomic"] = atomic
+        };
+        // Deltas are sent only when given: an absent axis and a zero are the same displacement, but
+        // "which axes were named" decides between model and view axes.
+        if (deltaXmm.HasValue) args["deltaXmm"] = deltaXmm.Value;
+        if (deltaYmm.HasValue) args["deltaYmm"] = deltaYmm.Value;
+        if (deltaZmm.HasValue) args["deltaZmm"] = deltaZmm.Value;
+        if (deltaRightMm.HasValue) args["deltaRightMm"] = deltaRightMm.Value;
+        if (deltaUpMm.HasValue) args["deltaUpMm"] = deltaUpMm.Value;
+        if (dryRun.HasValue) args["dryRun"] = dryRun.Value;
+
         var result = await pipeClient.SendAsync(toolName, args, cancellationToken);
         return FormatResult(result);
     }
