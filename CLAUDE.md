@@ -32,6 +32,14 @@ connection). Find any other tool with `revit_tools_search`, read its schema with
 and run it with `revit_tools_call` (or `revit_tools_load` it into the session). `--tool-profile full`
 advertises every tool. See `docs/mcp-performance.md`.
 
+## Several open projects
+
+`revit_list_open_documents` lists the open project documents and their DWG/IFC/RVT links. The `documents` group
+(`revit_reload_links_from`, `revit_remove_links`, `revit_set_link_visibility`, `revit_save_document`,
+`revit_sync_with_central`, each with a preview where it changes the model) takes `document` (title or path) and works
+on non-active documents; approvals bind to that target document. Other tools still act on the active document —
+switch with `revit_activate_document` when needed.
+
 ## Development notes
 
 - Build: `dotnet build RevitMCP.slnx -c Release`; tests: `dotnet test RevitMCP.Tests/RevitMCP.Tests.csproj`.

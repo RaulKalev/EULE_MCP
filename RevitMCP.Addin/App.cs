@@ -6,6 +6,7 @@ using RevitMCP.Addin.Services;
 using RevitMCP.Addin.Tools;
 using RevitMCP.Addin.Tools.Configuration;
 using RevitMCP.Addin.Tools.Delivery;
+using RevitMCP.Addin.Tools.Documents;
 using RevitMCP.Addin.Tools.Excel;
 using RevitMCP.Addin.Tools.FileSystem;
 using RevitMCP.Addin.Tools.Graph;
@@ -61,6 +62,17 @@ public class App : IExternalApplication
             handler.RegisterTool(new SetCadOverridesTool());
             handler.RegisterTool(new PreviewCopyCadOverridesTool());
             handler.RegisterTool(new CopyCadOverridesTool());
+            // Multi-document and link management (#90)
+            handler.RegisterTool(new ListOpenDocumentsTool());
+            handler.RegisterTool(new ActivateDocumentTool());
+            handler.RegisterTool(new PreviewReloadLinksTool());
+            handler.RegisterTool(new ReloadLinksTool());
+            handler.RegisterTool(new PreviewRemoveLinksTool());
+            handler.RegisterTool(new RemoveLinksTool());
+            handler.RegisterTool(new PreviewSetLinkVisibilityTool());
+            handler.RegisterTool(new SetLinkVisibilityTool());
+            handler.RegisterTool(new SaveDocumentTool());
+            handler.RegisterTool(new SyncWithCentralTool());
             handler.RegisterTool(new ListSheetsTool());
             handler.RegisterTool(new ListSchedulesTool());
             handler.RegisterTool(new GetElementParametersTool());
@@ -398,6 +410,12 @@ public class App : IExternalApplication
             var connector = new ConnectorService(pipeServer, eventService, approvalService, registration);
             _connector = connector;
             _viewModel = new McpWindowViewModel(connector, logger, approvalService);
+            if (DirectEditDefault.Read())
+            {
+                // Opt-in per user so unattended batches survive add-in reloads and Revit restarts (#90).
+                _viewModel.EnableDirectEditByDefault();
+                DiagLog("Direct Edit enabled at startup (approval.directEditByDefault in user config).");
+            }
 
             // Auto-start the pipe server so [AppLoader] hot-reloads are transparent to agents.
             // OnShutdown calls PanicStop (stops old pipe), then OnStartup creates + starts a fresh one —

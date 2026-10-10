@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Autodesk.Revit.UI;
 using RevitMCP.Addin.Approval;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Logging;
 using RevitMCP.Addin.Tools;
@@ -165,19 +166,20 @@ public class ExternalEventHandler : IExternalEventHandler
         if (item.CancellationToken.IsCancellationRequested || tcs.Task.IsCompleted)
             return true;
 
+        // Approvals bind to the request's target document: its 'document' argument when given (#90), else the active one.
         if (request.IsApproved &&
             !ApprovalContextGuard.IsValid(
                 item.IsDocumentBound,
                 item.ExpectedDocument,
-                app.ActiveUIDocument?.Document))
+                RevitDocumentResolver.ResolveApprovalDocument(app, request)))
         {
-            var activeTitle = app.ActiveUIDocument?.Document?.Title ?? "no active document";
+            var targetTitle = RevitDocumentResolver.ResolveApprovalDocument(app, request)?.Title ?? "no matching document";
             var contextChanged = new McpToolResult
             {
                 RequestId = request.RequestId,
                 Success = false,
                 Status = "approval_context_changed",
-                Message = $"Approval was created for '{item.ExpectedDocumentTitle}', but the active document is now '{activeTitle}'. Run the preview again and request a new approval."
+                Message = $"Approval was created for '{item.ExpectedDocumentTitle}', but the target document is now '{targetTitle}'. Run the preview again and request a new approval."
             };
             tcs.TrySetResult(contextChanged);
             _ = _activityLogger?.WriteAsync(request, contextChanged, _lastContext);
@@ -248,8 +250,23 @@ public class ExternalEventHandler : IExternalEventHandler
         if (needsApproval)
         {
             var summary = ApprovalSummaryBuilder.Build(request);
-            var activeDocument = app.ActiveUIDocument?.Document;
-            var bindSelection = activeDocument != null &&
+            var approvalDocument = RevitDocumentResolver.ResolveApprovalDocument(app, request);
+            if (approvalDocument == null && tool is not IBackgroundMcpTool &&
+                !string.IsNullOrWhiteSpace(ToolArguments.GetString(request.Arguments, RevitDocumentResolver.ArgumentName)))
+            {
+                // A 'document' that does not resolve would fail after approval anyway; say so now.
+                RevitDocumentResolver.Resolve(app, request, out var documentError);
+                tcs.TrySetResult(new McpToolResult
+                {
+                    RequestId = request.RequestId,
+                    Success = false,
+                    Status = "validation_failed",
+                    Message = documentError ?? "The document argument does not match an open project document."
+                });
+                return true;
+            }
+            var bindSelection = approvalDocument != null &&
+                                RevitDocumentResolver.IsActive(app, approvalDocument) &&
                                 tool is not IBackgroundMcpTool &&
                                 ToolArguments.GetBool(request.Arguments, "useSelection");
             var selectionIds = bindSelection
@@ -268,10 +285,10 @@ public class ExternalEventHandler : IExternalEventHandler
                 ToolName = tool.Name,
                 Summary = summary,
                 ClientName = request.ClientName,
-                IsDocumentBound = activeDocument != null && tool is not IBackgroundMcpTool,
-                OriginDocumentToken = tool is IBackgroundMcpTool ? null : activeDocument,
-                OriginDocumentTitle = tool is IBackgroundMcpTool ? string.Empty : activeDocument?.Title ?? string.Empty,
-                OriginDocumentVersion = tool is IBackgroundMcpTool ? 0 : DocumentChangeTracker.Capture(activeDocument),
+                IsDocumentBound = approvalDocument != null && tool is not IBackgroundMcpTool,
+                OriginDocumentToken = tool is IBackgroundMcpTool ? null : approvalDocument,
+                OriginDocumentTitle = tool is IBackgroundMcpTool ? string.Empty : approvalDocument?.Title ?? string.Empty,
+                OriginDocumentVersion = tool is IBackgroundMcpTool ? 0 : DocumentChangeTracker.Capture(approvalDocument),
                 IsSelectionBound = bindSelection,
                 OriginSelectionIds = selectionIds
             };

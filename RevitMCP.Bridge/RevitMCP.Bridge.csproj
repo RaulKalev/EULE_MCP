@@ -18,6 +18,11 @@
     <ProjectReference Include="..\RevitMCP.Core\RevitMCP.Core.csproj" />
   </ItemGroup>
 
+  <!-- Pure timeout table shared with the add-in (#90); kept out of Core so hot-reloaded add-ins see it. -->
+  <ItemGroup>
+    <Compile Include="..\RevitMCP.Addin\Services\LongRunningTools.cs" Link="Shared\LongRunningTools.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <None Update="appsettings.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
