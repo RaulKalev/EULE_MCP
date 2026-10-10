@@ -6,6 +6,7 @@ using Newtonsoft.Json;
 using RevitMCP.Core.Configuration;
 using RevitMCP.Core.Instances;
 using RevitMCP.Core.Models;
+using RevitMCP.Addin.Services;
 
 namespace RevitMCP.Bridge;
 
@@ -67,8 +68,10 @@ public class RevitPipeClient
 
         // Start the request timeout before the write so both write and read are covered.
         // This prevents an indefinite hang if the pipe write blocks (e.g. due to sandbox restrictions).
+        // Long-running tools (link reloads, saves, sync with central) get a longer answer window (#90).
+        var requestTimeoutMs = LongRunningTools.TimeoutMsFor(toolName, _requestTimeoutMs);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(_requestTimeoutMs);
+        cts.CancelAfter(requestTimeoutMs);
 
         var requestJson = JsonConvert.SerializeObject(request);
         try
@@ -91,7 +94,7 @@ public class RevitPipeClient
         }
         catch (OperationCanceledException)
         {
-            return TimedOut(request.RequestId, $"Request timed out after {_requestTimeoutMs / 1000} s without an answer from Revit.", targetProcessId);
+            return TimedOut(request.RequestId, $"Request timed out after {requestTimeoutMs / 1000} s without an answer from Revit.", targetProcessId);
         }
     }
 

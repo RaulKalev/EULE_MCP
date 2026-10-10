@@ -1,0 +1,43 @@
+{
+  "Label": "multi-document-90",
+  "Model": "",
+  "StartedAt": "2026-10-05 23:52:05 \u002B03:00",
+  "BridgePath": "C:\\Users\\RaulKalev\\Documents\\AntiGravity\\EULE_MCP\\.claude\\worktrees\\main-sync-check-2d876b\\RevitMCP.Bridge\\bin\\Release\\net8.0\\RevitMCP.Bridge.exe",
+  "Schemas": [
+    {
+      "Profile": "full",
+      "ToolCount": 246,
+      "SchemaBytes": 308863,
+      "SchemaTokens": 77216,
+      "InstructionTokens": 353,
+      "Error": null
+    },
+    {
+      "Profile": "core",
+      "ToolCount": 19,
+      "SchemaBytes": 20694,
+      "SchemaTokens": 5174,
+      "InstructionTokens": 353,
+      "Error": null
+    },
+    {
+      "Profile": "query",
+      "ToolCount": 38,
+      "SchemaBytes": 39900,
+      "SchemaTokens": 9975,
+      "InstructionTokens": 353,
+      "Error": null
+    },
+    {
+      "Profile": "read-only",
+      "ToolCount": 168,
+      "SchemaBytes": 199069,
+      "SchemaTokens": 49768,
+      "InstructionTokens": 353,
+      "Error": null
+    }
+  ],
+  "GraphBuild": null,
+  "GraphIncremental": null,
+  "Scenarios": []
+}

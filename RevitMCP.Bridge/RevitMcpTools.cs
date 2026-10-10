@@ -6254,4 +6254,191 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         var result = await pipeClient.SendAsync("revit_graph_summary", args, cancellationToken);
         return FormatResult(result);
     }
+
+    // ── Multi-document and link management (#90) ─────────────────────────────────────────────
+
+    private const string DocumentArgDescription =
+        "Target project document: title or full path from revit_list_open_documents. Empty = the active document. " +
+        "Works on non-active documents.";
+
+    private const string LinksToReloadDescription =
+        "Files to reload from, e.g. [{\"path\":\"C:\\\\in\\\\ARH.ifc\"},{\"path\":\"C:\\\\in\\\\plan.dwg\",\"link\":\"old_plan.dwg\"}]. " +
+        "path: full path to a .dwg, .ifc or .rvt file. link (optional): existing link name or type id; without it the file " +
+        "is paired with a link of the same type by name.";
+
+    [McpServerTool(Name = "revit_list_open_documents", ReadOnly = true),
+     Description("Lists the open Revit project documents (no linked or family documents): title, path, active flag, worksharing state, modified/read-only flags and, with includeLinks=true (default), their DWG/IFC/RVT links (type id, name, path, load status, instance ids). Pass a title or path as 'document' to the document-aware tools to work on a non-active project.")]
+    public async Task<string> ListOpenDocuments(
+        [Description("Include each document's DWG/IFC/RVT links. Default true.")] bool includeLinks = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["includeLinks"] = includeLinks };
+        return FormatResult(await pipeClient.SendAsync("revit_list_open_documents", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_activate_document"),
+     Description("Makes an open project document the active one in the Revit UI. Only needed for UI-bound tools (selection, active view, revit_select_*); the document-aware tools take 'document' and work without switching.")]
+    public async Task<string> ActivateDocument(
+        [Description("Document title or full path (required).")] string document,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["document"] = document };
+        return FormatResult(await pipeClient.SendAsync("revit_activate_document", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_preview_reload_links_from", ReadOnly = true),
+     Description("Previews reloading DWG/IFC/RVT links of a document from files the user gave, WITHOUT changing anything. Returns each file's pairing with an existing link (status matched/ambiguous/unmatched/invalid) and the action. When a pair is ambiguous, show the proposed pairing to the user and call again with 'link' set for each file.")]
+    public async Task<string> PreviewReloadLinksFrom(
+        [Description(LinksToReloadDescription)] object[] links,
+        [Description(DocumentArgDescription)] string? document = null,
+        [Description("IFC: auto (default: update in place when the file is the same, otherwise replace), update (in place only), replace (always link the new IFC and delete the old link).")] string ifcMethod = "auto",
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["links"] = ToJToken(links),
+            ["document"] = document ?? string.Empty,
+            ["ifcMethod"] = ifcMethod
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_preview_reload_links_from", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_reload_links_from", Destructive = true),
+     Description("Reloads DWG/IFC/RVT links of a document (active or not) from new files. Requires approval unless Direct Edit is on (then it runs unattended); run revit_preview_reload_links_from first. Does nothing unless every file pairs unambiguously with a link. DWG/RVT reload in place. IFC from the same file: updated in place. IFC from a new file: a new link is placed like the old one (position, workset, pin, per-view hidden state, overrides) and the old link is deleted, so its ids change. Clears the document's undo history. Save afterwards with revit_save_document.")]
+    public async Task<string> ReloadLinksFrom(
+        [Description(LinksToReloadDescription)] object[] links,
+        [Description(DocumentArgDescription)] string? document = null,
+        [Description("IFC: auto (default), update or replace.")] string ifcMethod = "auto",
+        [Description("Where a replacing IFC link is placed: matchExisting (default, same position and rotation as the old instances), origin, shared.")] string placement = "matchExisting",
+        [Description("Convert the IFC again even when an .ifc.RVT cache newer than the IFC exists. Default false.")] bool regenerateIfcCache = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["links"] = ToJToken(links),
+            ["document"] = document ?? string.Empty,
+            ["ifcMethod"] = ifcMethod,
+            ["placement"] = placement,
+            ["regenerateIfcCache"] = regenerateIfcCache
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_reload_links_from", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_preview_remove_links", ReadOnly = true),
+     Description("Previews removing DWG/IFC/RVT links from a document WITHOUT changing anything: each link's type, path, instance ids and the views where an instance is not hidden.")]
+    public async Task<string> PreviewRemoveLinks(
+        [Description("Link names or type ids (from revit_list_open_documents).")] string[] links,
+        [Description(DocumentArgDescription)] string? document = null,
+        [Description("Report whether an IFC link's .ifc.RVT cache file would be deleted too. Default false.")] bool deleteIfcCacheFile = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["links"] = links,
+            ["document"] = document ?? string.Empty,
+            ["deleteIfcCacheFile"] = deleteIfcCacheFile
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_preview_remove_links", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_remove_links", Destructive = true),
+     Description("DESTRUCTIVE: removes DWG/IFC/RVT links (the link type and all its instances) from a document, active or not. Requires approval unless Direct Edit is on (then it runs unattended). Run revit_preview_remove_links first.")]
+    public async Task<string> RemoveLinks(
+        [Description("Link names or type ids (from revit_list_open_documents).")] string[] links,
+        [Description(DocumentArgDescription)] string? document = null,
+        [Description("Also delete an IFC link's .ifc.RVT cache file after removal. Default false.")] bool deleteIfcCacheFile = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["links"] = links,
+            ["document"] = document ?? string.Empty,
+            ["deleteIfcCacheFile"] = deleteIfcCacheFile
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_remove_links", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_preview_set_link_visibility", ReadOnly = true),
+     Description("Previews turning DWG/IFC/RVT links on or off in Visibility/Graphics WITHOUT changing anything. Per view: owner (view or template), before → after, or skipped with the reason (e.g. controlled by a view template).")]
+    public async Task<string> PreviewSetLinkVisibility(
+        [Description("Link names or type ids.")] string[] links,
+        [Description("true = turn on, false = turn off.")] bool visible,
+        [Description(DocumentArgDescription)] string? document = null,
+        [Description("Views to change.")] long[]? viewIds = null,
+        [Description("Change every plan, section, elevation, 3D, detail and drafting view.")] bool allViews = false,
+        [Description("View templates to change directly (DWG links only).")] long[]? viewTemplateIds = null,
+        [Description("When a view's imported-category visibility is controlled by its view template, change the template (affects every view using it). Default false = skip such views.")] bool applyToTemplates = false,
+        CancellationToken cancellationToken = default)
+    {
+        return FormatResult(await pipeClient.SendAsync("revit_preview_set_link_visibility",
+            LinkVisibilityArgs(links, visible, document, viewIds, allViews, viewTemplateIds, applyToTemplates), cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_set_link_visibility"),
+     Description("Turns DWG/IFC/RVT links on or off in Visibility/Graphics without removing them, in a document (active or not). DWG: the link's Imported Categories entry per view, or the view template with applyToTemplates=true. IFC/RVT: hides/unhides the link instances per view. Requires approval; run revit_preview_set_link_visibility first.")]
+    public async Task<string> SetLinkVisibility(
+        [Description("Link names or type ids.")] string[] links,
+        [Description("true = turn on, false = turn off.")] bool visible,
+        [Description(DocumentArgDescription)] string? document = null,
+        [Description("Views to change.")] long[]? viewIds = null,
+        [Description("Change every plan, section, elevation, 3D, detail and drafting view.")] bool allViews = false,
+        [Description("View templates to change directly (DWG links only).")] long[]? viewTemplateIds = null,
+        [Description("When a view's imported-category visibility is controlled by its view template, change the template (affects every view using it). Default false = skip such views.")] bool applyToTemplates = false,
+        CancellationToken cancellationToken = default)
+    {
+        return FormatResult(await pipeClient.SendAsync("revit_set_link_visibility",
+            LinkVisibilityArgs(links, visible, document, viewIds, allViews, viewTemplateIds, applyToTemplates), cancellationToken));
+    }
+
+    private static Dictionary<string, object?> LinkVisibilityArgs(
+        string[] links, bool visible, string? document, long[]? viewIds, bool allViews, long[]? viewTemplateIds, bool applyToTemplates) => new()
+    {
+        ["links"] = links,
+        ["visible"] = visible,
+        ["document"] = document ?? string.Empty,
+        ["viewIds"] = viewIds ?? [],
+        ["allViews"] = allViews,
+        ["viewTemplateIds"] = viewTemplateIds ?? [],
+        ["applyToTemplates"] = applyToTemplates
+    };
+
+    [McpServerTool(Name = "revit_save_document"),
+     Description("Saves an open project document (active or not), or every open project document with all=true. A workshared local is saved locally only — use revit_sync_with_central to synchronize. Skips read-only, detached, never-saved and (with onlyModified=true, default) unchanged documents and reports why.")]
+    public async Task<string> SaveDocument(
+        [Description(DocumentArgDescription)] string? document = null,
+        [Description("Save every open project document.")] bool all = false,
+        [Description("Skip documents without unsaved changes. Default true.")] bool onlyModified = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["document"] = document ?? string.Empty,
+            ["all"] = all,
+            ["onlyModified"] = onlyModified
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_save_document", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_sync_with_central", Destructive = true),
+     Description("Synchronizes a workshared document (active or not), or every open workshared document with all=true, with central. Always requires manual approval — cannot be bypassed by Direct Edit.")]
+    public async Task<string> SyncWithCentral(
+        [Description(DocumentArgDescription)] string? document = null,
+        [Description("Synchronize every open workshared document.")] bool all = false,
+        [Description("Synchronize comment.")] string? comment = null,
+        [Description("Relinquish all borrowed elements and worksets. Default true.")] bool relinquishAll = true,
+        [Description("Save the local file before and after synchronizing. Default true.")] bool saveLocal = true,
+        [Description("Compact the central model. Default false.")] bool compact = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["document"] = document ?? string.Empty,
+            ["all"] = all,
+            ["comment"] = comment ?? string.Empty,
+            ["relinquishAll"] = relinquishAll,
+            ["saveLocal"] = saveLocal,
+            ["compact"] = compact
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_sync_with_central", args, cancellationToken));
+    }
 }

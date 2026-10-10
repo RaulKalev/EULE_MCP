@@ -247,6 +247,12 @@ public class McpWindowViewModel : BaseViewModel
             _approvalService?.Reject(approvalId);
     }
 
+    /// <summary>
+    /// Starts in Direct Edit without the confirmation prompt; used when the user opted in through
+    /// <c>approval.directEditByDefault</c> in their own config (see <see cref="Approval.DirectEditDefault"/>).
+    /// </summary>
+    public void EnableDirectEditByDefault() => IsDirectEditEnabled = true;
+
     private void ToggleDirectEdit()
     {
         if (!_isDirectEditEnabled)

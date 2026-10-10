@@ -44,7 +44,8 @@ public class ExternalEventService
         if (!TryQueue(item))
             return;
 
-        ScheduleTimeout(item, Math.Max(1, QueryLimits.Default.TimeoutSeconds) * 1000);
+        ScheduleTimeout(item, LongRunningTools.TimeoutMsFor(
+            pending.ToolName, Math.Max(1, QueryLimits.Default.TimeoutSeconds) * 1000));
         RaiseOrCancel(item);
     }
 

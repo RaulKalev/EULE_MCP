@@ -27,6 +27,7 @@ public static class BridgeToolGroups
         ["tags"] = "Tags, dimensions, text notes, detail lines, view alignment",
         ["coordination"] = "Clash detection, clash review, issue reports",
         ["cad"] = "DWG/CAD imports, overrides and placement from CAD",
+        ["documents"] = "Open documents: activate, reload/remove DWG/IFC/RVT links, link visibility, save and sync with central",
         ["skills"] = "Skill builder and skill runs",
         ["office"] = "Configuration, files, Excel, standards lookup, delivery checks"
     };
@@ -36,7 +37,7 @@ public static class BridgeToolGroups
         {
             "revit_get_connection_status", "revit_list_instances", "revit_select_instance", "revit_get_selected_elements",
             "revit_inspect_selected_elements", "revit_get_elements_info", "revit_get_element_parameters", "revit_count_elements",
-            "revit_get_approval_status"
+            "revit_get_approval_status", "revit_list_open_documents"
         }),
         (Discovery, new[] { "revit_tools_search", "revit_tools_describe", "revit_tools_call", "revit_tools_load" }),
         ("devices", new[]
@@ -66,6 +67,12 @@ public static class BridgeToolGroups
         ("tags", new[] { "revit_create_text_notes", "revit_get_text_notes", "revit_preview_set_text_notes", "revit_set_text_notes", "revit_annotate_detail_lines", "revit_preview_align_in_view", "revit_align_in_view" }),
         ("ifc", new[] { "revit_query_linked_elements", "revit_select_linked_elements" }),
         ("cad", new[] { "revit_create_panel_schematic_symbol_from_dwg" }),
+        ("documents", new[]
+        {
+            "revit_activate_document", "revit_preview_reload_links_from", "revit_reload_links_from", "revit_preview_remove_links",
+            "revit_remove_links", "revit_preview_set_link_visibility", "revit_set_link_visibility", "revit_save_document",
+            "revit_sync_with_central"
+        }),
         ("coordination", new[] { "revit_export_issues", "revit_merge_issue_reports" }));
 
     /// <summary>Ordered rules for everything not in the exact table: the first keyword found in the name wins.</summary>

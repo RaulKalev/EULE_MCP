@@ -15,6 +15,11 @@
     <Compile Include="..\RevitMCP.Addin\Tools\IfcSpaceToRoom\Services\FootprintCurveChainer.cs" Link="IfcSpaceToRoom\FootprintCurveChainer.cs" />
     <Compile Include="..\RevitMCP.Benchmark\Core\BenchmarkMath.cs" Link="Benchmark\BenchmarkMath.cs" />
     <Compile Include="..\RevitMCP.Bridge\BridgeToolGroups.cs" Link="Bridge\BridgeToolGroups.cs" />
+    <!-- Multi-document target and link-file matching (#90) -->
+    <Compile Include="..\RevitMCP.Addin\Documents\DocumentTargetMatcher.cs" Link="Documents\DocumentTargetMatcher.cs" />
+    <Compile Include="..\RevitMCP.Addin\Documents\LinkFileMatcher.cs" Link="Documents\LinkFileMatcher.cs" />
+    <Compile Include="..\RevitMCP.Addin\Services\LongRunningTools.cs" Link="Services\LongRunningTools.cs" />
+    <Compile Include="..\RevitMCP.Addin\Approval\DirectEditDefault.cs" Link="Approval\DirectEditDefault.cs" />
     <Compile Include="..\RevitMCP.Bridge\ToolSearchIndex.cs" Link="Bridge\ToolSearchIndex.cs" />
     <Compile Include="..\RevitMCP.Benchmark\Core\BenchmarkReport.cs" Link="Benchmark\BenchmarkReport.cs" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
