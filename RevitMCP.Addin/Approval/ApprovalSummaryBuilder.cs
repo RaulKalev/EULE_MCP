@@ -62,6 +62,7 @@ public static class ApprovalSummaryBuilder
             "revit_align_in_view"               => BuildAlignInView(request),
             "revit_move_elements"               => BuildMoveElements(request),
             "revit_copy_elements"               => BuildCopyElements(request),
+            "revit_place_on_face"               => BuildPlaceOnFace(request),
             "revit_place_from_cad"              => BuildPlaceFromCad(request),
             // Text notes
             "revit_set_text_notes"              => BuildSetTextNotes(request),
@@ -388,6 +389,36 @@ public static class ApprovalSummaryBuilder
 
         var where = viewId > 0 ? $" in view {viewId}" : " in the active view";
         return $"{action}{where}. Elements move in the plane of that view only.";
+    }
+
+    private static string BuildPlaceOnFace(McpToolRequest request)
+    {
+        request.Arguments.TryGetValue("placements", out var rawPlacements);
+        var defaultMountOn = ToolArguments.GetString(request.Arguments, "mountOn");
+        var placements = FacePlacementMath.Parse(rawPlacements, defaultMountOn, out _);
+        if (placements == null)
+            return "Place a face-based family (the request could not be read — it will be rejected).";
+
+        var typeId = ToolArguments.GetLong(request.Arguments, "typeId");
+        var family = ToolArguments.GetString(request.Arguments, "familyName");
+        var type = ToolArguments.GetString(request.Arguments, "typeName");
+        var what = typeId > 0
+            ? $"family type {typeId}"
+            : string.Join(" : ", new[] { family, type }.Where(part => !string.IsNullOrWhiteSpace(part)));
+
+        var surfaces = placements
+            .GroupBy(placement => placement.Direction.HasValue ? "a given direction" : placement.MountOn)
+            .Select(group => $"{group.Count()} on {group.Key}")
+            .ToList();
+
+        var includeLinks = ToolArguments.GetBool(request.Arguments, "includeLinks", true);
+        var includeHost = ToolArguments.GetBool(request.Arguments, "includeHost", true);
+        var where = includeHost && includeLinks ? "this model or its links" : includeLinks ? "linked models only" : "this model only";
+        var atomic = ToolArguments.GetBool(request.Arguments, "atomic", true);
+
+        return $"Place {placements.Count} instance{(placements.Count == 1 ? "" : "s")} of {what}, hosted on faces found from the " +
+               $"given points ({string.Join(", ", surfaces)}) in {where}." +
+               $" {(atomic ? "Atomic: any refusal undoes the whole batch." : "Non-atomic: failures are reported and the rest are placed.")}";
     }
 
     private static string BuildCopyElements(McpToolRequest request)

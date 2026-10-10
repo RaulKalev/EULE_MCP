@@ -100,9 +100,18 @@ internal static class FamilyInstancePlacer
                 if (host != null)
                     return doc.Create.NewFamilyInstance(point, symbol, host, StructuralType.NonStructural);
                 // Generic overload works for many work-plane-based families when the
-                // document has an implicit placement plane; otherwise Revit throws and
-                // the per-item error explains what to pass.
-                return doc.Create.NewFamilyInstance(point, symbol, StructuralType.NonStructural);
+                // document has an implicit placement plane; otherwise Revit throws. Hosting on a
+                // face needs the face itself, which revit_place_on_face finds.
+                try
+                {
+                    return doc.Create.NewFamilyInstance(point, symbol, StructuralType.NonStructural);
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException(
+                        $"{ex.Message} Family '{symbol.Family.Name}' is face-based or work-plane-based: to host it on a wall, " +
+                        "ceiling or floor face (also in a linked model) use revit_place_on_face.");
+                }
             }
 
             default:

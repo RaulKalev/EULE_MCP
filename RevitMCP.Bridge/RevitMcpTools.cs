@@ -1310,7 +1310,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_place_family_instances"),
-     Description("Places instances of a loaded family type at given points (millimetres). Handles model components (level-based) and detail items (view-based) automatically from the family's placement type. Pick the type via typeId, or familyName and/or typeName (partial match; ambiguity returns candidates). Optional per-point rotationDegrees, levelName, viewId (detail items), hostElementId (hosted families). Requires approval; reversible via Revit Undo.")]
+     Description("Places instances of a loaded family type at given points (millimetres). Handles model components (level-based) and detail items (view-based) automatically from the family's placement type. Pick the type via typeId, or familyName and/or typeName (partial match; ambiguity returns candidates). Optional per-point rotationDegrees, levelName, viewId (detail items), hostElementId (hosted families). Face-based families that should sit on a wall, ceiling or floor face — including faces in linked models — are placed with revit_place_on_face instead. Requires approval; reversible via Revit Undo.")]
     public async Task<string> PlaceFamilyInstances(
         [Description("JSON array of placement points in mm: [{x, y, z, rotationDegrees}]")] string placements,
         [Description("Family name to place (partial match).")] string? familyName = null,
@@ -1829,6 +1829,90 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["skipPinned"] = skipPinned,
             ["viewId"] = viewId
         };
+        var result = await pipeClient.SendAsync(toolName, args, cancellationToken);
+        return FormatResult(result);
+    }
+
+    // ── Placing Face-Based Families ───────────────────────────────────────────
+
+    private const string PlaceOnFacePlacements =
+        "JSON array of placements in mm: [{x, y, z, mountOn, rotationDegrees}]. x/y/z is a point at or near the face. " +
+        "mountOn: wall (search horizontally all round), ceiling (search up), floor (search down) or nearest; or give an " +
+        "exact search direction with dx, dy, dz instead. rotationDegrees turns the family about the face normal.";
+
+    [McpServerTool(Name = "revit_preview_place_on_face", ReadOnly = true),
+     Description("Previews placing a face-based family on wall, ceiling or floor faces, WITHOUT changing the model. Same arguments as revit_place_on_face. For each point the face is found by ray casting in a 3D view, in the host model and in linked RVT/IFC models. Returns per point the face that would host the family (element, category, host model or link, wall/ceiling/floor, normal), where the family would land and how far that is from the point, its orientation, and other faces in reach. A trial run that is rolled back reports faces Revit refuses to host on. Use it to check the right wall or ceiling was found before placing.")]
+    public Task<string> PreviewPlaceOnFace(
+        [Description(PlaceOnFacePlacements)] string placements,
+        [Description("Family name of the face-based family (partial match).")] string? familyName = null,
+        [Description("Type name within the family (partial match).")] string? typeName = null,
+        [Description("Exact family type element ID — skips name matching.")] long typeId = 0,
+        [Description("Default surface for placements that name none: wall, ceiling, floor or nearest.")] string? mountOn = null,
+        [Description("How far from each point to look for a face, in mm (default 1500).")] double maxDistanceMm = 1500,
+        [Description("Consider faces of elements in this model (default true).")] bool includeHost = true,
+        [Description("Consider faces in linked RVT/IFC models (default true).")] bool includeLinks = true,
+        [Description("Only consider these link instances among the links.")] long[]? linkInstanceIds = null,
+        [Description("Only consider faces of elements in these categories, e.g. [\"Walls\",\"Ceilings\"]. Linked IFC elements often have generic categories — leave empty for them.")] string[]? hostCategories = null,
+        [Description("Sets the family's 'Offset from Host' in mm after placing.")] double? offsetFromHostMm = null,
+        [Description("How far a face may lean from vertical/horizontal and still count as a wall, ceiling or floor, in degrees (default 10).")] double angleToleranceDegrees = 10,
+        [Description("3D view used for the search. Only geometry visible in it can be found. Default: the active 3D view, else the first 3D view.")] long searchViewId = 0,
+        [Description("true (default): any failure undoes the whole batch. false: place what can be placed.")] bool atomic = true,
+        [Description("Let Revit try the placement in a transaction that is rolled back (default true).")] bool dryRun = true,
+        CancellationToken cancellationToken = default) =>
+        SendPlaceOnFace("revit_preview_place_on_face", placements, familyName, typeName, typeId, mountOn, maxDistanceMm,
+            includeHost, includeLinks, linkInstanceIds, hostCategories, offsetFromHostMm, angleToleranceDegrees,
+            searchViewId, atomic, dryRun, cancellationToken);
+
+    [McpServerTool(Name = "revit_place_on_face"),
+     Description("Places instances of a face-based (or work-plane-based) family hosted on wall, ceiling or floor faces. Requires approval. Give the family type (typeId, or familyName and/or typeName) and points in mm; for each point the face is found by ray casting in a 3D view, in the host model and in linked RVT/IFC models, and the family is hosted on the nearest matching face within maxDistanceMm at the foot of the perpendicular from the point. mountOn=wall|ceiling|floor|nearest per placement or for the whole request, or an exact direction dx/dy/dz. On a wall the family stands upright; rotationDegrees turns it about the face normal. Returns each new element id with the face and host it is on and where it ended up. atomic=true (default) undoes the whole batch on any failure. One transaction, one Revit undo. Level-based and wall-hosted families use revit_place_family_instances. Run revit_preview_place_on_face first.")]
+    public Task<string> PlaceOnFace(
+        [Description(PlaceOnFacePlacements)] string placements,
+        [Description("Family name of the face-based family (partial match).")] string? familyName = null,
+        [Description("Type name within the family (partial match).")] string? typeName = null,
+        [Description("Exact family type element ID — skips name matching.")] long typeId = 0,
+        [Description("Default surface for placements that name none: wall, ceiling, floor or nearest.")] string? mountOn = null,
+        [Description("How far from each point to look for a face, in mm (default 1500).")] double maxDistanceMm = 1500,
+        [Description("Consider faces of elements in this model (default true).")] bool includeHost = true,
+        [Description("Consider faces in linked RVT/IFC models (default true).")] bool includeLinks = true,
+        [Description("Only consider these link instances among the links.")] long[]? linkInstanceIds = null,
+        [Description("Only consider faces of elements in these categories, e.g. [\"Walls\",\"Ceilings\"]. Linked IFC elements often have generic categories — leave empty for them.")] string[]? hostCategories = null,
+        [Description("Sets the family's 'Offset from Host' in mm after placing.")] double? offsetFromHostMm = null,
+        [Description("How far a face may lean from vertical/horizontal and still count as a wall, ceiling or floor, in degrees (default 10).")] double angleToleranceDegrees = 10,
+        [Description("3D view used for the search. Only geometry visible in it can be found. Default: the active 3D view, else the first 3D view.")] long searchViewId = 0,
+        [Description("true (default): any failure undoes the whole batch. false: place what can be placed.")] bool atomic = true,
+        CancellationToken cancellationToken = default) =>
+        SendPlaceOnFace("revit_place_on_face", placements, familyName, typeName, typeId, mountOn, maxDistanceMm,
+            includeHost, includeLinks, linkInstanceIds, hostCategories, offsetFromHostMm, angleToleranceDegrees,
+            searchViewId, atomic, null, cancellationToken);
+
+    private async Task<string> SendPlaceOnFace(
+        string toolName, string placements, string? familyName, string? typeName, long typeId, string? mountOn,
+        double maxDistanceMm, bool includeHost, bool includeLinks, long[]? linkInstanceIds, string[]? hostCategories,
+        double? offsetFromHostMm, double angleToleranceDegrees, long searchViewId, bool atomic, bool? dryRun,
+        CancellationToken cancellationToken)
+    {
+        if (!TryParseJsonArray(placements, "placements", out var parsedPlacements, out var placementsError))
+            return FormatBridgeError(placementsError!);
+
+        var args = new Dictionary<string, object?>
+        {
+            ["placements"] = parsedPlacements,
+            ["familyName"] = familyName ?? string.Empty,
+            ["typeName"] = typeName ?? string.Empty,
+            ["typeId"] = typeId,
+            ["mountOn"] = mountOn ?? string.Empty,
+            ["maxDistanceMm"] = maxDistanceMm,
+            ["includeHost"] = includeHost,
+            ["includeLinks"] = includeLinks,
+            ["linkInstanceIds"] = linkInstanceIds ?? [],
+            ["hostCategories"] = hostCategories ?? [],
+            ["angleToleranceDegrees"] = angleToleranceDegrees,
+            ["searchViewId"] = searchViewId,
+            ["atomic"] = atomic
+        };
+        if (offsetFromHostMm.HasValue) args["offsetFromHostMm"] = offsetFromHostMm.Value;
+        if (dryRun.HasValue) args["dryRun"] = dryRun.Value;
+
         var result = await pipeClient.SendAsync(toolName, args, cancellationToken);
         return FormatResult(result);
     }
