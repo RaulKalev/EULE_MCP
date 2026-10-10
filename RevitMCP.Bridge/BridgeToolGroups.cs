@@ -51,7 +51,8 @@ public static class BridgeToolGroups
         ("edit", new[]
         {
             "revit_preview_rotate_elements", "revit_rotate_elements", "revit_preview_set_elevation", "revit_set_elevation",
-            "revit_preview_move_elements", "revit_move_elements", "revit_preview_align_elements", "revit_align_elements",
+            "revit_preview_move_elements", "revit_move_elements", "revit_preview_copy_elements", "revit_copy_elements",
+            "revit_preview_align_elements", "revit_align_elements",
             "revit_preview_delete", "revit_delete", "revit_preview_duplicate", "revit_duplicate", "revit_preview_rename", "revit_rename",
             "revit_set_parameter", "revit_set_parameters_bulk", "revit_place_family_instances", "revit_preview_edit_family_types",
             "revit_edit_family_types", "revit_list_family_types", "revit_create_lines", "revit_list_extensible_storage_schemas",

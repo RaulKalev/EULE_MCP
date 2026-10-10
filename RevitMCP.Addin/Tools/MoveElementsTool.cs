@@ -13,15 +13,21 @@ public class MoveElementsTool : IRevitMcpTool
     public string Name => "revit_move_elements";
 
     public string Description =>
-        "Moves existing elements onto exact model coordinates. Requires approval. Nothing is " +
-        "deleted or recreated, so element ids, types, parameters, circuits and tags all survive. " +
-        "Required: moves — a JSON array of {elementId, targetXmm, targetYmm, targetZmm, expectedXmm, " +
-        "expectedYmm, expectedZmm}. An omitted target axis keeps its current value, so leaving out " +
-        "targetZmm preserves the elevation. The expected coordinates are an optional concurrency " +
-        "check: an element further than positionToleranceMm (default 1.0) from them is reported " +
-        "stale and left alone. Optional: atomic (default true — any failure undoes the whole " +
-        "batch), skipPinned (default true). Up to 2000 moves per call, in one transaction, " +
-        "reversible with a single Revit undo. Run revit_preview_move_elements first.";
+        "Moves existing elements: onto exact model coordinates, or by a displacement. Requires approval. " +
+        "Nothing is deleted or recreated, so element ids, types, parameters, circuits and tags all survive. " +
+        "Required: moves — a JSON array, each entry one of: " +
+        "{elementId, targetXmm, targetYmm, targetZmm} puts the insertion point on a coordinate (needs a " +
+        "LocationPoint; an omitted axis keeps its value, so leaving out targetZmm preserves the elevation); " +
+        "{elementId, deltaXmm, deltaYmm, deltaZmm} shifts by a displacement along the model axes; " +
+        "{elementId, deltaRightMm, deltaUpMm} shifts along the axes of the view that owns the element — the way " +
+        "to move Detail Items, detail lines, text and other view-specific elements in a plan, section, elevation " +
+        "or drafting view. Displacements work for elements without a LocationPoint (lines, walls, pipes). " +
+        "Optional per entry: expectedXmm/Ymm/Zmm, a concurrency check — an element further than " +
+        "positionToleranceMm (default 1.0) from them is reported stale and left alone. Optional: viewId (the view " +
+        "whose axes deltaRightMm/deltaUpMm follow for model elements), atomic (default true — any failure undoes " +
+        "the whole batch), skipPinned (default true). View-specific elements only move within their view's plane; " +
+        "group members are reported, not moved. Up to 2000 moves per call, in one transaction, reversible with a " +
+        "single Revit undo. Run revit_preview_move_elements first.";
 
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Elements;
@@ -72,6 +78,15 @@ public class MoveElementsTool : IRevitMcpTool
 
         var moved = 0;
         var runtimeFailures = 0;
+
+        // Where each element is now, so the response can say how far it really travelled. Revit can
+        // hold an element back (a host, a constraint, a work plane) without raising an error.
+        var before = new Dictionary<long, PointMm?>();
+        foreach (var plan in plans.Where(plan => plan.CanMove))
+        {
+            var element = doc.GetElement(MoveElementsService.ToElementId(plan.ElementId));
+            before[plan.ElementId] = element == null ? null : MoveElementsService.TrackingPoint(doc, element);
+        }
 
         cancellationToken.ThrowIfCancellationRequested();
         var (txSuccess, diagnostics) = RevitTransactionRunner.Run(doc, "Revit MCP - Move Elements", () =>
@@ -141,12 +156,23 @@ public class MoveElementsTool : IRevitMcpTool
             // circuits, hosted families — hundreds of times over for no benefit.
             if (moved > 0)
                 doc.Regenerate();
+
+            foreach (var plan in plans.Where(plan => plan.Status == MoveStatus.Moved))
+            {
+                var drift = MoveElementsService.RecordResult(doc, plan, before[plan.ElementId]);
+                if (drift != null)
+                    warnings.Add(drift);
+            }
         });
 
         if (!txSuccess)
         {
             foreach (var plan in plans.Where(plan => plan.Status == MoveStatus.Moved))
+            {
                 plan.Status = MoveStatus.RolledBack;
+                plan.ResultPointMm = null;
+                plan.ActualTranslationMm = null;
+            }
 
             foreach (var plan in plans.Where(plan => plan.CanMove && plan.Status == MoveStatus.Ready))
                 plan.Status = MoveStatus.NotAttempted;
