@@ -288,6 +288,8 @@ public class App : IExternalApplication
             // Bulk moves onto exact model coordinates, without recreating anything
             handler.RegisterTool(new PreviewMoveElementsTool());
             handler.RegisterTool(new MoveElementsTool());
+            handler.RegisterTool(new PreviewPlaceOnFaceTool());
+            handler.RegisterTool(new PlaceOnFaceTool());
             handler.RegisterTool(new PreviewCopyElementsTool());
             handler.RegisterTool(new CopyElementsTool());
 

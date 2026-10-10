@@ -100,6 +100,7 @@ Important repository references:
 - [`docs/model-graph.md`](docs/model-graph.md) — per-model routing graph: find element ids cheaply before querying the live model
 - [`docs/move-elements.md`](docs/move-elements.md) — moving existing elements onto exact coordinates or by a displacement, including Detail Items and other view-specific elements
 - [`docs/copy-elements.md`](docs/copy-elements.md) — copying any element Revit can copy, within a view, across views or in the model
+- [`docs/place-on-face.md`](docs/place-on-face.md) — placing face-based families on wall, ceiling and floor faces found from points, in the host model or in links
 - [`docs/place-from-cad.md`](docs/place-from-cad.md) — placing families at locations marked in an imported DWG, and reconstructing fixtures from loose DWG line work
 - [`docs/skills.md`](docs/skills.md) — company skills, project overrides, and the skill runner
 - [`docs/standards-lookup.md`](docs/standards-lookup.md) — offline standards indexing and retrieval
