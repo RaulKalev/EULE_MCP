@@ -12,6 +12,8 @@ public sealed class GraphRoutingState
     /// <summary>Element categories present in the graph (largest first).</summary>
     public List<string> Categories { get; set; } = [];
     public List<string> Levels { get; set; } = [];
+    /// <summary>Element count per category in the graph: what a category-wide live read would return, roughly.</summary>
+    public Dictionary<string, long> ElementsByCategory { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     public bool Usable => Exists && !Stale;
     public long Count(string kind) => NodesByKind.TryGetValue(kind, out var n) ? n : 0;
@@ -191,6 +193,71 @@ public static class GraphRouting
             return $"{matched} elements were read live. The model graph is stale ({state.StaleReason}); after revit_graph_build, {find} returns the ids without reading parameters;{tail}";
         return $"{matched} elements were read live. Graph-first is cheaper: {find} returns the ids without reading parameters;{tail}";
     }
+
+    // ── graph-first gate (#96) ────────────────────────────────────────────────
+
+    /// <summary>A category-wide live read of at least this many elements is answered with the graph route instead.</summary>
+    public const int GateThreshold = 200;
+
+    /// <summary>Status of a gated result: the tool did not run, the graph route is in Data.</summary>
+    public const string GateStatus = "graph_first";
+
+    /// <summary>Per-call bypass argument: false reads the whole category live after all.</summary>
+    public const string GateArg = "graphFirst";
+
+    /// <summary>Tools that return one record per element, so a whole category costs the most.</summary>
+    public static readonly HashSet<string> GatedTools = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "revit_get_elements_info",
+        "revit_find_elements_by_parameter"
+    };
+
+    /// <summary>What a live read asks for, as far as the gate cares.</summary>
+    public sealed class BroadRead
+    {
+        public string Tool { get; set; } = string.Empty;
+        public string? Category { get; set; }
+        public bool HasElementIds { get; set; }
+        public bool UseSelection { get; set; }
+        /// <summary>Parameter filters narrow by live values, which the graph does not hold: never gated.</summary>
+        public bool HasFilters { get; set; }
+        public bool SummaryOnly { get; set; }
+        /// <summary>The caller's graphFirst argument; false is the bypass.</summary>
+        public bool GraphFirst { get; set; } = true;
+    }
+
+    /// <summary>
+    /// True when the read is an unnarrowed scan of a whole category that the graph can narrow first: no ids, no
+    /// selection, no parameter filters, not a summary. Whether it is big enough is <see cref="GateCount"/>'s call.
+    /// </summary>
+    public static bool IsGateCandidate(BroadRead read) =>
+        GatedTools.Contains(read.Tool) && read.GraphFirst && !read.HasElementIds && !read.UseSelection && !read.HasFilters
+        && !read.SummaryOnly && !string.IsNullOrWhiteSpace(read.Category);
+
+    /// <summary>
+    /// The number of elements the graph holds for the read's category when the read should be gated, else null:
+    /// only with a fresh graph (a missing or stale one cannot be trusted to route), and only from
+    /// <see cref="GateThreshold"/> elements up.
+    /// </summary>
+    public static long? GateCount(BroadRead read, GraphRoutingState? state)
+    {
+        if (!IsGateCandidate(read) || state == null || !state.Usable) return null;
+        return state.ElementsByCategory.TryGetValue(read.Category!.Trim(), out var count) && count >= GateThreshold ? count : null;
+    }
+
+    /// <summary>The two calls that replace a gated read: ids from the graph, then live values for the ids needed.</summary>
+    public static List<RouteStep> GateSteps(BroadRead read) => new()
+    {
+        Step("revit_graph_query", "Ids, names and levels of the category without reading parameters; add level or nameContains to narrow.",
+            Args(("operation", "find"), ("kind", "element"), ("category", read.Category), ("pageSize", 200))),
+        Step(read.Tool, "Live values only for the ids you need.",
+            Args(("elementIds", "<ids from the previous step>"), ("compact", true)))
+    };
+
+    public static string GateMessage(BroadRead read, long count) =>
+        $"Not read: '{read.Category}' has about {count} elements in the model graph. Narrow in the graph first " +
+        $"(revit_graph_query operation=find kind=element category=\"{read.Category}\"), then call {read.Tool} with elementIds. " +
+        $"To read the whole category live anyway, repeat this call with {GateArg}=false.";
 
     // ── helpers ───────────────────────────────────────────────────────────────
 

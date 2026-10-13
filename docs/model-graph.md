@@ -254,8 +254,30 @@ The connector routes discovery through the graph by itself, without relying on r
   `revit_group_by_parameter`, `revit_group_elements` and `revit_export_query_to_excel`, when called
   with a category scope (no `elementIds`, no selection) that matches 50 or more elements, return a
   `routingHint` in `data` naming the equivalent `revit_graph_query find` call. The live result is
-  never changed or blocked. Opt out per call with `graphHint=false`, or for a user with
+  never changed or blocked by a hint. Opt out per call with `graphHint=false`, or for a user with
   `config_update scope=user updates={"$.graph.routingHints": false}`.
+
+### Enforcement (#96)
+
+Hints arrive after the cost is paid, and the activity logs showed agents reading broadly long before they
+touched the graph (in the first two weeks of October, 257 of 477 broad live reads came before any graph call
+that day). Two mechanisms make the graph the default path instead of a recommendation:
+
+- **The graph is kept ready.** Before a graph read (`revit_graph_status`, `_summary`, `_query`, `_route`) and
+  before a read the gate may answer, a missing graph is built and a stale one refreshed (incrementally when
+  possible). The result carries a warning saying so. A graph that is still stale after an automatic build is
+  left alone for ten minutes. Switch off per user with `{"$.graph.autoBuild": false}`.
+- **The gate.** `revit_get_elements_info` and `revit_find_elements_by_parameter` called for a **whole category**
+  — no `elementIds`, no selection, no parameter `filters`, not `summaryOnly` — are not run when the graph is
+  fresh and holds 200 or more elements of that category. The result is `success: true`, `status: "graph_first"`,
+  with the element count and the two calls to make (`revit_graph_query find`, then the same tool with
+  `elementIds`). `graphFirst=false` on the call reads everything after all; `{"$.graph.enforce": false}` in the
+  user config switches the gate off.
+
+What the gate deliberately leaves alone: reads with parameter filters (the graph holds no live values), reads by
+id or selection, summaries, grouping tools (their output is already aggregated), and everything when the graph
+is missing or stale and could not be refreshed. The count comes from the graph and includes indexed link
+elements, so it is "about", not exact.
 
 Examples:
 

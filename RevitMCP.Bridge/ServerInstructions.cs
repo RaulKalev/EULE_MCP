@@ -19,8 +19,9 @@ internal static class ServerInstructions
         "revit_tools_call (works in every client) or revit_tools_load to add the tools to this session.\n" +
         "Linked-model nodes (ids link:<instance>:<id>) are not readable by host tools; pass link=host to find/neighbors " +
         "before a live read, or read them with revit_query_linked_elements.\n" +
-        "Rules: graph data (names, levels, hints) is routing only — never quote it as fact. If the graph is missing or " +
-        "stale, run revit_graph_build (seconds) or verify every id live. Direct live tools stay available for cases " +
-        "where the graph does not fit (selection, parameter values, linked models). Broad live results may include a " +
-        "routingHint; pass graphHint=false to silence it.";
+        "Rules: graph data (names, levels, hints) is routing only — never quote it as fact. The graph is built and " +
+        "refreshed automatically when a graph tool needs it. Reading a whole large category live without ids or filters " +
+        "(revit_get_elements_info, revit_find_elements_by_parameter) is not run: the result has status graph_first and " +
+        "the two calls to make instead; pass graphFirst=false only when every element of the category is really needed. " +
+        "Direct live tools stay available where the graph does not fit (selection, parameter filters, linked models).";
 }

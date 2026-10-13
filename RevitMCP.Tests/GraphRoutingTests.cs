@@ -110,4 +110,55 @@ public class GraphRoutingTests
     [InlineData("everything", null)]
     public void ExtractNameHint(string text, string? expected) =>
         Assert.Equal(expected, GraphRouting.ExtractNameHint(text));
+
+    // ── graph-first gate (#96) ────────────────────────────────────────────────
+
+    private static GraphRoutingState WithCounts()
+    {
+        var state = Fresh();
+        state.ElementsByCategory = new(StringComparer.OrdinalIgnoreCase) { ["Electrical Fixtures"] = 2200, ["Lighting Devices"] = 199 };
+        return state;
+    }
+
+    private static GraphRouting.BroadRead Read(string tool = "revit_find_elements_by_parameter", string? category = "Electrical Fixtures") =>
+        new() { Tool = tool, Category = category };
+
+    [Fact]
+    public void Gate_StopsAWholeLargeCategory_AndSaysWhatToCallInstead()
+    {
+        var read = Read();
+        Assert.Equal(2200, GraphRouting.GateCount(read, WithCounts()));
+        Assert.Equal(2200, GraphRouting.GateCount(Read(category: " electrical fixtures "), WithCounts()));   // name as typed
+
+        var steps = GraphRouting.GateSteps(read);
+        Assert.Equal(["revit_graph_query", "revit_find_elements_by_parameter"], steps.Select(s => s.Tool));
+        Assert.Equal("Electrical Fixtures", steps[0].Args["category"]);
+        Assert.Contains("graphFirst=false", GraphRouting.GateMessage(read, 2200));
+    }
+
+    [Fact]
+    public void Gate_LetsNarrowedAndSmallReadsThrough()
+    {
+        var state = WithCounts();
+        Assert.Null(GraphRouting.GateCount(Read(category: "Lighting Devices"), state));                       // below the threshold
+        Assert.Null(GraphRouting.GateCount(Read(category: "Walls"), state));                                  // not in the graph
+        Assert.Null(GraphRouting.GateCount(Read(category: ""), state));
+        Assert.Null(GraphRouting.GateCount(new() { Tool = "revit_find_elements_by_parameter", Category = "Electrical Fixtures", HasElementIds = true }, state));
+        Assert.Null(GraphRouting.GateCount(new() { Tool = "revit_find_elements_by_parameter", Category = "Electrical Fixtures", UseSelection = true }, state));
+        Assert.Null(GraphRouting.GateCount(new() { Tool = "revit_find_elements_by_parameter", Category = "Electrical Fixtures", HasFilters = true }, state));
+        Assert.Null(GraphRouting.GateCount(new() { Tool = "revit_get_elements_info", Category = "Electrical Fixtures", SummaryOnly = true }, state));
+        Assert.Null(GraphRouting.GateCount(new() { Tool = "revit_get_elements_info", Category = "Electrical Fixtures", GraphFirst = false }, state));  // the bypass
+        Assert.Null(GraphRouting.GateCount(Read(tool: "revit_group_by_parameter"), state));                   // aggregated output: not gated
+    }
+
+    [Fact]
+    public void Gate_NeedsAFreshGraph()
+    {
+        var stale = WithCounts();
+        stale.Stale = true;
+        Assert.Null(GraphRouting.GateCount(Read(), stale));
+        Assert.Null(GraphRouting.GateCount(Read(), new GraphRoutingState()));
+        Assert.Null(GraphRouting.GateCount(Read(), null));
+        Assert.True(GraphRouting.IsGateCandidate(Read()));   // still a candidate: the caller refreshes the graph first
+    }
 }

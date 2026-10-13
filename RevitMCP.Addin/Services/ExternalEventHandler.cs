@@ -340,13 +340,22 @@ public class ExternalEventHandler : IExternalEventHandler
         try
         {
             item.CancellationToken.ThrowIfCancellationRequested();
-            var execution = tool.ExecuteAsync(app, request, item.CancellationToken);
-            if (!execution.IsCompleted)
-                throw new InvalidOperationException($"Tool '{tool.Name}' performed asynchronous work on the Revit API thread. Mark safe non-Revit I/O as background execution instead.");
 
-            var result = execution.GetAwaiter().GetResult();
-            // Graph-first routing hint on broad live queries (#64); advisory, never fails the result.
-            RevitMCP.Addin.Tools.Graph.GraphRoutingSupport.TryAttachHint(app, request, result);
+            // Graph-first (#96): keep the graph built and fresh for the calls that use it, and answer an
+            // unnarrowed read of a large category with the graph route instead of running it.
+            var graphNote = RevitMCP.Addin.Tools.Graph.GraphRoutingSupport.EnsureFresh(app, request);
+            var result = RevitMCP.Addin.Tools.Graph.GraphRoutingSupport.TryGate(app, request);
+            if (result == null)
+            {
+                var execution = tool.ExecuteAsync(app, request, item.CancellationToken);
+                if (!execution.IsCompleted)
+                    throw new InvalidOperationException($"Tool '{tool.Name}' performed asynchronous work on the Revit API thread. Mark safe non-Revit I/O as background execution instead.");
+
+                result = execution.GetAwaiter().GetResult();
+                // Graph-first routing hint on broad live queries (#64); advisory, never fails the result.
+                RevitMCP.Addin.Tools.Graph.GraphRoutingSupport.TryAttachHint(app, request, result);
+            }
+            if (graphNote != null) result.Warnings.Add(graphNote);
             tcs.TrySetResult(result);
             if (request.IsApproved)
                 _ = _activityLogger?.WriteAsync(request, result, _lastContext);

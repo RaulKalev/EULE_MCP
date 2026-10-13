@@ -667,6 +667,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("If true, list the annotation tags attached to each returned element (tag text, tag family/type, owner view). An element can carry multiple tags; an empty list means it has none.")] bool includeTags = false,
         [Description("If true, return identity fields and parameter name/value pairs only, omitting verbose parameter metadata. Default false preserves the full response.")] bool compact = false,
         [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
+        [Description("Default true: a whole-category read (no elementIds, selection or filters) of 200+ elements is not run when the model graph is fresh; the result has status graph_first with the calls to make instead. False reads the whole category live.")] bool graphFirst = true,
         CancellationToken cancellationToken = default)
     {
         if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
@@ -691,6 +692,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["compact"] = compact
         };
         args["graphHint"] = graphHint;
+        args["graphFirst"] = graphFirst;
         var result = await pipeClient.SendAsync("revit_find_elements_by_parameter", args, cancellationToken);
         return FormatResult(result);
     }
@@ -714,6 +716,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("If true, list the annotation tags attached to each returned element (tag text, tag family/type, owner view). An element can carry multiple tags; an empty list means it has none.")] bool includeTags = false,
         [Description("If true, return identity fields and parameter name/value pairs only, omitting verbose parameter metadata. Default false preserves the full response.")] bool compact = false,
         [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
+        [Description("Default true: a whole-category read (no elementIds, selection or filters) of 200+ elements is not run when the model graph is fresh; the result has status graph_first with the calls to make instead. False reads the whole category live.")] bool graphFirst = true,
         CancellationToken cancellationToken = default)
     {
         if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
@@ -738,6 +741,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["compact"] = compact
         };
         args["graphHint"] = graphHint;
+        args["graphFirst"] = graphFirst;
         var result = await pipeClient.SendAsync("revit_get_elements_info", args, cancellationToken);
         return FormatResult(result);
     }
