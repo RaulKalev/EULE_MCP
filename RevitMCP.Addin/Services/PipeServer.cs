@@ -164,6 +164,7 @@ public class PipeServer
             Data = new
             {
                 connectorStatus = "Running",
+                addin = RevitMCP.Addin.Tools.GetConnectionStatusTool.AddinBuild(),
                 busy = ExternalEventService.BusyData(snapshot),
                 lastKnownContext = context == null ? null : new
                 {

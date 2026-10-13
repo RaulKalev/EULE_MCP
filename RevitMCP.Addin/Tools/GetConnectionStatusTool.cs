@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using RevitMCP.Addin.Approval;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Services;
+using RevitMCP.Core.Configuration;
 using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Tools;
@@ -14,6 +15,10 @@ public class GetConnectionStatusTool : IRevitMcpTool
     public string Description => "Returns current Revit connection and document status.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Connection;
+
+    /// <summary>Which add-in build Revit loaded, compared with the published package (Addin\&lt;year&gt;\ is two below its root).</summary>
+    internal static Dictionary<string, object?> AddinBuild() =>
+        BuildInfo.Describe(typeof(GetConnectionStatusTool).Assembly, levelsUpToPackage: 2, restartHint: "Restart Revit to load it.");
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
@@ -34,7 +39,8 @@ public class GetConnectionStatusTool : IRevitMcpTool
             revitUsername = ctx.RevitUsername,
             selectedElementCount = ctx.SelectedElementCount,
             permissionMode = PermissionModeStatus.GetName(isDirectEditEnabled),
-            destructiveActionsRequireManualApproval = PermissionModeStatus.DestructiveActionsRequireManualApproval
+            destructiveActionsRequireManualApproval = PermissionModeStatus.DestructiveActionsRequireManualApproval,
+            addin = AddinBuild()
         };
 
         sw.Stop();

@@ -18,10 +18,20 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         "e.g. {\"parameterName\":\"Type\",\"operator\":\"contains\",\"value\":\"WiFi\"}. Use 'Type Id' to match a numeric type id.";
 
     [McpServerTool(Name = "revit_get_connection_status", ReadOnly = true),
-     Description("Returns current Revit connection and document status including model title, worksharing info, active view, and selected element count. Answers within a few seconds even while Revit is busy: then status is 'revit_busy' with the reason (modal dialog and its title, running tool, active command, unresponsive window) and the last known document context.")]
+     Description("Returns current Revit connection and document status including model title, worksharing info, active view, and selected element count. Also the connector's version: 'addin' (loaded by Revit) and 'bridge' (started by the AI client), each with its commit, build time, the published package's version.txt and matchesPackage (false = a different package is published; restart as the note says). Answers within a few seconds even while Revit is busy: then status is 'revit_busy' with the reason (modal dialog and its title, running tool, active command, unresponsive window) and the last known document context.")]
     public async Task<string> GetConnectionStatus(CancellationToken cancellationToken)
     {
         var result = await pipeClient.SendAsync("revit_get_connection_status", [], cancellationToken);
+        // The bridge's own build is reported here, so it is known even when Revit is not reachable.
+        var data = result.Data as Newtonsoft.Json.Linq.JObject ?? new Newtonsoft.Json.Linq.JObject();
+        data["bridge"] = Newtonsoft.Json.Linq.JObject.FromObject(RevitMCP.Core.Configuration.BuildInfo.Describe(
+            typeof(RevitMcpTools).Assembly, levelsUpToPackage: 1, restartHint: "Restart the AI client (Claude, Codex) to start it."));
+        if (result.Success && data["addin"] == null)
+            data["addin"] = new Newtonsoft.Json.Linq.JObject
+            {
+                ["note"] = "The add-in Revit loaded does not report its version, so it is older than this bridge. Restart Revit to load the published one."
+            };
+        result.Data = data;
         return FormatResult(result);
     }
 
