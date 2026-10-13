@@ -9,6 +9,11 @@
 //   data-revit-select-all                click selects every element on the page;
 //   data-revit-select-all="#table1"      ...or every element inside that CSS selector
 //
+// A table whose body rows carry data-revit-id also gets tools without any markup: a search box,
+// filters per column, sorting by a click on a header, grouping by a column, and "select shown".
+//   data-revit-tools="none"              on the table (or an ancestor): leave it alone
+//   data-sort="2024-05-01"               on a cell: the value to sort and filter by instead of its text
+//
 // and exposes the same to the page's own scripts as window.revit:
 //   revit.select(ids, {zoom}), revit.values(ids, parameters), revit.set(changes),
 //   revit.refresh(), revit.status()
@@ -31,6 +36,9 @@
     was: 'Lehe koostamisel: ', gone: 'Elementi ei ole enam mudelis', noParam: 'Elemendil ei ole seda parameetrit',
     updated: function (n) { return n ? 'Uuendatud väärtusi: ' + n : 'Väärtused on ajakohased'; },
     editHint: 'Topeltklõps muutmiseks',
+    search: 'Otsi…', groupBy: 'Grupeeri', noGroup: 'Grupeerimata', filters: 'Filtrid', reset: 'Lähtesta', all: 'Kõik',
+    empty: '(tühi)', selectShown: 'Vali nähtavad Revitis', selectGroup: 'Vali Revitis', contains: 'sisaldab…',
+    sortHint: 'Klõps sorteerib',
     approve: 'Kinnita muudatus Revitis: RevitMCP aken → Pending',
     saved: function (n) { return n === 1 ? 'Väärtus kirjutatud Revitisse' : n + ' väärtust kirjutatud Revitisse'; },
     notSaved: 'Ei kirjutatud: ', rejected: 'Muudatus lükati Revitis tagasi', timeout: 'Kinnitust ei tulnud. Muudatus ootab Revitis edasi.'
@@ -44,6 +52,9 @@
     was: 'When the page was made: ', gone: 'This element is no longer in the model', noParam: 'The element has no such parameter',
     updated: function (n) { return n ? 'Values updated: ' + n : 'Values are up to date'; },
     editHint: 'Double click to edit',
+    search: 'Search…', groupBy: 'Group by', noGroup: 'No grouping', filters: 'Filters', reset: 'Reset', all: 'All',
+    empty: '(empty)', selectShown: 'Select shown in Revit', selectGroup: 'Select in Revit', contains: 'contains…',
+    sortHint: 'Click to sort',
     approve: 'Approve the change in Revit: RevitMCP window → Pending',
     saved: function (n) { return n === 1 ? 'Value written to Revit' : n + ' values written to Revit'; },
     notSaved: 'Not written: ', rejected: 'The change was rejected in Revit', timeout: 'No approval yet. The change is still waiting in Revit.'
@@ -235,6 +246,7 @@
     return status().then(function (s) {
       if (!s.ok) { if (announce) say(s.message, true); return s; }
       return fill().then(function (r) {
+        tables();
         if (!r.ok) { setState(r); if (announce) say(r.message, true); }
         else if (announce) say(TEXT.updated(r.changed || 0));
         return r;
@@ -327,11 +339,249 @@
     input.addEventListener('blur', function () { finish(true); });
   }
 
+  // ── Table tools: search, column filters, sorting, grouping ───────────────
+  // Works on the rows that are there; nothing is fetched. Rows that do not match get the hidden
+  // attribute, which also keeps them out of "select all".
+  function cellValue(cell) {
+    return cell ? String(cell.getAttribute('data-sort') || cell.textContent || '').replace(/\s+/g, ' ').trim() : '';
+  }
+  function toNumber(text) {
+    var m = /^-?\d+(?:[.,]\d+)?/.exec(text.replace(/[\s ]/g, ''));
+    return m ? parseFloat(m[0].replace(',', '.')) : NaN;
+  }
+  var collator = (window.Intl && Intl.Collator) ? new Intl.Collator(root.lang || undefined, { numeric: true, sensitivity: 'base' }) : null;
+  function compareText(a, b) { return collator ? collator.compare(a, b) : (a < b ? -1 : a > b ? 1 : 0); }
+
+  function setupTable(table) {
+    if (table.closest('[data-revit-tools="none"]') || !table.querySelector('tr[data-revit-id]')) return;
+    if (table.tBodies.length !== 1 || table.querySelector('td[rowspan], td[colspan], th[rowspan], th[colspan]')) return;
+    var body = table.tBodies[0];
+    var headRow = table.tHead && table.tHead.rows.length ? table.tHead.rows[table.tHead.rows.length - 1] : null;
+    if (!headRow) {
+      var first = body.rows[0];
+      if (!first || first.hasAttribute('data-revit-id') || !first.querySelector('th')) return;
+      table.createTHead().appendChild(first);   // sorting reorders the body; the header must not move with it
+      headRow = first;
+    }
+    var heads = [].slice.call(headRow.cells);
+    if (!heads.length) return;
+
+    var state = { query: '', filters: {}, sort: -1, dir: 1, group: -1, collapsed: {}, filtersOpen: false };
+    var order = 0;
+    function dataRows() {
+      return [].filter.call(body.rows, function (row) {
+        if (row.classList.contains('revit-group')) return false;
+        if (row.__revitOrder == null) row.__revitOrder = order++;
+        return true;
+      });
+    }
+    function numeric(column, rows) {
+      var seen = false;
+      for (var i = 0; i < rows.length; i++) {
+        var text = cellValue(rows[i].cells[column]);
+        if (!text) continue;
+        if (isNaN(toNumber(text))) return false;
+        seen = true;
+      }
+      return seen;
+    }
+
+    // Toolbar
+    var tools = el('div', 'revit-tools');
+    var search = el('input');
+    search.type = 'search';
+    search.placeholder = TEXT.search;
+    search.setAttribute('aria-label', TEXT.search);
+    var groupSelect = el('select');
+    groupSelect.setAttribute('aria-label', TEXT.groupBy);
+    var none = el('option', null, TEXT.noGroup);
+    none.value = '-1';
+    groupSelect.appendChild(none);
+    heads.forEach(function (head, i) {
+      var name = cellValue(head);
+      if (!name) return;
+      var option = el('option', null, TEXT.groupBy + ': ' + name);
+      option.value = String(i);
+      groupSelect.appendChild(option);
+    });
+    var filterButton = el('button', 'ghost', TEXT.filters);
+    filterButton.type = 'button';
+    var resetButton = el('button', 'ghost', TEXT.reset);
+    resetButton.type = 'button';
+    var count = el('span', 'revit-count');
+    var selectButton = el('button', null, TEXT.selectShown);
+    selectButton.type = 'button';
+    [search, groupSelect, filterButton, resetButton, el('span', 'revit-spacer'), count, selectButton].forEach(function (n) { tools.appendChild(n); });
+    table.parentNode.insertBefore(tools, table);
+
+    var filterRow = null;
+    function buildFilters() {
+      if (filterRow) filterRow.parentNode.removeChild(filterRow);
+      filterRow = null;
+      if (!state.filtersOpen) return;
+      var rows = dataRows();
+      filterRow = el('tr', 'revit-filters');
+      heads.forEach(function (head, i) {
+        var cell = el('td'), control;
+        var distinct = [];
+        rows.forEach(function (row) { var v = cellValue(row.cells[i]); if (distinct.indexOf(v) < 0) distinct.push(v); });
+        var current = state.filters[i];
+        if (distinct.length >= 2 && distinct.length <= 24 && distinct.length < rows.length) {
+          control = el('select');
+          var all = el('option', null, TEXT.all);
+          all.value = '';
+          control.appendChild(all);
+          distinct.sort(compareText).forEach(function (v) {
+            var option = el('option', null, v === '' ? TEXT.empty : v);
+            option.value = '=' + v;
+            control.appendChild(option);
+          });
+          control.value = current && current.exact ? '=' + current.value : '';
+          control.addEventListener('change', function () {
+            if (control.value === '') delete state.filters[i];
+            else state.filters[i] = { exact: true, value: control.value.slice(1) };
+            apply();
+          });
+        } else {
+          control = el('input');
+          control.type = 'search';
+          control.placeholder = TEXT.contains;
+          control.value = current && !current.exact ? current.value : '';
+          control.addEventListener('input', function () {
+            if (control.value.trim() === '') delete state.filters[i];
+            else state.filters[i] = { exact: false, value: control.value.trim().toLowerCase() };
+            apply();
+          });
+        }
+        control.setAttribute('aria-label', cellValue(head));
+        cell.appendChild(control);
+        filterRow.appendChild(cell);
+      });
+      headRow.parentNode.appendChild(filterRow);
+    }
+
+    function matches(row) {
+      if (state.query && row.textContent.toLowerCase().indexOf(state.query) < 0) return false;
+      for (var key in state.filters) {
+        var filter = state.filters[key], text = cellValue(row.cells[key]);
+        if (filter.exact ? text !== filter.value : text.toLowerCase().indexOf(filter.value) < 0) return false;
+      }
+      return true;
+    }
+
+    function apply() {
+      [].slice.call(body.querySelectorAll('tr.revit-group')).forEach(function (row) { body.removeChild(row); });
+      var rows = dataRows();
+      var sortNumeric = state.sort >= 0 && numeric(state.sort, rows);
+      var groupNumeric = state.group >= 0 && numeric(state.group, rows);
+      function compareBy(column, isNumber, a, b) {
+        var x = cellValue(a.cells[column]), y = cellValue(b.cells[column]);
+        if (x === '' || y === '') return x === y ? 0 : (x === '' ? 1 : -1);   // empty values last
+        return isNumber ? toNumber(x) - toNumber(y) : compareText(x, y);
+      }
+      rows.sort(function (a, b) {
+        var result = state.group >= 0 ? compareBy(state.group, groupNumeric, a, b) : 0;
+        if (!result && state.sort >= 0) result = compareBy(state.sort, sortNumeric, a, b) * state.dir;
+        return result || a.__revitOrder - b.__revitOrder;
+      });
+
+      var shown = 0, groups = [], current = null;
+      rows.forEach(function (row) {
+        var match = matches(row);
+        row.__revitMatch = match;
+        if (match) shown++;
+        if (state.group >= 0 && match) {
+          var key = cellValue(row.cells[state.group]);
+          if (!current || current.key !== key) { current = { key: key, rows: [] }; groups.push(current); }
+          current.rows.push(row);
+        }
+      });
+
+      var fragment = document.createDocumentFragment();
+      if (state.group >= 0) {
+        groups.forEach(function (group) {
+          var collapsed = !!state.collapsed[group.key];
+          var header = el('tr', 'revit-group' + (collapsed ? ' collapsed' : ''));
+          var cell = el('td');
+          cell.colSpan = heads.length;
+          cell.appendChild(el('span', 'revit-caret', collapsed ? '▸' : '▾'));
+          cell.appendChild(el('b', null, group.key === '' ? TEXT.empty : group.key));
+          cell.appendChild(el('span', 'badge', String(group.rows.length)));
+          var pick = el('button', 'ghost', TEXT.selectGroup);
+          pick.type = 'button';
+          pick.addEventListener('click', function (event) {
+            event.stopPropagation();
+            select(group.rows.map(function (row) { return row.getAttribute('data-revit-id'); }).join(','));
+          });
+          cell.appendChild(pick);
+          header.appendChild(cell);
+          header.addEventListener('click', function () { state.collapsed[group.key] = !collapsed; apply(); });
+          fragment.appendChild(header);
+          group.rows.forEach(function (row) { row.hidden = collapsed; fragment.appendChild(row); });
+        });
+        rows.forEach(function (row) { if (!row.__revitMatch) { row.hidden = true; fragment.appendChild(row); } });
+      } else {
+        rows.forEach(function (row) { row.hidden = !row.__revitMatch; fragment.appendChild(row); });
+      }
+      body.appendChild(fragment);
+
+      heads.forEach(function (head, i) {
+        if (state.sort === i) head.setAttribute('aria-sort', state.dir > 0 ? 'ascending' : 'descending');
+        else head.removeAttribute('aria-sort');
+      });
+      count.textContent = shown === rows.length ? String(rows.length) : shown + ' / ' + rows.length;
+      var active = state.query || state.sort >= 0 || state.group >= 0 || Object.keys(state.filters).length > 0;
+      resetButton.hidden = !active;
+      filterButton.classList.toggle('on', state.filtersOpen);
+    }
+
+    heads.forEach(function (head, i) {
+      head.classList.add('revit-sortable');
+      head.tabIndex = 0;
+      if (!head.title) head.title = TEXT.sortHint;
+      function cycle() {
+        if (state.sort !== i) { state.sort = i; state.dir = 1; }
+        else if (state.dir > 0) state.dir = -1;
+        else state.sort = -1;
+        apply();
+      }
+      head.addEventListener('click', cycle);
+      head.addEventListener('keydown', function (event) { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); cycle(); } });
+    });
+    search.addEventListener('input', function () { state.query = search.value.trim().toLowerCase(); apply(); });
+    groupSelect.addEventListener('change', function () { state.group = parseInt(groupSelect.value, 10); state.collapsed = {}; apply(); });
+    filterButton.addEventListener('click', function () { state.filtersOpen = !state.filtersOpen; buildFilters(); apply(); });
+    resetButton.addEventListener('click', function () {
+      state.query = ''; state.filters = {}; state.sort = -1; state.group = -1; state.collapsed = {};
+      search.value = ''; groupSelect.value = '-1';
+      buildFilters();
+      apply();
+    });
+    selectButton.addEventListener('click', function () {
+      select(dataRows().filter(function (row) { return row.__revitMatch !== false && row.hasAttribute('data-revit-id'); })
+        .map(function (row) { return row.getAttribute('data-revit-id'); }).join(','));
+    });
+
+    table.__revitTools = { apply: apply, active: function () { return state.sort >= 0 || state.group >= 0 || state.query || Object.keys(state.filters).length > 0; } };
+    apply();
+  }
+
+  // New tables get their tools; a table already sorted, filtered or grouped is laid out again,
+  // because live values may have changed what a row matches.
+  function tables() {
+    [].forEach.call(document.querySelectorAll('table'), function (table) {
+      try {
+        if (!table.__revitTools) setupTable(table);
+        else if (table.__revitTools.active()) table.__revitTools.apply();
+      } catch (e) { /* a table the tools cannot handle stays as the page made it */ }
+    });
+  }
+
   // ── Wiring ───────────────────────────────────────────────────────────────
   var clickTimer = null;
   document.addEventListener('click', function (event) {
     var target = event.target;
-    if (!target || !target.closest || target.closest('#revit-bar') || target.closest('.revit-editing')) return;
+    if (!target || !target.closest || target.closest('#revit-bar, .revit-tools, .revit-filters, .revit-group, .revit-editing')) return;
 
     var all = target.closest('[data-revit-select-all]');
     if (all) {
@@ -374,7 +624,7 @@
     refresh: function () { return refresh(false); }
   };
 
-  function start() { buildUi(); refresh(false); }
+  function start() { buildUi(); tables(); refresh(false); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
 })();

@@ -54,7 +54,8 @@ When the user gets a list or report of model elements to go through, publish it 
 (`pages` group, see [`docs/model-pages.md`](docs/model-pages.md)) instead of only printing it. Mark rows with
 `data-revit-id` and value cells with `data-revit-param`; the served page then selects elements in Revit, shows live
 values and lets the user edit them without the agent (a write needs approval in Revit, like an agent's). Write plain
-semantic HTML: a default EULE-style theme with a black dark mode is applied. The HTML must be self-contained (no CDN).
+semantic HTML and one plain table per element list: a default EULE-style theme with a black dark mode is applied, and
+such a table gets search, filters, sorting and grouping by itself. The HTML must be self-contained (no CDN).
 
 ## Development notes
 

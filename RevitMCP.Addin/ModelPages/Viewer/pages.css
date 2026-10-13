@@ -233,6 +233,32 @@
 @keyframes revit-wait { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 @keyframes revit-flash { from { background-color: var(--ok-soft); } to { background-color: transparent; } }
 
+/* Table tools: search, filters, sorting, grouping. */
+.revit-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0 -4px; font: 14px var(--font-sans); }
+.revit-tools .revit-spacer { flex: 1; }
+.revit-tools .revit-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+.revit-tools input[type=search] { min-width: 200px; }
+.revit-tools input, .revit-tools select, .revit-filters input, .revit-filters select {
+  font: 14px var(--font-sans); color: var(--text); background: var(--bg-soft);
+  border: 1px solid var(--stroke-strong); border-radius: 10px; padding: 6px 10px;
+}
+.revit-tools button { font: 600 13px var(--font-sans); border-radius: 999px; padding: 6px 14px; cursor: pointer;
+  color: var(--on-accent); background: var(--accent); border: 1px solid transparent; }
+.revit-tools button.ghost, .revit-group button { color: var(--text); background: transparent; border: 1px solid var(--stroke-strong); }
+.revit-tools button.ghost:hover, .revit-tools button.on, .revit-group button:hover { background: var(--accent-soft); border-color: var(--accent); }
+.revit-filters > td { padding: 6px 8px; background: var(--bg-soft); border-bottom: 1px solid var(--stroke); }
+.revit-filters input, .revit-filters select { width: 100%; min-width: 70px; padding: 4px 8px; font-size: 13px; border-radius: 8px; }
+th.revit-sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.revit-sortable:hover { color: var(--text); }
+th.revit-sortable[aria-sort]::after { content: " ▲"; color: var(--accent); font-size: 10px; }
+th.revit-sortable[aria-sort=descending]::after { content: " ▼"; }
+tr.revit-group > td { background: var(--bg-soft); border-bottom: 1px solid var(--stroke); padding: 8px 14px; cursor: pointer; }
+tr.revit-group > td > * { vertical-align: middle; margin-right: 10px; }
+tr.revit-group .revit-caret { color: var(--accent); display: inline-block; width: 12px; }
+tr.revit-group button { font: 600 12px var(--font-sans); border-radius: 999px; padding: 2px 10px; cursor: pointer; float: right; margin: 0; }
+tr.revit-group .badge { display: inline-block; font-size: 12px; font-weight: 650; padding: 1px 9px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--info); }
+
 @media (max-width: 640px) {
   :where(:root:not([data-revit-theme="none"])) :where(body) { padding: 0 12px 64px; }
   #revit-bar { margin: 0 -12px 8px; padding: 8px 12px; gap: 8px; }
@@ -240,7 +266,7 @@
 }
 
 @media print {
-  #revit-bar, #revit-toast { display: none !important; }
+  #revit-bar, #revit-toast, .revit-tools, .revit-filters, tr.revit-group button { display: none !important; }
   :root, :root.dark, :root:not(.light) { --bg: #fff; --card: #fff; --text: #000; --muted: #444; --shadow: none; --stroke: #ccc; }
   :where(:root:not([data-revit-theme="none"])) :where(body) { background: #fff; }
   :where(:root:not([data-revit-theme="none"])) :where(th) { position: static; }

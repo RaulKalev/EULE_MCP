@@ -44,6 +44,29 @@ revit.status()                                 // → { ok, activeDocument } or 
 
 Helper texts are Estonian when the page says `<html lang="et">`, English otherwise.
 
+## Table tools
+
+A table with a header row whose body rows carry `data-revit-id` gets tools without any markup, so
+a user can trim a 40-row report to what they need:
+
+| Tool | How |
+|---|---|
+| Search | One box above the table; rows not containing the text are hidden |
+| Column filters | **Filters** adds a row under the header: a list of the distinct values for columns with 2–24 of them, a "contains" box otherwise |
+| Sorting | Click a header: ascending, descending, off. Columns of numbers (with or without a unit) sort as numbers, text in the page's language order; empty cells last |
+| Grouping | **Group by** a column: a header row per value with its count, collapsible, each with its own **Select in Revit** |
+| Select shown | Selects the elements of the rows that currently match, in Revit |
+| Reset | Back to the page's own order |
+
+Hidden rows are also left out of `data-revit-select-all`. The count shows matching and total rows.
+Nothing is fetched for any of this; it works on the rows in the page.
+
+For it to work the agent writes one plain table: a header row (`<thead>` or a first row of `<th>`),
+a single `<tbody>`, no `rowspan`/`colspan`, one fact per column. `data-sort="…"` on a cell gives the
+value to sort and filter by when the text is not it (a date shown as "3. mai"); `data-revit-tools="none"`
+on the table or an ancestor leaves the table alone. A page should not bring its own filter or sort
+script for such a table.
+
 ## Editing values
 
 Double click on a `data-revit-param` cell opens it; Enter or leaving the field saves, Esc cancels.
@@ -180,5 +203,5 @@ the tab away.
 
 `ModelPageTests` covers the store, the injected HTML, the listener over real sockets (token, origin,
 host, body validation, the write and approval routes) and the edit rules. The helper script, the
-theme and the edit flow were exercised in a browser against a fake backend. The Revit side —
+theme, the table tools and the edit flow were exercised in a browser against a fake backend. The Revit side —
 `ModelPageRevitHandler` and `PageSetValuesTool` — has no unit tests; check it in Revit after changes.
