@@ -85,8 +85,38 @@ public static class ApprovalSummaryBuilder
             "excel_update_cells"        => BuildExcelUpdateCells(request),
             "excel_insert_rows"         => BuildExcelInsertRows(request),
             "excel_append_table_rows"   => BuildExcelAppendTableRows(request),
+            // PanelSchematics plugin data
+            "revit_panelschematics_edit_empty_rows" => BuildPanelSchematicsEmptyRows(request),
+            "revit_panelschematics_set_circuit_rows" =>
+                $"PanelSchematics: write row values to {CountItems(request, "rows")} circuit(s), their connected elements and schematic detail items.",
+            "revit_panelschematics_set_panel_data" => BuildPanelSchematicsPanelData(request),
+            "revit_panelschematics_set_row_groups" =>
+                $"PanelSchematics: replace the row groups of panel '{ToolArguments.GetString(request.Arguments, "panel")}' with {CountItems(request, "groups")} group(s).",
             _ => $"Execute {request.ToolName}"
         };
+    }
+
+    private static int CountItems(McpToolRequest request, string key)
+        => request.Arguments.TryGetValue(key, out var value) && value is Newtonsoft.Json.Linq.JArray array ? array.Count : 0;
+
+    private static string BuildPanelSchematicsEmptyRows(McpToolRequest request)
+    {
+        var operations = request.Arguments.TryGetValue("operations", out var value) ? value as Newtonsoft.Json.Linq.JArray : null;
+        int Count(string action) => operations?.Count(o => string.Equals((string?)o["action"], action, StringComparison.OrdinalIgnoreCase)) ?? 0;
+        return $"PanelSchematics: change the empty rows of panel '{ToolArguments.GetString(request.Arguments, "panel")}' " +
+               $"(add {Count("add")}, update {Count("update")}, remove {Count("remove")}). Stored in the panel's Extensible Storage; a backup is written first.";
+    }
+
+    private static string BuildPanelSchematicsPanelData(McpToolRequest request)
+    {
+        var parts = new List<string>();
+        var panels = CountItems(request, "panels");
+        if (panels > 0) parts.Add($"stored data of {panels} panel(s)");
+        var main = ToolArguments.GetString(request.Arguments, "mainPanel");
+        if (main.Length > 0) parts.Add($"main panel → {main}");
+        if (CountItems(request, "colorLabels") > 0 || ToolArguments.GetStringArray(request.Arguments, "removeColorLabelIds").Length > 0)
+            parts.Add("colour labels");
+        return $"PanelSchematics: change {(parts.Count > 0 ? string.Join(", ", parts) : "stored data")} in Extensible Storage; a backup is written first.";
     }
 
     private static string BuildSelectElements(McpToolRequest request)

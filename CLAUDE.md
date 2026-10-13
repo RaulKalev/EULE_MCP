@@ -40,6 +40,14 @@ advertises every tool. See `docs/mcp-performance.md`.
 on non-active documents; approvals bind to that target document. Other tools still act on the active document —
 switch with `revit_activate_document` when needed.
 
+## PanelSchematics plugin data
+
+The `panelschematics` group (`revit_panelschematics_*`, see [`docs/panelschematics.md`](docs/panelschematics.md))
+reads and writes what the PanelSchematics plugin stores: panel tables, empty rows, the parameters a row is written
+to, and its Extensible Storage stores. Call `revit_panelschematics_guide` first. Every write has a preview, needs
+approval and is refused while the plugin's table window is open. The storage formats live in
+`RevitMCP.Addin/PanelSchematics/PanelSchematicsContract.cs` and must follow the plugin's source.
+
 ## Development notes
 
 - Build: `dotnet build RevitMCP.slnx -c Release`; tests: `dotnet test RevitMCP.Tests/RevitMCP.Tests.csproj`.

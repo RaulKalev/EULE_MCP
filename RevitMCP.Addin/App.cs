@@ -13,6 +13,7 @@ using RevitMCP.Addin.Tools.Graph;
 #if !REVIT2024
 using RevitMCP.Addin.Tools.IfcSpaceToRoom;
 #endif
+using RevitMCP.Addin.Tools.PanelSchematics;
 using RevitMCP.Addin.Tools.ParameterQA;
 using RevitMCP.Addin.Tools.Reports;
 using RevitMCP.Addin.Tools.Standards;
@@ -73,6 +74,23 @@ public class App : IExternalApplication
             handler.RegisterTool(new SetLinkVisibilityTool());
             handler.RegisterTool(new SaveDocumentTool());
             handler.RegisterTool(new SyncWithCentralTool());
+            // PanelSchematics plugin data: rows, empty rows and its Extensible Storage stores
+            handler.RegisterTool(new PanelSchematicsGuideTool());
+            handler.RegisterTool(new PanelSchematicsGetPanelTableTool());
+            handler.RegisterTool(new PanelSchematicsGetDataTool());
+            handler.RegisterTool(new PanelSchematicsReadDrawingTool());
+            handler.RegisterTool(new PanelSchematicsPreviewEditEmptyRowsTool());
+            handler.RegisterTool(new PanelSchematicsEditEmptyRowsTool());
+            handler.RegisterTool(new PanelSchematicsPreviewSetCircuitRowsTool());
+            handler.RegisterTool(new PanelSchematicsSetCircuitRowsTool());
+            handler.RegisterTool(new PanelSchematicsPreviewSetPanelDataTool());
+            handler.RegisterTool(new PanelSchematicsSetPanelDataTool());
+            handler.RegisterTool(new PanelSchematicsPreviewSetRowGroupsTool());
+            handler.RegisterTool(new PanelSchematicsSetRowGroupsTool());
+            handler.RegisterTool(new GetElementRoomsTool());
+            handler.RegisterTool(new GetRoomBoundariesTool());
+            handler.RegisterTool(new PreviewDrawCircuitArcsTool());
+            handler.RegisterTool(new DrawCircuitArcsTool());
             handler.RegisterTool(new ListSheetsTool());
             handler.RegisterTool(new ListSchedulesTool());
             handler.RegisterTool(new GetElementParametersTool());

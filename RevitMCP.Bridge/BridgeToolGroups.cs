@@ -22,6 +22,7 @@ public static class BridgeToolGroups
         ["edit"] = "Generic model edits: parameters, move/align/rotate/elevation, delete/duplicate/rename, family types, placement",
         ["devices"] = "Room geometry, device codes, room-based device placement and device/fire-alarm audits",
         ["electrical"] = "Circuits, panels, wires/cables, voltage drop, fire alarm circuits, patch panels",
+        ["panelschematics"] = "PanelSchematics plugin (Kilbiskeemid): panel tables, empty rows, circuit row parameters, its Extensible Storage data",
         ["ifc"] = "IFC links, IFC spaces to rooms, linked-model element queries",
         ["views"] = "Views, sheets, schedules, title blocks, revisions, view templates",
         ["tags"] = "Tags, dimensions, text notes, detail lines, view alignment",
@@ -46,7 +47,7 @@ public static class BridgeToolGroups
             "revit_preview_ensure_device_types", "revit_ensure_device_types", "revit_preview_place_at_wall", "revit_place_at_wall",
             "revit_preview_place_in_room", "revit_place_in_room", "revit_check_devices_per_room", "revit_check_device_alignment",
             "revit_check_coverage", "revit_check_fire_alarm", "revit_preview_assign_room_to_elements", "revit_assign_room_to_elements",
-            "revit_get_linked_elements_in_room", "revit_export_view_image"
+            "revit_get_linked_elements_in_room", "revit_export_view_image", "revit_get_element_rooms", "revit_get_room_boundaries"
         }),
         ("edit", new[]
         {
@@ -81,6 +82,8 @@ public static class BridgeToolGroups
     private static readonly (string Keyword, string Group)[] Rules =
     {
         ("revit_graph_", Graph),
+        // Before the electrical rules: these names contain "panel" and "circuit".
+        ("revit_panelschematics_", "panelschematics"),
         ("config_", "office"), ("file_", "office"), ("excel_", "office"), ("standards_", "office"), ("delivery_", "office"),
         ("skill", "skills"),
         ("clash", "coordination"),

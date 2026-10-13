@@ -6595,4 +6595,346 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         };
         return FormatResult(await pipeClient.SendAsync("revit_sync_with_central", args, cancellationToken));
     }
+
+    // ── Elements and their Rooms ──────────────────────────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "revit_get_element_rooms", ReadOnly = true),
+     Description("Finds the Revit Room each element belongs to (host model), for grouping devices by room or apartment. Per element: room (FamilyInstance.Room for the phase) and roomAtOffset (the room at a point offsetMm in front of the element, along its facing direction, tested 1 ft above its level). When FamilyInstance.Room is empty the room comes from the element's own point on plan (method GetRoomAtPoint; devices above or below the room height), then from the offset point (GetRoomAtPoint+offset; wall-mounted devices on a boundary), then from the point behind it (opposite); roomBehind is the room at the same distance behind it. conflict=true when room and roomAtOffset are two different rooms; that is not an error by itself: families differ in which way they face, so compare roomAtOffset and roomBehind across a model first (where the back is always a room, devices face into their wall and room/roomBehind is the right one). Elements from elementIds, categories, useSelection, narrowed by level. Returns a summary (total, found, withoutRoom, conflicts) and paged elements.")]
+    public async Task<string> GetElementRooms(
+        [Description("Element ids to check.")] long[]? elementIds = null,
+        [Description("Category names, e.g. ['Electrical Fixtures','Lighting Fixtures','Lighting Devices','Electrical Equipment'].")] string[]? categories = null,
+        [Description("Only elements on this level (element id).")] long levelId = 0,
+        [Description("Only elements on this level (name). Alternative to levelId.")] string? levelName = null,
+        [Description("Also check the elements selected in Revit.")] bool useSelection = false,
+        [Description("How far in front of the element the second point is tested, in mm. Default 200.")] double offsetMm = 200,
+        [Description("Phase name. Default: the document's last phase.")] string? phaseName = null,
+        [Description("Max elements to read. Default 5000.")] int limit = 5000,
+        [Description("Page size, 1-500. Default 100.")] int pageSize = -1,
+        [Description("Zero-based page index.")] int page = 0,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["elementIds"] = elementIds ?? [],
+            ["categories"] = categories ?? [],
+            ["levelId"] = levelId,
+            ["levelName"] = levelName ?? string.Empty,
+            ["useSelection"] = useSelection,
+            ["offsetMm"] = offsetMm,
+            ["phaseName"] = phaseName ?? string.Empty,
+            ["limit"] = limit,
+            ["pageSize"] = pageSize,
+            ["page"] = page
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_get_element_rooms", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_get_room_boundaries", ReadOnly = true),
+     Description("Returns the real outline of host-model Rooms as boundary loops in mm (first loop = outer boundary, the rest = holes; arcs tessellated), with number, name, level, areaM2 and location point. Correct for L-shaped and rotated rooms, unlike a bounding box. boundaryLocation: Finish (default), Center, CoreBoundary or CoreCenter. Unplaced and unenclosed rooms come in a separate 'unplaced' list. Lighter than revit_get_room_geometry, which also reads doors, windows, ceilings and linked models.")]
+    public async Task<string> GetRoomBoundaries(
+        [Description("Room element ids. Empty = every room (of the level, when one is given).")] long[]? roomIds = null,
+        [Description("Only rooms on this level (element id).")] long levelId = 0,
+        [Description("Only rooms on this level (name). Alternative to levelId.")] string? levelName = null,
+        [Description("Finish (default) | Center | CoreBoundary | CoreCenter.")] string boundaryLocation = "Finish",
+        [Description("Include areaM2. Default true.")] bool includeArea = true,
+        [Description("Max rooms to read. Default 1000.")] int limit = 1000,
+        [Description("Page size, 1-500. Default 100.")] int pageSize = -1,
+        [Description("Zero-based page index.")] int page = 0,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["roomIds"] = roomIds ?? [],
+            ["levelId"] = levelId,
+            ["levelName"] = levelName ?? string.Empty,
+            ["boundaryLocation"] = boundaryLocation,
+            ["includeArea"] = includeArea,
+            ["limit"] = limit,
+            ["pageSize"] = pageSize,
+            ["page"] = page
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_get_room_boundaries", args, cancellationToken));
+    }
+
+    // ── Circuit arcs: detail arcs between a circuit's devices, instead of Revit wires ─────────────────────
+
+    [McpServerTool(Name = "revit_preview_draw_circuit_arcs", ReadOnly = true),
+     Description("Previews drawing curved detail lines (splines by default, or arcs) between the devices of electrical circuits in a plan view (a stand-in for Revit wires) WITHOUT changing anything. Per circuit: devices on the circuit, devices visible in the view, the arcs that would join them (from, to, length) and earlier arcs that would be replaced.")]
+    public async Task<string> PreviewDrawCircuitArcs(
+        [Description("Circuit element ids.")] long[]? circuitIds = null,
+        [Description("Draw every circuit of this panel (element id or name). Can be combined with circuitIds.")] string? panel = null,
+        [Description("Plan view element id. 0 = the active view.")] long viewId = 0,
+        [Description("chain (default): each device to the nearest one not joined yet, starting nearest the panel. tree: shortest total length, with branches.")] string mode = "chain",
+        [Description("Arc height as a fraction of the distance between the two devices. Default 0.2.")] double bulge = 0.2,
+        [Description("Which side the arcs bulge to, looking from one device to the next: left (default), right or alternate.")] string side = "left",
+        [Description("Line style name for the arcs. Default style when empty.")] string? lineStyle = null,
+        [Description("Also join the panel to the first device when the panel is visible in the view. Default false.")] bool connectToPanel = false,
+        [Description("Devices closer together than this (stacked symbols) get no arc between them. Default 100 mm.")] double minDistanceMm = 100,
+        [Description("Delete the arcs drawn earlier for the same circuit in this view. Default true.")] bool replaceExisting = true,
+        [Description("Also draw a home run: a short open-ended arc from the device nearest the panel, pointing at the panel. Circuits with a single device in the view get only this. Default false.")] bool homeRun = false,
+        [Description("Length of the home run in mm (never more than 80 % of the way to the panel). Default 900.")] double homeRunLengthMm = 900,
+        [Description("Which side the home run bulges to, looking from the device to the panel: right (default) or left.")] string homeRunSide = "right",
+        [Description("Line shape: spline (default; through the two devices and the bulge point, its control points can be dragged in Revit) or arc.")] string curve = "spline",
+        CancellationToken cancellationToken = default)
+    {
+        var args = BuildCircuitArcArgs(circuitIds, panel, viewId, mode, bulge, side, lineStyle, connectToPanel, minDistanceMm, replaceExisting);
+        args["homeRun"] = homeRun;
+        args["homeRunLengthMm"] = homeRunLengthMm;
+        args["homeRunSide"] = homeRunSide;
+        args["curve"] = curve;
+        return FormatResult(await pipeClient.SendAsync("revit_preview_draw_circuit_arcs", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_draw_circuit_arcs"),
+     Description("Draws curved detail lines (splines by default, or arcs) between the devices of electrical circuits in a plan view, as a stand-in for Revit wires. Requires approval; one transaction, reversible with Undo. Only devices visible in the view are joined. Each arc is marked with its circuit, so drawing a circuit again replaces its arcs in that view. Run revit_preview_draw_circuit_arcs first.")]
+    public async Task<string> DrawCircuitArcs(
+        [Description("Circuit element ids.")] long[]? circuitIds = null,
+        [Description("Draw every circuit of this panel (element id or name). Can be combined with circuitIds.")] string? panel = null,
+        [Description("Plan view element id. 0 = the active view.")] long viewId = 0,
+        [Description("chain (default): each device to the nearest one not joined yet, starting nearest the panel. tree: shortest total length, with branches.")] string mode = "chain",
+        [Description("Arc height as a fraction of the distance between the two devices. Default 0.2.")] double bulge = 0.2,
+        [Description("Which side the arcs bulge to, looking from one device to the next: left (default), right or alternate.")] string side = "left",
+        [Description("Line style name for the arcs. Default style when empty.")] string? lineStyle = null,
+        [Description("Also join the panel to the first device when the panel is visible in the view. Default false.")] bool connectToPanel = false,
+        [Description("Devices closer together than this (stacked symbols) get no arc between them. Default 100 mm.")] double minDistanceMm = 100,
+        [Description("Delete the arcs drawn earlier for the same circuit in this view. Default true.")] bool replaceExisting = true,
+        [Description("Also draw a home run: a short open-ended arc from the device nearest the panel, pointing at the panel. Circuits with a single device in the view get only this. Default false.")] bool homeRun = false,
+        [Description("Length of the home run in mm (never more than 80 % of the way to the panel). Default 900.")] double homeRunLengthMm = 900,
+        [Description("Which side the home run bulges to, looking from the device to the panel: right (default) or left.")] string homeRunSide = "right",
+        [Description("Line shape: spline (default; through the two devices and the bulge point, its control points can be dragged in Revit) or arc.")] string curve = "spline",
+        CancellationToken cancellationToken = default)
+    {
+        var args = BuildCircuitArcArgs(circuitIds, panel, viewId, mode, bulge, side, lineStyle, connectToPanel, minDistanceMm, replaceExisting);
+        args["homeRun"] = homeRun;
+        args["homeRunLengthMm"] = homeRunLengthMm;
+        args["homeRunSide"] = homeRunSide;
+        args["curve"] = curve;
+        return FormatResult(await pipeClient.SendAsync("revit_draw_circuit_arcs", args, cancellationToken));
+    }
+
+    private static Dictionary<string, object?> BuildCircuitArcArgs(long[]? circuitIds, string? panel, long viewId, string mode, double bulge,
+        string side, string? lineStyle, bool connectToPanel, double minDistanceMm, bool replaceExisting) =>
+        new()
+        {
+            ["circuitIds"] = circuitIds ?? [],
+            ["panel"] = panel ?? string.Empty,
+            ["viewId"] = viewId,
+            ["mode"] = mode,
+            ["bulge"] = bulge,
+            ["side"] = side,
+            ["lineStyle"] = lineStyle ?? string.Empty,
+            ["connectToPanel"] = connectToPanel,
+            ["minDistanceMm"] = minDistanceMm,
+            ["replaceExisting"] = replaceExisting
+        };
+
+    // ── PanelSchematics plugin data (rows, empty rows, Extensible Storage) ────────────────────────────────
+
+    private const string PanelArgDescription = "The panel: element id or exact name of the electrical equipment.";
+
+    private const string StateTokenDescription =
+        "stateToken from the preview. When given, the write is refused if the stored data changed since the preview.";
+
+    private const string EmptyRowOperationsDescription =
+        "Operations, applied in order, e.g. [{\"action\":\"add\",\"reaNr\":12,\"insert\":true,\"values\":{\"GroupNr\":\"F12\",\"GroupName\":\"Reserv\",\"CircuitBreaker\":\"C16\",\"CircuitPhase\":\"1\"}}," +
+        "{\"action\":\"update\",\"uniqueId\":\"<row UniqueId>\",\"values\":{\"Symbol\":\"Kaitselüliti\"}},{\"action\":\"remove\",\"uniqueId\":\"<row UniqueId>\"}]. " +
+        "action: add, update or remove. uniqueId (or reaNr) selects the row for update/remove. add: reaNr is where the row goes (omitted = end of the table); " +
+        "insert=true moves the rows from that number on down by one when it is taken. values: row fields (ReaNr, GroupNr, GroupName, KlemmiNr, " +
+        "Symbol, WireTypeName, CircuitBreaker, CircuitPhase, Samm, Rikkevooluga, ApparentLoad, LisaKW, IsChecked; see revit_panelschematics_guide).";
+
+    private const string CircuitRowsDescription =
+        "Circuit rows, e.g. [{\"circuitId\":123456,\"values\":{\"GroupNr\":\"F3\",\"GroupName\":\"Valgustus\",\"CircuitBreaker\":\"B10\",\"Rikkevooluga\":\"Jah\"}}]. " +
+        "values: row fields a circuit has (ReaNr, GroupNr, GroupName, KlemmiNr, Symbol, WireTypeName, CircuitBreaker, CircuitPhase, Samm, Rikkevooluga, " +
+        "ApparentLoad, LisaKW). Only the given fields are written.";
+
+    private const string PanelDataDescription =
+        "Per-panel values, e.g. [{\"panel\":\"JK-1\",\"metadata\":{\"EA_2\":\"IP 44\",\"ET_2\":\"63\"},\"uheaegsustegur\":0.8,\"pingelang\":1.5," +
+        "\"cableLengthOverrideM\":42,\"horizontal\":true,\"colorLabelId\":\"ab12cd34\",\"schematicViewId\":987654}]. Each entry needs 'panel' (id or name) and any of: " +
+        "metadata (keys ET_1..ET_7, EA_1..EA_8, KT_1..KT_3, TT_1..TT_2; empty value removes), uheaegsustegur (0..1), pingelang (%), cableLengthOverrideM, " +
+        "cableLengthOriginalM, clearCableLengthOverride, horizontal, colorLabelId (empty clears), infoDetailItemId, clearInfoLink, schematicViewId (a plan view).";
+
+    private const string RowGroupsDescription =
+        "The complete wanted list of groups, e.g. [{\"parent\":\"C:<circuit UniqueId>\",\"dependents\":[\"E:<empty row UniqueId>\",\"123456\"]}]; [] removes all. " +
+        "id: an existing group's id (omit for a new group). parent and dependents: a row identity from revit_panelschematics_get_panel_table, a circuit's " +
+        "element id or an empty row's uniqueId. links (optional): element ids or UniqueIds of 2D elements that move with the parent's symbol.";
+
+    [McpServerTool(Name = "revit_panelschematics_guide", ReadOnly = true),
+     Description("How the PanelSchematics plugin (Kilbiskeemid, panel schematics) stores its data: the row fields, which circuit / connected-element / detail-item parameter each field is written to, its Extensible Storage stores, the panel metadata keys and the rules for changing them. Read this before any other revit_panelschematics_* tool.")]
+    public async Task<string> PanelSchematicsGuide(CancellationToken cancellationToken = default)
+    {
+        return FormatResult(await pipeClient.SendAsync("revit_panelschematics_guide", new Dictionary<string, object?>(), cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_panelschematics_get_panel_table", ReadOnly = true),
+     Description("A panel's PanelSchematics table: its circuits and its empty rows merged in Rea nr order, each with its values, identity (for row groups), row id and detail-item count. Without 'panel' it lists the panels that have rows. Circuit values are live parameters; empty-row values come from the panel's Extensible Storage.")]
+    public async Task<string> PanelSchematicsGetPanelTable(
+        [Description(PanelArgDescription + " Empty = list the panels that have rows.")] string? panel = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["panel"] = panel ?? string.Empty };
+        return FormatResult(await pipeClient.SendAsync("revit_panelschematics_get_panel_table", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_panelschematics_get_data", ReadOnly = true),
+     Description("Everything the PanelSchematics plugin stores in Extensible Storage besides the rows. Per panel: title-page metadata, Üheaegsustegur, Pingelang, cable-length override, orientation, colour label, info detail item, schematic view record and row groups. For the project: main panel, colour labels and the cable/symbol picker histories.")]
+    public async Task<string> PanelSchematicsGetData(
+        [Description(PanelArgDescription + " Empty = every panel that has data.")] string? panel = null,
+        [Description("Also list panels that have no stored data. Default false when no panel is given.")] bool includePanelsWithoutData = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["panel"] = panel ?? string.Empty };
+        if (includePanelsWithoutData) args["includePanelsWithoutData"] = true;
+        return FormatResult(await pipeClient.SendAsync("revit_panelschematics_get_data", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_panelschematics_read_drawing", ReadOnly = true),
+     Description("Reads the panel-schematic symbols drawn in one or more views (drafting views or plans): every detail item the view owns with its family, type, position in mm, the symbol names that family and type stand for, and the row values on it (Rea Nr, Group Nr, Group Name, Sümbol, Circuit Breaker, kW, ...). Use it to copy the layout of an existing schematic into a panel's table with the empty-row and circuit-row tools.")]
+    public async Task<string> PanelSchematicsReadDrawing(
+        [Description("View names or element ids, e.g. [\"EL-7-JK-C1\",\"EL-7-JK-C2\"].")] string[] views,
+        [Description("Also return detail items that are not row symbols (frames, headers, title pages). Default false.")] bool includeNonRowItems = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["views"] = views, ["includeNonRowItems"] = includeNonRowItems };
+        return FormatResult(await pipeClient.SendAsync("revit_panelschematics_read_drawing", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_panelschematics_preview_edit_empty_rows", ReadOnly = true),
+     Description("Previews adding, changing or removing PanelSchematics empty rows (rows without a Revit circuit) of a panel WITHOUT changing anything. Returns every row's fields before and after, circuits renumbered by an insert, detail-item parameters that would follow and a stateToken for the write.")]
+    public async Task<string> PanelSchematicsPreviewEditEmptyRows(
+        [Description(PanelArgDescription)] string panel,
+        [Description(EmptyRowOperationsDescription)] object[] operations,
+        [Description("Also update the schematic detail items of changed rows. Default true.")] bool updateDetailItems = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panel"] = panel,
+            ["operations"] = ToJToken(operations),
+            ["updateDetailItems"] = updateDetailItems
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_panelschematics_preview_edit_empty_rows", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_panelschematics_edit_empty_rows", Destructive = true),
+     Description("Adds, changes or removes PanelSchematics empty rows of a panel in its Extensible Storage. Requires approval. The stored JSON is edited in place (other rows and unknown fields are kept), Rea nr stays unique across circuits and empty rows, a backup is written first, and the result is read back. Refused while the plugin's Kilbiskeemid window is open. Run revit_panelschematics_preview_edit_empty_rows first.")]
+    public async Task<string> PanelSchematicsEditEmptyRows(
+        [Description(PanelArgDescription)] string panel,
+        [Description(EmptyRowOperationsDescription)] object[] operations,
+        [Description("Also update the schematic detail items of changed rows. Default true.")] bool updateDetailItems = true,
+        [Description(StateTokenDescription)] string? expectedStateToken = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panel"] = panel,
+            ["operations"] = ToJToken(operations),
+            ["updateDetailItems"] = updateDetailItems,
+            ["expectedStateToken"] = expectedStateToken ?? string.Empty
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_panelschematics_edit_empty_rows", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_panelschematics_preview_set_circuit_rows", ReadOnly = true),
+     Description("Previews writing PanelSchematics row values to electrical circuits WITHOUT changing anything. Per row field: the parameter on the circuit, on its connected elements and on its schematic detail items, with before/after and status (set, unchanged, missing, readOnly, invalid). Returns a stateToken for the write.")]
+    public async Task<string> PanelSchematicsPreviewSetCircuitRows(
+        [Description(CircuitRowsDescription)] object[] rows,
+        [Description("Mirror Rea Nr, Group Name, Group Nr, Circuit Breaker and Kaabel to the elements on the circuit. Default true.")] bool updateConnectedElements = true,
+        [Description("Update the row's schematic detail items (matched by the 'id' parameter). Default true.")] bool updateDetailItems = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["rows"] = ToJToken(rows),
+            ["updateConnectedElements"] = updateConnectedElements,
+            ["updateDetailItems"] = updateDetailItems
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_panelschematics_preview_set_circuit_rows", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_panelschematics_set_circuit_rows", Destructive = true),
+     Description("Writes PanelSchematics row values to electrical circuits the way the plugin's Kirjuta does. Requires approval. Each field goes to the plugin's parameter on the circuit and is mirrored to the connected elements and the row's schematic detail items; only the given fields are touched, Rea nr stays unique in the panel, a backup is written first. Refused while the plugin's Kilbiskeemid window is open. Run revit_panelschematics_preview_set_circuit_rows first.")]
+    public async Task<string> PanelSchematicsSetCircuitRows(
+        [Description(CircuitRowsDescription)] object[] rows,
+        [Description("Mirror Rea Nr, Group Name, Group Nr, Circuit Breaker and Kaabel to the elements on the circuit. Default true.")] bool updateConnectedElements = true,
+        [Description("Update the row's schematic detail items (matched by the 'id' parameter). Default true.")] bool updateDetailItems = true,
+        [Description(StateTokenDescription)] string? expectedStateToken = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["rows"] = ToJToken(rows),
+            ["updateConnectedElements"] = updateConnectedElements,
+            ["updateDetailItems"] = updateDetailItems,
+            ["expectedStateToken"] = expectedStateToken ?? string.Empty
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_panelschematics_set_circuit_rows", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_panelschematics_preview_set_panel_data", ReadOnly = true),
+     Description("Previews changing the PanelSchematics data kept per panel and for the project WITHOUT changing anything: title-page metadata, Üheaegsustegur, Pingelang, cable-length override, orientation, colour label, info detail item, schematic view, main panel and colour labels. Returns every value before and after and a stateToken for the write.")]
+    public async Task<string> PanelSchematicsPreviewSetPanelData(
+        [Description(PanelDataDescription)] object[]? panels = null,
+        [Description("The project's main panel: element id or name; 'none' clears it. Empty = unchanged.")] string? mainPanel = null,
+        [Description("Colour labels to add or change, e.g. [{\"hex\":\"#4CAF50\",\"label\":\"Korrus 1\"},{\"id\":\"ab12cd34\",\"label\":\"Uus nimi\"}]. Without id a new label is made.")] object[]? colorLabels = null,
+        [Description("Ids of colour labels to remove; they are also cleared from the panels that use them.")] string[]? removeColorLabelIds = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panels"] = ToJToken(panels),
+            ["mainPanel"] = mainPanel ?? string.Empty,
+            ["colorLabels"] = ToJToken(colorLabels),
+            ["removeColorLabelIds"] = removeColorLabelIds ?? []
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_panelschematics_preview_set_panel_data", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_panelschematics_set_panel_data", Destructive = true),
+     Description("Writes the PanelSchematics data kept per panel and for the project to Extensible Storage. Requires approval. Only the given values change and everything else in each store is kept; a backup is written first and the result is read back. Refused while the plugin's Kilbiskeemid window is open. Run revit_panelschematics_preview_set_panel_data first.")]
+    public async Task<string> PanelSchematicsSetPanelData(
+        [Description(PanelDataDescription)] object[]? panels = null,
+        [Description("The project's main panel: element id or name; 'none' clears it. Empty = unchanged.")] string? mainPanel = null,
+        [Description("Colour labels to add or change, e.g. [{\"hex\":\"#4CAF50\",\"label\":\"Korrus 1\"},{\"id\":\"ab12cd34\",\"label\":\"Uus nimi\"}]. Without id a new label is made.")] object[]? colorLabels = null,
+        [Description("Ids of colour labels to remove; they are also cleared from the panels that use them.")] string[]? removeColorLabelIds = null,
+        [Description(StateTokenDescription)] string? expectedStateToken = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panels"] = ToJToken(panels),
+            ["mainPanel"] = mainPanel ?? string.Empty,
+            ["colorLabels"] = ToJToken(colorLabels),
+            ["removeColorLabelIds"] = removeColorLabelIds ?? [],
+            ["expectedStateToken"] = expectedStateToken ?? string.Empty
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_panelschematics_set_panel_data", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_panelschematics_preview_set_row_groups", ReadOnly = true),
+     Description("Previews replacing the PanelSchematics row groups of a panel (a parent row with dependent rows that move together) WITHOUT changing anything. Returns the groups stored now, the groups that would be stored and a stateToken for the write.")]
+    public async Task<string> PanelSchematicsPreviewSetRowGroups(
+        [Description(PanelArgDescription)] string panel,
+        [Description(RowGroupsDescription)] object[] groups,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["panel"] = panel, ["groups"] = ToJToken(groups) };
+        return FormatResult(await pipeClient.SendAsync("revit_panelschematics_preview_set_row_groups", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_panelschematics_set_row_groups", Destructive = true),
+     Description("Replaces the PanelSchematics row groups of a panel in its Extensible Storage. Requires approval. 'groups' is the complete wanted list ([] removes all). Refused when the stored groups cannot be read or the plugin's Kilbiskeemid window is open; a backup is written first. Run revit_panelschematics_preview_set_row_groups first.")]
+    public async Task<string> PanelSchematicsSetRowGroups(
+        [Description(PanelArgDescription)] string panel,
+        [Description(RowGroupsDescription)] object[] groups,
+        [Description(StateTokenDescription)] string? expectedStateToken = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["panel"] = panel,
+            ["groups"] = ToJToken(groups),
+            ["expectedStateToken"] = expectedStateToken ?? string.Empty
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_panelschematics_set_row_groups", args, cancellationToken));
+    }
 }

@@ -14,6 +14,8 @@ the point, rotation and height. All coordinates are **host model internal coordi
 |---|---|---|
 | `revit_list_levels` | Read-only | Host levels and, with `linkInstanceId`, the link's levels mapped to host levels |
 | `revit_get_room_geometry` | Read-only | Room boundary, centroid, interior point, area, height, ceiling height, doors, windows |
+| `revit_get_room_boundaries` | Read-only | Host rooms only: boundary loops (outer first, then holes) with number, name, level, area. Lighter than `revit_get_room_geometry`; `boundaryLocation` selectable; unplaced rooms listed separately |
+| `revit_get_element_rooms` | Read-only | The Room of each element, tried in order: `FamilyInstance.Room`, the element's own point on plan (`GetRoomAtPoint`, 1 ft above its level), a point `offsetMm` in front of it (`GetRoomAtPoint+offset`), the point behind it (`opposite`). The room in front is always returned as `roomAtOffset` and the room behind as `roomBehind`; `conflict` when the front is another room. **Check which way a model's families face before trusting the front:** in P125 every socket and switch faces *into* its wall, so `roomBehind` (and `FamilyInstance.Room`) is the device's room and `roomAtOffset` is the neighbour |
 | `revit_get_room_walls` | Read-only | One room's wall faces seen from inside: `index`, `wallId`, thickness, inner face, normal, openings |
 | `revit_get_device_codes` | Read-only | The device code map and its status in the model |
 | `revit_set_device_codes` | Requires approval | Write/merge device codes and placement settings into the project config |
