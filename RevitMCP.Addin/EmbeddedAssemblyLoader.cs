@@ -8,12 +8,12 @@ namespace RevitMCP.Addin;
 /// <summary>
 /// Wires up loading of the dependencies Costura embeds in this assembly.
 ///
-/// Costura's own resolver matches already-loaded assemblies by simple name only. Revit 2024 runs every
-/// add-in in one AppDomain, so when another add-in has already loaded an older copy of a shared library
-/// (DiRoots ships System.Text.Json 4.0.0.0), Costura hands that copy back and the add-in dies at startup
-/// with "Could not load type 'System.Text.Json.Nodes.JsonObject'". On .NET Framework several versions of
-/// a strong-named assembly can live side by side, so a version-aware resolver runs ahead of Costura and
-/// loads the embedded copy when only older ones are present.
+/// Revit 2024 runs every add-in in one AppDomain, and the first AssemblyResolve handler to answer wins. Add-ins
+/// loaded earlier bring resolvers that answer by simple name (Costura's own does, and DiRoots' loads its
+/// System.Text.Json 4.0.0.0 on demand), so left to the chain this add-in gets someone else's older copy and
+/// dies at startup with "Could not load type 'System.Text.Json.Nodes.JsonObject'". On .NET Framework several
+/// versions of a strong-named assembly can live side by side, so this add-in's resolver is put at the head of
+/// the chain and serves its own requests from its embedded copies, whatever else is or is not loaded.
 ///
 /// Must only touch BCL types: it runs before any embedded assembly can be resolved.
 /// </summary>
@@ -81,46 +81,77 @@ internal static class EmbeddedAssemblyLoader
         return string.Join(", ", owners);
     }
 
+    // This add-in's assembly and every embedded assembly this resolver loaded: requests from these are ours to answer.
+    private static readonly HashSet<Assembly> Family = new HashSet<Assembly> { typeof(EmbeddedAssemblyLoader).Assembly };
+
+    /// <summary>
+    /// Answers a request with this add-in's embedded copy, and never passes a request of its own down the chain.
+    /// Passing it down was the bug behind the Revit 2024 start failure: with no System.Text.Json loaded yet, the
+    /// next resolver (DiRoots') loaded its own 4.0.0.0 for it. Who asks decides the answer:
+    ///  * this add-in or one of its embedded assemblies: always the embedded copy;
+    ///  * another add-in's assembly: nothing — its dependencies are its own business;
+    ///  * no requester or a framework assembly (Assembly.Load by name, WPF loading a XAML assembly): the embedded
+    ///    copy only when the request names exactly its version, otherwise an already loaded assembly of exactly
+    ///    the requested version.
+    /// </summary>
     private static Assembly? ResolveEmbeddedOverOlderLoaded(object? sender, ResolveEventArgs args)
     {
         try
         {
             var requested = new AssemblyName(args.Name);
-            if (requested.Name is null || requested.Version is null || !string.IsNullOrEmpty(requested.CultureName))
+            if (requested.Name is null || !string.IsNullOrEmpty(requested.CultureName))
                 return null;
 
             lock (Gate)
             {
-                if (SideLoaded.TryGetValue(requested.Name, out var own) && own.GetName().Version >= requested.Version)
-                    return own;
+                var requester = args.RequestingAssembly;
+                bool ours = requester != null && Family.Contains(requester);
+                if (requester != null && !ours && !requester.GlobalAssemblyCache)
+                    return null;
 
-                Assembly? best = null;
-                foreach (var loaded in AppDomain.CurrentDomain.GetAssemblies())
+                if (!SideLoaded.TryGetValue(requested.Name, out var own))
                 {
-                    var name = loaded.GetName();
-                    if (!string.Equals(name.Name, requested.Name, StringComparison.OrdinalIgnoreCase)) continue;
-                    if (name.Version == requested.Version) return loaded;
-                    if (best is null || name.Version > best.GetName().Version) best = loaded;
+                    if (!ours)
+                    {
+                        // Unknown requester: an assembly of exactly that version that is already loaded is the one meant
+                        if (requested.Version is null) return null;
+                        var exact = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a =>
+                        {
+                            var name = a.GetName();
+                            return string.Equals(name.Name, requested.Name, StringComparison.OrdinalIgnoreCase) && name.Version == requested.Version;
+                        });
+                        if (exact != null) return exact;
+                    }
+
+                    var bytes = ReadEmbedded(requested.Name);
+                    if (bytes is null) return null;
+
+                    own = Assembly.Load(bytes);
+                    SideLoaded[requested.Name] = own;
+                    Family.Add(own);
+
+                    var others = AppDomain.CurrentDomain.GetAssemblies()
+                        .Where(a => a != own && string.Equals(a.GetName().Name, requested.Name, StringComparison.OrdinalIgnoreCase))
+                        .Select(a => $"{a.GetName().Version} from '{a.Location}'").ToList();
+                    if (others.Count > 0)
+                    {
+                        Log($"Loaded embedded {own.GetName().Name} {own.GetName().Version} next to {string.Join(", ", others)}" +
+                            (_loggedHandlers ? "" : $" (resolvers subscribed before this add-in: {_earlierHandlers})"));
+                        _loggedHandlers = true;
+                    }
                 }
 
-                // Nothing loaded yet: Costura's default path handles it.
-                if (best is null) return null;
-                if (best.GetName().Version > requested.Version) return best;
-
-                var bytes = ReadEmbedded(requested.Name);
-                if (bytes is null) return null;
-
-                var assembly = Assembly.Load(bytes);
-                SideLoaded[requested.Name] = assembly;
-                Log($"Loaded embedded {assembly.GetName().Name} {assembly.GetName().Version} next to {best.GetName().Version} from '{best.Location}' (resolvers subscribed before this add-in: {_earlierHandlers})");
-                return assembly;
+                return ours || requested.Version == own.GetName().Version ? own : null;
             }
         }
-        catch
+        catch (Exception ex)
         {
+            Log($"Resolving '{args.Name}' failed: {ex.GetType().Name}: {ex.Message}");
             return null;
         }
     }
+
+    private static bool _loggedHandlers;
 
     // Same file as App.DiagLog, written directly: App cannot be touched from a resolver (it needs RevitAPIUI).
     private static void Log(string message)
