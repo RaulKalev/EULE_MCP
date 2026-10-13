@@ -55,6 +55,9 @@ internal static class DrawCircuitArcsExecutor
         public CircuitArcPlanner.Plan Plan = new();
         public List<ElementId> Existing = new();
         public bool HasHomeRun;
+        /// <summary>What this circuit is drawn with: spline, arc or wire.</summary>
+        public string Kind = "spline";
+        public bool Lighting;
     }
 
     public static McpToolResult Execute(UIApplication uiapp, McpToolRequest request, bool apply, CancellationToken cancellationToken)
@@ -80,11 +83,15 @@ internal static class DrawCircuitArcsExecutor
             return Fail(request, "bulge is the arc height as a fraction of the distance between two devices: above 0, at most 1 (default 0.2).");
         var minDistance = UnitUtils.ConvertToInternalUnits(Math.Max(1, ToolArguments.GetDouble(request.Arguments, "minDistanceMm", 100)), UnitTypeId.Millimeters);
         var replaceExisting = ToolArguments.GetBool(request.Arguments, "replaceExisting", true);
-        // Spline by default: its three points can be dragged in Revit, which an arc's cannot
-        var curveKind = ToolArguments.GetString(request.Arguments, "curve", "spline").Trim().ToLowerInvariant();
-        if (curveKind.Length == 0) curveKind = "spline";
-        if (curveKind != "arc" && curveKind != "spline")
-            return Fail(request, "curve must be 'spline' (through the two devices and the bulge point; its points can be dragged in Revit) or 'arc'.");
+        // auto follows the office habit: Revit wires on lighting circuits, splines on sockets and everything else
+        var curveKind = ToolArguments.GetString(request.Arguments, "curve", "auto").Trim().ToLowerInvariant();
+        if (curveKind.Length == 0) curveKind = "auto";
+        if (curveKind != "auto" && curveKind != "arc" && curveKind != "spline" && curveKind != "wire")
+            return Fail(request, "curve must be 'auto' (wires for lighting circuits, splines for the rest), 'spline', 'arc' or 'wire'.");
+        var wiring = ToolArguments.GetString(request.Arguments, "wiring", "arc").Trim().ToLowerInvariant();
+        if (wiring != "arc" && wiring != "chamfer")
+            return Fail(request, "wiring is the shape of a Revit wire: 'arc' or 'chamfer'.");
+        var wireTypeName = ToolArguments.GetString(request.Arguments, "wireType").Trim();
         var connectToPanel = ToolArguments.GetBool(request.Arguments, "connectToPanel");
         var homeRun = ToolArguments.GetBool(request.Arguments, "homeRun");
         var homeRunLength = UnitUtils.ConvertToInternalUnits(Math.Max(50, ToolArguments.GetDouble(request.Arguments, "homeRunLengthMm", 900)), UnitTypeId.Millimeters);
@@ -169,6 +176,11 @@ internal static class DrawCircuitArcsExecutor
 
             int devicesInView = plan.Nodes.Count;
 
+            // A lighting circuit: most of its devices in the view are lighting fixtures or switches
+            int lighting = plan.Nodes.Count(n => IsLighting(doc.GetElement(new ElementId(n.Id))));
+            plan.Lighting = plan.Nodes.Count > 0 && lighting * 2 >= plan.Nodes.Count;
+            plan.Kind = curveKind == "auto" ? (plan.Lighting ? "wire" : "spline") : curveKind;
+
             // Start at the device nearest to the panel, so the chain runs away from it
             int start = 0;
             XYZ? panelPoint = null;
@@ -209,6 +221,30 @@ internal static class DrawCircuitArcsExecutor
         int toDraw = plans.Sum(p => p.Plan.Arcs.Count);
         int toReplace = replaceExisting ? plans.Sum(p => p.Existing.Count) : 0;
 
+        // Wires need a wire type: the named one, else the circuit's own, else the project's first
+        var wireTypes = new FilteredElementCollector(doc).OfClass(typeof(WireType)).Cast<WireType>().OrderBy(w => w.Name).ToList();
+        WireType? namedWireType = null;
+        if (plans.Any(p => p.Kind == "wire" && p.Plan.Arcs.Count > 0))
+        {
+            if (wireTypes.Count == 0)
+                return Fail(request, "This project has no wire types, so Revit wires cannot be drawn. Use curve='spline', or add a wire type in Electrical Settings.");
+            if (wireTypeName.Length > 0)
+            {
+                namedWireType = wireTypes.FirstOrDefault(w => string.Equals(w.Name, wireTypeName, StringComparison.OrdinalIgnoreCase));
+                if (namedWireType == null)
+                    return Fail(request, $"Wire type '{wireTypeName}' was not found. Wire types: {string.Join(", ", wireTypes.Select(w => w.Name))}.");
+            }
+            if (lineStyle != null)
+                warnings.Add("lineStyle applies to splines and arcs; Revit wires take their look from the Wires category.");
+        }
+        WireType WireTypeFor(ElectricalSystem circuit)
+        {
+            if (namedWireType != null) return namedWireType;
+            try { if (circuit.WireType != null) return circuit.WireType; }
+            catch { /* Revit 2026 circuits carry a cable type instead */ }
+            return wireTypes[0];
+        }
+
         object Summary(Dictionary<long, List<long>>? created) => new
         {
             view = new { id = view.Id.Value, name = view.Name },
@@ -222,6 +258,9 @@ internal static class DrawCircuitArcsExecutor
                 name = p.Circuit.Name,
                 devicesOnCircuit = p.DevicesOnCircuit,
                 devicesInView = p.Nodes.Count,
+                lightingCircuit = p.Lighting,
+                drawnAs = p.Kind,
+                wireType = p.Kind == "wire" && p.Plan.Arcs.Count > 0 ? WireTypeFor(p.Circuit).Name : null,
                 homeRun = p.HasHomeRun,
                 arcs = p.Plan.Arcs.Select(a => new
                 {
@@ -261,6 +300,7 @@ internal static class DrawCircuitArcsExecutor
         var shortCurve = doc.Application.ShortCurveTolerance;
         var createdIds = new Dictionary<long, List<long>>();
         int maxSplinePoints = 0;
+        var wireNotes = new Dictionary<string, int>();
         var transaction = RevitTransactionRunner.Run(doc, "Revit MCP - Draw circuit arcs", () =>
         {
             var schema = MarkerSchema();
@@ -277,11 +317,23 @@ internal static class DrawCircuitArcsExecutor
                     var from = FromPlane(arc.X1, arc.Y1);
                     var to = FromPlane(arc.X2, arc.Y2);
                     var middle = FromPlane(arc.MidX, arc.MidY);
-                    var curve = curveKind == "spline"
+
+                    if (plan.Kind == "wire")
+                    {
+                        var wire = NewWire(doc, view, WireTypeFor(plan.Circuit), wiring, from, middle, to,
+                            doc.GetElement(new ElementId(arc.FromId)), arc.ToId == 0 ? null : doc.GetElement(new ElementId(arc.ToId)), wireNotes);
+                        var wireMarker = new Entity(schema);
+                        wireMarker.Set(MarkerField, plan.Circuit.UniqueId);
+                        wire.SetEntity(wireMarker);
+                        ids.Add(wire.Id.Value);
+                        continue;
+                    }
+
+                    var curve = plan.Kind == "spline"
                         ? NewDetailSpline(doc, view, from, middle, to)
                         : doc.Create.NewDetailCurve(view, Arc.Create(from, to, middle));
                     if (curve == null)
-                        throw new InvalidOperationException($"Revit did not create a detail {curveKind} between elements {arc.FromId} and {arc.ToId}.");
+                        throw new InvalidOperationException($"Revit did not create a detail {plan.Kind} between elements {arc.FromId} and {arc.ToId}.");
                     if (curve.GeometryCurve is NurbSpline created)
                         maxSplinePoints = Math.Max(maxSplinePoints, created.CtrlPoints.Count);
                     if (lineStyle != null) curve.LineStyle = lineStyle;
@@ -310,6 +362,8 @@ internal static class DrawCircuitArcsExecutor
                 result = Summary(transaction.Success ? createdIds : null),
                 // Points a user drags to reshape a spline: 3 means the two ends and one in between
                 splineControlPoints = maxSplinePoints > 0 ? maxSplinePoints : (int?)null,
+                // How the wires were made: joined to the devices' electrical connectors, or as free wires
+                wires = wireNotes.Count > 0 ? wireNotes : null,
                 transaction = transaction.Diagnostics
             },
             Warnings = warnings,
@@ -331,6 +385,74 @@ internal static class DrawCircuitArcsExecutor
         var control = chordMiddle + (apex - chordMiddle) * 2;
         var spline = NurbSpline.CreateCurve(new List<XYZ> { from, control, to }, new List<double> { 1, 1, 1 });
         return doc.Create.NewDetailCurve(view, spline);
+    }
+
+    private static bool IsLighting(Element? element)
+    {
+        var category = element?.Category?.Id.Value;
+        return category == (long)BuiltInCategory.OST_LightingFixtures || category == (long)BuiltInCategory.OST_LightingDevices;
+    }
+
+    private static Connector? ElectricalConnector(Element? element)
+    {
+        try
+        {
+            var connectors = (element as FamilyInstance)?.MEPModel?.ConnectorManager?.Connectors;
+            if (connectors == null) return null;
+            foreach (Connector connector in connectors)
+                if (connector.Domain == Domain.DomainElectrical) return connector;
+        }
+        catch
+        {
+            // No MEP model: the wire end stays free.
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// A Revit wire from one device to the next (or, for a home run, from a device into the open), bulging
+    /// through <paramref name="middle"/>. Joined to the devices' electrical connectors when Revit accepts that;
+    /// otherwise drawn as a free wire along the same points. Each attempt runs in its own sub-transaction, so a
+    /// refused attempt leaves nothing behind.
+    /// </summary>
+    private static Wire NewWire(Document doc, View view, WireType wireType, string wiring, XYZ from, XYZ middle, XYZ to,
+        Element? fromElement, Element? toElement, Dictionary<string, int> notes)
+    {
+        var shape = wiring == "chamfer" ? WiringType.Chamfer : WiringType.Arc;
+        var start = ElectricalConnector(fromElement);
+        var end = ElectricalConnector(toElement);
+        var attempts = new List<(string Note, IList<XYZ> Points, Connector? Start, Connector? End)>();
+        if (start != null || end != null)
+        {
+            attempts.Add(("joined to connectors", new List<XYZ> { from, middle, to }, start, end));
+            attempts.Add(("joined to connectors", new List<XYZ> { start?.Origin ?? from, middle, end?.Origin ?? to }, start, end));
+        }
+        attempts.Add(("free wire (not joined to a connector)", new List<XYZ> { from, middle, to }, null, null));
+
+        string? lastError = null;
+        foreach (var attempt in attempts)
+        {
+            using var sub = new SubTransaction(doc);
+            sub.Start();
+            try
+            {
+                var wire = Wire.Create(doc, wireType.Id, view.Id, shape, attempt.Points, attempt.Start, attempt.End);
+                if (wire != null)
+                {
+                    sub.Commit();
+                    notes[attempt.Note] = notes.TryGetValue(attempt.Note, out var count) ? count + 1 : 1;
+                    return wire;
+                }
+                sub.RollBack();
+                lastError = "Revit returned no wire";
+            }
+            catch (Exception ex)
+            {
+                if (sub.HasStarted() && !sub.HasEnded()) sub.RollBack();
+                lastError = ex.GetType().Name + ": " + ex.Message;
+            }
+        }
+        throw new InvalidOperationException($"Revit could not create a wire from element {fromElement?.Id.Value}: {lastError}");
     }
 
     /// <summary>Where a device is shown: its insertion point, or the middle of its box in the view.</summary>
@@ -355,15 +477,15 @@ internal static class DrawCircuitArcsExecutor
         return builder.Finish();
     }
 
-    /// <summary>Arcs this tool drew in the view earlier, by circuit UniqueId.</summary>
+    /// <summary>Lines and wires this tool drew in the view earlier, by circuit UniqueId.</summary>
     private static Dictionary<string, List<ElementId>> ExistingArcs(Document doc, View view)
     {
         var result = new Dictionary<string, List<ElementId>>(StringComparer.Ordinal);
         var schema = Schema.Lookup(MarkerGuid);
         if (schema == null) return result;
 
-        foreach (var curve in new FilteredElementCollector(doc, view.Id).OfClass(typeof(CurveElement))
-                     .WherePasses(new ExtensibleStorageFilter(MarkerGuid)).Cast<CurveElement>())
+        // Whole document, then by owner view: a wire is view-specific but is not always found through the view's collector
+        foreach (var curve in new FilteredElementCollector(doc).WherePasses(new ExtensibleStorageFilter(MarkerGuid)))
         {
             if (curve.OwnerViewId != view.Id) continue;
             try

@@ -18,7 +18,14 @@ arcs are plain detail lines that can be moved, restyled or deleted like any othe
 - Devices closer together than `minDistanceMm` (stacked symbols) get no arc between them.
 - `connectToPanel` also joins the panel to the first device when the panel is visible in the view.
 - `lineStyle` names a line style; an unknown name is refused with the list of styles.
-- `curve` is `spline` (default) or `arc`. A spline has the fewest points there can be — its two ends and one
+- `curve` is `auto` (default), `spline`, `arc` or `wire`. `auto` follows the office habit: **Revit wires on
+  lighting circuits** (most of the circuit's devices in the view are lighting fixtures or switches) and
+  **splines on sockets and everything else**. The preview shows `drawnAs` per circuit.
+- A wire is a real Revit `Wire` in the view, joined to the devices' electrical connectors when Revit accepts
+  that and drawn as a free wire along the same points otherwise (the result counts both). `wireType` names the
+  wire type (default: the circuit's own, else the project's first); `wiring` is `arc` or `chamfer`. `lineStyle`
+  does not apply to wires. A project without wire types cannot draw wires.
+- A spline has the fewest points there can be — its two ends and one
   control point between them — so it is reshaped in Revit by dragging a single point. It is created as a
   three-point NURBS spline; the control point sits twice as far from the chord as the bulge, because such a
   spline only goes halfway to its control point. A Hermite spline is never passed to `NewDetailCurve`: in Revit

@@ -6659,7 +6659,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     // ── Circuit arcs: detail arcs between a circuit's devices, instead of Revit wires ─────────────────────
 
     [McpServerTool(Name = "revit_preview_draw_circuit_arcs", ReadOnly = true),
-     Description("Previews drawing curved detail lines (splines by default, or arcs) between the devices of electrical circuits in a plan view (a stand-in for Revit wires) WITHOUT changing anything. Per circuit: devices on the circuit, devices visible in the view, the arcs that would join them (from, to, length) and earlier arcs that would be replaced.")]
+     Description("Previews drawing the links between the devices of electrical circuits in a plan view (a stand-in for Revit wires) WITHOUT changing anything. Per circuit: devices on the circuit, devices visible in the view, the arcs that would join them (from, to, length) and earlier arcs that would be replaced.")]
     public async Task<string> PreviewDrawCircuitArcs(
         [Description("Circuit element ids.")] long[]? circuitIds = null,
         [Description("Draw every circuit of this panel (element id or name). Can be combined with circuitIds.")] string? panel = null,
@@ -6674,7 +6674,9 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Also draw a home run: a short open-ended arc from the device nearest the panel, pointing at the panel. Circuits with a single device in the view get only this. Default false.")] bool homeRun = false,
         [Description("Length of the home run in mm (never more than 80 % of the way to the panel). Default 900.")] double homeRunLengthMm = 900,
         [Description("Which side the home run bulges to, looking from the device to the panel: right (default) or left.")] string homeRunSide = "right",
-        [Description("Line shape: spline (default; through the two devices and the bulge point, its control points can be dragged in Revit) or arc.")] string curve = "spline",
+        [Description("What to draw: auto (default: Revit wires for lighting circuits, three-point splines for sockets and everything else), spline, arc or wire.")] string curve = "auto",
+        [Description("Wire type name for Revit wires. Default: the circuit's own wire type, else the project's first.")] string? wireType = null,
+        [Description("Shape of Revit wires: arc (default) or chamfer.")] string wiring = "arc",
         CancellationToken cancellationToken = default)
     {
         var args = BuildCircuitArcArgs(circuitIds, panel, viewId, mode, bulge, side, lineStyle, connectToPanel, minDistanceMm, replaceExisting);
@@ -6682,11 +6684,13 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         args["homeRunLengthMm"] = homeRunLengthMm;
         args["homeRunSide"] = homeRunSide;
         args["curve"] = curve;
+        args["wireType"] = wireType ?? string.Empty;
+        args["wiring"] = wiring;
         return FormatResult(await pipeClient.SendAsync("revit_preview_draw_circuit_arcs", args, cancellationToken));
     }
 
     [McpServerTool(Name = "revit_draw_circuit_arcs"),
-     Description("Draws curved detail lines (splines by default, or arcs) between the devices of electrical circuits in a plan view, as a stand-in for Revit wires. Requires approval; one transaction, reversible with Undo. Only devices visible in the view are joined. Each arc is marked with its circuit, so drawing a circuit again replaces its arcs in that view. Run revit_preview_draw_circuit_arcs first.")]
+     Description("Draws the links between the devices of electrical circuits in a plan view: by default Revit wires on lighting circuits and three-point detail splines on sockets and other devices (curve = auto | spline | arc | wire). Requires approval; one transaction, reversible with Undo. Only devices visible in the view are joined. Each arc is marked with its circuit, so drawing a circuit again replaces its arcs in that view. Run revit_preview_draw_circuit_arcs first.")]
     public async Task<string> DrawCircuitArcs(
         [Description("Circuit element ids.")] long[]? circuitIds = null,
         [Description("Draw every circuit of this panel (element id or name). Can be combined with circuitIds.")] string? panel = null,
@@ -6701,7 +6705,9 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Also draw a home run: a short open-ended arc from the device nearest the panel, pointing at the panel. Circuits with a single device in the view get only this. Default false.")] bool homeRun = false,
         [Description("Length of the home run in mm (never more than 80 % of the way to the panel). Default 900.")] double homeRunLengthMm = 900,
         [Description("Which side the home run bulges to, looking from the device to the panel: right (default) or left.")] string homeRunSide = "right",
-        [Description("Line shape: spline (default; through the two devices and the bulge point, its control points can be dragged in Revit) or arc.")] string curve = "spline",
+        [Description("What to draw: auto (default: Revit wires for lighting circuits, three-point splines for sockets and everything else), spline, arc or wire.")] string curve = "auto",
+        [Description("Wire type name for Revit wires. Default: the circuit's own wire type, else the project's first.")] string? wireType = null,
+        [Description("Shape of Revit wires: arc (default) or chamfer.")] string wiring = "arc",
         CancellationToken cancellationToken = default)
     {
         var args = BuildCircuitArcArgs(circuitIds, panel, viewId, mode, bulge, side, lineStyle, connectToPanel, minDistanceMm, replaceExisting);
@@ -6709,6 +6715,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         args["homeRunLengthMm"] = homeRunLengthMm;
         args["homeRunSide"] = homeRunSide;
         args["curve"] = curve;
+        args["wireType"] = wireType ?? string.Empty;
+        args["wiring"] = wiring;
         return FormatResult(await pipeClient.SendAsync("revit_draw_circuit_arcs", args, cancellationToken));
     }
 
