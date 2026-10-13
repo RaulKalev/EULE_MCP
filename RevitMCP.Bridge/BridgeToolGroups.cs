@@ -28,6 +28,7 @@ public static class BridgeToolGroups
         ["tags"] = "Tags, dimensions, text notes, detail lines, view alignment",
         ["coordination"] = "Clash detection, clash review, issue reports",
         ["cad"] = "DWG/CAD imports, overrides and placement from CAD",
+        ["pages"] = "Model pages: publish a generated HTML report as a local page whose rows select elements in Revit and show live parameter values",
         ["documents"] = "Open documents: activate, reload/remove DWG/IFC/RVT links, link visibility, save and sync with central",
         ["skills"] = "Skill builder and skill runs",
         ["office"] = "Configuration, files, Excel, standards lookup, delivery checks"
@@ -76,6 +77,7 @@ public static class BridgeToolGroups
             "revit_remove_links", "revit_preview_set_link_visibility", "revit_set_link_visibility", "revit_save_document",
             "revit_sync_with_central"
         }),
+        ("pages", new[] { "revit_publish_page", "revit_list_pages" }),
         ("coordination", new[] { "revit_export_issues", "revit_merge_issue_reports" }));
 
     /// <summary>Ordered rules for everything not in the exact table: the first keyword found in the name wins.</summary>

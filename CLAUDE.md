@@ -48,6 +48,13 @@ to, and its Extensible Storage stores. Call `revit_panelschematics_guide` first.
 approval and is refused while the plugin's table window is open. The storage formats live in
 `RevitMCP.Addin/PanelSchematics/PanelSchematicsContract.cs` and must follow the plugin's source.
 
+## Model pages
+
+When the user gets a list or report of model elements to go through, publish it with `revit_publish_page`
+(`pages` group, see [`docs/model-pages.md`](docs/model-pages.md)) instead of only printing it. Mark rows with
+`data-revit-id` and value cells with `data-revit-param`; the served page then selects elements in Revit and shows
+live values without the agent. The HTML must be self-contained (no CDN). The page cannot change the model.
+
 ## Development notes
 
 - Build: `dotnet build RevitMCP.slnx -c Release`; tests: `dotnet test RevitMCP.Tests/RevitMCP.Tests.csproj`.

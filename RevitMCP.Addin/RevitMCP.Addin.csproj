@@ -86,6 +86,11 @@
     <EmbeddedResource Include="Village\Viewer\vendor\village-three.min.js" LogicalName="RevitMCP.Addin.Village.Viewer.vendor.village-three.min.js" />
   </ItemGroup>
 
+  <!-- Model pages: the helper script added to every page the loopback listener serves. -->
+  <ItemGroup>
+    <EmbeddedResource Include="ModelPages\Viewer\pages.js" LogicalName="RevitMCP.Addin.ModelPages.Viewer.pages.js" />
+  </ItemGroup>
+
   <!-- Assets (WPF Resource items) — ribbon icons and window branding, needed by both TFMs. -->
   <ItemGroup>
     <Resource Include="Assets\RevitMCP.tiff" />

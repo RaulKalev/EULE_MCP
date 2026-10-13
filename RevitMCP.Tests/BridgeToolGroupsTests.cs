@@ -72,6 +72,7 @@ public class BridgeToolGroupsTests
     [InlineData("convert_ifc_spaces_to_rooms", "ifc")]
     [InlineData("excel_read_range", "office")]
     [InlineData("revit_panelschematics_set_circuit_rows", "panelschematics")]   // contains "panel" and "circuit"
+    [InlineData("revit_publish_page", "pages")]
     [InlineData("revit_create_panel_schematic_symbol_from_dwg", "cad")]
     public void GroupOf_ResolvesAmbiguousNames(string tool, string expected) =>
         Assert.Equal(expected, BridgeToolGroups.GroupOf(tool));

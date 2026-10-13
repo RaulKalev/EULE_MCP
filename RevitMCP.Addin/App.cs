@@ -32,6 +32,7 @@ public class App : IExternalApplication
     private static ConnectorService? _connector;
     public static ConnectorService? GetConnector() => _connector;
     private static VillageService? _village;
+    private static RevitMCP.Addin.ModelPages.Hosting.ModelPageService? _modelPages;
     public static VillageService? GetVillage() => _village;
 
     private static readonly string DiagLogPath = System.IO.Path.Combine(
@@ -89,6 +90,8 @@ public class App : IExternalApplication
             handler.RegisterTool(new PanelSchematicsSetRowGroupsTool());
             handler.RegisterTool(new GetElementRoomsTool());
             handler.RegisterTool(new GetRoomBoundariesTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.ModelPages.PublishPageTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.ModelPages.ListPagesTool());
             handler.RegisterTool(new PreviewDrawCircuitArcsTool());
             handler.RegisterTool(new DrawCircuitArcsTool());
             handler.RegisterTool(new ListSheetsTool());
@@ -465,6 +468,20 @@ public class App : IExternalApplication
                 DiagLog($"Project Village unavailable: {ex.GetType().Name}: {ex.Message}");
             }
 
+            // Model pages (ModelPages\) — HTML an agent generated from the model, served on a loopback listener so
+            // the user can select elements and see live values from it without the agent. Its ExternalEvent is
+            // created here, in API context. A failure is logged and never fails startup.
+            try
+            {
+                _modelPages = RevitMCP.Addin.ModelPages.Hosting.ModelPageService.Create(DiagLog);
+                _modelPages.StartIfPagesExist();
+                DiagLog($"Model pages: {(_modelPages.Url != null ? "listening at " + _modelPages.Url : "idle until a page is published")}");
+            }
+            catch (Exception ex)
+            {
+                DiagLog($"Model pages unavailable: {ex.GetType().Name}: {ex.Message}");
+            }
+
             // Startup validation: log all registered tool names so mismatches (e.g. after a
             // partial rebuild before Revit restart) are visible in the diagnostic log.
             var registeredTools = handler.GetRegisteredToolNames();
@@ -493,6 +510,7 @@ public class App : IExternalApplication
     {
         application.ControlledApplication.DocumentChanged -= OnDocumentChanged;
         try { _village?.Dispose(); } catch { }
+        try { _modelPages?.Dispose(); } catch { }
         _connector?.PanicStop();
         return Result.Succeeded;
     }

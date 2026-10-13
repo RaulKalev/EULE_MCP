@@ -23,5 +23,7 @@ internal static class ServerInstructions
         "refreshed automatically when a graph tool needs it. Reading a whole large category live without ids or filters " +
         "(revit_get_elements_info, revit_find_elements_by_parameter) is not run: the result has status graph_first and " +
         "the two calls to make instead; pass graphFirst=false only when every element of the category is really needed. " +
-        "Direct live tools stay available where the graph does not fit (selection, parameter filters, linked models).";
+        "Direct live tools stay available where the graph does not fit (selection, parameter filters, linked models).\n" +
+        "When the user gets a list or report of model elements to go through, publish it with revit_publish_page " +
+        "(revit_tools_describe it for the markup): its rows select elements in Revit and show live values without you.";
 }

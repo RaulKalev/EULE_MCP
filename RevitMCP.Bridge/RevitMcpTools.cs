@@ -6670,6 +6670,41 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(await pipeClient.SendAsync("revit_get_room_boundaries", args, cancellationToken));
     }
 
+    // ── Model pages: a generated HTML report the user can work from without the agent ─────────────────────
+
+    [McpServerTool(Name = "revit_publish_page", ReadOnly = true),
+     Description("Publishes HTML you generated from the active model (a report, check list, overview table) as a local page and opens it in the user's browser. On that page the user selects and zooms to elements in Revit and sees current parameter values by clicking — without you, so follow-up look-ups cost no tokens. Use it whenever you hand the user a list of model elements they will want to go through. " +
+                 "Markup: data-revit-id=\"<elementId>\" (or several ids separated by commas) on each row/card/item — a click selects and zooms to them; data-revit-param=\"<parameter name>\" on a cell inside such a row — its text is replaced by the element's current value on load and on Refresh, and highlighted when it differs from what you wrote; data-revit-select-all (optionally =\"<css selector>\") on a button — selects every visible element on the page or inside the selector. Your own scripts may call revit.select(ids, {zoom}), revit.values(ids, parameterNames) and revit.refresh() (after adding rows). " +
+                 "The page must be self-contained: inline CSS and JS only, no CDN scripts, fonts or remote images (other origins are blocked). Set <html lang=\"et\"> for Estonian helper texts. The page is bound to the active model and works on this computer while Revit runs. It cannot change the model. Returns the url and pageId.")]
+    public async Task<string> PublishPage(
+        [Description("Page title, shown in the page list.")] string title,
+        [Description("The full HTML document. Alternative to htmlPath.")] string? html = null,
+        [Description("Path to an .html file you wrote on this computer (max 2 MB). Preferred for large pages. Alternative to html.")] string? htmlPath = null,
+        [Description("Id of a page published earlier: replaces it and keeps its link. Empty = a new page.")] string? pageId = null,
+        [Description("Open the page in the user's browser. Default true.")] bool open = true,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["title"] = title,
+            ["html"] = html ?? string.Empty,
+            ["htmlPath"] = htmlPath ?? string.Empty,
+            ["pageId"] = pageId ?? string.Empty,
+            ["open"] = open
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_publish_page", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_list_pages", ReadOnly = true),
+     Description("Lists the model pages published with revit_publish_page: pageId, title, model, whether it belongs to the active model, last update and url. removePageId deletes one page.")]
+    public async Task<string> ListPages(
+        [Description("Delete this page before listing. Empty = list only.")] string? removePageId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["removePageId"] = removePageId ?? string.Empty };
+        return FormatResult(await pipeClient.SendAsync("revit_list_pages", args, cancellationToken));
+    }
+
     // ── Circuit arcs: detail arcs between a circuit's devices, instead of Revit wires ─────────────────────
 
     [McpServerTool(Name = "revit_preview_draw_circuit_arcs", ReadOnly = true),
