@@ -24,7 +24,7 @@ internal static class EmbeddedAssemblyLoader
     internal static void Initialize()
     {
 #if REVIT2024
-        AppDomain.CurrentDomain.AssemblyResolve += ResolveEmbeddedOverOlderLoaded;
+        SubscribeFirst(ResolveEmbeddedOverOlderLoaded);
 #endif
         // FodyWeavers.xml sets LoadAtModuleInit="false" so the handler above is subscribed first.
         CosturaUtility.Initialize();
@@ -34,6 +34,52 @@ internal static class EmbeddedAssemblyLoader
 #if REVIT2024
     private static readonly object Gate = new object();
     private static readonly Dictionary<string, Assembly> SideLoaded = new Dictionary<string, Assembly>(StringComparer.OrdinalIgnoreCase);
+
+    private static string _earlierHandlers = "";
+
+    /// <summary>
+    /// Puts the handler at the head of the AppDomain's resolve chain. The first handler to return an assembly
+    /// wins, and add-ins loaded before this one (they load alphabetically) often carry a name-only resolver
+    /// of their own, Costura's included, which would answer with the older copy before ours is asked.
+    /// The event has no public way to prepend, hence the private field; falls back to a normal subscription.
+    /// </summary>
+    private static void SubscribeFirst(ResolveEventHandler handler)
+    {
+        var domain = AppDomain.CurrentDomain;
+        try
+        {
+            var field = typeof(AppDomain).GetField("_AssemblyResolve", BindingFlags.Instance | BindingFlags.NonPublic);
+            if (field != null && field.FieldType == typeof(ResolveEventHandler))
+            {
+                // Same lock the event's own add/remove accessors take.
+                lock (domain)
+                {
+                    var existing = (ResolveEventHandler?)field.GetValue(domain);
+                    _earlierHandlers = Describe(existing);
+                    field.SetValue(domain, (ResolveEventHandler)Delegate.Combine(handler, existing));
+                }
+                return;
+            }
+        }
+        catch { }
+
+        _earlierHandlers = "unknown (could not prepend)";
+        domain.AssemblyResolve += handler;
+    }
+
+    private static string Describe(ResolveEventHandler? handlers)
+    {
+        if (handlers is null) return "none";
+        var owners = new List<string>();
+        foreach (var handler in handlers.GetInvocationList())
+        {
+            string owner;
+            try { owner = handler.Method.DeclaringType?.Assembly.GetName().Name ?? "?"; }
+            catch { owner = "?"; }
+            if (!owners.Contains(owner)) owners.Add(owner);
+        }
+        return string.Join(", ", owners);
+    }
 
     private static Assembly? ResolveEmbeddedOverOlderLoaded(object? sender, ResolveEventArgs args)
     {
@@ -66,7 +112,7 @@ internal static class EmbeddedAssemblyLoader
 
                 var assembly = Assembly.Load(bytes);
                 SideLoaded[requested.Name] = assembly;
-                Log($"Loaded embedded {assembly.GetName().Name} {assembly.GetName().Version} next to {best.GetName().Version} from '{best.Location}'");
+                Log($"Loaded embedded {assembly.GetName().Name} {assembly.GetName().Version} next to {best.GetName().Version} from '{best.Location}' (resolvers subscribed before this add-in: {_earlierHandlers})");
                 return assembly;
             }
         }
