@@ -33,6 +33,18 @@ public class ModelPageTests
             Calls.Add($"values:{string.Join(",", ids)}:{string.Join("|", parameters)}");
             return Task.FromResult<object>(new { ok = true, status = "read" });
         }
+
+        public Task<object> SetAsync(ModelPageInfo page, IReadOnlyList<ModelPageChange> changes, CancellationToken ct)
+        {
+            Calls.Add("set:" + string.Join(";", changes.Select(c => $"{c.Id}/{c.Parameter}={c.Value}/was={c.Expected ?? "?"}")));
+            return Task.FromResult<object>(new { ok = false, status = "approval_required", requestId = "req-1" });
+        }
+
+        public Task<object> ApprovalAsync(ModelPageInfo page, string requestId, CancellationToken ct)
+        {
+            Calls.Add("approval:" + requestId);
+            return Task.FromResult<object>(new { ok = true, status = "written" });
+        }
     }
 
     private sealed class Fixture : IDisposable
@@ -48,7 +60,7 @@ public class ModelPageTests
         {
             Store = new ModelPageStore(Folder);
             Page = Store.Save(null, "KK.48 kontroll", "<html><body><tr data-revit-id=\"11\"><td>x</td></tr></body></html>", "model-a", "P125", "Claude", DateTimeOffset.Now);
-            Server = new ModelPageServer(Store, Backend, () => "/* helper */", port: 0);
+            Server = new ModelPageServer(Store, Backend, () => "/* helper */", port: 0, stylesProvider: () => "/* theme */");
             Assert.True(Server.Start());
         }
 
@@ -137,6 +149,17 @@ public class ModelPageTests
     }
 
     [Fact]
+    public void Inject_LinksTheDefaultStylesBeforeThePagesOwn()
+    {
+        var html = ModelPageHtml.Inject("<html lang=\"et\"><head><style>body{color:red}</style></head><body></body></html>", "p", "t", "Pealkiri <1>");
+        Assert.True(html.IndexOf("/pages.css", StringComparison.Ordinal) < html.IndexOf("body{color:red}", StringComparison.Ordinal));
+        Assert.True(html.IndexOf("<head>", StringComparison.Ordinal) < html.IndexOf("/pages.css", StringComparison.Ordinal));
+        Assert.Contains("Pealkiri \\u003c1>", html);
+        Assert.StartsWith("<html><link", ModelPageHtml.Inject("<html><body></body></html>", "p", "t"));
+        Assert.StartsWith("<link", ModelPageHtml.Inject("<p>fragment</p>", "p", "t"));
+    }
+
+    [Fact]
     public void Review_FlagsExternalResourcesAndPagesWithoutElements()
     {
         Assert.Empty(ModelPageHtml.Review("<table><tr data-revit-id=\"1\"><td><img src=\"data:image/png;base64,AA\"></td></tr></table>"));
@@ -174,6 +197,8 @@ public class ModelPageTests
 
         Assert.Contains("KK.48 kontroll", await f.Http.GetStringAsync(f.Origin + "/"));
         Assert.Equal("/* helper */", await f.Http.GetStringAsync(f.Origin + "/pages.js"));
+        Assert.Equal("/* theme */", await f.Http.GetStringAsync(f.Origin + "/pages.css"));
+        Assert.Contains("style-src 'self'", csp);
         Assert.Equal(HttpStatusCode.NotFound, (await f.Http.GetAsync(f.Origin + "/p/nope")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await f.Http.GetAsync(f.Origin + "/api/select")).StatusCode);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await f.Http.DeleteAsync(f.Server.PageUrl(f.Page.Id))).StatusCode);
@@ -223,6 +248,75 @@ public class ModelPageTests
         Assert.Equal(HttpStatusCode.BadRequest, (await f.Http.SendAsync(f.Post("/api/values", $"{{\"page\":\"{id}\",\"ids\":{many},\"parameters\":[\"a\"]}}"))).StatusCode);
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, (await f.Http.SendAsync(f.Post("/api/select", "{\"page\":\"" + new string('a', ModelPageServer.MaxBodyBytes) + "\"}"))).StatusCode);
         Assert.Empty(f.Backend.Calls);
+    }
+
+    [Fact]
+    public async Task Post_Set_GoesToTheBackendOnlyWhenEveryChangeIsReadable()
+    {
+        using var f = new Fixture();
+        var id = f.Page.Id;
+        var waiting = await f.Json(f.Post("/api/set", $"{{\"page\":\"{id}\",\"changes\":[{{\"id\":\"11\",\"parameter\":\"Comments\",\"value\":\"PM\",\"expected\":\"KÜ\"}},{{\"id\":12,\"parameter\":\"Mark\",\"value\":7}}]}}"));
+        Assert.Equal("approval_required", (string)waiting["status"]!);
+        Assert.Contains("set:11/Comments=PM/was=KÜ;12/Mark=7/was=?", f.Backend.Calls);
+
+        await f.Json(f.Post("/api/approval", $"{{\"page\":\"{id}\",\"requestId\":\"req-1\"}}"));
+        Assert.Contains("approval:req-1", f.Backend.Calls);
+
+        var calls = f.Backend.Calls.Count;
+        foreach (var bad in new[]
+                 {
+                     "[]",
+                     "[{\"id\":11,\"parameter\":\"\",\"value\":\"x\"}]",
+                     "[{\"id\":0,\"parameter\":\"Mark\",\"value\":\"x\"}]",
+                     "[{\"id\":11,\"parameter\":\"Mark\"}]",
+                     "[{\"id\":11,\"parameter\":\"Mark\",\"value\":\"a\"},{\"id\":11,\"parameter\":\"Mark\",\"value\":\"b\"}]",
+                     "[{\"id\":11,\"parameter\":\"Mark\",\"value\":{\"a\":1}}]"
+                 })
+            Assert.Equal(HttpStatusCode.BadRequest, (await f.Http.SendAsync(f.Post("/api/set", $"{{\"page\":\"{id}\",\"changes\":{bad}}}"))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await f.Http.SendAsync(f.Post("/api/approval", $"{{\"page\":\"{id}\"}}"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await f.Http.SendAsync(f.Post("/api/set", $"{{\"page\":\"{id}\",\"changes\":[{{\"id\":11,\"parameter\":\"Mark\",\"value\":\"x\"}}]}}", token: null))).StatusCode);
+        Assert.Equal(calls, f.Backend.Calls.Count);
+    }
+
+    [Fact]
+    public void Edits_SummaryNamesWhatAnApproverNeedsToKnow()
+    {
+        var one = new List<ModelPageChange> { new() { Id = 11, Parameter = "Comments", Value = "PM" } };
+        Assert.Equal("Page 'KK.48 kontroll': set 'Comments' to \"PM\" on element 11.", ModelPageEdits.Summary("KK.48 kontroll", one));
+
+        var many = new List<ModelPageChange>
+        {
+            new() { Id = 11, Parameter = "Comments", Value = "PM" },
+            new() { Id = 12, Parameter = "Comments", Value = "PM" },
+            new() { Id = 12, Parameter = "Mark", Value = "PM" }
+        };
+        Assert.Equal("Page 'KK.48 kontroll': set 'Comments', 'Mark' to \"PM\" on 2 elements (3 values).", ModelPageEdits.Summary("KK.48 kontroll", many));
+        many[2].Value = "A1";
+        Assert.DoesNotContain(" to \"", ModelPageEdits.Summary("KK.48 kontroll", many));
+    }
+
+    [Theory]
+    [InlineData("Jah", true, true)]
+    [InlineData("yes", true, true)]
+    [InlineData("1", true, true)]
+    [InlineData("ei", true, false)]
+    [InlineData("No", true, false)]
+    [InlineData("", true, false)]
+    [InlineData("võib-olla", false, false)]
+    public void Edits_YesNo_ReadsEnglishAndEstonian(string text, bool parsed, bool expected)
+    {
+        Assert.Equal(parsed, ModelPageEdits.TryParseYesNo(text, out var value));
+        Assert.Equal(expected, value);
+    }
+
+    [Fact]
+    public void Edits_StillExpected_ComparesWhatThePageShowed()
+    {
+        Assert.True(ModelPageEdits.StillExpected(null, "anything"));
+        Assert.True(ModelPageEdits.StillExpected(" PM ", "PM"));
+        Assert.True(ModelPageEdits.StillExpected("", null));
+        Assert.False(ModelPageEdits.StillExpected("PM", "KÜ"));
+        Assert.False(ModelPageEdits.StillExpected("", "KÜ"));
     }
 
     [Fact]

@@ -22,6 +22,7 @@ public static class ApprovalSummaryBuilder
             "revit_select_elements" => BuildSelectElements(request),
             "revit_select_elements_by_query" => BuildSelectByQuery(request),
             "revit_set_parameter" => BuildSetParameter(request),
+            RevitMCP.Addin.Tools.ModelPages.PageSetValuesTool.ToolName => BuildPageSetValues(request),
             "revit_set_circuit_parameter" => BuildSetCircuitParameter(request),
             "revit_create_electrical_circuit" => CircuitPreviewBuilder.BuildCreateCircuit(request),
             "revit_add_elements_to_circuit" => CircuitPreviewBuilder.BuildAddElements(request),
@@ -142,6 +143,14 @@ public static class ApprovalSummaryBuilder
             : string.Empty;
         return $"Select elements by query in category {catDesc}{filterDesc}. " +
                $"Replace: {(replace ? "yes" : "no")}. Zoom: {(zoom ? "yes" : "no")}. Limit: {limit}";
+    }
+
+    private static string BuildPageSetValues(McpToolRequest request)
+    {
+        var title = ToolArguments.GetString(request.Arguments, "pageTitle");
+        request.Arguments.TryGetValue("changes", out var raw);
+        var changes = raw == null ? null : RevitMCP.Addin.ModelPages.ModelPageEdits.Parse(raw as JToken ?? JToken.FromObject(raw), out _);
+        return RevitMCP.Addin.ModelPages.ModelPageEdits.Summary(title, changes ?? new List<RevitMCP.Addin.ModelPages.ModelPageChange>());
     }
 
     private static string BuildSetParameter(McpToolRequest request)

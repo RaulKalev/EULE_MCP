@@ -1,22 +1,43 @@
 using System.Collections.Concurrent;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using Newtonsoft.Json.Linq;
+using RevitMCP.Addin.Approval;
+using RevitMCP.Addin.Logging;
 using RevitMCP.Addin.Services;
 using RevitMCP.Addin.Tools;
+using RevitMCP.Addin.Tools.ModelPages;
+using RevitMCP.Core.Models;
 using RevitMCP.Village;
 
 namespace RevitMCP.Addin.ModelPages.Hosting;
 
 /// <summary>
-/// The Revit side of a model page: selects and zooms to elements, and reads current parameter values.
-/// Runs on its own <see cref="ExternalEvent"/>, so a click on a page never enters the MCP dispatcher,
-/// the approval queue or the activity log, and costs no tokens. It changes the UI selection and the
-/// view only — never the model — and refuses when the active document is not the page's model.
+/// The Revit side of a model page. Selecting, zooming and reading values run on its own
+/// <see cref="ExternalEvent"/>: they never enter the MCP dispatcher, the approval queue or the activity
+/// log, cost no tokens and cannot change the model. Writing a value is different on purpose: it is handed
+/// to the connector's dispatcher as <see cref="PageSetValuesTool"/>, so it needs the user's approval in
+/// Revit (unless Direct Edit is on), runs in one transaction and is logged, like an agent's write.
+/// Everything refuses when the active document is not the page's model.
 /// </summary>
 public sealed class ModelPageRevitHandler : IExternalEventHandler, IModelPageBackend
 {
     private readonly ConcurrentQueue<Work> _queue = new();
     private ExternalEvent? _event;
+    private ExternalEventService? _dispatcher;
+    private ApprovalService? _approvals;
+    private ActivityLogger? _logger;
+
+    /// <summary>pages.allowEdits in the user config; asked on every request so a change applies at once.</summary>
+    public Func<bool> EditsEnabled { get; set; } = () => true;
+
+    /// <summary>Connects the write path. Without it pages stay read-only.</summary>
+    public void SetWritePath(ExternalEventService dispatcher, ApprovalService approvals, ActivityLogger? logger)
+    {
+        _dispatcher = dispatcher;
+        _approvals = approvals;
+        _logger = logger;
+    }
 
     private sealed class Work
     {
@@ -42,6 +63,70 @@ public sealed class ModelPageRevitHandler : IExternalEventHandler, IModelPageBac
 
     public Task<object> ValuesAsync(ModelPageInfo page, IReadOnlyList<long> ids, IReadOnlyList<string> parameters, CancellationToken ct) =>
         RunAsync(app => Values(app, page, ids, parameters), ct);
+
+    public async Task<object> SetAsync(ModelPageInfo page, IReadOnlyList<ModelPageChange> changes, CancellationToken ct)
+    {
+        var dispatcher = _dispatcher;
+        if (dispatcher == null || !EditsEnabled())
+            return ModelPageServer.Fail("read_only", "Editing from pages is switched off.");
+
+        var list = new JArray();
+        foreach (var c in changes)
+            list.Add(new JObject { ["id"] = c.Id, ["parameter"] = c.Parameter, ["value"] = c.Value, ["expected"] = c.Expected });
+        var request = new McpToolRequest
+        {
+            RequestId = Guid.NewGuid().ToString("N"),
+            ToolName = PageSetValuesTool.ToolName,
+            ClientName = "Model page",
+            Arguments = new Dictionary<string, object?>
+            {
+                ["pageId"] = page.Id, ["pageTitle"] = page.Title, ["modelId"] = page.ModelId, ["changes"] = list
+            }
+        };
+
+        var result = await dispatcher.DispatchAsync(request, cancellationToken: ct).ConfigureAwait(false);
+        try { if (_logger != null) await _logger.WriteAsync(request, result, dispatcher.GetLastContext()).ConfigureAwait(false); }
+        catch { /* logging never fails a write */ }
+
+        if (result.Status == "approval_required")
+        {
+            var waiting = ModelPageServer.Fail("approval_required", "Approve the change in Revit: RevitMCP window, Pending tab.");
+            waiting["requestId"] = request.RequestId;
+            return waiting;
+        }
+        return Written(result);
+    }
+
+    public Task<object> ApprovalAsync(ModelPageInfo page, string requestId, CancellationToken ct)
+    {
+        var outcome = _approvals?.GetOutcome(requestId);
+        // Only this feature's own requests: a page must not read what an agent's approval returned.
+        if (outcome == null || outcome.ToolName != PageSetValuesTool.ToolName)
+            return Task.FromResult<object>(ModelPageServer.Fail("unknown_request", "This request is no longer known. Refresh the page to see the current values."));
+
+        object answer = outcome.State switch
+        {
+            ApprovalOutcome.Pending => ModelPageServer.Fail("pending", "Waiting for approval in Revit."),
+            ApprovalOutcome.Running => ModelPageServer.Fail("pending", "Approved; Revit is writing the values."),
+            ApprovalOutcome.Rejected => ModelPageServer.Fail("rejected", "The change was rejected in Revit."),
+            _ => outcome.Result == null ? ModelPageServer.Fail("failed", "The change did not complete.") : Written(outcome.Result)
+        };
+        return Task.FromResult(answer);
+    }
+
+    /// <summary>A finished write as the page reads it: per value whether it was written, and the value now in the model.</summary>
+    private static object Written(McpToolResult result)
+    {
+        JToken? rows = null;
+        try { rows = result.Data == null ? null : (result.Data as JToken ?? JObject.FromObject(result.Data))["changes"]; }
+        catch { /* a refusal carries no rows */ }
+
+        var answer = result.Success
+            ? new Dictionary<string, object?> { ["ok"] = true, ["status"] = "written", ["message"] = result.Message }
+            : ModelPageServer.Fail(string.IsNullOrEmpty(result.Status) ? "failed" : result.Status!, result.Message);
+        if (rows != null) answer["changes"] = rows;
+        return answer;
+    }
 
     /// <summary>The identity a page is bound to; the same value the village uses for a model.</summary>
     public static string ModelIdOf(UIApplication app)
@@ -142,7 +227,7 @@ public sealed class ModelPageRevitHandler : IExternalEventHandler, IModelPageBac
         };
     }
 
-    private static object Values(UIApplication app, ModelPageInfo page, IReadOnlyList<long> ids, IReadOnlyList<string> parameters)
+    private object Values(UIApplication app, ModelPageInfo page, IReadOnlyList<long> ids, IReadOnlyList<string> parameters)
     {
         var uidoc = PageDocument(app, page, out var refusal);
         if (uidoc == null) return refusal!;
@@ -151,6 +236,9 @@ public sealed class ModelPageRevitHandler : IExternalEventHandler, IModelPageBac
         // Per element: parameter name → display value. A parameter the element does not have is left out,
         // one without a value is null, so the page can tell "empty" from "no such parameter".
         var values = new Dictionary<string, Dictionary<string, string?>>();
+        // Per element: the parameters a page may change — writable instance parameters holding text or a number.
+        var editable = new Dictionary<string, List<string>>();
+        var canEdit = _dispatcher != null && EditsEnabled();
         var missing = new List<long>();
         foreach (var id in ids)
         {
@@ -161,14 +249,25 @@ public sealed class ModelPageRevitHandler : IExternalEventHandler, IModelPageBac
             var typeId = element.GetTypeId();
             if (typeId != null && typeId != ElementId.InvalidElementId) type = doc.GetElement(typeId);
 
+            var key = id.ToString(System.Globalization.CultureInfo.InvariantCulture);
             var row = new Dictionary<string, string?>();
+            var open = new List<string>();
             foreach (var name in parameters)
             {
-                var parameter = element.LookupParameter(name) ?? type?.LookupParameter(name);
-                if (parameter != null) row[name] = ParameterResolver.DisplayValue(parameter);
+                var own = element.LookupParameter(name);
+                var parameter = own ?? type?.LookupParameter(name);
+                if (parameter == null) continue;
+                row[name] = ParameterResolver.DisplayValue(parameter);
+                if (canEdit && own != null && !own.IsReadOnly &&
+                    own.StorageType is StorageType.String or StorageType.Integer or StorageType.Double)
+                    open.Add(name);
             }
-            values[id.ToString(System.Globalization.CultureInfo.InvariantCulture)] = row;
+            values[key] = row;
+            if (open.Count > 0) editable[key] = open;
         }
-        return new Dictionary<string, object?> { ["ok"] = true, ["status"] = "read", ["values"] = values, ["missing"] = missing };
+        return new Dictionary<string, object?>
+        {
+            ["ok"] = true, ["status"] = "read", ["values"] = values, ["editable"] = editable, ["missing"] = missing
+        };
     }
 }

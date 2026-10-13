@@ -92,6 +92,8 @@ public class App : IExternalApplication
             handler.RegisterTool(new GetRoomBoundariesTool());
             handler.RegisterTool(new RevitMCP.Addin.Tools.ModelPages.PublishPageTool());
             handler.RegisterTool(new RevitMCP.Addin.Tools.ModelPages.ListPagesTool());
+            // Not advertised by the bridge: sent by the model page listener when a user edits a value on a page.
+            handler.RegisterTool(new RevitMCP.Addin.Tools.ModelPages.PageSetValuesTool());
             handler.RegisterTool(new PreviewDrawCircuitArcsTool());
             handler.RegisterTool(new DrawCircuitArcsTool());
             handler.RegisterTool(new ListSheetsTool());
@@ -473,7 +475,7 @@ public class App : IExternalApplication
             // created here, in API context. A failure is logged and never fails startup.
             try
             {
-                _modelPages = RevitMCP.Addin.ModelPages.Hosting.ModelPageService.Create(DiagLog);
+                _modelPages = RevitMCP.Addin.ModelPages.Hosting.ModelPageService.Create(DiagLog, eventService, approvalService, logger);
                 _modelPages.StartIfPagesExist();
                 DiagLog($"Model pages: {(_modelPages.Url != null ? "listening at " + _modelPages.Url : "idle until a page is published")}");
             }

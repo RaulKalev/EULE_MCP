@@ -89,6 +89,7 @@
   <!-- Model pages: the helper script added to every page the loopback listener serves. -->
   <ItemGroup>
     <EmbeddedResource Include="ModelPages\Viewer\pages.js" LogicalName="RevitMCP.Addin.ModelPages.Viewer.pages.js" />
+    <EmbeddedResource Include="ModelPages\Viewer\pages.css" LogicalName="RevitMCP.Addin.ModelPages.Viewer.pages.css" />
   </ItemGroup>
 
   <!-- Assets (WPF Resource items) — ribbon icons and window branding, needed by both TFMs. -->

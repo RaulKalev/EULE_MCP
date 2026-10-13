@@ -20,26 +20,36 @@ public interface IModelPageBackend
 
     /// <summary>Current values of the named parameters on the elements.</summary>
     Task<object> ValuesAsync(ModelPageInfo page, IReadOnlyList<long> ids, IReadOnlyList<string> parameters, CancellationToken ct);
+
+    /// <summary>
+    /// Writes parameter values. This is the one action that changes the model, so the implementation sends it
+    /// through the connector's approval path; the answer may be "approval_required" with a request id.
+    /// </summary>
+    Task<object> SetAsync(ModelPageInfo page, IReadOnlyList<ModelPageChange> changes, CancellationToken ct);
+
+    /// <summary>What became of a write that needed approval.</summary>
+    Task<object> ApprovalAsync(ModelPageInfo page, string requestId, CancellationToken ct);
 }
 
 /// <summary>
 /// Loopback HTTP/1.1 server for model pages: HTML an AI agent generated from a model, served back to
-/// the user's browser with a helper script that can select elements in Revit and read live parameter
-/// values — without the agent, so it costs no tokens. Same shape as the village listener
+/// the user's browser with a helper script that can select elements in Revit, read live parameter
+/// values and change them — without the agent, so it costs no tokens. Same shape as the village listener
 /// (<see cref="TcpListener"/>, no URL ACL, .NET Framework 4.8 and .NET 8).
 ///
 /// Security model:
 /// - binds to 127.0.0.1 only, and the Host header must name a loopback host (blocks DNS rebinding);
-/// - GET/HEAD for "/", "/p/{id}", "/pages.js" and "/health"; POST for "/api/status", "/api/select" and
-///   "/api/values"; everything else is refused;
+/// - GET/HEAD for "/", "/p/{id}", "/pages.js", "/pages.css" and "/health"; POST for "/api/status",
+///   "/api/select", "/api/values", "/api/set" and "/api/approval"; everything else is refused;
 /// - a POST must carry this listener's per-start token in <c>X-Revit-Page-Token</c> (written only into
 ///   the pages it serves), a same-origin Sec-Fetch-Site and Origin when the browser sends them, and a
 ///   JSON body of at most <see cref="MaxBodyBytes"/> naming a published page;
 /// - no CORS headers, so another origin can neither read a page (and its token) nor send the header;
 /// - every response carries a policy that lets a page reach this listener only: a generated page cannot
 ///   load from or send to any other origin, and cannot be framed;
-/// - the three actions are fixed. Nothing received is passed to the MCP dispatcher or the tool registry,
-///   and none of them changes the model.
+/// - the actions are fixed. Status, select and values never reach the MCP dispatcher and cannot change the
+///   model. "/api/set" is the one write: the backend hands it to the connector as a parameter write that
+///   needs the user's approval in Revit (unless they switched Direct Edit on), exactly like an agent's.
 /// Pure — no Revit API, unit tested in RevitMCP.Tests.
 /// </summary>
 public sealed class ModelPageServer : IDisposable
@@ -60,7 +70,7 @@ public sealed class ModelPageServer : IDisposable
     public const string TokenHeader = "X-Revit-Page-Token";
 
     internal const string CspHeader =
-        "Content-Security-Policy: default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; " +
+        "Content-Security-Policy: default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
         "img-src 'self' data: blob:; font-src data:; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'";
 
     private static readonly string[] AllowedHosts = { "127.0.0.1", "localhost" };
@@ -68,17 +78,20 @@ public sealed class ModelPageServer : IDisposable
     private readonly ModelPageStore _store;
     private readonly IModelPageBackend _backend;
     private readonly Func<string> _script;
+    private readonly Func<string> _styles;
     private readonly Action<string>? _log;
     private readonly int _preferredPort;
 
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
 
-    public ModelPageServer(ModelPageStore store, IModelPageBackend backend, Func<string> scriptProvider, int port = DefaultPort, Action<string>? log = null)
+    public ModelPageServer(ModelPageStore store, IModelPageBackend backend, Func<string> scriptProvider, int port = DefaultPort,
+        Action<string>? log = null, Func<string>? stylesProvider = null)
     {
         _store = store;
         _backend = backend;
         _script = scriptProvider;
+        _styles = stylesProvider ?? (() => string.Empty);
         _preferredPort = port;
         _log = log;
         Token = NewToken();
@@ -201,12 +214,17 @@ public sealed class ModelPageServer : IDisposable
             }
             if (request.Path == ModelPageHtml.ScriptPath)
             {
-                await WriteAsync(stream, 200, "OK", "application/javascript; charset=utf-8", SafeScript(), ct, headOnly).ConfigureAwait(false);
+                await WriteAsync(stream, 200, "OK", "application/javascript; charset=utf-8", Safe(_script), ct, headOnly).ConfigureAwait(false);
+                return;
+            }
+            if (request.Path == ModelPageHtml.StylesPath)
+            {
+                await WriteAsync(stream, 200, "OK", "text/css; charset=utf-8", Safe(_styles), ct, headOnly).ConfigureAwait(false);
                 return;
             }
             if (request.Path == "/health")
             {
-                await WriteAsync(stream, 200, "OK", "application/json; charset=utf-8", "{\"ok\":true,\"read_only\":true}", ct, headOnly).ConfigureAwait(false);
+                await WriteAsync(stream, 200, "OK", "application/json; charset=utf-8", "{\"ok\":true}", ct, headOnly).ConfigureAwait(false);
                 return;
             }
 
@@ -217,7 +235,7 @@ public sealed class ModelPageServer : IDisposable
                 await WriteAsync(stream, 404, "Not Found", "text/plain", "not found", ct).ConfigureAwait(false);
                 return;
             }
-            await WriteAsync(stream, 200, "OK", "text/html; charset=utf-8", ModelPageHtml.Inject(html, pageId!, Token), ct, headOnly).ConfigureAwait(false);
+            await WriteAsync(stream, 200, "OK", "text/html; charset=utf-8", ModelPageHtml.Inject(html, pageId!, Token, _store.Find(pageId!)?.Title), ct, headOnly).ConfigureAwait(false);
         }
         catch (OperationCanceledException) { }
         catch (IOException) { }
@@ -235,7 +253,8 @@ public sealed class ModelPageServer : IDisposable
 
     // ─── Routes ─────────────────────────────────────────────────────────────
 
-    public static bool IsApiRoute(string path) => path == "/api/status" || path == "/api/select" || path == "/api/values";
+    public static bool IsApiRoute(string path) =>
+        path == "/api/status" || path == "/api/select" || path == "/api/values" || path == "/api/set" || path == "/api/approval";
 
     /// <summary>The id in "/p/{id}", or null.</summary>
     public static string? PageIdFrom(string path)
@@ -358,6 +377,28 @@ public sealed class ModelPageServer : IDisposable
                         return;
                     }
                     result = await _backend.ValuesAsync(page, ids, parameters, timeout.Token).ConfigureAwait(false);
+                    break;
+                }
+                case "/api/set":
+                {
+                    var changes = ModelPageEdits.Parse(json["changes"], out var problem);
+                    if (changes == null)
+                    {
+                        await WriteJsonAsync(stream, 400, "Bad Request", Fail("bad_request", problem ?? "Name the values to change."), ct).ConfigureAwait(false);
+                        return;
+                    }
+                    result = await _backend.SetAsync(page, changes, timeout.Token).ConfigureAwait(false);
+                    break;
+                }
+                case "/api/approval":
+                {
+                    var requestId = json["requestId"] is JValue rv && rv.Type == JTokenType.String ? rv.Value<string>() : null;
+                    if (string.IsNullOrWhiteSpace(requestId) || requestId!.Length > 100)
+                    {
+                        await WriteJsonAsync(stream, 400, "Bad Request", Fail("bad_request", "Name the request."), ct).ConfigureAwait(false);
+                        return;
+                    }
+                    result = await _backend.ApprovalAsync(page, requestId.Trim(), timeout.Token).ConfigureAwait(false);
                     break;
                 }
                 default:
@@ -591,9 +632,9 @@ public sealed class ModelPageServer : IDisposable
         await stream.FlushAsync(ct).ConfigureAwait(false);
     }
 
-    private string SafeScript()
+    private static string Safe(Func<string> provider)
     {
-        try { return _script() ?? string.Empty; }
+        try { return provider() ?? string.Empty; }
         catch { return string.Empty; }
     }
 

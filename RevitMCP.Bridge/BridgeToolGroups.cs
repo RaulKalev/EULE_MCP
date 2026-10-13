@@ -28,7 +28,7 @@ public static class BridgeToolGroups
         ["tags"] = "Tags, dimensions, text notes, detail lines, view alignment",
         ["coordination"] = "Clash detection, clash review, issue reports",
         ["cad"] = "DWG/CAD imports, overrides and placement from CAD",
-        ["pages"] = "Model pages: publish a generated HTML report as a local page whose rows select elements in Revit and show live parameter values",
+        ["pages"] = "Model pages: publish a generated HTML report as a local page whose rows select elements in Revit, show live parameter values and can be edited",
         ["documents"] = "Open documents: activate, reload/remove DWG/IFC/RVT links, link visibility, save and sync with central",
         ["skills"] = "Skill builder and skill runs",
         ["office"] = "Configuration, files, Excel, standards lookup, delivery checks"

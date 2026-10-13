@@ -52,8 +52,9 @@ approval and is refused while the plugin's table window is open. The storage for
 
 When the user gets a list or report of model elements to go through, publish it with `revit_publish_page`
 (`pages` group, see [`docs/model-pages.md`](docs/model-pages.md)) instead of only printing it. Mark rows with
-`data-revit-id` and value cells with `data-revit-param`; the served page then selects elements in Revit and shows
-live values without the agent. The HTML must be self-contained (no CDN). The page cannot change the model.
+`data-revit-id` and value cells with `data-revit-param`; the served page then selects elements in Revit, shows live
+values and lets the user edit them without the agent (a write needs approval in Revit, like an agent's). Write plain
+semantic HTML: a default EULE-style theme with a black dark mode is applied. The HTML must be self-contained (no CDN).
 
 ## Development notes
 

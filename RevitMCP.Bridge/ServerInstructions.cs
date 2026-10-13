@@ -25,5 +25,5 @@ internal static class ServerInstructions
         "the two calls to make instead; pass graphFirst=false only when every element of the category is really needed. " +
         "Direct live tools stay available where the graph does not fit (selection, parameter filters, linked models).\n" +
         "When the user gets a list or report of model elements to go through, publish it with revit_publish_page " +
-        "(revit_tools_describe it for the markup): its rows select elements in Revit and show live values without you.";
+        "(revit_tools_describe it for the markup): its rows select elements in Revit, show live values and let the user edit them without you.";
 }
