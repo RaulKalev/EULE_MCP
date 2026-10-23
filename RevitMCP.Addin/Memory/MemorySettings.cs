@@ -43,6 +43,9 @@ public sealed class MemorySettings
     public int DormantAfterDays { get; set; } = 90;
     public int RetireAfterDays { get; set; } = 365;
 
+    /// <summary>Project roots the consolidation pass reads when none are passed (for the unattended nightly run).</summary>
+    public List<string> ConsolidationRoots { get; set; } = new();
+
     public static MemorySettings From(JsonObject? user, JsonObject? company)
     {
         var s = new MemorySettings();
@@ -74,6 +77,13 @@ public sealed class MemorySettings
         s.ConfirmAfterUses = Int(First(sections, "confirmAfterUses"), s.ConfirmAfterUses, 1, 100);
         s.DormantAfterDays = Int(First(sections, "dormantAfterDays"), s.DormantAfterDays, 1, 3650);
         s.RetireAfterDays = Int(First(sections, "retireAfterDays"), s.RetireAfterDays, 1, 3650);
+
+        foreach (var section in sections)
+        {
+            if ((section?["consolidation"] as JsonObject)?["projectRoots"] is not JsonArray roots) continue;
+            s.ConsolidationRoots = roots.Select(r => r?.ToString().Trim() ?? string.Empty).Where(r => r.Length > 0).ToList();
+            break;
+        }
         return s;
     }
 

@@ -29,7 +29,7 @@ public static class BridgeToolGroups
         ["coordination"] = "Clash detection, clash review, issue reports",
         ["cad"] = "DWG/CAD imports, overrides and placement from CAD",
         ["pages"] = "Model pages: publish a generated HTML report as a local page whose rows select elements in Revit, show live parameter values and can be edited",
-        ["memory"] = "Shared memory: list and review the project's and the user's durable notes (recall and remember are in core)",
+        ["memory"] = "Shared memory: list, review page, forget, weekly consolidation (recall and remember are in core)",
         ["documents"] = "Open documents: activate, reload/remove DWG/IFC/RVT links, link visibility, save and sync with central",
         ["skills"] = "Skill builder and skill runs",
         ["office"] = "Configuration, files, Excel, standards lookup, delivery checks"
@@ -79,7 +79,7 @@ public static class BridgeToolGroups
             "revit_sync_with_central"
         }),
         ("pages", new[] { "revit_publish_page", "revit_list_pages" }),
-        ("memory", new[] { "revit_memory_list" }),
+        ("memory", new[] { "revit_memory_list", "revit_memory_page", "revit_memory_forget", "revit_memory_consolidate" }),
         ("coordination", new[] { "revit_export_issues", "revit_merge_issue_reports" }));
 
     /// <summary>Ordered rules for everything not in the exact table: the first keyword found in the name wins.</summary>

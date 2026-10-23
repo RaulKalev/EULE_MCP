@@ -99,6 +99,10 @@ public class App : IExternalApplication
             handler.RegisterTool(new RevitMCP.Addin.Tools.Memory.MemoryRememberTool());
             handler.RegisterTool(new RevitMCP.Addin.Tools.Memory.MemoryRecallTool());
             handler.RegisterTool(new RevitMCP.Addin.Tools.Memory.MemoryListTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Memory.MemoryForgetTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Memory.MemoryPageTool());
+            // Not advertised by the bridge: sent by the model page listener from the memory review page.
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Memory.MemoryReviewTool());
             handler.RegisterTool(new PreviewDrawCircuitArcsTool());
             handler.RegisterTool(new DrawCircuitArcsTool());
             handler.RegisterTool(new ListSheetsTool());

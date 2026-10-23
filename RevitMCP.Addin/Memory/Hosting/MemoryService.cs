@@ -111,6 +111,9 @@ internal sealed class MemoryNote
 
     /// <summary>A fixed id, so two machines promoting the same pattern write the same file instead of two.</summary>
     public string? Id;
+
+    /// <summary>Stored state: candidate, or confirmed when a person accepted the note on the review page.</summary>
+    public string State = MemoryStates.Candidate;
 }
 
 /// <summary>
@@ -325,7 +328,7 @@ public sealed partial class MemoryService : IDisposable
             Client = Blank(context.Client),
             Created = context.Now,
             Updated = context.Now,
-            State = MemoryStates.Candidate,
+            State = note.State,
             Tags = new List<string>(note.Tags),
             Requires = new List<string>(note.Requires),
             Match = note.Match,

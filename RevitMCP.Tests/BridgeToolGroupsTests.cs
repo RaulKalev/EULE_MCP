@@ -14,8 +14,9 @@ public class BridgeToolGroupsTests
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !File.Exists(Path.Combine(dir.FullName, "RevitMCP.slnx"))) dir = dir.Parent;
-        var source = File.ReadAllText(Path.Combine(dir!.FullName, "RevitMCP.Bridge", "RevitMcpTools.cs")) +
-                     File.ReadAllText(Path.Combine(dir.FullName, "RevitMCP.Bridge", "ToolDiscoveryTools.cs"));
+        var bridge = Path.Combine(dir!.FullName, "RevitMCP.Bridge");
+        var source = string.Concat(Directory.GetFiles(bridge, "RevitMcpTools*.cs").OrderBy(f => f, StringComparer.Ordinal).Select(File.ReadAllText)) +
+                     File.ReadAllText(Path.Combine(bridge, "ToolDiscoveryTools.cs"));
         return Regex.Matches(source, @"McpServerTool\(Name = ""([^""]+)""").Select(m => m.Groups[1].Value).ToList();
     });
 

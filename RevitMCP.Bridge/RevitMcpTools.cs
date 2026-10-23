@@ -7,7 +7,7 @@ using RevitMCP.Core.Models;
 namespace RevitMCP.Bridge;
 
 [McpServerToolType]
-internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
+internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
 {
     /// <summary>Shared description of the JSON filter array accepted by the query-style tools.</summary>
     private const string FiltersDescription =

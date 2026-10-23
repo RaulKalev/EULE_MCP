@@ -23,6 +23,24 @@
     <Compile Include="..\RevitMCP.Addin\Services\LongRunningTools.cs" Link="Shared\LongRunningTools.cs" />
   </ItemGroup>
 
+  <!-- Shared memory consolidation runs in the bridge on plain files, so it needs no Revit open (no Revit API in these). -->
+  <ItemGroup>
+    <Compile Include="..\RevitMCP.Addin\Memory\MemoryEntry.cs" Link="Memory\MemoryEntry.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\MemoryEntryParser.cs" Link="Memory\MemoryEntryParser.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\MemoryPolicy.cs" Link="Memory\MemoryPolicy.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\MemoryStore.cs" Link="Memory\MemoryStore.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\MemoryCache.cs" Link="Memory\MemoryCache.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\MemoryRecall.cs" Link="Memory\MemoryRecall.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\MemoryLifecycle.cs" Link="Memory\MemoryLifecycle.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\MemorySettings.cs" Link="Memory\MemorySettings.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\MemoryProposals.cs" Link="Memory\MemoryProposals.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\MemoryConsolidation.cs" Link="Memory\MemoryConsolidation.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\MemoryConsolidationRunner.cs" Link="Memory\MemoryConsolidationRunner.cs" />
+    <Compile Include="..\RevitMCP.Addin\Configuration\JsonConfigService.cs" Link="Memory\JsonConfigService.cs" />
+    <Compile Include="..\RevitMCP.Addin\Configuration\ConfigPathResolver.cs" Link="Memory\ConfigPathResolver.cs" />
+    <Compile Include="..\RevitMCP.Addin\FileSystem\BackupPathNaming.cs" Link="Memory\BackupPathNaming.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <None Update="appsettings.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>

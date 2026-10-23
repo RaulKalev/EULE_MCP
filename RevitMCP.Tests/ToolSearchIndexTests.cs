@@ -15,9 +15,10 @@ public class ToolSearchIndexTests
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !File.Exists(Path.Combine(dir.FullName, "RevitMCP.slnx"))) dir = dir.Parent;
         var entries = new List<ToolEntry>();
-        foreach (var file in new[] { "RevitMcpTools.cs", "ToolDiscoveryTools.cs" })
+        var bridge = Path.Combine(dir!.FullName, "RevitMCP.Bridge");
+        foreach (var file in Directory.GetFiles(bridge, "RevitMcpTools*.cs").OrderBy(f => f, StringComparer.Ordinal).Append(Path.Combine(bridge, "ToolDiscoveryTools.cs")))
         {
-            var source = File.ReadAllText(Path.Combine(dir!.FullName, "RevitMCP.Bridge", file));
+            var source = File.ReadAllText(file);
             foreach (Match m in Regex.Matches(source,
                          @"McpServerTool\(Name = ""(?<name>[^""]+)""(?<ro>, ReadOnly = true)?\)\s*,\s*Description\(\s*""(?<desc>(?:[^""\\]|\\.)*)"""))
             {

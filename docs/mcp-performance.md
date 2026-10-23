@@ -77,7 +77,7 @@ args = ["--client", "Codex", "--tool-profile", "core", "--tool-groups", "electri
 | `tags` | Tags, dimensions, text notes, detail lines, view alignment |
 | `coordination` | Clash detection, clash review, issue reports |
 | `cad` | DWG/CAD imports, overrides and placement from CAD |
-| `memory` | Shared memory review: `revit_memory_list` (see [shared-memory.md](shared-memory.md)) |
+| `memory` | Shared memory review: `revit_memory_list`, `revit_memory_page`, `revit_memory_forget`, `revit_memory_consolidate` (see [shared-memory.md](shared-memory.md)) |
 | `skills` | Skill builder and skill runs |
 | `office` | Configuration, files, Excel, standards lookup, delivery checks |
 

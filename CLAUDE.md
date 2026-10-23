@@ -57,6 +57,9 @@ summary or anything readable from the model. Entries are hints like graph data: 
 approval in Revit; a personal one does not; `scope=company` only writes a proposal for an administrator. Pass `basedOn`
 with the ids of entries you relied on. `revit_graph_route` carries matching entries in a `memory` block when
 `memory.hints` is on, and the workflow observer learns project defaults, recipes and corrections from tool calls by itself.
+When the user wants to review memory, publish `revit_memory_page`; `revit_memory_forget` retires wrong entries (approval).
+The weekly consolidation pass is the `memory-consolidate` prompt / `revit_memory_consolidate` (no Revit needed): it writes
+proposals only, never entries.
 
 ## Model pages
 

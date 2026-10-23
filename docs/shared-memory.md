@@ -1,9 +1,11 @@
-# Shared company memory (design)
+# Shared company memory
 
-> **Status: phases 1 and 2 are implemented** — store and recall
-> ([Phase 1 as built](#phase-1-as-built)), then hints, the workflow observer, hint feedback, the
-> lifecycle and the company tier via proposals ([Phase 2 as built](#phase-2-as-built)). The review
-> page and consolidation (phases 3 and 4) are still the plan. Sections marked *decision* record
+> **Status: all four phases are implemented** — store and recall
+> ([Phase 1 as built](#phase-1-as-built)); hints, the workflow observer, hint feedback, the
+> lifecycle and the company tier via proposals ([Phase 2 as built](#phase-2-as-built)); the review
+> page and forget ([Phase 3 as built](#phase-3-as-built)); the consolidation pass and its unattended
+> nightly run ([Phase 4 as built](#phase-4-as-built)). The design sections below are kept as written;
+> the "as built" sections record where the implementation differs. Sections marked *decision* record
 > choices already made, sections marked *open* still need one.
 
 Shared memory is a store of durable notes about how the company and each project work — decisions,
@@ -284,9 +286,9 @@ Configuration keys (`memory.*`, user then company config): `enabled`, `companyFo
    before and after.
 2. **Hints and learning** *(done)*. `memory` block in `revit_graph_route`; `WorkflowObserver` with recipes,
    defaults, corrections and hint feedback; lifecycle transitions; company tier via proposals.
-3. **Review.** `revit_memory_page` with confirm / retire / promote and the digest view;
+3. **Review** *(done)*. `revit_memory_page` with confirm / retire / promote and the digest view;
    `revit_memory_forget`.
-4. **Consolidation.** `revit_memory_consolidate` as a skill a lead runs weekly; later the headless
+4. **Consolidation** *(done)*. `revit_memory_consolidate` as a skill a lead runs weekly; later the headless
    nightly run.
 
 ---
@@ -466,12 +468,113 @@ Benchmark (schema only): `core` ≈ 6.0k → 6.1k tokens
 
 ---
 
+## Phase 3 as built
+
+### The review page
+
+`revit_memory_page` publishes the open project's memory as a model page with the fixed id
+`memory-<project>` (the same link every time) and opens it. Top to bottom:
+
+1. Six numbers: active entries, confirmed, waiting for confirmation, dormant, hit rate
+   (used / shown), proposals waiting.
+2. **Needs a decision**: pending consolidation proposals (kind, the entries now, the proposed text,
+   why, who) with *Accept* / *Reject*, then the disagreements (flip-flops) with *Confirm* / *Retire*.
+3. **Digest** — the monthly look: unused for 30 days or dormant, contradicted by later actions,
+   waiting for confirmation.
+4. **All entries** with key, value, reason, tier, state (and why), flags, source, authors, counters,
+   staleness and *Confirm* / *Retire* / *Promote*; the table gets search, filters, sorting and
+   grouping from the page helper (`data-revit-tools="rows"`, new for tables whose rows are not model
+   elements).
+
+A button calls `revit.memory(action, {ids, proposal})` in the page helper, which posts to the
+listener's new `/api/memory` route. The listener hands it to the dispatcher as `revit_memory_review`
+— approval in Revit, the activity log, like any shared write — and, once approved, the tool
+republishes the page, which then reloads. `/api/memory` is accepted only from `memory-…` pages, and
+`revit_publish_page` refuses those ids, so a page an agent wrote cannot change memory.
+
+| Action | Effect |
+|---|---|
+| Confirm | Stored state `confirmed`; a flip-flop flag is cleared (a person settled it) |
+| Retire | Stored state `retired`; the file stays as history |
+| Promote | A company proposal file (as `scope=company`) and the `promoted` flag on the entry, which stays in use until the company copy exists |
+| Accept | Applies a consolidation proposal (below) and marks it accepted |
+| Reject | Marks the proposal rejected; nothing else changes |
+
+Company entries are shown but have no buttons: an administrator changes them.
+
+### Forget
+
+`revit_memory_forget ids=[…] reason=…` retires entries after approval; nothing is deleted.
+
+## Phase 4 as built
+
+### Proposals
+
+A proposal is a JSON file in `<project memory>\.proposals\` (one per proposal, written atomically):
+`kind`, `entryIds`, the proposed `key` / `value` / `reason`, a `target` for promotions, a `note`
+for the reviewer, `status` (`pending`, `accepted`, `rejected`), who and when.
+
+| Kind | Accepting it |
+|---|---|
+| `merge` (≥ 2 entries) | One entry with the proposed key, value and reason, stored as confirmed (a person accepted it), authors carried over; the merged entries retire |
+| `rewrite` (1 entry) | The same for one entry: a raw observation in readable words, or a flip-flop with its explanation |
+| `retire` | The entries retire |
+| `promote` | `target=company`: a company proposal file; `skill` or `standard`: a `<id>.promotion.proposal.json` in `%AppData%\RKTools\RevitMCP\MemoryProposals\` naming the text and the entries, for whoever maintains the skill or standard. The entries get the `promoted` flag |
+
+Proposals are checked when written and again when accepted (entries still exist and are active,
+text passes the write rules); a merge or rewrite stays within one project, a promotion may name
+entries of several.
+
+### `revit_memory_consolidate`
+
+The tool runs in the **bridge**, on the memory files — Revit does not need to be open. It takes
+`projectRoots` (or `memory.consolidation.projectRoots` from the config) and an `action`:
+
+- `read` reports, per project, what changed since that project's last run (`full=true` or `since`
+  for more): duplicate groups (active entries whose values share ≥ 60 % of their words, joined
+  transitively, reported only when one of them changed), flip-flops, raw observed entries, dormant
+  entries, entries with the same topic and value in two or more of the projects (promotion
+  candidates), and the number of proposals already waiting. The response carries `howTo`, the
+  procedure, so any client can run the pass.
+- `propose` validates and stores proposals; it never changes an entry.
+- `done` records the run in `<project memory>\.consolidation.json`, so the next read starts there.
+
+### Running it
+
+- **Weekly, by a lead:** the bridge publishes an MCP prompt, `memory-consolidate` (in Claude Code
+  `/mcp__revit-mcp__memory-consolidate`), which runs read → propose → done and reports what it
+  proposed. The lead then opens `revit_memory_page` in a project and accepts or rejects.
+- **Nightly, unattended:** `RevitMCP.Config\Install\Run-Memory-Consolidation.bat [project roots]`
+  runs Claude Code non-interactively (`claude -p`) against a private bridge configuration with only
+  the core and memory tools, allows only `revit_memory_consolidate`, and appends to
+  `%LOCALAPPDATA%\RKTools\RevitMCP\Logs\memory-consolidation.log`. Schedule it on one workstation
+  with `schtasks` (the command is in the script's header). A cloud scheduled task works only if the
+  memory folders are mirrored somewhere it can reach, as the design says.
+
+### Code
+
+| Component | Location |
+|---|---|
+| `MemoryProposals`, `MemoryConsolidation`, `MemoryConsolidationRunner`, `MemoryPageHtml` | `RevitMCP.Addin/Memory/` (no Revit API; tested in `MemoryReviewTests.cs`) |
+| Review actions and review data | `RevitMCP.Addin/Memory/Hosting/MemoryService.Review.cs` |
+| `revit_memory_page`, `revit_memory_forget`, `revit_memory_review` | `RevitMCP.Addin/Tools/Memory/MemoryReviewTools.cs` |
+| `/api/memory`, `revit.memory`, `data-revit-tools="rows"` | `ModelPages/ModelPageServer.cs`, `ModelPages/Hosting/ModelPageRevitHandler.cs`, `ModelPages/Viewer/pages.js` |
+| `revit_memory_consolidate`, the `memory-consolidate` prompt | `RevitMCP.Bridge/RevitMcpTools.Memory.cs` (memory files linked into the bridge) |
+| Nightly run | `RevitMCP.Config/Install/Run-Memory-Consolidation.bat` |
+
+Benchmark (schema only): `core` unchanged at 21 tools ≈ 6.1k tokens; `full` 271 → 274 tools
+([report](benchmarks/20261023-221627-shared-memory-phase3-4.md)).
+
+---
+
 ## Open decisions
 
 - *Open:* the exact support threshold for observer candidates and the N for confirmation. Implemented
   as 3 sightings across 2 sessions and 3 successful uses (configurable); tune from the hit rate.
 - *Open:* whether the project tier lives next to the model (`.rktools\memory`) or under one
   server root keyed by project id. Next to the model follows the project config; one root is easier
-  to back up and to point the consolidation pass at.
-- *Open:* how `used` is detected for prose entries without an argument value to match. First
-  version: an agent `remember` that cites the entry id, plus the consolidation pass.
+  to back up and to point the consolidation pass at. Implemented next to the model; the pass takes a
+  list of project roots (`memory.consolidation.projectRoots`) instead.
+- *Open:* how `used` is detected for prose entries without an argument value to match. Implemented:
+  a later call that passes a value the entry names, and `remember basedOn=[ids]`; tune from the hit
+  rate on the review page.

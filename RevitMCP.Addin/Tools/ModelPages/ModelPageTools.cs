@@ -40,6 +40,8 @@ public class PublishPageTool : IRevitMcpTool
         if (string.IsNullOrWhiteSpace(html)) return Done(request, false, "Pass the page as html, or as htmlPath to an .html file.");
 
         var pageId = ToolArguments.GetString(request.Arguments, "pageId");
+        if (RevitMCP.Addin.Memory.MemoryPageHtml.IsMemoryPage(pageId.Trim()))
+            return Done(request, false, "Page ids starting with 'memory-' are reserved for the memory review page (revit_memory_page).");
         ModelPageInfo info;
         try
         {

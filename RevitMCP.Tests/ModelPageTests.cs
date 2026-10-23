@@ -45,6 +45,12 @@ public class ModelPageTests
             Calls.Add("approval:" + requestId);
             return Task.FromResult<object>(new { ok = true, status = "written" });
         }
+
+        public Task<object> MemoryAsync(ModelPageInfo page, ModelPageMemoryAction action, CancellationToken ct)
+        {
+            Calls.Add($"memory:{action.Action}:{string.Join(",", action.Ids)}:{action.Proposal}");
+            return Task.FromResult<object>(new { ok = false, status = "approval_required", requestId = "req-2" });
+        }
     }
 
     private sealed class Fixture : IDisposable
@@ -275,6 +281,32 @@ public class ModelPageTests
             Assert.Equal(HttpStatusCode.BadRequest, (await f.Http.SendAsync(f.Post("/api/set", $"{{\"page\":\"{id}\",\"changes\":{bad}}}"))).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await f.Http.SendAsync(f.Post("/api/approval", $"{{\"page\":\"{id}\"}}"))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await f.Http.SendAsync(f.Post("/api/set", $"{{\"page\":\"{id}\",\"changes\":[{{\"id\":11,\"parameter\":\"Mark\",\"value\":\"x\"}}]}}", token: null))).StatusCode);
+        Assert.Equal(calls, f.Backend.Calls.Count);
+    }
+
+    [Fact]
+    public async Task Memory_ActionsReachTheBackend_AndBadOnesAreRefused()
+    {
+        using var f = new Fixture();
+        var id = f.Page.Id;
+        var waiting = await f.Json(f.Post("/api/memory", $"{{\"page\":\"{id}\",\"action\":\"confirm\",\"ids\":[\"8b2f5c1e-3c1a\"]}}"));
+        Assert.Equal("approval_required", (string)waiting["status"]!);
+        Assert.Contains("memory:confirm:8b2f5c1e-3c1a:", f.Backend.Calls);
+
+        await f.Json(f.Post("/api/memory", $"{{\"page\":\"{id}\",\"action\":\"accept\",\"proposal\":\"a1b2c3\"}}"));
+        Assert.Contains("memory:accept::a1b2c3", f.Backend.Calls);
+
+        var calls = f.Backend.Calls.Count;
+        foreach (var bad in new[]
+                 {
+                     "\"action\":\"delete\",\"ids\":[\"a\"]",
+                     "\"action\":\"confirm\",\"ids\":[]",
+                     "\"action\":\"confirm\",\"ids\":[\"../x\"]",
+                     "\"action\":\"accept\"",
+                     "\"action\":\"reject\",\"proposal\":\"<script>\""
+                 })
+            Assert.Equal(HttpStatusCode.BadRequest, (await f.Http.SendAsync(f.Post("/api/memory", $"{{\"page\":\"{id}\",{bad}}}"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await f.Http.SendAsync(f.Post("/api/memory", $"{{\"page\":\"{id}\",\"action\":\"confirm\",\"ids\":[\"a\"]}}", token: null))).StatusCode);
         Assert.Equal(calls, f.Backend.Calls.Count);
     }
 

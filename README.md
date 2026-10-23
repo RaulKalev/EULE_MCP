@@ -103,7 +103,7 @@ Important repository references:
 - [`docs/place-on-face.md`](docs/place-on-face.md) — placing face-based families on wall, ceiling and floor faces found from points, in the host model or in links
 - [`docs/place-from-cad.md`](docs/place-from-cad.md) — placing families at locations marked in an imported DWG, and reconstructing fixtures from loose DWG line work
 - [`docs/skills.md`](docs/skills.md) — company skills, project overrides, and the skill runner
-- [`docs/shared-memory.md`](docs/shared-memory.md) — design for a shared company memory that stays in sync without rebuilds and learns from users' workflows (proposal)
+- [`docs/shared-memory.md`](docs/shared-memory.md) — shared company memory: notes every colleague's agent recalls, kept in sync without rebuilds, learned from users' workflows, reviewed on a page and consolidated weekly
 - [`docs/standards-lookup.md`](docs/standards-lookup.md) — offline standards indexing and retrieval
 - [`docs/tool-consolidation.md`](docs/tool-consolidation.md) — discriminator-based tools and the old → new name mapping
 - [`docs/usage-reporting.md`](docs/usage-reporting.md) — design for per-user usage collection, monthly reports, credit cost join and time-saved estimates (proposal)
