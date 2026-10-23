@@ -6707,6 +6707,85 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(await pipeClient.SendAsync("revit_list_pages", args, cancellationToken));
     }
 
+    // ── Shared memory: durable decisions and corrections every colleague's agent can recall ───────────────
+
+    [McpServerTool(Name = "revit_memory_recall", ReadOnly = true),
+     Description("Searches the project's shared memory and the user's personal memory for decisions, preferences and corrections relevant to a task (which tag type, height or naming rule this project uses, and why). Call it before a write. " +
+                 "Returns ranked entries: key, value, reason, state, stale (written against an earlier model version). Hints only: verify live.")]
+    public async Task<string> MemoryRecall(
+        [Description("What you are about to do, e.g. \"detector tag type\".")] string query,
+        [Description("all (default), project or personal.")] string scope = "all",
+        [Description("Only entries carrying all of these tags.")] string[]? tags = null,
+        [Description("Maximum entries, default 5, max 20.")] int limit = 5,
+        [Description("Also return retired (superseded) entries.")] bool includeRetired = false,
+        [Description("Project root. Optional: found above the model file.")] string? projectRoot = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["query"] = query,
+            ["scope"] = scope,
+            ["tags"] = tags ?? [],
+            ["limit"] = limit,
+            ["includeRetired"] = includeRetired,
+            ["projectRoot"] = projectRoot ?? string.Empty
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_memory_recall", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_memory_remember"),
+     Description("Stores one durable note at task end: a user correction, a decision and its reason, or an exception to a rule — never a session summary or model data (ids, counts, values). " +
+                 "scope=project (default) shares it with the project after the user's approval in Revit; personal = this user only, no approval. Same key: same value reaffirms, a new value replaces (old kept as history). Max 400 characters each.")]
+    public async Task<string> MemoryRemember(
+        [Description("Topic path, e.g. \"tags/detector-tag-type\"; tier and project are added.")] string key,
+        [Description("The decision or correction itself.")] string value,
+        [Description("Why: the requirement, standard or user statement behind it.")] string reason,
+        [Description("project (default, approval) or personal.")] string scope = "project",
+        [Description("Up to 8 short tags.")] string[]? tags = null,
+        [Description("EP, PP, TP or TJ. Empty = all stages.")] string? stage = null,
+        [Description("agent (default) or human (the user said it).")] string source = "agent",
+        [Description("Personal scope only: applies in every project, not just this one.")] bool anyProject = false,
+        [Description("Project root. Optional: found above the model file.")] string? projectRoot = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["key"] = key,
+            ["value"] = value,
+            ["reason"] = reason,
+            ["scope"] = scope,
+            ["tags"] = tags ?? [],
+            ["stage"] = stage ?? string.Empty,
+            ["source"] = source,
+            ["anyProject"] = anyProject,
+            ["projectRoot"] = projectRoot ?? string.Empty
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_memory_remember", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_memory_list", ReadOnly = true),
+     Description("Lists the open project's memory entries and the user's personal ones, newest first, with state, source, author, counters, flags (flip-flop = people disagree) and staleness, plus where each tier is stored. Use it to review memory; use revit_memory_recall to search it.")]
+    public async Task<string> MemoryList(
+        [Description("all (default), project or personal.")] string scope = "all",
+        [Description("candidate, confirmed, dormant, retired or all. Default: everything except retired.")] string? state = null,
+        [Description("Only entries carrying all of these tags.")] string[]? tags = null,
+        [Description("Entries to skip, for paging.")] int offset = 0,
+        [Description("Maximum entries, default 25, max 100.")] int limit = 25,
+        [Description("Project root. Optional: found above the model file.")] string? projectRoot = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["scope"] = scope,
+            ["state"] = state ?? string.Empty,
+            ["tags"] = tags ?? [],
+            ["offset"] = offset,
+            ["limit"] = limit,
+            ["projectRoot"] = projectRoot ?? string.Empty
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_memory_list", args, cancellationToken));
+    }
+
     // ── Circuit arcs: detail arcs between a circuit's devices, instead of Revit wires ─────────────────────
 
     [McpServerTool(Name = "revit_preview_draw_circuit_arcs", ReadOnly = true),

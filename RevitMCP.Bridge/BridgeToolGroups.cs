@@ -15,7 +15,7 @@ public static class BridgeToolGroups
     /// <summary>Group name → one-line description (also shown by revit_tools_search).</summary>
     public static readonly IReadOnlyDictionary<string, string> Descriptions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
-        [Core] = "Connection, instance routing, selection and live reads by element id",
+        [Core] = "Connection, instance routing, selection, live reads by element id, memory recall and remember",
         [Discovery] = "Search, describe, load and call any connector tool",
         [Graph] = "Model graph: build, status, summary, query, route (cheap id-first discovery)",
         ["query"] = "Broad element queries, parameter filters, grouping, query presets, parameter QA",
@@ -29,6 +29,7 @@ public static class BridgeToolGroups
         ["coordination"] = "Clash detection, clash review, issue reports",
         ["cad"] = "DWG/CAD imports, overrides and placement from CAD",
         ["pages"] = "Model pages: publish a generated HTML report as a local page whose rows select elements in Revit, show live parameter values and can be edited",
+        ["memory"] = "Shared memory: list and review the project's and the user's durable notes (recall and remember are in core)",
         ["documents"] = "Open documents: activate, reload/remove DWG/IFC/RVT links, link visibility, save and sync with central",
         ["skills"] = "Skill builder and skill runs",
         ["office"] = "Configuration, files, Excel, standards lookup, delivery checks"
@@ -39,7 +40,7 @@ public static class BridgeToolGroups
         {
             "revit_get_connection_status", "revit_list_instances", "revit_select_instance", "revit_get_selected_elements",
             "revit_inspect_selected_elements", "revit_get_elements_info", "revit_get_element_parameters", "revit_count_elements",
-            "revit_get_approval_status", "revit_list_open_documents"
+            "revit_get_approval_status", "revit_list_open_documents", "revit_memory_recall", "revit_memory_remember"
         }),
         (Discovery, new[] { "revit_tools_search", "revit_tools_describe", "revit_tools_call", "revit_tools_load" }),
         ("devices", new[]
@@ -78,6 +79,7 @@ public static class BridgeToolGroups
             "revit_sync_with_central"
         }),
         ("pages", new[] { "revit_publish_page", "revit_list_pages" }),
+        ("memory", new[] { "revit_memory_list" }),
         ("coordination", new[] { "revit_export_issues", "revit_merge_issue_reports" }));
 
     /// <summary>Ordered rules for everything not in the exact table: the first keyword found in the name wins.</summary>

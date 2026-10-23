@@ -1,0 +1,43 @@
+{
+  "Label": "shared-memory-phase1-before",
+  "Model": "",
+  "StartedAt": "2026-10-23 21:32:51 \u002B00:00",
+  "BridgePath": "RevitMCP.Bridge/bin/Release/net8.0/RevitMCP.Bridge",
+  "Schemas": [
+    {
+      "Profile": "full",
+      "ToolCount": 268,
+      "SchemaBytes": 354939,
+      "SchemaTokens": 88735,
+      "InstructionTokens": 456,
+      "Error": null
+    },
+    {
+      "Profile": "core",
+      "ToolCount": 19,
+      "SchemaBytes": 21284,
+      "SchemaTokens": 5321,
+      "InstructionTokens": 456,
+      "Error": null
+    },
+    {
+      "Profile": "query",
+      "ToolCount": 38,
+      "SchemaBytes": 40794,
+      "SchemaTokens": 10199,
+      "InstructionTokens": 456,
+      "Error": null
+    },
+    {
+      "Profile": "read-only",
+      "ToolCount": 183,
+      "SchemaBytes": 227201,
+      "SchemaTokens": 56801,
+      "InstructionTokens": 456,
+      "Error": null
+    }
+  ],
+  "GraphBuild": null,
+  "GraphIncremental": null,
+  "Scenarios": []
+}

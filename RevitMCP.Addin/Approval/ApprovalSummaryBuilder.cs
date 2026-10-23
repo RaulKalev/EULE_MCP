@@ -23,6 +23,7 @@ public static class ApprovalSummaryBuilder
             "revit_select_elements_by_query" => BuildSelectByQuery(request),
             "revit_set_parameter" => BuildSetParameter(request),
             RevitMCP.Addin.Tools.ModelPages.PageSetValuesTool.ToolName => BuildPageSetValues(request),
+            RevitMCP.Addin.Tools.Memory.MemoryRememberTool.ToolName => BuildMemoryRemember(request),
             "revit_set_circuit_parameter" => BuildSetCircuitParameter(request),
             "revit_create_electrical_circuit" => CircuitPreviewBuilder.BuildCreateCircuit(request),
             "revit_add_elements_to_circuit" => CircuitPreviewBuilder.BuildAddElements(request),
@@ -858,6 +859,16 @@ public static class ApprovalSummaryBuilder
         var elementCount = ToolArguments.GetLongArray(request.Arguments, "elementIds").Distinct().Count();
         return $"DESTRUCTIVE: Delete {elementCount} element{(elementCount == 1 ? "" : "s")} plus dependent elements. Manual approval required.";
     }
+
+    private static string BuildMemoryRemember(McpToolRequest request)
+    {
+        var key = ToolArguments.GetString(request.Arguments, "key");
+        var value = ClipTo(ToolArguments.GetString(request.Arguments, "value"), 160);
+        var reason = ClipTo(ToolArguments.GetString(request.Arguments, "reason"), 160);
+        return $"Remember in project memory (shared with everyone on the project) '{key}': {value} — because {reason}";
+    }
+
+    private static string ClipTo(string text, int max) => text.Length <= max ? text : text.Substring(0, max) + "…";
 
     private static string BuildCreateSkill(McpToolRequest request)
     {

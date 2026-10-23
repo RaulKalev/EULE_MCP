@@ -243,7 +243,8 @@ public class ExternalEventHandler : IExternalEventHandler
             // Direct Edit mode bypasses RequiresApproval, but NEVER bypasses Destructive.
             var isDirectEditEnabled = RevitMCP.Addin.App.GetViewModel()?.IsDirectEditEnabled ?? false;
         var needsApproval =
-            ((tool.Permission == ToolPermission.RequiresApproval && !isDirectEditEnabled)
+            ((tool.Permission == ToolPermission.RequiresApproval && !isDirectEditEnabled &&
+              (tool is not IConditionalApprovalTool conditional || conditional.NeedsApproval(request)))
              || tool.Permission == ToolPermission.DestructiveRequiresManualApproval)
             && !request.IsApproved
             && _approvalService != null;

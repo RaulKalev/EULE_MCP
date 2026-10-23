@@ -23,6 +23,16 @@
     <Compile Include="..\RevitMCP.Addin\ModelPages\ModelPageHtml.cs" Link="ModelPages\ModelPageHtml.cs" />
     <Compile Include="..\RevitMCP.Addin\ModelPages\ModelPageServer.cs" Link="ModelPages\ModelPageServer.cs" />
     <Compile Include="..\RevitMCP.Addin\ModelPages\ModelPageEdits.cs" Link="ModelPages\ModelPageEdits.cs" />
+    <!-- Shared memory: entry format, write-time rules, store, cache, recall and the tier service (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\Memory\MemoryEntry.cs" Link="Memory\MemoryEntry.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\MemoryEntryParser.cs" Link="Memory\MemoryEntryParser.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\MemoryPolicy.cs" Link="Memory\MemoryPolicy.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\MemoryStore.cs" Link="Memory\MemoryStore.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\MemoryCache.cs" Link="Memory\MemoryCache.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\MemoryRecall.cs" Link="Memory\MemoryRecall.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\MemorySettings.cs" Link="Memory\MemorySettings.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\MemoryProjectRoot.cs" Link="Memory\MemoryProjectRoot.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\Hosting\MemoryService.cs" Link="Memory\Hosting\MemoryService.cs" />
     <!-- PanelSchematics plugin contract, empty-row editing and payload formats (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\PanelSchematics\PanelSchematicsContract.cs" Link="PanelSchematics\PanelSchematicsContract.cs" />
     <Compile Include="..\RevitMCP.Addin\PanelSchematics\EmptyRowsEditor.cs" Link="PanelSchematics\EmptyRowsEditor.cs" />

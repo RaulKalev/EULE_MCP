@@ -48,6 +48,14 @@ to, and its Extensible Storage stores. Call `revit_panelschematics_guide` first.
 approval and is refused while the plugin's table window is open. The storage formats live in
 `RevitMCP.Addin/PanelSchematics/PanelSchematicsContract.cs` and must follow the plugin's source.
 
+## Shared memory
+
+`revit_memory_recall` and `revit_memory_remember` (see [`docs/shared-memory.md`](docs/shared-memory.md)) hold the
+project's durable decisions and corrections next to the model (`.rktools\memory`) and the user's personal notes. Recall
+before a write; remember at task end one user correction, decision with its reason, or exception — never a session
+summary or anything readable from the model. Entries are hints like graph data: verify live. A project note needs
+approval in Revit; a personal one does not. Phase 1 only: no hints in `revit_graph_route`, observer or company tier yet.
+
 ## Model pages
 
 When the user gets a list or report of model elements to go through, publish it with `revit_publish_page`

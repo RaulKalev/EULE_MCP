@@ -1,8 +1,11 @@
 # Shared company memory (design)
 
-> **Status: design proposal, nothing implemented yet.** The tools, folders and components named
-> here do not exist in the connector. This document is the plan agreed for building them; sections
-> marked *decision* record choices already made, sections marked *open* still need one.
+> **Status: phase 1 (store and recall) is implemented** — `revit_memory_remember`,
+> `revit_memory_recall` and `revit_memory_list` with the personal and project tiers; see
+> [Phase 1 as built](#phase-1-as-built). Everything else in this document (hints in
+> `revit_graph_route`, the workflow observer, the lifecycle, the company tier, the review page and
+> consolidation) is still the plan. Sections marked *decision* record choices already made, sections
+> marked *open* still need one.
 
 Shared memory is a store of durable notes about how the company and each project work — decisions,
 preferences, exceptions, corrections and recurring workflows — that every colleague's agent reads
@@ -276,7 +279,7 @@ Configuration keys (`memory.*`, user then company config): `enabled`, `companyFo
 
 ## Phases
 
-1. **Store and recall.** `MemoryEntry`, `MemoryStore`, `MemoryCache`, `MemoryRecall`,
+1. **Store and recall** *(done)*. `MemoryEntry`, `MemoryStore`, `MemoryCache`, `MemoryRecall`,
    `MemoryPolicy` with the write-time rules; `revit_memory_remember`, `revit_memory_recall`,
    `revit_memory_list`; the server-instruction lines. Personal and project tiers. Benchmark report
    before and after.
@@ -286,6 +289,83 @@ Configuration keys (`memory.*`, user then company config): `enabled`, `companyFo
    `revit_memory_forget`.
 4. **Consolidation.** `revit_memory_consolidate` as a skill a lead runs weekly; later the headless
    nightly run.
+
+---
+
+## Phase 1 as built
+
+### Tools
+
+| Tool | Permission | What it does |
+|---|---|---|
+| `revit_memory_remember` | Approval for `scope=project` (the default); none for `scope=personal` | Stores one note: `key` (topic path), `value`, `reason`, `tags[]`, `stage`, `source` (`agent` \| `human`), `anyProject` (personal only), `projectRoot` |
+| `revit_memory_recall` | Read-only | `query`, `scope` (`all` \| `project` \| `personal`), `tags[]`, `limit` (5, max 20), `includeRetired`; ranked entries with `stale`, and the `note` field |
+| `revit_memory_list` | Read-only | Newest first, filtered by `scope`, `state` (default: all but retired; `all` includes history), `tags[]`, paged with `offset`/`limit`; shows counters, flags and where each tier is stored |
+
+`recall` and `remember` are in the `core` profile, `list` in the `memory` group. The server
+instructions carry the two lines: recall before a write, remember at task end.
+
+Per-call approval comes from a small dispatcher extension: a `RequiresApproval` tool may implement
+`IConditionalApprovalTool` and say a call does not need approval (here: a personal note). It never
+relaxes destructive tools, and Direct Edit still skips approval as for every other write.
+
+### Where entries live
+
+- **Project tier:** `<project root>\.rktools\memory\` (`memory.projectFolderName`). The project root
+  is `projectRoot` when given, else the nearest folder above the **central** model file that has a
+  `.rktools` folder (the project-config rule), else the central model's own folder. Cloud and server
+  models have no folder: they get personal memory only unless `projectRoot` is passed.
+- **Personal tier:** `%AppData%\RKTools\RevitMCP\Memory\`. A personal note is bound to the open
+  project unless `anyProject=true`.
+- **Mirror:** `%LOCALAPPDATA%\RKTools\RevitMCP\MemoryMirror\<project>\` holds a copy of every
+  project entry read. While the project root is unreachable, reads use the mirror and writes are
+  parked in its `.pending\` folder; the next read with the share back copies them over (an entry
+  the share already holds with a newer `updated` is left alone).
+
+### Refinements to the format
+
+- **Counters are not rewritten by recall.** Incrementing `shown` in the entry file would make every
+  recall a write to a shared file, and two people recalling at once would lose counts. Each user
+  instead has one tally file, `.counters\<user>.json` in the tier folder, written only by that
+  user; recall reports the entry's own counters plus every user's tally. The `counters` block in
+  the entry keeps what was written with it.
+- **Added fields:** `authors` (everyone who wrote the same key and value — the "seen from two
+  users" signal for phase 2), `flags` (`flip-flop`), and the counter `remembered` (times the same
+  key and value were written again).
+- **Keys:** the agent passes a topic path (`tags/detector-tag-type`); the store adds the tier and
+  project (`project/1626/tags/detector-tag-type`, `personal/1626/…`, `personal/…` with
+  `anyProject`). Keys are lowercase ASCII with diacritics dropped.
+- **Every new entry starts as `candidate`.** Lifecycle transitions arrive with phase 2; recall
+  weights candidates below confirmed entries and flip-flops lower still.
+
+### Write-time rules as implemented
+
+`MemoryPolicy` refuses a note without a `reason`; a `value` or `reason` over
+`memory.valueMaxLength` (400); a `value` that looks like model data (fewer than two words, or four
+or more numbers of four digits — a single id cited in a sentence is fine); e-mail addresses and
+phone numbers; and credential-like text (`password:`, `token=`, private keys, long base64/hex runs).
+The same key with the same value (ignoring case and whitespace) reaffirms the entry; a new value
+writes a new entry with `supersedes` and retires the old one; a value going back to a retired one
+with two or more authors on the key gets the `flip-flop` flag. At `memory.maxEntriesPerProject`
+(500) the least useful dormant entry is retired; with none dormant a new key is refused
+(`memory_full`) while superseding an existing key still works.
+
+Configuration read in phase 1 (user config first, then company): `memory.enabled`,
+`memory.projectFolderName`, `memory.valueMaxLength`, `memory.maxEntriesPerProject`.
+
+### Code
+
+| Component | Location |
+|---|---|
+| `MemoryEntry`, `MemoryEntryParser`, `MemoryPolicy`, `MemoryStore`, `MemoryCache`, `MemoryRecall`, `MemorySettings`, `MemoryProjectRoot` | `RevitMCP.Addin/Memory/` (no Revit API; linked into `RevitMCP.Tests`, `MemoryTests.cs`) |
+| `MemoryService` | `RevitMCP.Addin/Memory/Hosting/` (no Revit API; created in `App.OnStartup`) |
+| Tools | `RevitMCP.Addin/Tools/Memory/MemoryTools.cs`; bridge methods in `RevitMCP.Bridge/RevitMcpTools.cs` |
+| Conditional approval | `RevitMCP.Addin/Interfaces/IConditionalApprovalTool.cs`, used in `ExternalEventHandler` |
+
+Benchmark (schema only): `core` goes from 19 tools ≈ 5.3k tokens to 21 tools ≈ 6.0k tokens
+([before](benchmarks/20261023-213314-shared-memory-phase1-before.md),
+[after](benchmarks/20261023-214349-shared-memory-phase1.md)). The memory-on/off run on a real project
+is still to be recorded before hints are enabled by default in phase 2.
 
 ---
 
