@@ -55,8 +55,18 @@ internal static class MemoryToolSupport
             model = hit.Entry.Model,
             tags = hit.Entry.Tags,
             flags = hit.Entry.Flags.Count == 0 ? null : hit.Entry.Flags,
+            lifecycle = hit.Entry.Lifecycle,
             supersedes = hit.Entry.Supersedes,
-            counters = new { shown = hit.Entry.Counters.Shown, used = hit.Entry.Counters.Used, remembered = hit.Entry.Counters.Remembered },
+            requires = hit.Entry.Requires.Count == 0 ? null : hit.Entry.Requires,
+            counters = new
+            {
+                shown = hit.Entry.Counters.Shown,
+                used = hit.Entry.Counters.Used,
+                worked = hit.Entry.Counters.Worked,
+                contradicted = hit.Entry.Counters.Contradicted,
+                remembered = hit.Entry.Counters.Remembered,
+                lastUsed = hit.Entry.Counters.LastUsed?.ToString("yyyy-MM-dd")
+            },
             updated = hit.Entry.Updated.ToString("yyyy-MM-dd")
         }
         : new
@@ -86,7 +96,8 @@ internal static class MemoryToolSupport
 
 /// <summary>
 /// Stores a durable note — a decision and its reason, a user correction, an exception to a rule — in the
-/// project memory (approval-gated, shared with everyone on the project) or the user's personal memory.
+/// project memory (approval-gated, shared with everyone on the project) or the user's personal memory, or proposes
+/// it for the company tier (a proposal file an administrator applies).
 /// Tool name: revit_memory_remember
 /// </summary>
 public class MemoryRememberTool : IRevitMcpTool, IConditionalApprovalTool
@@ -95,13 +106,17 @@ public class MemoryRememberTool : IRevitMcpTool, IConditionalApprovalTool
 
     public string Name => ToolName;
     public string Description =>
-        "Stores a durable note (decision + reason, user correction, exception) in project memory (approval) or personal memory. " +
-        "Args: key, value, reason, scope (project|personal), tags[], stage, source (agent|human), anyProject, projectRoot.";
+        "Stores a durable note (decision + reason, user correction, exception) in project memory (approval), personal memory, " +
+        "or as a company proposal. Args: key, value, reason, scope (project|personal|company), tags[], stage, source (agent|human), " +
+        "anyProject, basedOn[] (ids of recalled entries the note relied on), projectRoot.";
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Configuration;
 
-    /// <summary>A personal note is the user's own: no approval. Anything else is shared and needs it.</summary>
-    public bool NeedsApproval(McpToolRequest request) => MemoryToolSupport.Scope(request, MemoryScopes.Project) != MemoryScopes.Personal;
+    /// <summary>
+    /// Only a project note is shared as written: it needs approval. A personal note is the user's own, and a company
+    /// note is only a proposal file in the user's folder that an administrator reviews.
+    /// </summary>
+    public bool NeedsApproval(McpToolRequest request) => MemoryToolSupport.Scope(request, MemoryScopes.Project) == MemoryScopes.Project;
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
@@ -122,7 +137,8 @@ public class MemoryRememberTool : IRevitMcpTool, IConditionalApprovalTool
             Tags = ToolArguments.GetStringArray(args, "tags").ToList(),
             Stage = ToolArguments.GetString(args, "stage"),
             Source = ToolArguments.GetString(args, "source", MemorySources.Agent),
-            AnyProject = ToolArguments.GetBool(args, "anyProject")
+            AnyProject = ToolArguments.GetBool(args, "anyProject"),
+            BasedOn = ToolArguments.GetStringArray(args, "basedOn").ToList()
         });
         sw.Stop();
 
@@ -155,6 +171,8 @@ public class MemoryRememberTool : IRevitMcpTool, IConditionalApprovalTool
                 flags = entry.Flags.Count == 0 ? null : entry.Flags,
                 pending = result.Pending,
                 path = result.Path,
+                proposal = result.ProposalPath,
+                credited = result.Credited == 0 ? (int?)null : result.Credited,
                 note = MemoryRecall.Note
             },
             DurationMs = sw.ElapsedMilliseconds
@@ -172,7 +190,7 @@ public class MemoryRecallTool : IRevitMcpTool
     public string Name => "revit_memory_recall";
     public string Description =>
         "Searches project and personal memory for decisions, preferences and corrections relevant to a task. Hints only — verify live before writing. " +
-        "Args: query, scope (all|project|personal), tags[], limit (default 5, max 20), includeRetired, projectRoot.";
+        "Args: query, scope (all|project|company|personal), tags[], limit (default 5, max 20), includeRetired, projectRoot.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Configuration;
 
@@ -225,7 +243,7 @@ public class MemoryListTool : IRevitMcpTool
     public string Name => "revit_memory_list";
     public string Description =>
         "Lists memory entries newest first with state, source, counters and staleness. " +
-        "Args: scope (all|project|personal), state (candidate|confirmed|dormant|retired|all; default: all but retired), tags[], offset, limit (default 25, max 100), projectRoot.";
+        "Args: scope (all|project|company|personal), state (candidate|confirmed|dormant|retired|all; default: all but retired), tags[], offset, limit (default 25, max 100), projectRoot.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Configuration;
 

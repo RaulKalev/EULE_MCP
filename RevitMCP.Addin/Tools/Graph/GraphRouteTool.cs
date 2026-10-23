@@ -39,6 +39,8 @@ public sealed class GraphRouteTool : IRevitMcpTool
             NullIfEmpty(ToolArguments.GetString(args, "level")),
             NullIfEmpty(ToolArguments.GetString(args, "name")));
 
+        var memory = MemoryHints(uiapp, request, plan.Category);
+
         sw.Stop();
         return Task.FromResult(new McpToolResult
         {
@@ -61,10 +63,38 @@ public sealed class GraphRouteTool : IRevitMcpTool
                 },
                 steps = plan.Steps.Select((s, i) => new { step = i + 1, tool = s.Tool, args = s.Args, why = s.Why }).ToList(),
                 notes = plan.Notes,
-                note = GraphSchema.RoutingNote
+                note = GraphSchema.RoutingNote,
+                memory
             },
             DurationMs = sw.ElapsedMilliseconds
         });
+    }
+
+    /// <summary>
+    /// Shared memory entries matching the intent (docs/shared-memory.md, "Recall"), or null when hints are off
+    /// (memory.hints), opted out per call (memoryHint=false), or nothing matches. Never fails the route.
+    /// </summary>
+    private static object? MemoryHints(UIApplication uiapp, McpToolRequest request, string? category)
+    {
+        try
+        {
+            var service = RevitMCP.Addin.Memory.Hosting.MemoryService.Current;
+            if (service == null || !ToolArguments.GetBool(request.Arguments, "memoryHint", true) || !service.Settings.Hints) return null;
+            var context = Tools.Memory.MemoryToolSupport.Context(uiapp, request, service, out _);
+            if (context == null) return null;
+            var query = (ToolArguments.GetString(request.Arguments, "intent") + " " + category).Trim();
+            var hints = service.Hints(context, query);
+            if (hints == null || hints.Hits.Count == 0) return null;
+            return new
+            {
+                note = RevitMCP.Addin.Memory.MemoryRecall.Note,
+                entries = hints.Hits.Select(h => Tools.Memory.MemoryToolSupport.Dto(h, false)).ToList()
+            };
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static string? NullIfEmpty(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

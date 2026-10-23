@@ -489,10 +489,14 @@ public class App : IExternalApplication
                 DiagLog($"Model pages unavailable: {ex.GetType().Name}: {ex.Message}");
             }
 
-            // Shared memory: plain files, no Revit API. Folder watchers start on first use.
+            // Shared memory: plain files, no Revit API. Folder watchers start on first use; the observer runs on a
+            // background task fed by the activity log.
             try
             {
-                _memory = RevitMCP.Addin.Memory.Hosting.MemoryService.CreateDefault();
+                var knownTools = new HashSet<string>(handler.GetRegisteredToolNames(), StringComparer.OrdinalIgnoreCase);
+                _memory = RevitMCP.Addin.Memory.Hosting.MemoryService.CreateDefault(knownTools.Contains);
+                RevitMCP.Addin.Memory.Hosting.MemoryHooks.PermissionOf = handler.GetToolPermission;
+                RevitMCP.Addin.Memory.Hosting.MemoryHooks.LastContext = handler.GetLastContext;
             }
             catch (Exception ex)
             {

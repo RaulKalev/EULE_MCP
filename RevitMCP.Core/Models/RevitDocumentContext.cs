@@ -9,4 +9,7 @@ public class RevitDocumentContext
     public string ActiveViewName { get; set; } = string.Empty;
     public bool IsWorkshared { get; set; }
     public string RevitUsername { get; set; } = string.Empty;
+
+    /// <summary>Project number (else project name) from Project Information; the key shared memory files projects under.</summary>
+    public string ProjectKey { get; set; } = string.Empty;
 }

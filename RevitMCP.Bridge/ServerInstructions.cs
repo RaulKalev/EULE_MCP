@@ -15,8 +15,9 @@ internal static class ServerInstructions
         "revit_get_element_parameters, revit_get_circuit_info).\n" +
         "4. Act, then verify live. Write tools need approval and always act on the live model.\n" +
         "Memory: before a write, revit_memory_recall with what you are about to do — colleagues' decisions and corrections " +
-        "for this project (hints, verify live). At task end, revit_memory_remember a user correction, a decision and its reason, " +
-        "or an exception to a rule — one note each, never a session summary or model data.\n" +
+        "for this project (hints, verify live; revit_graph_route may already carry them in its memory block). At task end, " +
+        "revit_memory_remember a user correction, a decision and its reason, or an exception to a rule — one note each, never a " +
+        "session summary or model data; pass basedOn with the ids of entries you relied on.\n" +
         "Only a core set of tools is advertised by default. For anything else (circuits, tags, sheets, IFC, devices, " +
         "clashes, Excel...) use revit_tools_search with the intent, revit_tools_describe for the schema, then " +
         "revit_tools_call (works in every client) or revit_tools_load to add the tools to this session.\n" +

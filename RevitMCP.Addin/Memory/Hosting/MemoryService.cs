@@ -1,5 +1,8 @@
 using System.Collections.Concurrent;
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
+using Newtonsoft.Json;
 
 namespace RevitMCP.Addin.Memory.Hosting;
 
@@ -45,6 +48,9 @@ public sealed class MemoryRememberRequest
 
     /// <summary>Personal scope only: the note applies in every project, not just the open one.</summary>
     public bool AnyProject { get; set; }
+
+    /// <summary>Ids of recalled entries this note relied on: each counts as used and worked.</summary>
+    public List<string> BasedOn { get; set; } = new();
 }
 
 public sealed class MemoryRememberResult
@@ -61,6 +67,12 @@ public sealed class MemoryRememberResult
     public MemoryEntry? RetiredForCap { get; set; }
     public string? Path { get; set; }
     public bool Pending { get; set; }
+
+    /// <summary>scope=company: the proposal file an administrator reviews.</summary>
+    public string? ProposalPath { get; set; }
+
+    /// <summary>basedOn ids that were found and credited.</summary>
+    public int Credited { get; set; }
 }
 
 public sealed class MemoryTierHits
@@ -81,33 +93,60 @@ public sealed class MemoryReadResult
     public int Total { get; set; }
 }
 
-/// <summary>
-/// Shared memory for this Revit session: resolves the personal and project tiers for the open model, keeps one
-/// <see cref="MemoryCache"/> (and its watcher) per tier folder, and runs remember / recall / list with the
-/// write-time rules of <see cref="MemoryPolicy"/>. The approval gate for project writes is the dispatcher's;
-/// this class only does what an approved call asks. Pure — no Revit API, unit tested in RevitMCP.Tests.
-/// </summary>
-public sealed class MemoryService : IDisposable
+/// <summary>What a note is, independent of who asked for it: the agent, or the workflow observer.</summary>
+internal sealed class MemoryNote
 {
+    public string Scope = MemoryScopes.Project;
+    public string? Project;
+    public string Key = string.Empty;
+    public string Value = string.Empty;
+    public string Reason = string.Empty;
+    public List<string> Tags = new();
+    public string? Stage;
+    public string Source = MemorySources.Agent;
+    public List<string> Authors = new();
+    public MemoryMatch? Match;
+    public List<string> Requires = new();
+    public string? Connector;
+
+    /// <summary>A fixed id, so two machines promoting the same pattern write the same file instead of two.</summary>
+    public string? Id;
+}
+
+/// <summary>
+/// Shared memory for this Revit session: resolves the personal, project and company tiers for the open model, keeps
+/// one <see cref="MemoryCache"/> (and its watcher) per tier folder, and runs remember / recall / list with the
+/// write-time rules of <see cref="MemoryPolicy"/> and the lifecycle of <see cref="MemoryLifecycle"/>. Also hosts
+/// the hint feedback and the workflow observer (the other parts of this class). The approval gate for project
+/// writes is the dispatcher's; this class only does what an approved call asks. Pure — no Revit API.
+/// </summary>
+public sealed partial class MemoryService : IDisposable
+{
+    public const string ProposalExtension = ".memory.proposal.json";
+
     private readonly ConcurrentDictionary<string, MemoryCache> _caches = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _writeGate = new();
     private readonly Func<MemorySettings> _settings;
+    private readonly Func<string, bool>? _toolExists;
     private readonly bool _watch;
 
-    public MemoryService(string personalFolder, string mirrorRoot, Func<MemorySettings>? settings = null, bool watch = true)
+    public MemoryService(string personalFolder, string mirrorRoot, Func<MemorySettings>? settings = null, bool watch = true,
+        string? proposalsFolder = null, Func<string, bool>? toolExists = null)
     {
         PersonalFolder = personalFolder;
         MirrorRoot = mirrorRoot;
+        ProposalsFolder = proposalsFolder ?? Path.Combine(Path.GetDirectoryName(personalFolder) ?? personalFolder, "MemoryProposals");
         _settings = settings ?? (() => MemorySettings.Load());
         _watch = watch;
+        _toolExists = toolExists;
     }
 
     public static MemoryService? Current { get; private set; }
 
     /// <summary>The service used by the tools, with the standard folders. Called from App.OnStartup.</summary>
-    public static MemoryService CreateDefault()
+    public static MemoryService CreateDefault(Func<string, bool>? toolExists = null)
     {
-        var service = new MemoryService(DefaultPersonalFolder(), DefaultMirrorRoot());
+        var service = new MemoryService(DefaultPersonalFolder(), DefaultMirrorRoot(), toolExists: toolExists);
         Current = service;
         return service;
     }
@@ -120,7 +159,13 @@ public sealed class MemoryService : IDisposable
 
     public string PersonalFolder { get; }
     public string MirrorRoot { get; }
+
+    /// <summary>Company proposals land here, like skill proposals; an administrator applies them.</summary>
+    public string ProposalsFolder { get; }
     public MemorySettings Settings => _settings();
+
+    /// <summary>The connector version observed entries are bound to.</summary>
+    public static string ConnectorVersion => typeof(MemoryService).Assembly.GetName().Version?.ToString() ?? "0";
 
     /// <summary>The project tier folder for a project root.</summary>
     public string ProjectFolderFor(string projectRoot) => Path.Combine(projectRoot, Settings.ProjectFolderName);
@@ -134,17 +179,14 @@ public sealed class MemoryService : IDisposable
 
         var scope = (request.Scope ?? string.Empty).Trim().ToLowerInvariant();
         if (scope.Length == 0) scope = MemoryScopes.Project;
-        if (scope == MemoryScopes.Company)
-            return Refuse("validation_failed", "The company tier is written by an administrator through proposals, which are not available yet. Use scope=project.");
         if (!MemoryScopes.IsKnown(scope))
-            return Refuse("validation_failed", $"Unknown scope '{request.Scope}'. Use project or personal.");
+            return Refuse("validation_failed", $"Unknown scope '{request.Scope}'. Use project, personal or company.");
 
         var source = (request.Source ?? string.Empty).Trim().ToLowerInvariant();
         if (source.Length == 0) source = MemorySources.Agent;
         if (source != MemorySources.Agent && source != MemorySources.Human)
             return Refuse("validation_failed", "source must be agent (your own note) or human (the user said it).");
 
-        var project = scope == MemoryScopes.Personal && request.AnyProject ? null : Blank(context.Project);
         var topic = MemoryPolicy.NormalizeTopic(request.Key, context.Project);
         if (topic == null)
             return Refuse("validation_failed", "key is required: a topic path such as \"tags/detector-tag-type\".");
@@ -155,29 +197,58 @@ public sealed class MemoryService : IDisposable
         if (problems.Count > 0)
             return new MemoryRememberResult { Status = "validation_failed", Message = "Not remembered: " + problems[0], Problems = problems };
 
+        var author = UserOf(context);
+        var project = scope == MemoryScopes.Company || (scope == MemoryScopes.Personal && request.AnyProject) ? null : Blank(context.Project);
+        var note = new MemoryNote
+        {
+            Scope = scope,
+            Project = project,
+            Key = MemoryPolicy.FullKey(scope, project, topic),
+            Value = value,
+            Reason = reason,
+            Tags = MemoryPolicy.NormalizeTags(request.Tags),
+            Stage = Blank(request.Stage)?.ToUpperInvariant(),
+            Source = source,
+            Authors = new List<string> { author }
+        };
+
+        var credited = Credit(context, request.BasedOn);
+        if (scope == MemoryScopes.Company)
+        {
+            var proposal = Propose(context, note);
+            proposal.Credited = credited;
+            return proposal;
+        }
+
         var cache = CacheFor(scope, context, out var unavailable);
         if (cache == null) return Refuse("not_available", unavailable!);
+        var result = Write(cache, note, context);
+        result.Credited = credited;
+        return result;
+    }
 
-        var key = MemoryPolicy.FullKey(scope, project, topic);
-        var tags = MemoryPolicy.NormalizeTags(request.Tags);
-        var stage = Blank(request.Stage)?.ToUpperInvariant();
-        var author = string.IsNullOrWhiteSpace(context.User) ? Environment.UserName : context.User;
-
+    /// <summary>
+    /// Writes a note into a tier with the merge rules: reaffirm the same value, supersede another, flag a flip-flop,
+    /// respect the per-project cap. Shared by agent notes and the workflow observer.
+    /// </summary>
+    internal MemoryRememberResult Write(MemoryCache cache, MemoryNote note, MemoryContext context)
+    {
+        var settings = Settings;
         lock (_writeGate)
         {
-            var snapshot = cache.Read();
-            var sameKey = snapshot.Entries.Where(e => string.Equals(e.Key, key, StringComparison.OrdinalIgnoreCase)).ToList();
-            var decision = MemoryPolicy.Decide(sameKey, value, author);
+            var snapshot = Read(cache, context.Now);
+            var sameKey = snapshot.Entries.Where(e => string.Equals(e.Key, note.Key, StringComparison.OrdinalIgnoreCase)).ToList();
+            var decision = MemoryPolicy.Decide(sameKey, note.Value, note.Authors.FirstOrDefault() ?? UserOf(context));
             var result = new MemoryRememberResult { Success = true, Kind = decision.Kind };
 
             if (decision.Kind == MemoryWriteKind.Reaffirm)
             {
-                // The file keeps its own counters; the tallies summed into the snapshot must not be written back.
                 var entry = OnDisk(snapshot, decision.Existing!);
                 entry.Counters.Remembered++;
-                if (!entry.Authors.Contains(author, StringComparer.OrdinalIgnoreCase)) entry.Authors.Add(author);
-                foreach (var t in tags) if (!entry.Tags.Contains(t)) entry.Tags.Add(t);
-                entry.Reason = reason;
+                foreach (var a in note.Authors)
+                    if (!entry.Authors.Contains(a, StringComparer.OrdinalIgnoreCase)) entry.Authors.Add(a);
+                foreach (var t in note.Tags) if (!entry.Tags.Contains(t)) entry.Tags.Add(t);
+                entry.Reason = note.Reason;
                 entry.Updated = context.Now;
                 if (string.Equals(entry.Model, context.Model, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(context.ModelVersion))
                     entry.ModelVersion = context.ModelVersion;
@@ -186,41 +257,22 @@ public sealed class MemoryService : IDisposable
                 result.Entry = entry;
                 result.Path = location.Path;
                 result.Pending = location.Pending;
-                result.Message = $"'{key}' already said this; reaffirmed it (written {entry.Counters.Remembered + 1} times, by {entry.Authors.Count} author{(entry.Authors.Count == 1 ? "" : "s")}).";
+                result.Message = $"'{note.Key}' already said this; reaffirmed it (written {entry.Counters.Remembered + 1} times, by {entry.Authors.Count} author{(entry.Authors.Count == 1 ? "" : "s")}).";
                 return result;
             }
 
             MemoryEntry? capVictim = null;
             if (decision.Kind == MemoryWriteKind.New)
             {
-                var active = snapshot.Entries.Where(e => !e.IsRetired && SameProject(e.Project, project)).ToList();
+                var active = snapshot.Entries.Where(e => !e.IsRetired && SameProject(e.Project, note.Project)).ToList();
                 capVictim = MemoryPolicy.EntryToRetireForCap(active, settings.MaxEntriesPerProject, context.Now, out var full);
                 if (full)
                     return Refuse("memory_full",
                         $"This project already holds {active.Count} active memory entries (memory.maxEntriesPerProject={settings.MaxEntriesPerProject}) and none is dormant. Supersede an existing key instead.");
             }
 
-            var created = new MemoryEntry
-            {
-                Id = Guid.NewGuid().ToString(),
-                Key = key,
-                Scope = scope,
-                Project = project,
-                Stage = stage,
-                Model = Blank(context.Model),
-                ModelVersion = Blank(context.ModelVersion),
-                Source = source,
-                Author = author,
-                Authors = new List<string> { author },
-                Client = Blank(context.Client),
-                Created = context.Now,
-                Updated = context.Now,
-                State = MemoryStates.Candidate,
-                Supersedes = decision.Existing?.Id,
-                Tags = tags,
-                Value = value,
-                Reason = reason
-            };
+            var created = NewEntry(note, context);
+            created.Supersedes = decision.Existing?.Id;
             if (decision.FlipFlop) created.Flags.Add(MemoryPolicy.FlagFlipFlop);
 
             var written = cache.Store.Write(created);
@@ -247,17 +299,90 @@ public sealed class MemoryService : IDisposable
             cache.Invalidate();
 
             result.Message = decision.Kind == MemoryWriteKind.Supersede
-                ? $"Remembered '{key}'; it replaces the earlier value, which is kept as history." +
+                ? $"Remembered '{note.Key}'; it replaces the earlier value, which is kept as history." +
                   (decision.FlipFlop ? " The value went back and forth between people, so it is flagged as a disagreement for review." : string.Empty)
-                : $"Remembered '{key}' in {scope} memory.";
+                : $"Remembered '{note.Key}' in {note.Scope} memory.";
             if (result.Pending) result.Message += " The project folder is unreachable: the entry waits in the local mirror and is copied when it returns.";
             return result;
         }
     }
 
+    private static MemoryEntry NewEntry(MemoryNote note, MemoryContext context)
+    {
+        var author = note.Authors.FirstOrDefault() ?? UserOf(context);
+        return new MemoryEntry
+        {
+            Id = note.Id ?? Guid.NewGuid().ToString(),
+            Key = note.Key,
+            Scope = note.Scope,
+            Project = note.Project,
+            Stage = note.Stage,
+            Model = Blank(context.Model),
+            ModelVersion = Blank(context.ModelVersion),
+            Source = note.Source,
+            Author = author,
+            Authors = note.Authors.Count > 0 ? new List<string>(note.Authors) : new List<string> { author },
+            Client = Blank(context.Client),
+            Created = context.Now,
+            Updated = context.Now,
+            State = MemoryStates.Candidate,
+            Tags = new List<string>(note.Tags),
+            Requires = new List<string>(note.Requires),
+            Match = note.Match,
+            Connector = note.Connector,
+            Value = note.Value,
+            Reason = note.Reason
+        };
+    }
+
+    /// <summary>
+    /// scope=company: agents never write the company tier. The note becomes a proposal file in the user's proposals
+    /// folder, holding the entry exactly as it would be stored, for an administrator to review and copy into
+    /// <c>memory.companyFolder</c> — the same flow as skill proposals.
+    /// </summary>
+    private MemoryRememberResult Propose(MemoryContext context, MemoryNote note)
+    {
+        var entry = NewEntry(note, context);
+        var settings = Settings;
+        var proposal = new
+        {
+            kind = "memory.proposal",
+            id = entry.Id,
+            key = entry.Key,
+            proposedAt = context.Now,
+            proposedBy = entry.Author,
+            client = entry.Client,
+            fromProject = Blank(context.Project),
+            fromModel = entry.Model,
+            applyTo = settings.CompanyFolder,
+            fileName = MemoryStore.FileName(entry.Id),
+            howToApply = settings.CompanyFolder == null
+                ? "Set memory.companyFolder in the company config, then save 'entry' there as 'fileName'."
+                : $"Review, then save 'entry' as '{MemoryStore.FileName(entry.Id)}' in {settings.CompanyFolder}.",
+            entry = MemoryEntryParser.Serialize(entry)
+        };
+        try
+        {
+            var path = MemoryStore.AtomicWrite(ProposalsFolder, entry.Id + ProposalExtension, JsonConvert.SerializeObject(proposal, Formatting.Indented));
+            return new MemoryRememberResult
+            {
+                Success = true,
+                Kind = MemoryWriteKind.New,
+                Entry = entry,
+                ProposalPath = path,
+                Path = path,
+                Message = $"Company memory is written by an administrator: proposed '{entry.Key}' in {path}."
+            };
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Refuse("not_available", "The proposal could not be written: " + ex.Message);
+        }
+    }
+
     // ── Recall and list ──────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Ranked entries for a query across the personal and project tiers. Counts each returned entry as shown.</summary>
+    /// <summary>Ranked entries for a query across the tiers. Counts each returned entry as shown and watches what follows.</summary>
     public MemoryReadResult Recall(MemoryContext context, MemoryRecallOptions options, string? scope = null)
     {
         var read = ReadTiers(context, scope);
@@ -267,16 +392,25 @@ public sealed class MemoryService : IDisposable
         var hits = MemoryRecall.Rank(all, options, context.ForRecall());
         read.Result.Hits = hits;
         read.Result.Total = hits.Count;
-
-        var user = string.IsNullOrWhiteSpace(context.User) ? Environment.UserName : context.User;
-        foreach (var (cache, snapshot, _) in read.Snapshots)
-        {
-            var ids = new HashSet<string>(snapshot.Entries.Select(e => e.Id), StringComparer.OrdinalIgnoreCase);
-            var shown = hits.Where(h => ids.Contains(h.Entry.Id)).Select(h => h.Entry.Id).ToList();
-            if (shown.Count > 0 && !cache.Store.AddShown(user, shown))
-                read.Result.Warnings.Add($"The usage tally in {snapshot.Folder} could not be updated.");
-        }
+        RecordShown(context, hits, read);
         return read.Result;
+    }
+
+    /// <summary>
+    /// The memory block of revit_graph_route: confirmed entries (and the user's own candidates) matching the intent,
+    /// at most <c>memory.hintLimit</c>. Null when hints are off.
+    /// </summary>
+    public MemoryReadResult? Hints(MemoryContext context, string query)
+    {
+        var settings = Settings;
+        if (!settings.Enabled || !settings.Hints || string.IsNullOrWhiteSpace(query)) return null;
+        return Recall(context, new MemoryRecallOptions
+        {
+            Query = query,
+            Limit = settings.HintLimit,
+            IncludeDormant = false,
+            VisibleTo = UserOf(context)
+        });
     }
 
     /// <summary>Entries newest first, filtered by state and tags; does not count as shown.</summary>
@@ -324,41 +458,56 @@ public sealed class MemoryService : IDisposable
         }
 
         var wanted = Blank(scope)?.ToLowerInvariant() ?? "all";
-        var scopes = wanted == "all" ? new[] { MemoryScopes.Project, MemoryScopes.Personal } : new[] { wanted };
+        var scopes = wanted == "all" ? new[] { MemoryScopes.Project, MemoryScopes.Company, MemoryScopes.Personal } : new[] { wanted };
         foreach (var s in scopes)
         {
-            if (s == MemoryScopes.Company)
-            {
-                read.Result.Warnings.Add("The company tier is not available yet.");
-                continue;
-            }
             if (!MemoryScopes.IsKnown(s))
             {
-                read.Result.Warnings.Add($"Unknown scope '{scope}'. Use all, project or personal.");
+                read.Result.Warnings.Add($"Unknown scope '{scope}'. Use all, project, company or personal.");
                 continue;
             }
             var cache = CacheFor(s, context, out var unavailable);
             if (cache == null)
             {
-                read.Result.Warnings.Add(unavailable!);
+                // No company folder configured is normal; only say so when the company tier was asked for.
+                if (s != MemoryScopes.Company || wanted == MemoryScopes.Company) read.Result.Warnings.Add(unavailable!);
                 continue;
             }
-            var snapshot = cache.Read();
+            var snapshot = Read(cache, context.Now);
             foreach (var error in snapshot.Errors) read.Result.Warnings.Add($"Skipped an unreadable entry: {error}");
-            if (snapshot.FromMirror) read.Result.Warnings.Add("The project folder is unreachable; read from the local mirror.");
+            if (snapshot.FromMirror) read.Result.Warnings.Add($"The {s} memory folder is unreachable; read from the local mirror.");
             read.Snapshots.Add((cache, snapshot, s));
             read.Result.Tiers.Add(new MemoryTierHits { Scope = s, Folder = snapshot.Folder, FromMirror = snapshot.FromMirror, Entries = snapshot.Entries.Count });
         }
         return read;
     }
 
+    /// <summary>A tier's entries with their usage tallies and effective lifecycle state.</summary>
+    private MemorySnapshot Read(MemoryCache cache, DateTimeOffset now)
+    {
+        var snapshot = cache.Read();
+        MemoryLifecycle.Apply(snapshot.Entries, now, Settings, _toolExists);
+        return snapshot;
+    }
+
     // ── Tiers ────────────────────────────────────────────────────────────────────────────────────────────
 
-    private MemoryCache? CacheFor(string scope, MemoryContext context, out string? unavailable)
+    internal MemoryCache? CacheFor(string scope, MemoryContext context, out string? unavailable)
     {
         unavailable = null;
         if (scope == MemoryScopes.Personal)
             return _caches.GetOrAdd(PersonalFolder, f => new MemoryCache(new MemoryStore(f), _watch));
+
+        if (scope == MemoryScopes.Company)
+        {
+            var company = Settings.CompanyFolder;
+            if (string.IsNullOrWhiteSpace(company))
+            {
+                unavailable = "No company memory is configured (memory.companyFolder in the company config).";
+                return null;
+            }
+            return _caches.GetOrAdd(company!, f => new MemoryCache(new MemoryStore(f, Path.Combine(MirrorRoot, "_company")), _watch));
+        }
 
         if (string.IsNullOrWhiteSpace(context.ProjectFolder))
         {
@@ -373,12 +522,20 @@ public sealed class MemoryService : IDisposable
         return _caches.GetOrAdd(folder, f => new MemoryCache(new MemoryStore(f, mirror, context.ProjectRoot), _watch));
     }
 
-    /// <summary>The entry as stored in its file, without the tallies a snapshot sums in.</summary>
-    private static MemoryEntry OnDisk(MemorySnapshot snapshot, MemoryEntry entry)
+    /// <summary>The entry exactly as its file says: no tallies, stored state — what a rewrite starts from.</summary>
+    private static MemoryEntry OnDisk(MemorySnapshot snapshot, MemoryEntry entry) =>
+        snapshot.FileEntries.TryGetValue(entry.Id, out var stored) ? stored.Clone() : entry.Clone();
+
+    /// <summary>A stable id from text: the same promoted pattern gets the same file on every machine.</summary>
+    internal static string DeterministicId(string text)
     {
-        var copy = entry.Clone();
-        if (snapshot.FileCounters.TryGetValue(entry.Id, out var c)) copy.Counters = c.Clone();
-        return copy;
+        using var sha = SHA256.Create();
+        var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(text));
+        var bytes = new byte[16];
+        Array.Copy(hash, bytes, 16);
+        bytes[6] = (byte)((bytes[6] & 0x0F) | 0x50);
+        bytes[8] = (byte)((bytes[8] & 0x3F) | 0x80);
+        return new Guid(bytes).ToString();
     }
 
     /// <summary>No state: everything but retired history. "all": everything. Otherwise that state only.</summary>
@@ -388,13 +545,16 @@ public sealed class MemoryService : IDisposable
     private static bool SameProject(string? a, string? b) =>
         string.Equals(MemoryPolicy.Slug(a ?? string.Empty), MemoryPolicy.Slug(b ?? string.Empty), StringComparison.Ordinal);
 
-    private static string? Blank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s!.Trim();
+    internal static string UserOf(MemoryContext context) => string.IsNullOrWhiteSpace(context.User) ? Environment.UserName : context.User;
+
+    internal static string? Blank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s!.Trim();
 
     private static MemoryRememberResult Refuse(string status, string message) =>
         new() { Status = status, Message = message, Problems = new List<string> { message } };
 
     public void Dispose()
     {
+        StopObserver();
         foreach (var cache in _caches.Values) cache.Dispose();
         _caches.Clear();
         if (ReferenceEquals(Current, this)) Current = null;

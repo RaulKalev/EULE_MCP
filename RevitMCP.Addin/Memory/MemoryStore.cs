@@ -225,11 +225,18 @@ public sealed class MemoryStore
         return totals;
     }
 
-    /// <summary>Adds <paramref name="shown"/> to the user's own tally file. Never throws; returns false when it could not write.</summary>
-    public bool AddShown(string user, IEnumerable<string> ids)
+    /// <summary>Counts each id as shown once in the user's own tally file. Never throws; false when it could not write.</summary>
+    public bool AddShown(string user, IEnumerable<string> ids) =>
+        AddTallies(user, ids.Where(id => !string.IsNullOrEmpty(id)).Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(id => id, _ => new MemoryCounters { Shown = 1 }, StringComparer.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Adds counter deltas (shown, used, worked, contradicted, last used) to the user's own tally file — the only
+    /// file this user writes for usage, so nobody else's counts can be lost. Never throws; false when it could not write.
+    /// </summary>
+    public bool AddTallies(string user, IReadOnlyDictionary<string, MemoryCounters> deltas)
     {
-        var list = ids.Where(id => !string.IsNullOrEmpty(id)).ToList();
-        if (list.Count == 0) return true;
+        if (deltas.Count == 0) return true;
         try
         {
             var folder = System.IO.Path.Combine(ReadFolder(), CountersFolderName);
@@ -237,14 +244,21 @@ public sealed class MemoryStore
             if (name.Length == 0) name = "_unknown";
             var path = System.IO.Path.Combine(folder, name + ".json");
             var tallies = File.Exists(path) ? ReadTallyFile(path) : new Dictionary<string, MemoryCounters>(StringComparer.OrdinalIgnoreCase);
-            foreach (var id in list)
+            foreach (var delta in deltas)
             {
-                if (!tallies.TryGetValue(id, out var c)) tallies[id] = c = new MemoryCounters();
-                c.Shown++;
+                if (!tallies.TryGetValue(delta.Key, out var c)) tallies[delta.Key] = c = new MemoryCounters();
+                c.Add(delta.Value);
             }
             var json = JsonConvert.SerializeObject(tallies.ToDictionary(
                 p => p.Key,
-                p => new TallyDto { Shown = p.Value.Shown, Used = p.Value.Used, Worked = p.Value.Worked, Contradicted = p.Value.Contradicted }));
+                p => new TallyDto
+                {
+                    Shown = p.Value.Shown,
+                    Used = p.Value.Used,
+                    Worked = p.Value.Worked,
+                    Contradicted = p.Value.Contradicted,
+                    LastUsed = p.Value.LastUsed
+                }));
             AtomicWrite(folder, name + ".json", json);
             return true;
         }
@@ -269,7 +283,8 @@ public sealed class MemoryStore
                     Shown = Math.Max(0, pair.Value.Shown),
                     Used = Math.Max(0, pair.Value.Used),
                     Worked = Math.Max(0, pair.Value.Worked),
-                    Contradicted = Math.Max(0, pair.Value.Contradicted)
+                    Contradicted = Math.Max(0, pair.Value.Contradicted),
+                    LastUsed = pair.Value.LastUsed
                 };
             }
         }
@@ -285,6 +300,7 @@ public sealed class MemoryStore
         [JsonProperty("used")] public int Used { get; set; }
         [JsonProperty("worked")] public int Worked { get; set; }
         [JsonProperty("contradicted")] public int Contradicted { get; set; }
+        [JsonProperty("lastUsed", NullValueHandling = NullValueHandling.Ignore)] public DateTimeOffset? LastUsed { get; set; }
     }
 
     // ── Files ────────────────────────────────────────────────────────────────────────────────────────────

@@ -11,8 +11,8 @@ public sealed class MemorySnapshot
     public bool FromMirror { get; set; }
     public List<MemoryEntry> Entries { get; set; } = new();
 
-    /// <summary>Counters as written in each entry file (by id), before the usage tallies are added.</summary>
-    public Dictionary<string, MemoryCounters> FileCounters { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Each entry exactly as its file says (by id): no usage tallies, stored state. What a rewrite starts from.</summary>
+    public Dictionary<string, MemoryEntry> FileEntries { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public List<string> Errors { get; set; } = new();
 }
 
@@ -80,11 +80,11 @@ public sealed class MemoryCache : IDisposable
 
             var tallies = Store.ReadTallies();
             var entries = new List<MemoryEntry>(_files.Count);
-            var fileCounters = new Dictionary<string, MemoryCounters>(StringComparer.OrdinalIgnoreCase);
+            var fileEntries = new Dictionary<string, MemoryEntry>(StringComparer.OrdinalIgnoreCase);
             foreach (var stored in _files.Values)
             {
                 var entry = stored.Entry.Clone();
-                fileCounters[entry.Id] = stored.Entry.Counters.Clone();
+                fileEntries[entry.Id] = stored.Entry.Clone();
                 if (tallies.TryGetValue(entry.Id, out var extra)) entry.Counters.Add(extra);
                 entries.Add(entry);
             }
@@ -94,7 +94,7 @@ public sealed class MemoryCache : IDisposable
                 Folder = folder,
                 FromMirror = Store.MirrorFolder != null && string.Equals(folder, Store.MirrorFolder, StringComparison.OrdinalIgnoreCase),
                 Entries = entries,
-                FileCounters = fileCounters,
+                FileEntries = fileEntries,
                 Errors = _errors.Concat(replayErrors).ToList()
             };
         }

@@ -64,6 +64,10 @@ public class ExternalEventHandler : IExternalEventHandler
     public IReadOnlyList<string> GetRegisteredToolNames()
         => _tools.Keys.OrderBy(k => k).ToList();
 
+    /// <summary>The permission a registered tool declares; null for an unknown name.</summary>
+    public ToolPermission? GetToolPermission(string name)
+        => _tools.TryGetValue(name, out var tool) ? tool.Permission : null;
+
     public bool TryEnqueue(ExternalEventWorkItem item) => _queue.TryEnqueue(item);
 
     public RevitDocumentContext? GetLastContext() => _lastContext;
@@ -463,7 +467,8 @@ public class ExternalEventHandler : IExternalEventHandler
                 LocalPath = ctx.LocalModelPath,
                 ActiveViewName = ctx.ActiveViewName,
                 IsWorkshared = ctx.IsWorkshared,
-                RevitUsername = ctx.RevitUsername
+                RevitUsername = ctx.RevitUsername,
+                ProjectKey = RevitMCP.Addin.Graph.RevitModelVersionReader.ReadProjectKey(app.ActiveUIDocument?.Document)
             };
         }
         catch

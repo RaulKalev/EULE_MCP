@@ -1,11 +1,10 @@
 # Shared company memory (design)
 
-> **Status: phase 1 (store and recall) is implemented** — `revit_memory_remember`,
-> `revit_memory_recall` and `revit_memory_list` with the personal and project tiers; see
-> [Phase 1 as built](#phase-1-as-built). Everything else in this document (hints in
-> `revit_graph_route`, the workflow observer, the lifecycle, the company tier, the review page and
-> consolidation) is still the plan. Sections marked *decision* record choices already made, sections
-> marked *open* still need one.
+> **Status: phases 1 and 2 are implemented** — store and recall
+> ([Phase 1 as built](#phase-1-as-built)), then hints, the workflow observer, hint feedback, the
+> lifecycle and the company tier via proposals ([Phase 2 as built](#phase-2-as-built)). The review
+> page and consolidation (phases 3 and 4) are still the plan. Sections marked *decision* record
+> choices already made, sections marked *open* still need one.
 
 Shared memory is a store of durable notes about how the company and each project work — decisions,
 preferences, exceptions, corrections and recurring workflows — that every colleague's agent reads
@@ -283,7 +282,7 @@ Configuration keys (`memory.*`, user then company config): `enabled`, `companyFo
    `MemoryPolicy` with the write-time rules; `revit_memory_remember`, `revit_memory_recall`,
    `revit_memory_list`; the server-instruction lines. Personal and project tiers. Benchmark report
    before and after.
-2. **Hints and learning.** `memory` block in `revit_graph_route`; `WorkflowObserver` with recipes,
+2. **Hints and learning** *(done)*. `memory` block in `revit_graph_route`; `WorkflowObserver` with recipes,
    defaults, corrections and hint feedback; lifecycle transitions; company tier via proposals.
 3. **Review.** `revit_memory_page` with confirm / retire / promote and the digest view;
    `revit_memory_forget`.
@@ -335,8 +334,8 @@ relaxes destructive tools, and Direct Edit still skips approval as for every oth
 - **Keys:** the agent passes a topic path (`tags/detector-tag-type`); the store adds the tier and
   project (`project/1626/tags/detector-tag-type`, `personal/1626/…`, `personal/…` with
   `anyProject`). Keys are lowercase ASCII with diacritics dropped.
-- **Every new entry starts as `candidate`.** Lifecycle transitions arrive with phase 2; recall
-  weights candidates below confirmed entries and flip-flops lower still.
+- **Every new entry starts as `candidate`.** Recall weights candidates below confirmed entries and
+  flip-flops lower still; phase 2 adds the lifecycle that confirms them.
 
 ### Write-time rules as implemented
 
@@ -369,10 +368,108 @@ is still to be recorded before hints are enabled by default in phase 2.
 
 ---
 
+## Phase 2 as built
+
+### Hints in `revit_graph_route`
+
+The route response carries a `memory` block — the `note` and up to `memory.hintLimit` (5) entries
+matching the intent and the detected category — when `memory.hints` is on. Hints show confirmed
+entries and, of the candidates, only those the asking user wrote; dormant and retired entries never
+appear. `memoryHint=false` opts out per call.
+
+*Decision:* `memory.hints` is **off by default**. The section *Credit usage* asks for the
+memory-on/off benchmark on a real project before hints are enabled by default; until that report is
+recorded, a user or the company config switches them on with `"memory": { "hints": true }`. Recall,
+remember, the observer and the lifecycle work either way.
+
+### Lifecycle
+
+`MemoryLifecycle` computes the state every time entries are read, from the counters, authors and
+dates; nothing is rewritten to move an entry, so the shared folder stays conflict-free and every
+machine sees the same state. The stored `state` only records what a write or a person decided
+(retired by supersede; confirmed on the review page in phase 3). `revit_memory_list` shows why an
+entry is in its state (`lifecycle`).
+
+| Effective state | When |
+|---|---|
+| retired | Stored as retired; a recipe names a tool the connector no longer has; unused for `dormantAfterDays` + `retireAfterDays` (90 + 365) |
+| dormant | Unused for `dormantAfterDays` (90); or contradicted at least `confirmAfterUses` times and more often than it worked |
+| candidate | A flip-flop not settled by a person; otherwise no evidence yet |
+| confirmed | Stored as confirmed; worked `confirmAfterUses` (3) times; or written (or observed) by two or more people |
+
+"Unused" is measured from the later of `updated` and the last use in the tallies, so an entry used
+again is confirmed again. Two rules from the design table are not applied: "stage passed" (the
+connector does not know the project's current stage) and "model version moved on" (every sync
+moves it; staleness is reported per entry instead).
+
+### Hint feedback
+
+Every entry a recall or a route hint shows is watched for the next 15 calls or 30 minutes of the same
+user and client. A call that passes a value the entry names (an observed default: its tool and
+argument) counts `used`, and `worked` when it succeeds; a rejected call counts `contradicted`, and so
+does an observed default called with a different value. Counts go to the user's tally file, with
+`lastUsed`. For prose notes the agent can also pass `basedOn=[ids]` to `revit_memory_remember`:
+each cited entry counts as used and worked — the first answer to the open decision on `used`.
+
+### Workflow observer
+
+`MemoryHooks.ToolCompleted` sits next to the village hook in `ActivityLogger.WriteAsync`; a
+rejection in the approval window, which is never logged as a call, reaches `MemoryHooks.ToolRejected`
+from `ApprovalService.Reject`. The hook copies the tool name, client, Revit user, project number
+(now captured in the document context), model path, success, status and the allow-listed argument
+values, and queues them; a background task processes the queue, so a tool call never waits.
+
+| Pattern | Rule | Entry |
+|---|---|---|
+| Default | A write tool called with the same allow-listed value ≥ `observer.minSupport` (3) times across ≥ `observer.minSessions` (2) sessions, and in ≥ 60 % of the calls with that argument | `defaults/<tool>/<argument>`, `match` = tool, argument, value |
+| Recipe | The chain of successful tools after a `revit_graph_route` of the same kind (route + detected category, else the intent's first words), at least three tools, same thresholds | `workflow/<route>/<category>`, `requires` = the tools |
+| Correction | A rejected write followed within 30 minutes by an accepted call of the same tool with another value for an allow-listed argument — reported on the first sighting, since a person rejecting a value is the signal | `corrections/<tool>/<argument>`, `match` = the accepted value |
+
+A session ends after 30 minutes without a call. Allow-listed arguments are names, types, categories,
+levels, views, parameter names, tag type ids and offsets/heights; values longer than 64 characters,
+paths and arrays are skipped. Memory and discovery tools are not observed.
+
+A pattern becomes a **personal** candidate (`source: observed`, key `personal/<project>/…`, bound
+to the connector version). The user's patterns are also listed in
+`<project memory>\.observed\<user>.json`; when another user's list holds the same topic and value,
+the pattern is promoted to the **project** tier with both as authors — so it is confirmed — under an
+id derived from the key and value, so two machines promoting it write the same file. The observer's
+counts stay in `%AppData%\RKTools\RevitMCP\Memory\.observer\<project>.json`.
+`memory.observer.enabled=false` switches it off.
+
+### Company tier
+
+`memory.companyFolder` (company config, or user config to test) is read by recall and list as the
+third tier, with a local mirror like the project tier; usage of company entries is counted only when
+the folder is writable. `revit_memory_remember scope=company` writes no entry: it writes
+`<id>.memory.proposal.json` to `%AppData%\RKTools\RevitMCP\MemoryProposals\` with the entry text
+ready to save as `<id>.md` in the company folder, like skill proposals. It needs no approval because it
+changes nothing shared.
+
+### Configuration added
+
+`memory.companyFolder`, `memory.hints` (false), `memory.hintLimit` (5), `memory.observer.enabled`
+(true), `memory.observer.minSupport` (3), `memory.observer.minSessions` (2),
+`memory.confirmAfterUses` (3), `memory.dormantAfterDays` (90), `memory.retireAfterDays` (365).
+
+### Code
+
+| Component | Location |
+|---|---|
+| `MemoryLifecycle`, `WorkflowObserver` | `RevitMCP.Addin/Memory/` (no Revit API; tested in `MemoryPhase2Tests.cs`) |
+| Hint feedback, observer host, company proposals | `RevitMCP.Addin/Memory/Hosting/MemoryService*.cs` |
+| `MemoryHooks` | `RevitMCP.Addin/Memory/Hosting/`; called from `ActivityLogger` and `ApprovalService.Reject` |
+| Route hints | `RevitMCP.Addin/Tools/Graph/GraphRouteTool.cs` |
+
+Benchmark (schema only): `core` ≈ 6.0k → 6.1k tokens
+([report](benchmarks/20261023-220217-shared-memory-phase2.md)).
+
+---
+
 ## Open decisions
 
-- *Open:* the exact support threshold for observer candidates and the N for confirmation. Start
-  with 3 sightings across 2 sessions and 3 successful uses; tune from the hit rate.
+- *Open:* the exact support threshold for observer candidates and the N for confirmation. Implemented
+  as 3 sightings across 2 sessions and 3 successful uses (configurable); tune from the hit rate.
 - *Open:* whether the project tier lives next to the model (`.rktools\memory`) or under one
   server root keyed by project id. Next to the model follows the project config; one root is easier
   to back up and to point the consolidation pass at.

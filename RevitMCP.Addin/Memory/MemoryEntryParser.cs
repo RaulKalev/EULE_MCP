@@ -39,6 +39,10 @@ public static class MemoryEntryParser
         Line(sb, "counters", string.Format(CultureInfo.InvariantCulture,
             "{{ shown: {0}, used: {1}, worked: {2}, contradicted: {3}, remembered: {4} }}",
             c.Shown, c.Used, c.Worked, c.Contradicted, c.Remembered));
+        // Written only when set, so plain notes keep the short shape of the design document.
+        if (e.Requires.Count > 0) Line(sb, "requires", List(e.Requires));
+        if (e.Match != null) Line(sb, "match", List(new[] { e.Match.Tool, e.Match.Argument, e.Match.Value }));
+        if (!string.IsNullOrEmpty(e.Connector)) Line(sb, "connector", Quote(e.Connector!));
         sb.Append(Fence).Append('\n');
         sb.Append("value: ").Append(OneLine(e.Value)).Append('\n');
         sb.Append("reason: ").Append(OneLine(e.Reason)).Append('\n');
@@ -122,6 +126,12 @@ public static class MemoryEntryParser
             case "tags": e.Tags = ParseList(raw); break;
             case "flags": e.Flags = ParseList(raw); break;
             case "counters": e.Counters = ParseCounters(raw); break;
+            case "requires": e.Requires = ParseList(raw); break;
+            case "match":
+                var m = ParseList(raw);
+                e.Match = m.Count == 3 ? new MemoryMatch { Tool = m[0], Argument = m[1], Value = m[2] } : null;
+                break;
+            case "connector": e.Connector = Scalar(raw); break;
         }
     }
 

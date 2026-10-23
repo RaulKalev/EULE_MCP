@@ -33,6 +33,11 @@
     <Compile Include="..\RevitMCP.Addin\Memory\MemorySettings.cs" Link="Memory\MemorySettings.cs" />
     <Compile Include="..\RevitMCP.Addin\Memory\MemoryProjectRoot.cs" Link="Memory\MemoryProjectRoot.cs" />
     <Compile Include="..\RevitMCP.Addin\Memory\Hosting\MemoryService.cs" Link="Memory\Hosting\MemoryService.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\MemoryLifecycle.cs" Link="Memory\MemoryLifecycle.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\WorkflowObserver.cs" Link="Memory\WorkflowObserver.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\Hosting\MemoryService.Feedback.cs" Link="Memory\Hosting\MemoryService.Feedback.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\Hosting\MemoryService.Observer.cs" Link="Memory\Hosting\MemoryService.Observer.cs" />
+    <Compile Include="..\RevitMCP.Addin\Memory\Hosting\MemoryHooks.cs" Link="Memory\Hosting\MemoryHooks.cs" />
     <!-- PanelSchematics plugin contract, empty-row editing and payload formats (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\PanelSchematics\PanelSchematicsContract.cs" Link="PanelSchematics\PanelSchematicsContract.cs" />
     <Compile Include="..\RevitMCP.Addin\PanelSchematics\EmptyRowsEditor.cs" Link="PanelSchematics\EmptyRowsEditor.cs" />

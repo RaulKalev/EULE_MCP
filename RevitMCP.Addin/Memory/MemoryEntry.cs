@@ -42,6 +42,9 @@ public sealed class MemoryCounters
     /// <summary>How many times the same key and value were written again (by anyone).</summary>
     public int Remembered { get; set; }
 
+    /// <summary>When a later action last matched the entry (from the usage tallies; not stored in the entry file).</summary>
+    public DateTimeOffset? LastUsed { get; set; }
+
     public MemoryCounters Clone() => (MemoryCounters)MemberwiseClone();
 
     public void Add(MemoryCounters other)
@@ -51,7 +54,19 @@ public sealed class MemoryCounters
         Worked += other.Worked;
         Contradicted += other.Contradicted;
         Remembered += other.Remembered;
+        if (other.LastUsed != null && (LastUsed == null || other.LastUsed > LastUsed)) LastUsed = other.LastUsed;
     }
+}
+
+/// <summary>
+/// The tool call an observed default stands for: a later call of <see cref="Tool"/> with <see cref="Argument"/>
+/// = <see cref="Value"/> uses it, another value contradicts it.
+/// </summary>
+public sealed class MemoryMatch
+{
+    public string Tool { get; set; } = string.Empty;
+    public string Argument { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -88,8 +103,20 @@ public sealed class MemoryEntry
     /// <summary>Review flags, e.g. <see cref="MemoryPolicy.FlagFlipFlop"/>.</summary>
     public List<string> Flags { get; set; } = new();
     public MemoryCounters Counters { get; set; } = new();
+
+    /// <summary>Recipes: the tools they name. A recipe whose tool no longer exists retires.</summary>
+    public List<string> Requires { get; set; } = new();
+
+    /// <summary>Observed defaults: the call that uses or contradicts the entry.</summary>
+    public MemoryMatch? Match { get; set; }
+
+    /// <summary>Connector version an observed entry was derived with.</summary>
+    public string? Connector { get; set; }
     public string Value { get; set; } = string.Empty;
     public string Reason { get; set; } = string.Empty;
+
+    /// <summary>Why the lifecycle put the entry in its current state (computed on read, not stored).</summary>
+    public string? Lifecycle { get; set; }
 
     public bool IsRetired => State == MemoryStates.Retired;
 
@@ -99,6 +126,8 @@ public sealed class MemoryEntry
         copy.Tags = new List<string>(Tags);
         copy.Authors = new List<string>(Authors);
         copy.Flags = new List<string>(Flags);
+        copy.Requires = new List<string>(Requires);
+        copy.Match = Match == null ? null : new MemoryMatch { Tool = Match.Tool, Argument = Match.Argument, Value = Match.Value };
         copy.Counters = Counters.Clone();
         return copy;
     }

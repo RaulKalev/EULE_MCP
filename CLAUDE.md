@@ -54,7 +54,9 @@ approval and is refused while the plugin's table window is open. The storage for
 project's durable decisions and corrections next to the model (`.rktools\memory`) and the user's personal notes. Recall
 before a write; remember at task end one user correction, decision with its reason, or exception — never a session
 summary or anything readable from the model. Entries are hints like graph data: verify live. A project note needs
-approval in Revit; a personal one does not. Phase 1 only: no hints in `revit_graph_route`, observer or company tier yet.
+approval in Revit; a personal one does not; `scope=company` only writes a proposal for an administrator. Pass `basedOn`
+with the ids of entries you relied on. `revit_graph_route` carries matching entries in a `memory` block when
+`memory.hints` is on, and the workflow observer learns project defaults, recipes and corrections from tool calls by itself.
 
 ## Model pages
 

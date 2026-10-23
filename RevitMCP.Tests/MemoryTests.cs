@@ -533,9 +533,8 @@ public sealed class MemoryServiceTests : IDisposable
     }
 
     [Fact]
-    public void Remember_RefusesCompanyScopeFactsAndMissingProjectFolder()
+    public void Remember_RefusesFactsAndMissingProjectFolder()
     {
-        Assert.Equal("validation_failed", _service.Remember(Ctx(), Note("Use tag A for detectors.", scope: MemoryScopes.Company)).Status);
         Assert.Equal("validation_failed", _service.Remember(Ctx(), Note("712345 712346 712347 712348")).Status);
         Assert.Equal("validation_failed", _service.Remember(Ctx(), new MemoryRememberRequest { Key = "k", Value = "Use tag A for detectors.", Reason = "" }).Status);
 

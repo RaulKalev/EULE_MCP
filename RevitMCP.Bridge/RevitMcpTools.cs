@@ -6382,12 +6382,13 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_graph_route", ReadOnly = true),
-     Description("Start here for element discovery. Give an intent in plain words (\"devices in room 1.12\", \"everything fed by panel JK-1\", \"fire alarm devices on 2. korrus\"); returns the cheapest call plan: graph steps that narrow ids, then a live read by id, plus the graph's freshness (when missing or stale the plan starts with revit_graph_build). Read-only; graph data is routing hints, never facts.")]
+     Description("Start here for element discovery. Give an intent in plain words (\"devices in room 1.12\", \"everything fed by panel JK-1\", \"fire alarm devices on 2. korrus\"); returns the cheapest call plan: graph steps that narrow ids, then a live read by id, plus the graph's freshness (when missing or stale the plan starts with revit_graph_build) and, when enabled, a memory block of the project's matching decisions. Read-only; graph data and memory are hints, never facts.")]
     public async Task<string> GraphRoute(
         [Description("What you want to find, in plain words.")] string intent,
         [Description("Optional category (overrides detection), e.g. 'Fire Alarm Devices'.")] string? category = null,
         [Description("Optional level name (overrides detection).")] string? level = null,
         [Description("Optional room number / panel name / other name to look for.")] string? name = null,
+        [Description("Include matching shared-memory entries (when memory.hints is on). Default true.")] bool memoryHint = true,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -6395,7 +6396,8 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["intent"] = intent,
             ["category"] = category ?? string.Empty,
             ["level"] = level ?? string.Empty,
-            ["name"] = name ?? string.Empty
+            ["name"] = name ?? string.Empty,
+            ["memoryHint"] = memoryHint
         };
         var result = await pipeClient.SendAsync("revit_graph_route", args, cancellationToken);
         return FormatResult(result);
@@ -6714,7 +6716,7 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
                  "Returns ranked entries: key, value, reason, state, stale (written against an earlier model version). Hints only: verify live.")]
     public async Task<string> MemoryRecall(
         [Description("What you are about to do, e.g. \"detector tag type\".")] string query,
-        [Description("all (default), project or personal.")] string scope = "all",
+        [Description("all (default), project, company or personal.")] string scope = "all",
         [Description("Only entries carrying all of these tags.")] string[]? tags = null,
         [Description("Maximum entries, default 5, max 20.")] int limit = 5,
         [Description("Also return retired (superseded) entries.")] bool includeRetired = false,
@@ -6735,16 +6737,17 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
 
     [McpServerTool(Name = "revit_memory_remember"),
      Description("Stores one durable note at task end: a user correction, a decision and its reason, or an exception to a rule — never a session summary or model data (ids, counts, values). " +
-                 "scope=project (default) shares it with the project after the user's approval in Revit; personal = this user only, no approval. Same key: same value reaffirms, a new value replaces (old kept as history). Max 400 characters each.")]
+                 "scope=project (default) shares it with the project after the user's approval in Revit; personal = this user only; company = a proposal for an administrator. Same key: same value reaffirms, a new value replaces (old kept as history). Max 400 characters each.")]
     public async Task<string> MemoryRemember(
         [Description("Topic path, e.g. \"tags/detector-tag-type\"; tier and project are added.")] string key,
         [Description("The decision or correction itself.")] string value,
         [Description("Why: the requirement, standard or user statement behind it.")] string reason,
-        [Description("project (default, approval) or personal.")] string scope = "project",
+        [Description("project (default, approval), personal or company (proposal).")] string scope = "project",
         [Description("Up to 8 short tags.")] string[]? tags = null,
         [Description("EP, PP, TP or TJ. Empty = all stages.")] string? stage = null,
         [Description("agent (default) or human (the user said it).")] string source = "agent",
         [Description("Personal scope only: applies in every project, not just this one.")] bool anyProject = false,
+        [Description("Ids of recalled entries this note relied on (counts them as useful).")] string[]? basedOn = null,
         [Description("Project root. Optional: found above the model file.")] string? projectRoot = null,
         CancellationToken cancellationToken = default)
     {
@@ -6758,15 +6761,16 @@ internal sealed class RevitMcpTools(RevitPipeClient pipeClient)
             ["stage"] = stage ?? string.Empty,
             ["source"] = source,
             ["anyProject"] = anyProject,
+            ["basedOn"] = basedOn ?? [],
             ["projectRoot"] = projectRoot ?? string.Empty
         };
         return FormatResult(await pipeClient.SendAsync("revit_memory_remember", args, cancellationToken));
     }
 
     [McpServerTool(Name = "revit_memory_list", ReadOnly = true),
-     Description("Lists the open project's memory entries and the user's personal ones, newest first, with state, source, author, counters, flags (flip-flop = people disagree) and staleness, plus where each tier is stored. Use it to review memory; use revit_memory_recall to search it.")]
+     Description("Lists the open project's memory entries, the company's and the user's personal ones, newest first, with state (and why: lifecycle), source (observed = learned from usage), author, counters, flags (flip-flop = people disagree) and staleness, plus where each tier is stored. Use it to review memory; use revit_memory_recall to search it.")]
     public async Task<string> MemoryList(
-        [Description("all (default), project or personal.")] string scope = "all",
+        [Description("all (default), project, company or personal.")] string scope = "all",
         [Description("candidate, confirmed, dormant, retired or all. Default: everything except retired.")] string? state = null,
         [Description("Only entries carrying all of these tags.")] string[]? tags = null,
         [Description("Entries to skip, for paging.")] int offset = 0,

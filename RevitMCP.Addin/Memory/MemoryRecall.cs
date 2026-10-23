@@ -22,6 +22,9 @@ public sealed class MemoryRecallOptions
 
     /// <summary>Hints leave dormant entries out; a deliberate search finds them.</summary>
     public bool IncludeDormant { get; set; } = true;
+
+    /// <summary>Hints: only confirmed entries, and candidates written by this user.</summary>
+    public string? VisibleTo { get; set; }
 }
 
 public sealed class MemoryHit
@@ -52,6 +55,7 @@ public static class MemoryRecall
         {
             if (e.IsRetired && !options.IncludeRetired) continue;
             if (e.State == MemoryStates.Dormant && !options.IncludeDormant) continue;
+            if (options.VisibleTo != null && !MemoryLifecycle.VisibleInHints(e, options.VisibleTo)) continue;
             if (!InProject(e, context.Project)) continue;
             if (tags.Count > 0 && !tags.All(t => e.Tags.Contains(t))) continue;
 
@@ -146,7 +150,7 @@ public static class MemoryRecall
     }
 
     /// <summary>Lowercase, diacritics dropped, so "silt" finds "Silt" and "õ" matches "o".</summary>
-    private static string Fold(string text)
+    public static string Fold(string text)
     {
         var sb = new StringBuilder(text.Length);
         foreach (var c in text.Normalize(NormalizationForm.FormD))

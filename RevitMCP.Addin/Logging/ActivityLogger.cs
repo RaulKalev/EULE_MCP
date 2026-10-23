@@ -24,6 +24,8 @@ public class ActivityLogger
     {
         // Project Village observer (Village\): O(1), never throws, no-op when disabled. Does not alter the entry.
         Village.Hosting.VillageHooks.ToolCompleted(request, result, context);
+        // Shared memory (Memory\): hint feedback and the workflow observer. O(1) enqueue, never throws.
+        Memory.Hosting.MemoryHooks.ToolCompleted(request, result, context);
 
         var entry = new LogEntry
         {
