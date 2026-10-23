@@ -23,7 +23,10 @@ internal static class MemoryToolSupport
         }
 
         var signal = RevitModelVersionReader.Read(uiapp, doc);
-        var (root, problem) = MemoryProjectRoot.Find(signal.ModelPath, ToolArguments.GetString(request.Arguments, "projectRoot"));
+        var explicitRoot = ToolArguments.GetString(request.Arguments, "projectRoot");
+        var (root, problem) = MemoryProjectRoot.Find(signal.ModelPath, explicitRoot);
+        // The observer only sees the model path; tell it where this model's project memory was put.
+        if (root != null && !string.IsNullOrWhiteSpace(explicitRoot)) service.NoteProjectRoot(signal.ModelPath, root);
         return new MemoryContext
         {
             Project = string.IsNullOrWhiteSpace(signal.ProjectKey) ? null : signal.ProjectKey,

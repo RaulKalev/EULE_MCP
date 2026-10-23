@@ -24,7 +24,9 @@ public sealed partial class MemoryService
     private readonly WorkflowObserver _observer = new();
     private readonly Dictionary<string, ObserverState> _states = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _dirtyStates = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, (string? Root, string? Problem)> _roots = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, (string? Root, string? Problem, DateTimeOffset Found)> _roots = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, string> _explicitRoots = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly TimeSpan RootCacheTime = TimeSpan.FromMinutes(10);
     private int _draining;
     private volatile bool _stopped;
 
@@ -120,12 +122,32 @@ public sealed partial class MemoryService
         };
         if (!string.IsNullOrWhiteSpace(call.ModelPath))
         {
-            var (root, problem) = _roots.GetOrAdd(call.ModelPath!, p => MemoryProjectRoot.Find(p, null));
+            var (root, problem) = ProjectRootOf(call.ModelPath!);
             context.ProjectRoot = root;
             context.ProjectFolder = root == null ? null : ProjectFolderFor(root);
             context.ProjectProblem = problem;
         }
         return context;
+    }
+
+    /// <summary>A tool call passed projectRoot for this model: the observer files the model's patterns there too.</summary>
+    public void NoteProjectRoot(string modelPath, string root)
+    {
+        if (!string.IsNullOrWhiteSpace(modelPath) && !string.IsNullOrWhiteSpace(root)) _explicitRoots[modelPath] = root;
+    }
+
+    /// <summary>
+    /// The project root of a model: one a tool was given explicitly, else the lookup above the model file, kept for a
+    /// few minutes only — a share that was briefly away must not pin the wrong folder for the whole session.
+    /// </summary>
+    private (string? Root, string? Problem) ProjectRootOf(string modelPath)
+    {
+        if (_explicitRoots.TryGetValue(modelPath, out var given)) return (given, null);
+        if (_roots.TryGetValue(modelPath, out var cached) && DateTimeOffset.UtcNow - cached.Found < RootCacheTime)
+            return (cached.Root, cached.Problem);
+        var (root, problem) = MemoryProjectRoot.Find(modelPath, null);
+        _roots[modelPath] = (root, problem, DateTimeOffset.UtcNow);
+        return (root, problem);
     }
 
     /// <summary>
@@ -162,8 +184,12 @@ public sealed partial class MemoryService
                 note.Reason = $"Observed for {users.Count} people: {p.Reason}";
                 note.Id = DeterministicId(note.Key + "|" + MemoryRecall.Fold(p.Value));
 
-                var existing = Read(project, context.Now).Entries
-                    .FirstOrDefault(e => !e.IsRetired && string.Equals(e.Key, note.Key, StringComparison.OrdinalIgnoreCase) && MemoryPolicy.SameValue(e.Value, p.Value));
+                var sameValue = Read(project, context.Now).Entries
+                    .Where(e => string.Equals(e.Key, note.Key, StringComparison.OrdinalIgnoreCase) && MemoryPolicy.SameValue(e.Value, p.Value))
+                    .ToList();
+                // A person retired this value: usage alone must not bring it back.
+                if (sameValue.Any(e => e.IsRetired && e.Flags.Contains(FlagRetiredByReview))) continue;
+                var existing = sameValue.FirstOrDefault(e => !e.IsRetired);
                 if (existing != null && users.All(u => existing.Authors.Contains(u, StringComparer.OrdinalIgnoreCase))) continue;
                 Write(project, note, context);
             }

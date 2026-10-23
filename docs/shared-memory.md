@@ -318,8 +318,10 @@ relaxes destructive tools, and Direct Edit still skips approval as for every oth
   models have no folder: they get personal memory only unless `projectRoot` is passed.
 - **Personal tier:** `%AppData%\RKTools\RevitMCP\Memory\`. A personal note is bound to the open
   project unless `anyProject=true`.
-- **Mirror:** `%LOCALAPPDATA%\RKTools\RevitMCP\MemoryMirror\<project>\` holds a copy of every
-  project entry read. While the project root is unreachable, reads use the mirror and writes are
+- **Mirror:** `%LOCALAPPDATA%\RKTools\RevitMCP\MemoryMirror\<project>-<hash of the folder>\` holds a
+  copy of every project entry and usage tally read (the hash keeps two projects with the same
+  project number apart). Usage counted while offline waits in `.pending-counters\` and is merged
+  into the share's tallies on return. While the project root is unreachable, reads use the mirror and writes are
   parked in its `.pending\` folder; the next read with the share back copies them over (an entry
   the share already holds with a newer `updated` is left alone).
 
@@ -410,8 +412,11 @@ Every entry a recall or a route hint shows is watched for the next 15 calls or 3
 user and client. A call that passes a value the entry names (an observed default: its tool and
 argument) counts `used`, and `worked` when it succeeds; a rejected call counts `contradicted`, and so
 does an observed default called with a different value. Counts go to the user's tally file, with
-`lastUsed`. For prose notes the agent can also pass `basedOn=[ids]` to `revit_memory_remember`:
-each cited entry counts as used and worked — the first answer to the open decision on `used`.
+`lastUsed`. A call still waiting for approval is not an outcome; the approved execution or the
+rejection that follows is. Prose entries match on whole words. For prose notes the agent can also
+pass `basedOn=[ids]` to `revit_memory_remember`: each cited entry counts as used, and as worked only
+when the note is a project note (approved) — so unapproved personal notes cannot confirm shared
+entries.
 
 ### Workflow observer
 
@@ -488,9 +493,12 @@ Benchmark (schema only): `core` ≈ 6.0k → 6.1k tokens
 
 A button calls `revit.memory(action, {ids, proposal})` in the page helper, which posts to the
 listener's new `/api/memory` route. The listener hands it to the dispatcher as `revit_memory_review`
-— approval in Revit, the activity log, like any shared write — and, once approved, the tool
-republishes the page, which then reloads. `/api/memory` is accepted only from `memory-…` pages, and
-`revit_publish_page` refuses those ids, so a page an agent wrote cannot change memory.
+and, once approved, the tool republishes the page, which then reloads. `/api/memory` is accepted only
+for `memory-…` pages, whose ids no other page can get. All pages share one origin, so a script in an
+agent-written page could still send the same request; `revit_memory_review` therefore always needs
+manual approval in Revit — even with Direct Edit on — and the approval line says it came from a page.
+An entry a person retires gets the `retired-by-review` flag, and the observer never promotes that
+value again.
 
 | Action | Effect |
 |---|---|

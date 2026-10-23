@@ -883,13 +883,15 @@ public static class ApprovalSummaryBuilder
         var action = ToolArguments.GetString(request.Arguments, "action");
         var ids = ToolArguments.GetStringArray(request.Arguments, "ids");
         var proposal = ToolArguments.GetString(request.Arguments, "proposal");
-        return action switch
+        var what = action switch
         {
-            "accept" => $"Memory page: accept consolidation proposal {proposal} (changes the project's shared memory).",
-            "reject" => $"Memory page: reject consolidation proposal {proposal}.",
-            "promote" => $"Memory page: propose {ids.Length} entr{(ids.Length == 1 ? "y" : "ies")} for company memory.",
-            _ => $"Memory page: {action} {ids.Length} entr{(ids.Length == 1 ? "y" : "ies")} of the project's shared memory."
+            "accept" => $"accept consolidation proposal {proposal} (changes the project's shared memory)",
+            "reject" => $"reject consolidation proposal {proposal}",
+            "promote" => $"propose {ids.Length} entr{(ids.Length == 1 ? "y" : "ies")} for company memory",
+            _ => $"{action} {ids.Length} entr{(ids.Length == 1 ? "y" : "ies")} of the project's shared memory"
         };
+        var first = ids.Length > 0 ? " (" + string.Join(", ", ids.Take(3)) + (ids.Length > 3 ? ", …" : "") + ")" : string.Empty;
+        return $"Requested from a model page: {what}{first}. Approve only if you clicked this on the memory review page.";
     }
 
     private static string ClipTo(string text, int max) => text.Length <= max ? text : text.Substring(0, max) + "…";

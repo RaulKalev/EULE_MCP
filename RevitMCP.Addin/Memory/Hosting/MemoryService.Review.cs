@@ -58,6 +58,9 @@ public sealed class MemoryReviewData
 public sealed partial class MemoryService
 {
     public const string FlagPromoted = "promoted";
+
+    /// <summary>Retired by a person (review page, forget, accepted proposal): the observer never brings it back.</summary>
+    public const string FlagRetiredByReview = "retired-by-review";
     public const string PromotionExtension = ".promotion.proposal.json";
     public const int MaxReviewIds = 100;
     public static readonly TimeSpan UnusedAfter = TimeSpan.FromDays(30);
@@ -137,6 +140,7 @@ public sealed partial class MemoryService
             stored.State = state;
             // A person settling the value ends the disagreement.
             if (state == MemoryStates.Confirmed) stored.Flags.Remove(MemoryPolicy.FlagFlipFlop);
+            if (state == MemoryStates.Retired && !stored.Flags.Contains(FlagRetiredByReview)) stored.Flags.Add(FlagRetiredByReview);
             stored.Updated = context.Now;
             f.Cache.Store.Write(stored);
             f.Cache.Invalidate();
@@ -309,6 +313,7 @@ public sealed partial class MemoryService
             if (current == null || current.IsRetired) continue;
             var old = OnDisk(after, current);
             old.State = MemoryStates.Retired;
+            if (!old.Flags.Contains(FlagRetiredByReview)) old.Flags.Add(FlagRetiredByReview);
             old.Updated = context.Now;
             cache.Store.Write(old);
         }

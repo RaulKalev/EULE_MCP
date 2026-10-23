@@ -35,6 +35,8 @@ public sealed class MemoryStore
 {
     public const string CountersFolderName = ".counters";
     public const string PendingFolderName = ".pending";
+    public const string PendingCountersFolderName = ".pending-counters";
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> TallyLocks = new(StringComparer.OrdinalIgnoreCase);
     private const string TempExtension = ".tmp";
 
     private readonly string? _probe;
@@ -156,6 +158,7 @@ public sealed class MemoryStore
         var copied = 0;
         try
         {
+            ReplayPendingTallies(errors);
             if (!Directory.Exists(pending)) return 0;
             foreach (var path in Directory.EnumerateFiles(pending, "*" + MemoryEntryParser.FileExtension))
             {
@@ -205,18 +208,25 @@ public sealed class MemoryStore
     public Dictionary<string, MemoryCounters> ReadTallies()
     {
         var totals = new Dictionary<string, MemoryCounters>(StringComparer.OrdinalIgnoreCase);
+        var offline = MirrorFolder != null && !IsReachable();
         var folder = System.IO.Path.Combine(ReadFolder(), CountersFolderName);
         try
         {
-            if (!Directory.Exists(folder)) return totals;
-            foreach (var path in Directory.EnumerateFiles(folder, "*.json"))
-            {
-                var tallies = ReadTallyFile(path);
-                foreach (var pair in tallies)
+            if (Directory.Exists(folder))
+                foreach (var path in Directory.EnumerateFiles(folder, "*.json"))
                 {
-                    if (!totals.TryGetValue(pair.Key, out var sum)) totals[pair.Key] = sum = new MemoryCounters();
-                    sum.Add(pair.Value);
+                    var text = SafeRead(path);
+                    if (text == null) continue;
+                    AddInto(totals, ParseTallies(text));
+                    // Keep everyone's counts in the mirror, so the lifecycle stays right while the share is away.
+                    if (!offline && MirrorFolder != null) MirrorTally(System.IO.Path.GetFileName(path), text);
                 }
+            if (offline)
+            {
+                var pending = System.IO.Path.Combine(MirrorFolder!, PendingCountersFolderName);
+                if (Directory.Exists(pending))
+                    foreach (var path in Directory.EnumerateFiles(pending, "*.json"))
+                        AddInto(totals, ParseTallies(SafeRead(path) ?? string.Empty));
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -232,48 +242,107 @@ public sealed class MemoryStore
 
     /// <summary>
     /// Adds counter deltas (shown, used, worked, contradicted, last used) to the user's own tally file — the only
-    /// file this user writes for usage, so nobody else's counts can be lost. Never throws; false when it could not write.
+    /// file this user writes for usage, so nobody else's counts can be lost. While the share is away the deltas wait
+    /// in the mirror's <c>.pending-counters\</c> and are merged in by <see cref="ReplayPending"/>. Never throws;
+    /// false when it could not write.
     /// </summary>
     public bool AddTallies(string user, IReadOnlyDictionary<string, MemoryCounters> deltas)
     {
         if (deltas.Count == 0) return true;
-        try
+        var name = MemoryPolicy.Slug(user);
+        if (name.Length == 0) name = "_unknown";
+        var folder = MirrorFolder != null && !IsReachable()
+            ? System.IO.Path.Combine(MirrorFolder, PendingCountersFolderName)
+            : System.IO.Path.Combine(Folder, CountersFolderName);
+        return MergeTallies(folder, name + ".json", deltas);
+    }
+
+    /// <summary>Read-modify-write of one tally file, serialised per file within this process (recall and the observer race).</summary>
+    private static bool MergeTallies(string folder, string fileName, IReadOnlyDictionary<string, MemoryCounters> deltas)
+    {
+        var path = System.IO.Path.Combine(folder, fileName);
+        lock (TallyLocks.GetOrAdd(System.IO.Path.GetFullPath(path), _ => new object()))
         {
-            var folder = System.IO.Path.Combine(ReadFolder(), CountersFolderName);
-            var name = MemoryPolicy.Slug(user);
-            if (name.Length == 0) name = "_unknown";
-            var path = System.IO.Path.Combine(folder, name + ".json");
-            var tallies = File.Exists(path) ? ReadTallyFile(path) : new Dictionary<string, MemoryCounters>(StringComparer.OrdinalIgnoreCase);
-            foreach (var delta in deltas)
+            try
             {
-                if (!tallies.TryGetValue(delta.Key, out var c)) tallies[delta.Key] = c = new MemoryCounters();
-                c.Add(delta.Value);
-            }
-            var json = JsonConvert.SerializeObject(tallies.ToDictionary(
-                p => p.Key,
-                p => new TallyDto
+                var tallies = File.Exists(path) ? ParseTallies(SafeRead(path) ?? string.Empty) : new Dictionary<string, MemoryCounters>(StringComparer.OrdinalIgnoreCase);
+                foreach (var delta in deltas)
                 {
-                    Shown = p.Value.Shown,
-                    Used = p.Value.Used,
-                    Worked = p.Value.Worked,
-                    Contradicted = p.Value.Contradicted,
-                    LastUsed = p.Value.LastUsed
-                }));
-            AtomicWrite(folder, name + ".json", json);
-            return true;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-        {
-            return false;
+                    if (!tallies.TryGetValue(delta.Key, out var c)) tallies[delta.Key] = c = new MemoryCounters();
+                    c.Add(delta.Value);
+                }
+                var json = JsonConvert.SerializeObject(tallies.ToDictionary(
+                    p => p.Key,
+                    p => new TallyDto
+                    {
+                        Shown = p.Value.Shown,
+                        Used = p.Value.Used,
+                        Worked = p.Value.Worked,
+                        Contradicted = p.Value.Contradicted,
+                        LastUsed = p.Value.LastUsed
+                    }));
+                AtomicWrite(folder, fileName, json);
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+            {
+                return false;
+            }
         }
     }
 
-    private static Dictionary<string, MemoryCounters> ReadTallyFile(string path)
+    /// <summary>Merges tallies counted while the share was away into the users' tally files on the share.</summary>
+    private void ReplayPendingTallies(List<string>? errors)
+    {
+        var pending = System.IO.Path.Combine(MirrorFolder!, PendingCountersFolderName);
+        if (!Directory.Exists(pending)) return;
+        foreach (var path in Directory.EnumerateFiles(pending, "*.json"))
+        {
+            var text = SafeRead(path);
+            if (text == null) continue;
+            if (MergeTallies(System.IO.Path.Combine(Folder, CountersFolderName), System.IO.Path.GetFileName(path), ParseTallies(text)))
+            {
+                try { File.Delete(path); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { errors?.Add("Replay of usage counts: " + ex.Message); }
+            }
+            else errors?.Add($"Replay of usage counts in {System.IO.Path.GetFileName(path)} failed.");
+        }
+    }
+
+    private void MirrorTally(string name, string text)
+    {
+        try
+        {
+            var target = System.IO.Path.Combine(MirrorFolder!, CountersFolderName, name);
+            if (File.Exists(target) && SafeRead(target) == text) return;
+            AtomicWrite(System.IO.Path.Combine(MirrorFolder!, CountersFolderName), name, text);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    private static void AddInto(Dictionary<string, MemoryCounters> totals, Dictionary<string, MemoryCounters> tallies)
+    {
+        foreach (var pair in tallies)
+        {
+            if (!totals.TryGetValue(pair.Key, out var sum)) totals[pair.Key] = sum = new MemoryCounters();
+            sum.Add(pair.Value);
+        }
+    }
+
+    private static string? SafeRead(string path)
+    {
+        try { return File.ReadAllText(path, Encoding.UTF8); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
+    }
+
+    private static Dictionary<string, MemoryCounters> ParseTallies(string text)
     {
         var result = new Dictionary<string, MemoryCounters>(StringComparer.OrdinalIgnoreCase);
         try
         {
-            var parsed = JsonConvert.DeserializeObject<Dictionary<string, TallyDto>>(File.ReadAllText(path, Encoding.UTF8));
+            var parsed = JsonConvert.DeserializeObject<Dictionary<string, TallyDto>>(text);
             if (parsed == null) return result;
             foreach (var pair in parsed)
             {
@@ -288,7 +357,7 @@ public sealed class MemoryStore
                 };
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        catch (JsonException)
         {
         }
         return result;
@@ -320,7 +389,11 @@ public sealed class MemoryStore
         }
     }
 
-    /// <summary>Writes to a temp file in the target folder, then renames it over the target.</summary>
+    /// <summary>
+    /// Writes to a temp file in the target folder, then renames it over the target. A share that refuses the rename
+    /// for a moment (another machine reading the file) gets a few retries; a share without Replace support gets a copy.
+    /// The temp file never stays behind.
+    /// </summary>
     public static string AtomicWrite(string folder, string name, string text)
     {
         Directory.CreateDirectory(folder);
@@ -329,15 +402,29 @@ public sealed class MemoryStore
         File.WriteAllText(temp, text, new UTF8Encoding(false));
         try
         {
-            if (File.Exists(target)) File.Replace(temp, target, null);
-            else File.Move(temp, target);
+            for (var attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    if (File.Exists(target)) File.Replace(temp, target, null);
+                    else File.Move(temp, target);
+                    return target;
+                }
+                catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && attempt < 3 && File.Exists(temp))
+                {
+                    Thread.Sleep(50 * (attempt + 1));
+                }
+                catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && File.Exists(temp))
+                {
+                    File.Copy(temp, target, true);
+                    return target;
+                }
+            }
         }
-        catch (IOException) when (File.Exists(temp))
+        finally
         {
-            // Some shares do not support Replace; a copy over the target is still a single short write.
-            File.Copy(temp, target, true);
-            File.Delete(temp);
+            try { if (File.Exists(temp)) File.Delete(temp); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
-        return target;
     }
 }

@@ -131,8 +131,10 @@ public class MemoryForgetTool : IRevitMcpTool
 
 /// <summary>
 /// The memory review page's actions: confirm, retire or promote entries, accept or reject a consolidation proposal.
-/// Not advertised by the bridge: only the page listener sends it, through the dispatcher, so it needs approval in Revit
-/// like any shared write. Republishes the page afterwards so a reload shows the result.
+/// Not advertised by the bridge: only the page listener sends it, through the dispatcher. It always needs manual
+/// approval, even with Direct Edit on: every page served by the listener shares one origin, so a script in a page an
+/// agent wrote could read the review page and send the same request; the person at the Revit screen is the guard.
+/// Republishes the page afterwards so a reload shows the result.
 /// Tool name: revit_memory_review
 /// </summary>
 public class MemoryReviewTool : IRevitMcpTool
@@ -140,8 +142,8 @@ public class MemoryReviewTool : IRevitMcpTool
     public const string ToolName = "revit_memory_review";
 
     public string Name => ToolName;
-    public string Description => "Applies a review action from the memory page. Sent by the page listener only. Requires approval.";
-    public ToolPermission Permission => ToolPermission.RequiresApproval;
+    public string Description => "Applies a review action from the memory page. Sent by the page listener only. Always requires manual approval.";
+    public ToolPermission Permission => ToolPermission.DestructiveRequiresManualApproval;
     public ToolCategory Category => ToolCategory.Configuration;
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)

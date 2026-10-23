@@ -264,3 +264,115 @@ public sealed class MemoryConsolidationTests : IDisposable
         Assert.Equal(new[] { "P:\\1626", "P:\\1700" }, MemorySettings.From(user, null).ConsolidationRoots);
     }
 }
+
+public sealed class MemoryHardeningTests : IDisposable
+{
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "memory-hardening-" + Guid.NewGuid().ToString("N"));
+    private readonly MemorySettings _settings = new() { ObserverMinSupport = 2, ObserverMinSessions = 1 };
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_root, true); } catch { }
+    }
+
+    private MemoryService New(string personal) =>
+        new(Path.Combine(_root, personal), Path.Combine(_root, "mirror-" + personal), () => _settings, watch: false);
+
+    private MemoryContext Ctx(MemoryService s, string root, string user = "u1") => new()
+    {
+        Project = "1626", ProjectRoot = root, ProjectFolder = s.ProjectFolderFor(root), User = user, Client = "Claude Code", Now = DateTimeOffset.UtcNow
+    };
+
+    private static ObservedCall Call(string modelPath, string user, string? status = null, bool success = true, string value = "712345") => new()
+    {
+        Tool = "revit_place_tags", Client = "Claude Code", User = user, Project = "1626", ModelPath = modelPath, IsWrite = true,
+        Success = success, Status = status, Time = DateTimeOffset.UtcNow,
+        Arguments = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["tagTypeId"] = value }
+    };
+
+    [Fact]
+    public void Feedback_WaitsForTheApprovalOutcome()
+    {
+        var root = Path.Combine(_root, "P"); Directory.CreateDirectory(root);
+        using var s = New("p1");
+        s.Remember(Ctx(s, root), new MemoryRememberRequest { Key = "tags/x", Value = "Detector tags use type 712345 here.", Reason = "Client legend." });
+        s.Recall(Ctx(s, root), new MemoryRecallOptions { Query = "detector tags" });
+
+        Assert.Equal(0, s.Feedback(Call("m", "u1", status: "approval_required", success: false)));
+        Assert.Equal(1, s.Feedback(Call("m", "u1", status: WorkflowObserver.RejectedStatus, success: false)));
+        var e = s.List(Ctx(s, root), "project", null, null, 0, 5).Hits.Single().Entry;
+        Assert.Equal(1, e.Counters.Contradicted);
+    }
+
+    [Theory]
+    [InlineData("sockets at 1000 mm", "100", false)]
+    [InlineData("sockets at 100 mm", "100", true)]
+    [InlineData("automatic numbering", "auto", false)]
+    [InlineData("use ats_tag_andur_nr for detectors", "ats_tag_andur_nr", true)]
+    public void Feedback_MatchesWholeValues(string text, string value, bool expected) =>
+        Assert.Equal(expected, MemoryService.NamesValue(text, value));
+
+    [Fact]
+    public void BasedOn_FromAPersonalNote_DoesNotCountAsWorked()
+    {
+        var root = Path.Combine(_root, "P"); Directory.CreateDirectory(root);
+        using var s = New("p1");
+        var e = s.Remember(Ctx(s, root), new MemoryRememberRequest { Key = "tags/x", Value = "Detector tags use tag A always.", Reason = "Client legend." }).Entry!;
+        s.Remember(Ctx(s, root), new MemoryRememberRequest { Key = "mine", Value = "I place detector tags to the right.", Reason = "Habit.", Scope = MemoryScopes.Personal, BasedOn = { e.Id } });
+        var after = s.List(Ctx(s, root), "project", null, null, 0, 5).Hits.Single().Entry;
+        Assert.Equal(1, after.Counters.Used);
+        Assert.Equal(0, after.Counters.Worked);
+    }
+
+    [Fact]
+    public void Observer_NeverBringsBackAValueAPersonRetired()
+    {
+        var root = Path.Combine(_root, "P"); Directory.CreateDirectory(Path.Combine(root, ".rktools"));
+        var model = Path.Combine(root, "m.rvt");
+        foreach (var u in new[] { "u1", "u2" })
+            using (var s = New("p-" + u)) { s.ProcessObserved(Call(model, u)); s.ProcessObserved(Call(model, u)); }
+
+        using var review = New("p-u1");
+        var promoted = review.List(Ctx(review, root), "project", null, null, 0, 5).Hits.Single().Entry;
+        Assert.True(review.Forget(Ctx(review, root), new[] { promoted.Id }).Success);
+
+        using (var s = New("p-u3")) { s.ProcessObserved(Call(model, "u3")); s.ProcessObserved(Call(model, "u3")); }
+
+        Assert.Empty(review.List(Ctx(review, root), "project", null, null, 0, 5).Hits);
+        Assert.Equal(MemoryStates.Retired, review.List(Ctx(review, root), "project", "all", null, 0, 5).Hits.Single().Entry.State);
+    }
+
+    [Fact]
+    public void Mirror_IsPerProjectFolder_AndOfflineTalliesReachTheShare()
+    {
+        Assert.NotEqual(MemoryService.MirrorSegment("0001", Path.Combine(_root, "A")), MemoryService.MirrorSegment("0001", Path.Combine(_root, "B")));
+
+        var root = Path.Combine(_root, "share", "P");
+        var folder = Path.Combine(root, ".rktools", "memory");
+        Directory.CreateDirectory(root);
+        var store = new MemoryStore(folder, Path.Combine(_root, "mirror-x"), root);
+        store.AddTallies("u2", new Dictionary<string, MemoryCounters> { ["a"] = new() { Worked = 2 } });
+        store.ReadTallies(); // mirrors everyone's tallies while online
+
+        // The share goes away (its files stay on the server) and comes back.
+        Directory.Move(Path.Combine(_root, "share"), Path.Combine(_root, "share-away"));
+        Assert.True(store.AddTallies("u1", new Dictionary<string, MemoryCounters> { ["a"] = new() { Used = 1 } }));
+        var offline = store.ReadTallies()["a"];
+        Assert.Equal(2, offline.Worked);
+        Assert.Equal(1, offline.Used);
+
+        Directory.Move(Path.Combine(_root, "share-away"), Path.Combine(_root, "share"));
+        store.ReplayPending();
+        var online = store.ReadTallies()["a"];
+        Assert.Equal(1, online.Used);
+        Assert.Equal(2, online.Worked);
+    }
+
+    [Fact]
+    public void Ids_AreSafeFileNames_AndGeneratedPageIdsAvoidTheMemoryPrefix()
+    {
+        Assert.Null(MemoryEntryParser.Parse("---\nid: ..\\evil\nkey: k\n---\nvalue: v w\n", out var error));
+        Assert.Contains("letters, digits and hyphens", error);
+        Assert.StartsWith("page-memory-", RevitMCP.Addin.ModelPages.ModelPageStore.NewId("Memory audit"));
+    }
+}

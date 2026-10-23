@@ -62,6 +62,8 @@ public sealed class ModelPageStore
         }
         var stem = slug.ToString().Trim('-');
         if (stem.Length == 0) stem = "page";
+        // "memory-" ids belong to the memory review page, the one page allowed to change shared memory.
+        if (stem == "memory" || stem.StartsWith("memory-", StringComparison.Ordinal)) stem = "page-" + stem;
 
         var bytes = new byte[3];
         using (var rng = RandomNumberGenerator.Create()) rng.GetBytes(bytes);

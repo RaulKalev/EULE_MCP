@@ -215,7 +215,7 @@ public sealed partial class MemoryService : IDisposable
             Authors = new List<string> { author }
         };
 
-        var credited = Credit(context, request.BasedOn);
+        var credited = Credit(context, request.BasedOn, scope == MemoryScopes.Project);
         if (scope == MemoryScopes.Company)
         {
             var proposal = Propose(context, note);
@@ -275,6 +275,8 @@ public sealed partial class MemoryService : IDisposable
             }
 
             var created = NewEntry(note, context);
+            // A fixed id must never overwrite a stored entry (history, or one a person retired).
+            if (note.Id != null && snapshot.FileEntries.ContainsKey(note.Id)) created.Id = Guid.NewGuid().ToString();
             created.Supersedes = decision.Existing?.Id;
             if (decision.FlipFlop) created.Flags.Add(MemoryPolicy.FlagFlipFlop);
 
@@ -283,20 +285,23 @@ public sealed partial class MemoryService : IDisposable
             result.Path = written.Path;
             result.Pending = written.Pending;
 
+            // The new entry is written; a retire that fails now (a share hiccup) leaves the old entry active but older,
+            // and recall and the next write of the key prefer the newest, so the note is not lost.
+            string? retireProblem = null;
             if (decision.Existing != null)
             {
                 var old = OnDisk(snapshot, decision.Existing);
                 old.State = MemoryStates.Retired;
                 old.Updated = context.Now;
-                cache.Store.Write(old);
-                result.Superseded = old;
+                retireProblem = TryWrite(cache, old);
+                if (retireProblem == null) result.Superseded = old;
             }
             if (capVictim != null)
             {
                 var victim = OnDisk(snapshot, capVictim);
                 victim.State = MemoryStates.Retired;
                 victim.Updated = context.Now;
-                cache.Store.Write(victim);
+                retireProblem ??= TryWrite(cache, victim);
                 result.RetiredForCap = victim;
             }
             cache.Invalidate();
@@ -306,7 +311,21 @@ public sealed partial class MemoryService : IDisposable
                   (decision.FlipFlop ? " The value went back and forth between people, so it is flagged as a disagreement for review." : string.Empty)
                 : $"Remembered '{note.Key}' in {note.Scope} memory.";
             if (result.Pending) result.Message += " The project folder is unreachable: the entry waits in the local mirror and is copied when it returns.";
+            if (retireProblem != null) result.Message += " The earlier entry could not be retired yet (" + retireProblem + "); the newer one wins.";
             return result;
+        }
+    }
+
+    private static string? TryWrite(MemoryCache cache, MemoryEntry entry)
+    {
+        try
+        {
+            cache.Store.Write(entry);
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return ex.Message;
         }
     }
 
@@ -518,11 +537,23 @@ public sealed partial class MemoryService : IDisposable
             return null;
         }
         var folder = context.ProjectFolder!;
-        var mirrorSegment = MemoryPolicy.Slug(context.Project ?? string.Empty);
-        if (mirrorSegment.Length == 0) mirrorSegment = MemoryPolicy.Slug(Path.GetFileName(context.ProjectRoot ?? folder));
-        if (mirrorSegment.Length == 0) mirrorSegment = "_unfiled";
-        var mirror = Path.Combine(MirrorRoot, mirrorSegment);
+        var mirror = Path.Combine(MirrorRoot, MirrorSegment(context.Project, folder));
         return _caches.GetOrAdd(folder, f => new MemoryCache(new MemoryStore(f, mirror, context.ProjectRoot), _watch));
+    }
+
+    /// <summary>
+    /// The mirror folder of a project tier: readable project key plus a hash of the full folder path, so two projects
+    /// sharing a project number (Revit's default "Project Number") never share a mirror or replay into each other.
+    /// </summary>
+    internal static string MirrorSegment(string? project, string folder)
+    {
+        var slug = MemoryPolicy.Slug(project ?? string.Empty);
+        if (slug.Length == 0) slug = "_unfiled";
+        if (slug.Length > 40) slug = slug.Substring(0, 40);
+        string full;
+        try { full = Path.GetFullPath(folder); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or IOException) { full = folder; }
+        return slug + "-" + DeterministicId(full.ToLowerInvariant()).Substring(0, 8);
     }
 
     /// <summary>The entry exactly as its file says: no tallies, stored state — what a rewrite starts from.</summary>

@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace RevitMCP.Addin.Memory.Hosting;
 
 /// <summary>
@@ -69,6 +71,8 @@ public sealed partial class MemoryService
     public int Feedback(ObservedCall call)
     {
         if (WorkflowObserver.IsIgnored(call.Tool) || call.Tool.StartsWith("revit_graph_", StringComparison.OrdinalIgnoreCase)) return 0;
+        // A write waiting for approval is not an outcome yet: the approved execution or the rejection follows.
+        if (call.Status == ApprovalPendingStatus) return 0;
 
         var deltas = new Dictionary<MemoryCache, Dictionary<string, MemoryCounters>>();
         lock (_feedbackGate)
@@ -112,9 +116,16 @@ public sealed partial class MemoryService
                 : new MemoryCounters { Contradicted = 1 };
         }
 
-        // A prose entry is used when the call passes a value the entry names (a type, a category, an offset).
-        return foldedValues.Any(v => hint.FoldedValue.Contains(v)) ? Outcome(call) : null;
+        // A prose entry is used when the call passes a value the entry names (a type, a category, an offset), as a whole
+        // word: "100" must not match "1000 mm", nor "auto" "automatic".
+        return foldedValues.Any(v => NamesValue(hint.FoldedValue, v)) ? Outcome(call) : null;
     }
+
+    public const string ApprovalPendingStatus = "approval_required";
+
+    /// <summary>True when <paramref name="value"/> occurs in <paramref name="text"/> with no letter or digit on either side.</summary>
+    public static bool NamesValue(string text, string value) =>
+        value.Length > 0 && Regex.IsMatch(text, "(?<![\\p{L}\\p{Nd}])" + Regex.Escape(value) + "(?![\\p{L}\\p{Nd}])");
 
     private static MemoryCounters Outcome(ObservedCall call) => new()
     {
@@ -124,8 +135,11 @@ public sealed partial class MemoryService
         LastUsed = call.Time
     };
 
-    /// <summary>remember basedOn=[ids]: the note relied on those entries, so each counts as used and worked.</summary>
-    private int Credit(MemoryContext context, List<string>? ids)
+    /// <summary>
+    /// remember basedOn=[ids]: the note relied on those entries, so each counts as used. It counts as worked only when
+    /// the note itself passed approval (a project note): an unapproved personal note must not confirm shared entries.
+    /// </summary>
+    private int Credit(MemoryContext context, List<string>? ids, bool approved)
     {
         if (ids == null || ids.Count == 0) return 0;
         var wanted = new HashSet<string>(ids.Where(i => !string.IsNullOrWhiteSpace(i)).Select(i => i.Trim()), StringComparer.OrdinalIgnoreCase);
@@ -138,7 +152,7 @@ public sealed partial class MemoryService
             if (found.Count == 0) continue;
             cache.Store.AddTallies(UserOf(context), found.ToDictionary(
                 id => id,
-                _ => new MemoryCounters { Used = 1, Worked = 1, LastUsed = context.Now },
+                _ => new MemoryCounters { Used = 1, Worked = approved ? 1 : 0, LastUsed = context.Now },
                 StringComparer.OrdinalIgnoreCase));
             cache.Invalidate();
             credited += found.Count;

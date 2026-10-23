@@ -190,9 +190,12 @@ web server that can act on Revit must not be reachable by other web pages:
 - the actions are fixed. Status, select and values never reach the MCP dispatcher and cannot change
   the model. `/api/set` can only become `revit_page_set_values`, which writes instance parameter
   values and nothing else; `/api/memory` can only become `revit_memory_review` (confirm, retire, promote,
-  accept or reject a proposal — shared memory, never the model) and is accepted only from the memory
-  review page: its `memory-…` ids are reserved, `revit_publish_page` refuses them; `/api/approval`
-  answers only for requests of those two tools;
+  accept or reject a proposal — shared memory, never the model) and is accepted only for the memory
+  review page: its `memory-…` ids are reserved (`revit_publish_page` refuses them and generated ids
+  never start with it). Pages share one origin, so a script in another page could still send such a
+  request; that is why `revit_memory_review` always needs manual approval, even with Direct Edit on,
+  and its approval line says it came from a page. `/api/approval` answers only for requests of those
+  two tools;
 - page ids are a lowercase slug, checked before any file access.
 
 What this does not cover: a page is HTML written by an agent and runs with the page token. Its

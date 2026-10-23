@@ -96,10 +96,15 @@ public static class MemoryEntryParser
         e.Reason = reason.ToString();
 
         if (string.IsNullOrWhiteSpace(e.Id)) error = "The entry has no id.";
+        else if (!IsValidId(e.Id)) error = "The entry id may hold letters, digits and hyphens only (it is the file name).";
         else if (string.IsNullOrWhiteSpace(e.Key)) error = "The entry has no key.";
         else if (string.IsNullOrWhiteSpace(e.Value)) error = "The entry has no value.";
         return error == null ? e : null;
     }
+
+    /// <summary>An id is the entry's file name: letters, digits and hyphens, at most 64 characters.</summary>
+    public static bool IsValidId(string? id) =>
+        !string.IsNullOrEmpty(id) && id!.Length <= 64 && id.All(c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-');
 
     private static void Apply(MemoryEntry e, string name, string raw)
     {
