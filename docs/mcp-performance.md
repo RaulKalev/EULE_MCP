@@ -79,7 +79,7 @@ args = ["--client", "Codex", "--tool-profile", "core", "--tool-groups", "electri
 | `cad` | DWG/CAD imports, overrides and placement from CAD |
 | `memory` | Shared memory review: `revit_memory_list`, `revit_memory_page`, `revit_memory_forget`, `revit_memory_consolidate` (see [shared-memory.md](shared-memory.md)) |
 | `skills` | Skill builder and skill runs |
-| `office` | Configuration, files, Excel, standards lookup, delivery checks |
+| `office` | Configuration, files, Excel, standards lookup, delivery checks, `revit_usage_report` (see [usage-reporting.md](usage-reporting.md)) |
 
 `core` always includes `core`, `discovery` and `graph`; `all` adds every group (same tools as `full`).
 The same values can be set in `appsettings.json` as `RevitMCP:ToolGroups`.

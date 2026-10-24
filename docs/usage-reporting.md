@@ -1,9 +1,11 @@
-# Usage reporting (design)
+# Usage reporting
 
-> **Status: design proposal, nothing implemented yet.** This document plans company-wide usage
-> reporting on top of the activity log the connector already writes. It is a companion to
-> [shared-memory.md](shared-memory.md); the two share the same collection path and the same
-> no-credits principle.
+> **Status: all three phases are implemented** — see [As built](#as-built) for where the
+> implementation differs from the design below. Company-wide usage reporting on top of the activity
+> log the connector already writes. It is a companion to [shared-memory.md](shared-memory.md); the
+> two share the same collection path and the same no-credits principle. The shared copy stays off
+> until an administrator sets `usage.sharedFolder` — after telling staff (see *Privacy and consent*
+> and the note in [INSTALL.md](../INSTALL.md)).
 
 The goal is to answer, per user, project and month: who uses the connector, how much, which tools
 the most, with what outcome, what it costs in credits, and — clearly labelled as an estimate — how
@@ -167,7 +169,83 @@ Configuration keys (`usage.*`): `sharedFolder`, `reportFolder`, `timeSavedBaseli
 
 ## Phases
 
-1. `affectedCount` and `projectId` in the log; `usage.sharedFolder` with the second append and the
+1. *(done)* `affectedCount` and `projectId` in the log; `usage.sharedFolder` with the second append and the
    catch-up. Consent note in the deployment guide.
-2. `UsageAggregator`, `UsageReportWriter`, `revit_usage_report` with HTML and Excel output.
-3. Cost export join and the time-saved estimate with the baseline table.
+2. *(done)* `UsageAggregator`, `UsageReportWriter`, `revit_usage_report` with HTML and Excel output.
+3. *(done)* Cost export join and the time-saved estimate with the baseline table.
+
+---
+
+## As built
+
+### What the log holds now
+
+Every line gains `affectedCount` and `projectId`, and two existing fields now carry real values:
+
+- `permission` is the tool's declared permission. Before, it was always `ReadOnly`, because the
+  request never carried it; the logger now asks the dispatcher.
+- `approvalStatus` is `NotRequired`, `Pending` (the placeholder answer of an approval-gated call),
+  `Approved` (the approved execution), `Rejected` or `Expired`. `status` stays `Success` / `Failed`.
+  The design assumed `status` carried the approval codes; it never did.
+- Rejected and expired approvals ran no tool and were never logged; they are now, from the approval
+  queue's outcome event, as a line with the decision.
+- `projectId` is the project config's `projectId` (above the central model), else the Project
+  Information number (the key the model graph and shared memory use), else the model name's leading
+  token when it holds a digit (`1626_PP_EN` → `1626`), else the model name. Skills take the project
+  id as an argument rather than resolving it, so there was no existing resolver to reuse.
+- The new fields are set in a helper that a hot reload with an older `RevitMCP.Core` simply skips.
+
+### Shared copy
+
+With `usage.sharedFolder` set, each line is appended a second time to
+`<sharedFolder>\<user>\<yyyy-MM-dd>.<machine>.jsonl`. The design had one file per user and day; the
+machine suffix keeps one person on two workstations from appending to the same file over SMB, so
+every shared file still has exactly one writer. A failed append is remembered in
+`Logs\.usage-pending.json`; the catch-up — at the next start, or right after the next append that
+succeeds — copies the local day file over the shared one (the local file holds every line of the
+day). Settings are re-read at most once a minute.
+
+### Report
+
+`revit_usage_report month= sharedFolder= format=html|xlsx|both open=` (group `office`), and the
+**Usage Report** button on the connector window's Activity tab (previous month). Both run the same
+code off the Revit thread. Output:
+
+- `<reportFolder>\<yyyy-MM>.html` with the model-page stylesheet embedded, so the file reads well on
+  its own;
+- the same page served as a model page `usage-<yyyy-MM>`, bound to no model, so the tables get search,
+  filters, sorting and grouping (`data-revit-tools="rows"`);
+- `<reportFolder>\<yyyy-MM>.xlsx` with one sheet per grouping, plus baselines and notes.
+
+Counting rules:
+
+- **Calls** are executed calls plus approval decisions (rejected, expired). The `Pending`
+  placeholder counts only under *Approvals asked*, so an approved write is one call, not two.
+- **Success rate** is successes ÷ (successes + failures): a rejection is a person's decision, not a
+  failure.
+- **Elements affected** sums `affectedCount` of successful calls. It is the village's allow-listed
+  count, so for read tools it is the number of elements returned.
+- **Sessions** are runs of one user and client without a gap longer than 30 minutes.
+- Lines written before this change have no `approvalStatus` detail. Their approval placeholders,
+  rejections and expiries are recognised from the message.
+
+### Costs and time saved
+
+- **Costs:** `<costExportFolder>\<yyyy-MM>.csv`, by default `<sharedFolder>\costs`. It needs a header
+  row, comma- or semicolon-separated, with at least `user` and `cost`; `client`, `inputTokens` and
+  `outputTokens` are optional. Rows are joined to the activity by user. An export user written as an
+  e-mail address matches the part before the @.
+- **No export:** the user table shows response bytes ÷ 4 as a labelled proxy for output tokens.
+- **Time saved** follows the formula above, for successful calls of tools in
+  `usage.timeSavedBaselines`. The company table applies, and a user config may override single
+  tools. Every page and workbook shows the baseline table and says "estimate".
+
+### Code
+
+| Component | Location |
+|---|---|
+| `LogEntry.affectedCount`, `projectId` | `RevitMCP.Core/Logging/LogEntry.cs` |
+| Logger changes, shared append, catch-up on start | `RevitMCP.Addin/Logging/ActivityLogger.cs` |
+| `UsageSettings`, `UsageProjectId`, `UsageShare`, `UsageAggregator`, `TimeSavedEstimator`, `UsageCosts`, `UsageReportWriter`, `UsageReportRunner` | `RevitMCP.Addin/Usage/` (no Revit API; tested in `UsageReportingTests.cs`) |
+| `revit_usage_report`, the window's button | `RevitMCP.Addin/Tools/Usage/UsageReportTool.cs`, `UI/ViewModels/McpWindowViewModel.cs`; bridge `RevitMcpTools.Usage.cs` |
+| Rejected/expired lines | `App.OnStartup` (approval outcome event) |

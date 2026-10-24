@@ -103,6 +103,8 @@ public class App : IExternalApplication
             handler.RegisterTool(new RevitMCP.Addin.Tools.Memory.MemoryPageTool());
             // Not advertised by the bridge: sent by the model page listener from the memory review page.
             handler.RegisterTool(new RevitMCP.Addin.Tools.Memory.MemoryReviewTool());
+            // Usage reporting (Usage\, docs/usage-reporting.md): the monthly report over the shared usage files.
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Usage.UsageReportTool());
             handler.RegisterTool(new PreviewDrawCircuitArcsTool());
             handler.RegisterTool(new DrawCircuitArcsTool());
             handler.RegisterTool(new ListSheetsTool());
@@ -426,6 +428,15 @@ public class App : IExternalApplication
             approvalService.SetRedispatch(eventService.Redispatch);
             handler.SetApprovalService(approvalService);
             handler.SetActivityLogger(logger);
+            logger.PermissionOf = handler.GetToolPermission;
+            // Usage reporting: a rejected or expired approval is a decision the log should hold too (it ran no tool).
+            approvalService.OutcomeRecorded += outcome =>
+            {
+                var status = outcome.Result?.Status;
+                if (status is not ("approval_rejected" or "approval_expired")) return;
+                var decided = new RevitMCP.Core.Models.McpToolRequest { RequestId = outcome.RequestId, ToolName = outcome.ToolName, ClientName = outcome.ClientName };
+                _ = logger.WriteAsync(decided, outcome.Result!, handler.GetLastContext());
+            };
             handler.RegisterTool(new GetApprovalStatusTool(approvalService));
 
             // Each add-in load hosts its own unique pipe. The load id is essential for

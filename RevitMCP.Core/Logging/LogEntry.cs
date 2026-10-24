@@ -66,6 +66,17 @@ public class LogEntry
 
     [JsonProperty("querySafety", NullValueHandling = NullValueHandling.Ignore)]
     public QuerySafetyLogEntry? QuerySafety { get; set; }
+
+    /// <summary>
+    /// Elements the call changed or returned, from the allow-listed result counts the Project Village reads
+    /// (placedCount, updatedCount, …). Lets a usage report say "placed 1,240 tags" rather than "51 calls".
+    /// </summary>
+    [JsonProperty("affectedCount", NullValueHandling = NullValueHandling.Ignore)]
+    public long? AffectedCount { get; set; }
+
+    /// <summary>The project the call ran in (project config, Project Information number, else the model name).</summary>
+    [JsonProperty("projectId", NullValueHandling = NullValueHandling.Ignore)]
+    public string? ProjectId { get; set; }
 }
 
 /// <summary>

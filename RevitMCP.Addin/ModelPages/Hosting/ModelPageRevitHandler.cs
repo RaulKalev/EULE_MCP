@@ -224,6 +224,10 @@ public sealed class ModelPageRevitHandler : IExternalEventHandler, IModelPageBac
 
     private static object Status(UIApplication app, ModelPageInfo page)
     {
+        // A page bound to no model (the usage report) is ready whatever is open; it has no elements to act on.
+        if (string.IsNullOrEmpty(page.ModelId))
+            return new Dictionary<string, object?> { ["ok"] = true, ["status"] = "ready", ["activeDocument"] = app.ActiveUIDocument?.Document?.Title };
+
         var uidoc = PageDocument(app, page, out var refusal);
         if (uidoc == null) return refusal!;
         return new Dictionary<string, object?>

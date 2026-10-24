@@ -32,7 +32,7 @@ public static class BridgeToolGroups
         ["memory"] = "Shared memory: list, review page, forget, weekly consolidation (recall and remember are in core)",
         ["documents"] = "Open documents: activate, reload/remove DWG/IFC/RVT links, link visibility, save and sync with central",
         ["skills"] = "Skill builder and skill runs",
-        ["office"] = "Configuration, files, Excel, standards lookup, delivery checks"
+        ["office"] = "Configuration, files, Excel, standards lookup, delivery checks, monthly usage report"
     };
 
     private static readonly Dictionary<string, string> Exact = Build(
@@ -80,6 +80,7 @@ public static class BridgeToolGroups
         }),
         ("pages", new[] { "revit_publish_page", "revit_list_pages" }),
         ("memory", new[] { "revit_memory_list", "revit_memory_page", "revit_memory_forget", "revit_memory_consolidate" }),
+        ("office", new[] { "revit_usage_report" }),
         ("coordination", new[] { "revit_export_issues", "revit_merge_issue_reports" }));
 
     /// <summary>Ordered rules for everything not in the exact table: the first keyword found in the name wins.</summary>

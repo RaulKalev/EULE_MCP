@@ -61,6 +61,13 @@ When the user wants to review memory, publish `revit_memory_page`; `revit_memory
 The weekly consolidation pass is the `memory-consolidate` prompt / `revit_memory_consolidate` (no Revit needed): it writes
 proposals only, never entries.
 
+## Usage reporting
+
+`revit_usage_report` (`office` group, see [`docs/usage-reporting.md`](docs/usage-reporting.md)) builds the monthly report
+from the shared usage folder: deterministic, no credits. Present its figures as aggregates, and time saved always as an
+estimate from the company baseline table — never as measured time. The shared copy is off until `usage.sharedFolder` is
+set, which needs staff to be told first (INSTALL.md).
+
 ## Model pages
 
 When the user gets a list or report of model elements to go through, publish it with `revit_publish_page`

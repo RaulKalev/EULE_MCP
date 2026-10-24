@@ -23,6 +23,12 @@
     <Compile Include="..\RevitMCP.Addin\ModelPages\ModelPageHtml.cs" Link="ModelPages\ModelPageHtml.cs" />
     <Compile Include="..\RevitMCP.Addin\ModelPages\ModelPageServer.cs" Link="ModelPages\ModelPageServer.cs" />
     <Compile Include="..\RevitMCP.Addin\ModelPages\ModelPageEdits.cs" Link="ModelPages\ModelPageEdits.cs" />
+    <!-- Usage reporting: shared copy, aggregation, time saved, costs, report files (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\Usage\UsageSettings.cs" Link="Usage\UsageSettings.cs" />
+    <Compile Include="..\RevitMCP.Addin\Usage\UsageShare.cs" Link="Usage\UsageShare.cs" />
+    <Compile Include="..\RevitMCP.Addin\Usage\UsageAggregator.cs" Link="Usage\UsageAggregator.cs" />
+    <Compile Include="..\RevitMCP.Addin\Usage\UsageReportWriter.cs" Link="Usage\UsageReportWriter.cs" />
+    <Compile Include="..\RevitMCP.Addin\Usage\UsageReportRunner.cs" Link="Usage\UsageReportRunner.cs" />
     <!-- Shared memory: entry format, write-time rules, store, cache, recall and the tier service (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Memory\MemoryEntry.cs" Link="Memory\MemoryEntry.cs" />
     <Compile Include="..\RevitMCP.Addin\Memory\MemoryEntryParser.cs" Link="Memory\MemoryEntryParser.cs" />

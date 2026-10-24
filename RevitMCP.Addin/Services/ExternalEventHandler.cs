@@ -454,12 +454,16 @@ public class ExternalEventHandler : IExternalEventHandler
         }
     }
 
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void SetProjectKey(RevitDocumentContext context, UIApplication app) =>
+        context.ProjectKey = RevitMCP.Addin.Graph.RevitModelVersionReader.ReadProjectKey(app.ActiveUIDocument?.Document);
+
     private static RevitDocumentContext CaptureContext(UIApplication app)
     {
         try
         {
             var ctx = RevitContextService.Read(app);
-            return new RevitDocumentContext
+            var context = new RevitDocumentContext
             {
                 RevitVersion = ctx.RevitVersion,
                 ModelTitle = ctx.DocumentTitle,
@@ -467,9 +471,11 @@ public class ExternalEventHandler : IExternalEventHandler
                 LocalPath = ctx.LocalModelPath,
                 ActiveViewName = ctx.ActiveViewName,
                 IsWorkshared = ctx.IsWorkshared,
-                RevitUsername = ctx.RevitUsername,
-                ProjectKey = RevitMCP.Addin.Graph.RevitModelVersionReader.ReadProjectKey(app.ActiveUIDocument?.Document)
+                RevitUsername = ctx.RevitUsername
             };
+            // A hot reload can keep an older RevitMCP.Core without ProjectKey; the helper then fails to JIT and is skipped.
+            try { SetProjectKey(context, app); } catch (MissingMethodException) { }
+            return context;
         }
         catch
         {

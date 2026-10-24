@@ -106,7 +106,7 @@ Important repository references:
 - [`docs/shared-memory.md`](docs/shared-memory.md) — shared company memory: notes every colleague's agent recalls, kept in sync without rebuilds, learned from users' workflows, reviewed on a page and consolidated weekly
 - [`docs/standards-lookup.md`](docs/standards-lookup.md) — offline standards indexing and retrieval
 - [`docs/tool-consolidation.md`](docs/tool-consolidation.md) — discriminator-based tools and the old → new name mapping
-- [`docs/usage-reporting.md`](docs/usage-reporting.md) — design for per-user usage collection, monthly reports, credit cost join and time-saved estimates (proposal)
+- [`docs/usage-reporting.md`](docs/usage-reporting.md) — per-user usage collection (opt-in, after telling staff), monthly HTML/Excel reports, credit cost join and estimated time saved
 - [`docs/view-alignment.md`](docs/view-alignment.md) — lining up and distributing tags, text, and elements within a view
 
 ## License

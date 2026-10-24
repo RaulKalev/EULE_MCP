@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.IO;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -9,8 +10,15 @@ namespace RevitMCP.Addin.Logging;
 
 public class ActivityLogger
 {
+    private static readonly TimeSpan SettingsCacheTime = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan ProjectIdCacheTime = TimeSpan.FromMinutes(10);
+
     private readonly string _logDir;
     private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly Usage.UsageShare _share;
+    private readonly ConcurrentDictionary<string, (string? Id, DateTimeOffset At)> _configProjectIds = new(StringComparer.OrdinalIgnoreCase);
+    private Usage.UsageSettings? _usage;
+    private DateTimeOffset _usageReadAt;
 
     public ActivityLogger()
     {
@@ -18,7 +26,22 @@ public class ActivityLogger
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "RKTools", "RevitMCP", "Logs");
         Directory.CreateDirectory(_logDir);
+        _share = new Usage.UsageShare(_logDir);
+
+        // Usage reporting (docs/usage-reporting.md): copy days whose shared append failed last time. Background, never throws.
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var shared = UsageSettings().SharedFolder;
+                if (shared != null) _share.CatchUp(shared, Environment.UserName, Environment.MachineName);
+            }
+            catch { }
+        });
     }
+
+    /// <summary>The permission a tool declares (the request does not carry it); set at startup.</summary>
+    public Func<string, ToolPermission?>? PermissionOf { get; set; }
 
     public async Task WriteAsync(McpToolRequest request, McpToolResult result, RevitDocumentContext? context = null, long? responseSizeBytes = null)
     {
@@ -34,7 +57,8 @@ public class ActivityLogger
             Machine = Environment.MachineName,
             Client = request.ClientName,
             Tool = request.ToolName,
-            Permission = request.Permission.ToString(),
+            Permission = (PermissionOf?.Invoke(request.ToolName) ?? request.Permission).ToString(),
+            ApprovalStatus = ApprovalStatusOf(request, result),
             Status = result.Success ? "Success" : "Failed",
             DurationMs = result.DurationMs,
             ResponseSizeBytes = responseSizeBytes,
@@ -55,7 +79,58 @@ public class ActivityLogger
 
         entry.QuerySafety = TryExtractQuerySafety(result);
 
+        // A hot reload can keep an older RevitMCP.Core without these fields; the helper then fails to JIT and is skipped.
+        try { SetUsageFields(entry, result, context); }
+        catch (MissingMethodException) { }
+        catch (Exception) { /* usage fields never fail a log line */ }
+
         await AppendEntryAsync(entry);
+    }
+
+    /// <summary>NotRequired, Pending (approval asked), Approved (the approved execution), Rejected or Expired.</summary>
+    private static string ApprovalStatusOf(McpToolRequest request, McpToolResult result) => result.Status switch
+    {
+        "approval_required" => "Pending",
+        "approval_rejected" => "Rejected",
+        "approval_expired" => "Expired",
+        _ => request.IsApproved ? "Approved" : "NotRequired"
+    };
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private void SetUsageFields(LogEntry entry, McpToolResult result, RevitDocumentContext? context)
+    {
+        entry.AffectedCount = RevitMCP.Village.VillageAffectedCount.TryExtract(result.Data);
+        if (context == null || (string.IsNullOrEmpty(context.ModelTitle) && string.IsNullOrEmpty(context.CentralPath))) return;
+        var modelPath = string.IsNullOrEmpty(context.CentralPath) ? context.LocalPath : context.CentralPath;
+        entry.ProjectId = Usage.UsageProjectId.Resolve(ConfigProjectId(modelPath), ProjectKeyOf(context), context.ModelTitle);
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static string? ProjectKeyOf(RevitDocumentContext context)
+    {
+        try { return context.ProjectKey; }
+        catch (MissingMethodException) { return null; }
+    }
+
+    /// <summary>The project config's projectId above the model, cached for a few minutes per model.</summary>
+    private string? ConfigProjectId(string? modelPath)
+    {
+        if (string.IsNullOrEmpty(modelPath)) return null;
+        if (_configProjectIds.TryGetValue(modelPath!, out var cached) && DateTimeOffset.UtcNow - cached.At < ProjectIdCacheTime) return cached.Id;
+        var id = Usage.UsageProjectId.FromProjectConfig(modelPath);
+        _configProjectIds[modelPath!] = (id, DateTimeOffset.UtcNow);
+        return id;
+    }
+
+    private Usage.UsageSettings UsageSettings()
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (_usage == null || now - _usageReadAt > SettingsCacheTime)
+        {
+            _usage = Usage.UsageSettings.Load();
+            _usageReadAt = now;
+        }
+        return _usage;
     }
 
     /// <summary>
@@ -137,6 +212,10 @@ public class ActivityLogger
 #else
             await File.AppendAllTextAsync(filePath, line);
 #endif
+            // The shared copy for usage reporting; best-effort, a failure is caught up from the local file later.
+            var shared = SharedFolderOrNull();
+            if (shared != null)
+                await System.Threading.Tasks.Task.Run(() => _share.Append(shared, Environment.UserName, Environment.MachineName, DateTime.Today, line));
         }
         finally
         {
@@ -148,4 +227,10 @@ public class ActivityLogger
     }
 
     public string LogDirectory => _logDir;
+
+    private string? SharedFolderOrNull()
+    {
+        try { return UsageSettings().SharedFolder; }
+        catch { return null; }
+    }
 }

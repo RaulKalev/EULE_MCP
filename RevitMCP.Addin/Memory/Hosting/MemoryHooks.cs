@@ -24,6 +24,8 @@ public static class MemoryHooks
             var service = MemoryService.Current;
             if (service == null || request == null || result == null) return;
             if (WorkflowObserver.IsIgnored(request.ToolName)) return;
+            // Rejections reach memory through ToolRejected, with the arguments; the logged decision carries none.
+            if (result.Status is "approval_rejected" or "approval_expired") return;
             var call = Build(request, context);
             call.Success = result.Success;
             call.Status = result.Status;
