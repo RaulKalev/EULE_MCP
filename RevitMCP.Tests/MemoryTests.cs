@@ -390,6 +390,57 @@ public class MemoryRecallTests
         Assert.Single(MemoryRecall.Rank(entries, new MemoryRecallOptions { Query = "korgusel" }, Ctx()));
     }
 
+    // The live check on IPI2519 (2026-10-24): one camera tag note matched "detector tag type" and
+    // "renumber the circuits on the panel", and missed "kaamerate sildid".
+    private static readonly MemoryEntry CameraNote = E("personal/ipi2519/tags/camera-tag-type",
+        "Camera tags use EN_Valve_Tag : Kaamera tüüp + Aadress, Paremal (or the Vasakul type when the tag sits to the left of the camera).",
+        MemoryScopes.Personal, project: "1626", tags: new[] { "tags", "camera", "vvs" });
+
+    [Theory]
+    [InlineData("camera tag type")]
+    [InlineData("tag the new cameras on 2.korrus")]
+    [InlineData("which tag family for video surveillance cameras")]
+    [InlineData("VVS kaamera tag")]
+    [InlineData("kaamerate sildid")]
+    [InlineData("kaamerad")]
+    public void Rank_FindsTheEntry_InOtherWordsAndWordForms(string query) =>
+        Assert.Single(MemoryRecall.Rank(new[] { CameraNote }, new MemoryRecallOptions { Query = query }, Ctx()));
+
+    [Theory]
+    [InlineData("detector tag type")]
+    [InlineData("renumber the circuits on the panel")]
+    [InlineData("list sheets and their revisions")]
+    [InlineData("on the")]
+    [InlineData("tag type for card readers in the stairwell")]
+    public void Rank_DropsEntriesThatShareOnlyFillerOrGenericWords(string query) =>
+        Assert.Empty(MemoryRecall.Rank(new[] { CameraNote }, new MemoryRecallOptions { Query = query }, Ctx()));
+
+    [Theory]
+    [InlineData("tag", "tags", true)]
+    [InlineData("kaamera", "kaamerate", true)]
+    [InlineData("kaamerad", "kaamerat", true)]
+    [InlineData("korgus", "korgusel", true)]
+    [InlineData("car", "cargo", false)]
+    [InlineData("on", "convention", false)]
+    [InlineData("detector", "camera", false)]
+    public void WordMatches_TakesInflectionsButNotSubstrings(string term, string word, bool expected) =>
+        Assert.Equal(expected, MemoryRecall.WordMatches(term, word));
+
+    [Fact]
+    public void Terms_DropShortAndFillerWords()
+    {
+        Assert.Equal(new[] { "tag", "cameras", "korrus" }, MemoryRecall.Terms("tag the new cameras on 2.korrus"));
+        Assert.Equal(new[] { "kaamerate", "sildid" }, MemoryRecall.Terms("kõik kaamerate sildid ja"));
+    }
+
+    [Fact]
+    public void Rank_NeedsAThirdOfTheTerms()
+    {
+        // One of four specific terms is not enough, two of four is.
+        Assert.Empty(MemoryRecall.Rank(new[] { CameraNote }, new MemoryRecallOptions { Query = "camera socket height classroom" }, Ctx()));
+        Assert.Single(MemoryRecall.Rank(new[] { CameraNote }, new MemoryRecallOptions { Query = "camera tag height classroom" }, Ctx()));
+    }
+
     [Fact]
     public void Rank_PrefersProjectOverPersonal_ConfirmedOverCandidate_RecentOverOld()
     {
