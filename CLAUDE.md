@@ -48,6 +48,26 @@ to, and its Extensible Storage stores. Call `revit_panelschematics_guide` first.
 approval and is refused while the plugin's table window is open. The storage formats live in
 `RevitMCP.Addin/PanelSchematics/PanelSchematicsContract.cs` and must follow the plugin's source.
 
+## Shared memory
+
+`revit_memory_recall` and `revit_memory_remember` (see [`docs/shared-memory.md`](docs/shared-memory.md)) hold the
+project's durable decisions and corrections next to the model (`.rktools\memory`) and the user's personal notes. Recall
+before a write; remember at task end one user correction, decision with its reason, or exception — never a session
+summary or anything readable from the model. Entries are hints like graph data: verify live. A project note needs
+approval in Revit; a personal one does not; `scope=company` only writes a proposal for an administrator. Pass `basedOn`
+with the ids of entries you relied on. `revit_graph_route` carries matching entries in a `memory` block when
+`memory.hints` is on, and the workflow observer learns project defaults, recipes and corrections from tool calls by itself.
+When the user wants to review memory, publish `revit_memory_page`; `revit_memory_forget` retires wrong entries (approval).
+The weekly consolidation pass is the `memory-consolidate` prompt / `revit_memory_consolidate` (no Revit needed): it writes
+proposals only, never entries.
+
+## Usage reporting
+
+`revit_usage_report` (`office` group, see [`docs/usage-reporting.md`](docs/usage-reporting.md)) builds the monthly report
+from the shared usage folder: deterministic, no credits. Present its figures as aggregates, and time saved always as an
+estimate from the company baseline table — never as measured time. The shared copy is off until `usage.sharedFolder` is
+set, which needs staff to be told first (INSTALL.md).
+
 ## Model pages
 
 When the user gets a list or report of model elements to go through, publish it with `revit_publish_page`

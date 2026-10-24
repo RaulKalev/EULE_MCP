@@ -97,11 +97,52 @@ public sealed class ModelPageRevitHandler : IExternalEventHandler, IModelPageBac
         return Written(result);
     }
 
+    /// <summary>
+    /// A shared-memory review action from the memory page. Handed to the dispatcher as
+    /// <see cref="Tools.Memory.MemoryReviewTool"/>: approval in Revit (unless Direct Edit is on) and the activity log.
+    /// </summary>
+    public async Task<object> MemoryAsync(ModelPageInfo page, ModelPageMemoryAction action, CancellationToken ct)
+    {
+        // Only the review page the connector itself generated may change memory, not a page an agent wrote.
+        if (!RevitMCP.Addin.Memory.MemoryPageHtml.IsMemoryPage(page.Id))
+            return ModelPageServer.Fail("forbidden", "Memory can only be changed from the memory review page (revit_memory_page).");
+        var dispatcher = _dispatcher;
+        if (dispatcher == null || !EditsEnabled())
+            return ModelPageServer.Fail("read_only", "Changes from pages are switched off.");
+
+        var request = new McpToolRequest
+        {
+            RequestId = Guid.NewGuid().ToString("N"),
+            ToolName = Tools.Memory.MemoryReviewTool.ToolName,
+            ClientName = "Model page",
+            Arguments = new Dictionary<string, object?>
+            {
+                ["pageId"] = page.Id,
+                ["modelId"] = page.ModelId,
+                ["action"] = action.Action,
+                ["ids"] = new JArray(action.Ids),
+                ["proposal"] = action.Proposal ?? string.Empty
+            }
+        };
+
+        var result = await dispatcher.DispatchAsync(request, cancellationToken: ct).ConfigureAwait(false);
+        try { if (_logger != null) await _logger.WriteAsync(request, result, dispatcher.GetLastContext()).ConfigureAwait(false); }
+        catch { /* logging never fails a write */ }
+
+        if (result.Status == "approval_required")
+        {
+            var waiting = ModelPageServer.Fail("approval_required", "Approve the change in Revit: RevitMCP window, Pending tab.");
+            waiting["requestId"] = request.RequestId;
+            return waiting;
+        }
+        return Written(result);
+    }
+
     public Task<object> ApprovalAsync(ModelPageInfo page, string requestId, CancellationToken ct)
     {
         var outcome = _approvals?.GetOutcome(requestId);
         // Only this feature's own requests: a page must not read what an agent's approval returned.
-        if (outcome == null || outcome.ToolName != PageSetValuesTool.ToolName)
+        if (outcome == null || (outcome.ToolName != PageSetValuesTool.ToolName && outcome.ToolName != Tools.Memory.MemoryReviewTool.ToolName))
             return Task.FromResult<object>(ModelPageServer.Fail("unknown_request", "This request is no longer known. Refresh the page to see the current values."));
 
         object answer = outcome.State switch
@@ -183,6 +224,10 @@ public sealed class ModelPageRevitHandler : IExternalEventHandler, IModelPageBac
 
     private static object Status(UIApplication app, ModelPageInfo page)
     {
+        // A page bound to no model (the usage report) is ready whatever is open; it has no elements to act on.
+        if (string.IsNullOrEmpty(page.ModelId))
+            return new Dictionary<string, object?> { ["ok"] = true, ["status"] = "ready", ["activeDocument"] = app.ActiveUIDocument?.Document?.Title };
+
         var uidoc = PageDocument(app, page, out var refusal);
         if (uidoc == null) return refusal!;
         return new Dictionary<string, object?>

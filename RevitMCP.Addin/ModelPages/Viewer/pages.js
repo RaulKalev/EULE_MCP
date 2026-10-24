@@ -12,11 +12,13 @@
 // A table whose body rows carry data-revit-id also gets tools without any markup: a search box,
 // filters per column, sorting by a click on a header, grouping by a column, and "select shown".
 //   data-revit-tools="none"              on the table (or an ancestor): leave it alone
+//   data-revit-tools="rows"              on a table whose rows are not model elements: the same tools,
+//                                        without the "select in Revit" buttons
 //   data-sort="2024-05-01"               on a cell: the value to sort and filter by instead of its text
 //
 // and exposes the same to the page's own scripts as window.revit:
 //   revit.select(ids, {zoom}), revit.values(ids, parameters), revit.set(changes),
-//   revit.refresh(), revit.status()
+//   revit.refresh(), revit.status(), revit.memory(action, {ids, proposal}) (the memory review page)
 // A page that changes its own markup later calls revit.refresh() to bind and fill the new rows.
 //
 // A write goes through the connector's approval queue: unless the user switched Direct Edit on,
@@ -41,7 +43,7 @@
     sortHint: 'Klõps sorteerib',
     approve: 'Kinnita muudatus Revitis: RevitMCP aken → Pending',
     saved: function (n) { return n === 1 ? 'Väärtus kirjutatud Revitisse' : n + ' väärtust kirjutatud Revitisse'; },
-    notSaved: 'Ei kirjutatud: ', rejected: 'Muudatus lükati Revitis tagasi', timeout: 'Kinnitust ei tulnud. Muudatus ootab Revitis edasi.'
+    notSaved: 'Ei kirjutatud: ', memoryDone: 'Tehtud', rejected: 'Muudatus lükati Revitis tagasi', timeout: 'Kinnitust ei tulnud. Muudatus ootab Revitis edasi.'
   } : {
     ready: 'Revit: ', offline: 'Revit is not responding', other: 'Another model is active in Revit', refresh: 'Refresh', pages: 'All pages',
     theme: 'Light/dark',
@@ -57,7 +59,7 @@
     sortHint: 'Click to sort',
     approve: 'Approve the change in Revit: RevitMCP window → Pending',
     saved: function (n) { return n === 1 ? 'Value written to Revit' : n + ' values written to Revit'; },
-    notSaved: 'Not written: ', rejected: 'The change was rejected in Revit', timeout: 'No approval yet. The change is still waiting in Revit.'
+    notSaved: 'Not written: ', memoryDone: 'Done', rejected: 'The change was rejected in Revit', timeout: 'No approval yet. The change is still waiting in Revit.'
   };
 
   // ── Theme: follows the system until the user picks one ───────────────────
@@ -263,19 +265,7 @@
       return change;
     });
     if (!list.length) return Promise.resolve({ ok: false, status: 'bad_request', message: '' });
-    return post('/api/set', { changes: list }).then(function (r) {
-      if (r.status !== 'approval_required') return r;
-      say(TEXT.approve, false, true);
-      var started = Date.now();
-      function poll() {
-        return wait(1200).then(function () { return post('/api/approval', { requestId: r.requestId }); }).then(function (p) {
-          if (p.status !== 'pending') return p;
-          if (Date.now() - started > 10 * 60 * 1000) return { ok: false, status: 'timeout', message: TEXT.timeout };
-          return poll();
-        });
-      }
-      return poll();
-    }).then(function (r) {
+    return post('/api/set', { changes: list }).then(awaitApproval).then(function (r) {
       var rows = r.changes || [];
       var done = rows.filter(function (c) { return c.ok; }).length;
       var failed = rows.filter(function (c) { return !c.ok; })[0];
@@ -283,6 +273,33 @@
       else if (r.status === 'rejected') say(TEXT.rejected, true);
       else say(TEXT.notSaved + ((failed && failed.reason) || r.message || r.status), true);
       if (!r.ok && !rows.length && r.status !== 'rejected' && r.status !== 'timeout') setState(r);
+      return r;
+    });
+  }
+
+  // An answer of "approval_required" is followed until the user decides in Revit (or ten minutes pass).
+  function awaitApproval(r) {
+    if (r.status !== 'approval_required') return r;
+    say(TEXT.approve, false, true);
+    var started = Date.now();
+    function poll() {
+      return wait(1200).then(function () { return post('/api/approval', { requestId: r.requestId }); }).then(function (p) {
+        if (p.status !== 'pending') return p;
+        if (Date.now() - started > 10 * 60 * 1000) return { ok: false, status: 'timeout', message: TEXT.timeout };
+        return poll();
+      });
+    }
+    return poll();
+  }
+
+  // Shared-memory review (the memory page): confirm, retire, promote, accept or reject. Same approval path as set.
+  function memory(action, args) {
+    var body = { action: action, ids: [].concat((args && args.ids) || []).map(String) };
+    if (args && args.proposal) body.proposal = String(args.proposal);
+    return post('/api/memory', body).then(awaitApproval).then(function (r) {
+      if (r.ok) say(r.message || TEXT.memoryDone);
+      else if (r.status === 'rejected') say(TEXT.rejected, true);
+      else say(TEXT.notSaved + (r.message || r.status), true);
       return r;
     });
   }
@@ -353,7 +370,9 @@
   function compareText(a, b) { return collator ? collator.compare(a, b) : (a < b ? -1 : a > b ? 1 : 0); }
 
   function setupTable(table) {
-    if (table.closest('[data-revit-tools="none"]') || !table.querySelector('tr[data-revit-id]')) return;
+    if (table.closest('[data-revit-tools="none"]')) return;
+    var elements = !!table.querySelector('tr[data-revit-id]');
+    if (!elements && table.getAttribute('data-revit-tools') !== 'rows') return;
     if (table.tBodies.length !== 1 || table.querySelector('td[rowspan], td[colspan], th[rowspan], th[colspan]')) return;
     var body = table.tBodies[0];
     var headRow = table.tHead && table.tHead.rows.length ? table.tHead.rows[table.tHead.rows.length - 1] : null;
@@ -411,7 +430,7 @@
     var count = el('span', 'revit-count');
     var selectButton = el('button', null, TEXT.selectShown);
     selectButton.type = 'button';
-    [search, groupSelect, filterButton, resetButton, el('span', 'revit-spacer'), count, selectButton].forEach(function (n) { tools.appendChild(n); });
+    [search, groupSelect, filterButton, resetButton, el('span', 'revit-spacer'), count].concat(elements ? [selectButton] : []).forEach(function (n) { tools.appendChild(n); });
     table.parentNode.insertBefore(tools, table);
 
     var filterRow = null;
@@ -513,7 +532,7 @@
             event.stopPropagation();
             select(group.rows.map(function (row) { return row.getAttribute('data-revit-id'); }).join(','));
           });
-          cell.appendChild(pick);
+          if (elements) cell.appendChild(pick);
           header.appendChild(cell);
           header.addEventListener('click', function () { state.collapsed[group.key] = !collapsed; apply(); });
           fragment.appendChild(header);
@@ -620,7 +639,7 @@
   });
 
   window.revit = {
-    select: select, values: values, set: set, status: status, pageId: cfg.id,
+    select: select, values: values, set: set, memory: memory, status: status, pageId: cfg.id,
     refresh: function () { return refresh(false); }
   };
 

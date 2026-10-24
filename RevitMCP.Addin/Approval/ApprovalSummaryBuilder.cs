@@ -23,6 +23,9 @@ public static class ApprovalSummaryBuilder
             "revit_select_elements_by_query" => BuildSelectByQuery(request),
             "revit_set_parameter" => BuildSetParameter(request),
             RevitMCP.Addin.Tools.ModelPages.PageSetValuesTool.ToolName => BuildPageSetValues(request),
+            RevitMCP.Addin.Tools.Memory.MemoryRememberTool.ToolName => BuildMemoryRemember(request),
+            RevitMCP.Addin.Tools.Memory.MemoryForgetTool.ToolName => BuildMemoryForget(request),
+            RevitMCP.Addin.Tools.Memory.MemoryReviewTool.ToolName => BuildMemoryReview(request),
             "revit_set_circuit_parameter" => BuildSetCircuitParameter(request),
             "revit_create_electrical_circuit" => CircuitPreviewBuilder.BuildCreateCircuit(request),
             "revit_add_elements_to_circuit" => CircuitPreviewBuilder.BuildAddElements(request),
@@ -858,6 +861,40 @@ public static class ApprovalSummaryBuilder
         var elementCount = ToolArguments.GetLongArray(request.Arguments, "elementIds").Distinct().Count();
         return $"DESTRUCTIVE: Delete {elementCount} element{(elementCount == 1 ? "" : "s")} plus dependent elements. Manual approval required.";
     }
+
+    private static string BuildMemoryRemember(McpToolRequest request)
+    {
+        var key = ToolArguments.GetString(request.Arguments, "key");
+        var value = ClipTo(ToolArguments.GetString(request.Arguments, "value"), 160);
+        var reason = ClipTo(ToolArguments.GetString(request.Arguments, "reason"), 160);
+        return $"Remember in project memory (shared with everyone on the project) '{key}': {value} — because {reason}";
+    }
+
+    private static string BuildMemoryForget(McpToolRequest request)
+    {
+        var ids = ToolArguments.GetStringArray(request.Arguments, "ids");
+        var reason = ToolArguments.GetString(request.Arguments, "reason");
+        return $"Retire {ids.Length} memory entr{(ids.Length == 1 ? "y" : "ies")} (kept as history)" +
+               (reason.Length > 0 ? " — because " + ClipTo(reason, 160) : ".");
+    }
+
+    private static string BuildMemoryReview(McpToolRequest request)
+    {
+        var action = ToolArguments.GetString(request.Arguments, "action");
+        var ids = ToolArguments.GetStringArray(request.Arguments, "ids");
+        var proposal = ToolArguments.GetString(request.Arguments, "proposal");
+        var what = action switch
+        {
+            "accept" => $"accept consolidation proposal {proposal} (changes the project's shared memory)",
+            "reject" => $"reject consolidation proposal {proposal}",
+            "promote" => $"propose {ids.Length} entr{(ids.Length == 1 ? "y" : "ies")} for company memory",
+            _ => $"{action} {ids.Length} entr{(ids.Length == 1 ? "y" : "ies")} of the project's shared memory"
+        };
+        var first = ids.Length > 0 ? " (" + string.Join(", ", ids.Take(3)) + (ids.Length > 3 ? ", …" : "") + ")" : string.Empty;
+        return $"Requested from a model page: {what}{first}. Approve only if you clicked this on the memory review page.";
+    }
+
+    private static string ClipTo(string text, int max) => text.Length <= max ? text : text.Substring(0, max) + "…";
 
     private static string BuildCreateSkill(McpToolRequest request)
     {

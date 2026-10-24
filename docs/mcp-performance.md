@@ -17,7 +17,8 @@ response contracts.
 **The default profile is `core`** (since #65/#66): 17 tools — connection and instance routing,
 selection, live reads by id, the five graph tools and tool discovery — about 4.2k schema tokens
 instead of about 69k for all 233 tools. Every other tool stays reachable through discovery (below),
-so nothing was removed. To advertise every tool, as before, start the bridge with
+so nothing was removed. Shared memory added `revit_memory_recall` and `revit_memory_remember` to it
+(21 tools, ≈ 6.0k schema tokens; see [benchmarks](benchmarks/README.md)). To advertise every tool, as before, start the bridge with
 `--tool-profile full` (or set `RevitMCP:ToolProfile` to `full` in `appsettings.json`).
 
 ### Tool discovery (#65)
@@ -64,7 +65,7 @@ args = ["--client", "Codex", "--tool-profile", "core", "--tool-groups", "electri
 
 | Group | Contents |
 |---|---|
-| `core` | Connection, instance routing, selection and live reads by element id |
+| `core` | Connection, instance routing, selection, live reads by element id, `revit_memory_recall` and `revit_memory_remember` |
 | `discovery` | Search, describe, load and call any connector tool |
 | `graph` | Model graph: build, status, summary, query, route |
 | `query` | Broad element queries, parameter filters, grouping, query presets, parameter QA |
@@ -76,8 +77,9 @@ args = ["--client", "Codex", "--tool-profile", "core", "--tool-groups", "electri
 | `tags` | Tags, dimensions, text notes, detail lines, view alignment |
 | `coordination` | Clash detection, clash review, issue reports |
 | `cad` | DWG/CAD imports, overrides and placement from CAD |
+| `memory` | Shared memory review: `revit_memory_list`, `revit_memory_page`, `revit_memory_forget`, `revit_memory_consolidate` (see [shared-memory.md](shared-memory.md)) |
 | `skills` | Skill builder and skill runs |
-| `office` | Configuration, files, Excel, standards lookup, delivery checks |
+| `office` | Configuration, files, Excel, standards lookup, delivery checks, `revit_usage_report` (see [usage-reporting.md](usage-reporting.md)) |
 
 `core` always includes `core`, `discovery` and `graph`; `all` adds every group (same tools as `full`).
 The same values can be set in `appsettings.json` as `RevitMCP:ToolGroups`.

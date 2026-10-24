@@ -150,8 +150,10 @@ public static class RevitModelVersionReader
         return dot > 0 ? file.Substring(0, dot) : file;
     }
 
-    private static string ReadProjectKey(Document doc)
+    /// <summary>Project number, else project name, from Project Information; empty when there is none.</summary>
+    public static string ReadProjectKey(Document? doc)
     {
+        if (doc == null) return string.Empty;
         try
         {
             var info = doc.ProjectInformation;

@@ -29,6 +29,74 @@ public interface IModelPageBackend
 
     /// <summary>What became of a write that needed approval.</summary>
     Task<object> ApprovalAsync(ModelPageInfo page, string requestId, CancellationToken ct);
+
+    /// <summary>
+    /// A shared-memory review action from the memory page (confirm, retire, promote, accept or reject a proposal).
+    /// Like <see cref="SetAsync"/> it goes through the connector's approval path.
+    /// </summary>
+    Task<object> MemoryAsync(ModelPageInfo page, ModelPageMemoryAction action, CancellationToken ct);
+}
+
+/// <summary>A validated memory review request from a page.</summary>
+public sealed class ModelPageMemoryAction
+{
+    public static readonly string[] Actions = { "confirm", "retire", "promote", "accept", "reject" };
+    public const int MaxIds = 100;
+
+    public string Action { get; set; } = string.Empty;
+    public List<string> Ids { get; set; } = new();
+    public string? Proposal { get; set; }
+
+    /// <summary>Parses the body: a known action, ids and proposal of letters, digits and hyphens only. Null with the problem.</summary>
+    public static ModelPageMemoryAction? Parse(JObject json, out string? problem)
+    {
+        problem = null;
+        var action = json["action"] is JValue a && a.Type == JTokenType.String ? a.Value<string>() : null;
+        if (action == null || Array.IndexOf(Actions, action) < 0)
+        {
+            problem = "Unknown memory action.";
+            return null;
+        }
+        var result = new ModelPageMemoryAction { Action = action };
+        if (json["ids"] is JArray ids)
+        {
+            if (ids.Count > MaxIds)
+            {
+                problem = $"At most {MaxIds} entries at once.";
+                return null;
+            }
+            foreach (var t in ids)
+            {
+                var id = t is JValue v && v.Type == JTokenType.String ? v.Value<string>() : null;
+                if (!IsSafeId(id))
+                {
+                    problem = "Entry ids are letters, digits and hyphens.";
+                    return null;
+                }
+                result.Ids.Add(id!);
+            }
+        }
+        if (json["proposal"] is JValue pv && pv.Type == JTokenType.String)
+        {
+            var proposal = pv.Value<string>();
+            if (!IsSafeId(proposal))
+            {
+                problem = "A proposal id is letters, digits and hyphens.";
+                return null;
+            }
+            result.Proposal = proposal;
+        }
+        var forProposal = action is "accept" or "reject";
+        if (forProposal ? result.Proposal == null : result.Ids.Count == 0)
+        {
+            problem = forProposal ? "Name the proposal." : "Name the entries.";
+            return null;
+        }
+        return result;
+    }
+
+    private static bool IsSafeId(string? id) =>
+        !string.IsNullOrEmpty(id) && id!.Length <= 64 && id.All(c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-');
 }
 
 /// <summary>
@@ -40,7 +108,7 @@ public interface IModelPageBackend
 /// Security model:
 /// - binds to 127.0.0.1 only, and the Host header must name a loopback host (blocks DNS rebinding);
 /// - GET/HEAD for "/", "/p/{id}", "/pages.js", "/pages.css" and "/health"; POST for "/api/status",
-///   "/api/select", "/api/values", "/api/set" and "/api/approval"; everything else is refused;
+///   "/api/select", "/api/values", "/api/set", "/api/memory" and "/api/approval"; everything else is refused;
 /// - a POST must carry this listener's per-start token in <c>X-Revit-Page-Token</c> (written only into
 ///   the pages it serves), a same-origin Sec-Fetch-Site and Origin when the browser sends them, and a
 ///   JSON body of at most <see cref="MaxBodyBytes"/> naming a published page;
@@ -48,8 +116,9 @@ public interface IModelPageBackend
 /// - every response carries a policy that lets a page reach this listener only: a generated page cannot
 ///   load from or send to any other origin, and cannot be framed;
 /// - the actions are fixed. Status, select and values never reach the MCP dispatcher and cannot change the
-///   model. "/api/set" is the one write: the backend hands it to the connector as a parameter write that
+///   model. "/api/set" is the one model write: the backend hands it to the connector as a parameter write that
 ///   needs the user's approval in Revit (unless they switched Direct Edit on), exactly like an agent's.
+///   "/api/memory" (the memory review page) takes the same approval path for shared-memory changes.
 /// Pure — no Revit API, unit tested in RevitMCP.Tests.
 /// </summary>
 public sealed class ModelPageServer : IDisposable
@@ -254,7 +323,7 @@ public sealed class ModelPageServer : IDisposable
     // ─── Routes ─────────────────────────────────────────────────────────────
 
     public static bool IsApiRoute(string path) =>
-        path == "/api/status" || path == "/api/select" || path == "/api/values" || path == "/api/set" || path == "/api/approval";
+        path == "/api/status" || path == "/api/select" || path == "/api/values" || path == "/api/set" || path == "/api/memory" || path == "/api/approval";
 
     /// <summary>The id in "/p/{id}", or null.</summary>
     public static string? PageIdFrom(string path)
@@ -388,6 +457,17 @@ public sealed class ModelPageServer : IDisposable
                         return;
                     }
                     result = await _backend.SetAsync(page, changes, timeout.Token).ConfigureAwait(false);
+                    break;
+                }
+                case "/api/memory":
+                {
+                    var action = ModelPageMemoryAction.Parse(json, out var problem);
+                    if (action == null)
+                    {
+                        await WriteJsonAsync(stream, 400, "Bad Request", Fail("bad_request", problem ?? "Name the memory action."), ct).ConfigureAwait(false);
+                        return;
+                    }
+                    result = await _backend.MemoryAsync(page, action, timeout.Token).ConfigureAwait(false);
                     break;
                 }
                 case "/api/approval":

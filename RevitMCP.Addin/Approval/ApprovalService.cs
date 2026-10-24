@@ -199,6 +199,8 @@ public class ApprovalService
         };
         try { rejResult.Status = "approval_rejected"; } catch (MissingMethodException) { }
         request.Completion.TrySetResult(rejResult);
+        // A user's rejection is how shared memory learns corrections (RejectAll on panic stop is not one).
+        RevitMCP.Addin.Memory.Hosting.MemoryHooks.ToolRejected(request.OriginalRequest);
         PendingChanged?.Invoke();
     }
 

@@ -64,7 +64,8 @@ Nothing is fetched for any of this; it works on the rows in the page.
 For it to work the agent writes one plain table: a header row (`<thead>` or a first row of `<th>`),
 a single `<tbody>`, no `rowspan`/`colspan`, one fact per column. `data-sort="…"` on a cell gives the
 value to sort and filter by when the text is not it (a date shown as "3. mai"); `data-revit-tools="none"`
-on the table or an ancestor leaves the table alone. A page should not bring its own filter or sort
+on the table or an ancestor leaves the table alone, and `data-revit-tools="rows"` gives the same tools to a
+table whose rows are not model elements (without the "select in Revit" buttons). A page should not bring its own filter or sort
 script for such a table.
 
 ## Editing values
@@ -180,7 +181,7 @@ web server that can act on Revit must not be reachable by other web pages:
 
 - binds to `127.0.0.1` only; the `Host` header must name a loopback host (blocks DNS rebinding);
 - `GET`/`HEAD` for `/`, `/p/{id}`, `/pages.js`, `/pages.css`, `/health`; `POST` for `/api/status`,
-  `/api/select`, `/api/values`, `/api/set`, `/api/approval`; everything else is `404`/`405`;
+  `/api/select`, `/api/values`, `/api/set`, `/api/memory`, `/api/approval`; everything else is `404`/`405`;
 - a `POST` needs the listener's per-start token in `X-Revit-Page-Token`. The token is written only
   into pages the listener serves; no CORS headers are sent, so another origin can neither read a
   page nor send the header. `Sec-Fetch-Site` and `Origin`, when present, must be this listener;
@@ -188,7 +189,13 @@ web server that can act on Revit must not be reachable by other web pages:
   generated page can talk to this listener and nothing else, and cannot be framed;
 - the actions are fixed. Status, select and values never reach the MCP dispatcher and cannot change
   the model. `/api/set` can only become `revit_page_set_values`, which writes instance parameter
-  values and nothing else; `/api/approval` answers only for requests of that tool;
+  values and nothing else; `/api/memory` can only become `revit_memory_review` (confirm, retire, promote,
+  accept or reject a proposal — shared memory, never the model) and is accepted only for the memory
+  review page: its `memory-…` ids are reserved (`revit_publish_page` refuses them and generated ids
+  never start with it). Pages share one origin, so a script in another page could still send such a
+  request; that is why `revit_memory_review` always needs manual approval, even with Direct Edit on,
+  and its approval line says it came from a page. `/api/approval` answers only for requests of those
+  two tools;
 - page ids are a lowercase slug, checked before any file access.
 
 What this does not cover: a page is HTML written by an agent and runs with the page token. Its

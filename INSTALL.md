@@ -124,9 +124,41 @@ Activity logs are written to:
 %AppData%\RKTools\RevitMCP\Logs\YYYY-MM-DD.jsonl
 ```
 
-Each line is a JSON object with: `timestamp`, `client`, `tool`, `status`, `durationMs`, `revitVersion`, `model`, `centralPath`, `activeView`, `isWorkshared`, `revitUsername`.
+Each line is a JSON object with: `timestamp`, `user`, `client`, `tool`, `permission`, `approvalStatus`, `status`, `durationMs`, `affectedCount`, `projectId`, `revitVersion`, `model`, `centralPath`, `activeView`, `isWorkshared`, `revitUsername`.
 
 ---
+
+## Usage reporting (optional) — tell staff first
+
+The connector can copy every user's activity log to a shared folder for a monthly usage report
+(`revit_usage_report`, or **Usage Report** on the connector window's Activity tab; see
+[`docs/usage-reporting.md`](docs/usage-reporting.md)). It is **off** until an administrator sets
+`usage.sharedFolder` in the company config.
+
+That copy makes individual usage visible to the company, which is an employee-monitoring question
+under Estonian and EU rules. **Before** setting the key, tell staff in writing:
+
+- **what** is collected — per tool call: time, Windows and Revit user name, machine, AI client, tool
+  name, read or write, outcome, duration, response size, elements affected, project id and model
+  name. No prompts, AI responses, tool arguments, tool results, parameter values or file contents;
+- **where** it is stored — `<usage.sharedFolder>\<user>\<yyyy-MM-dd>.<machine>.jsonl`, reports in
+  `<usage.sharedFolder>\reports\`;
+- **who** can see it — restrict the folder's permissions to the report role; reports show aggregates;
+- **why** — adoption, outcomes, credit cost, and an *estimated* time saved;
+- **how long** it is kept, and whom to ask.
+
+Then, in `%ProgramData%\RKTools\MCP\Config\company.config.json`:
+
+```json
+{
+  "usage": {
+    "sharedFolder": "\\\\server\\EULE\\MCP\\Usage",
+    "timeSavedBaselines": { "revit_place_tags": { "secondsPerElement": 20 } }
+  }
+}
+```
+
+Optional: `usage.reportFolder`, `usage.costExportFolder` (provider cost exports as `<yyyy-MM>.csv`).
 
 ## Troubleshooting
 

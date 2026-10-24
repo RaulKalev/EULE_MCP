@@ -33,6 +33,7 @@ public class App : IExternalApplication
     public static ConnectorService? GetConnector() => _connector;
     private static VillageService? _village;
     private static RevitMCP.Addin.ModelPages.Hosting.ModelPageService? _modelPages;
+    private static RevitMCP.Addin.Memory.Hosting.MemoryService? _memory;
     public static VillageService? GetVillage() => _village;
 
     private static readonly string DiagLogPath = System.IO.Path.Combine(
@@ -94,6 +95,16 @@ public class App : IExternalApplication
             handler.RegisterTool(new RevitMCP.Addin.Tools.ModelPages.ListPagesTool());
             // Not advertised by the bridge: sent by the model page listener when a user edits a value on a page.
             handler.RegisterTool(new RevitMCP.Addin.Tools.ModelPages.PageSetValuesTool());
+            // Shared memory (Memory\, docs/shared-memory.md): durable notes every colleague's agent can recall.
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Memory.MemoryRememberTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Memory.MemoryRecallTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Memory.MemoryListTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Memory.MemoryForgetTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Memory.MemoryPageTool());
+            // Not advertised by the bridge: sent by the model page listener from the memory review page.
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Memory.MemoryReviewTool());
+            // Usage reporting (Usage\, docs/usage-reporting.md): the monthly report over the shared usage files.
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Usage.UsageReportTool());
             handler.RegisterTool(new PreviewDrawCircuitArcsTool());
             handler.RegisterTool(new DrawCircuitArcsTool());
             handler.RegisterTool(new ListSheetsTool());
@@ -417,6 +428,15 @@ public class App : IExternalApplication
             approvalService.SetRedispatch(eventService.Redispatch);
             handler.SetApprovalService(approvalService);
             handler.SetActivityLogger(logger);
+            logger.PermissionOf = handler.GetToolPermission;
+            // Usage reporting: a rejected or expired approval is a decision the log should hold too (it ran no tool).
+            approvalService.OutcomeRecorded += outcome =>
+            {
+                var status = outcome.Result?.Status;
+                if (status is not ("approval_rejected" or "approval_expired")) return;
+                var decided = new RevitMCP.Core.Models.McpToolRequest { RequestId = outcome.RequestId, ToolName = outcome.ToolName, ClientName = outcome.ClientName };
+                _ = logger.WriteAsync(decided, outcome.Result!, handler.GetLastContext());
+            };
             handler.RegisterTool(new GetApprovalStatusTool(approvalService));
 
             // Each add-in load hosts its own unique pipe. The load id is essential for
@@ -484,6 +504,20 @@ public class App : IExternalApplication
                 DiagLog($"Model pages unavailable: {ex.GetType().Name}: {ex.Message}");
             }
 
+            // Shared memory: plain files, no Revit API. Folder watchers start on first use; the observer runs on a
+            // background task fed by the activity log.
+            try
+            {
+                var knownTools = new HashSet<string>(handler.GetRegisteredToolNames(), StringComparer.OrdinalIgnoreCase);
+                _memory = RevitMCP.Addin.Memory.Hosting.MemoryService.CreateDefault(knownTools.Contains);
+                RevitMCP.Addin.Memory.Hosting.MemoryHooks.PermissionOf = handler.GetToolPermission;
+                RevitMCP.Addin.Memory.Hosting.MemoryHooks.LastContext = handler.GetLastContext;
+            }
+            catch (Exception ex)
+            {
+                DiagLog($"Shared memory unavailable: {ex.GetType().Name}: {ex.Message}");
+            }
+
             // Startup validation: log all registered tool names so mismatches (e.g. after a
             // partial rebuild before Revit restart) are visible in the diagnostic log.
             var registeredTools = handler.GetRegisteredToolNames();
@@ -513,6 +547,7 @@ public class App : IExternalApplication
         application.ControlledApplication.DocumentChanged -= OnDocumentChanged;
         try { _village?.Dispose(); } catch { }
         try { _modelPages?.Dispose(); } catch { }
+        try { _memory?.Dispose(); } catch { }
         _connector?.PanicStop();
         return Result.Succeeded;
     }

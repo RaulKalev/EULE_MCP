@@ -34,7 +34,8 @@ builder.Services.AddTransient<ToolDiscoveryTools>();
 
 var mcpBuilder = builder.Services
     .AddMcpServer(options => options.ServerInstructions = ServerInstructions.Text)
-    .WithStdioServerTransport();
+    .WithStdioServerTransport()
+    .WithPrompts<MemoryPrompts>();
 
 // Default: the compact graph-first core profile (#66) with tool discovery and dispatch (#65).
 // "full" advertises every tool for clients/automations that call tools by name.

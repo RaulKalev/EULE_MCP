@@ -52,6 +52,7 @@ public sealed class VillageToolClassifier
     {
         ("graph",              VillageAreas.Graph),
         ("device_code",        VillageAreas.Office),
+        ("memory",             VillageAreas.Office),
         ("device_type",        VillageAreas.FamiliesTypes),
         ("level",              VillageAreas.Elements),
         ("elevation",          VillageAreas.Elements),

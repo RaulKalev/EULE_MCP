@@ -64,6 +64,10 @@ public class ExternalEventHandler : IExternalEventHandler
     public IReadOnlyList<string> GetRegisteredToolNames()
         => _tools.Keys.OrderBy(k => k).ToList();
 
+    /// <summary>The permission a registered tool declares; null for an unknown name.</summary>
+    public ToolPermission? GetToolPermission(string name)
+        => _tools.TryGetValue(name, out var tool) ? tool.Permission : null;
+
     public bool TryEnqueue(ExternalEventWorkItem item) => _queue.TryEnqueue(item);
 
     public RevitDocumentContext? GetLastContext() => _lastContext;
@@ -243,7 +247,8 @@ public class ExternalEventHandler : IExternalEventHandler
             // Direct Edit mode bypasses RequiresApproval, but NEVER bypasses Destructive.
             var isDirectEditEnabled = RevitMCP.Addin.App.GetViewModel()?.IsDirectEditEnabled ?? false;
         var needsApproval =
-            ((tool.Permission == ToolPermission.RequiresApproval && !isDirectEditEnabled)
+            ((tool.Permission == ToolPermission.RequiresApproval && !isDirectEditEnabled &&
+              (tool is not IConditionalApprovalTool conditional || conditional.NeedsApproval(request)))
              || tool.Permission == ToolPermission.DestructiveRequiresManualApproval)
             && !request.IsApproved
             && _approvalService != null;
@@ -449,12 +454,16 @@ public class ExternalEventHandler : IExternalEventHandler
         }
     }
 
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void SetProjectKey(RevitDocumentContext context, UIApplication app) =>
+        context.ProjectKey = RevitMCP.Addin.Graph.RevitModelVersionReader.ReadProjectKey(app.ActiveUIDocument?.Document);
+
     private static RevitDocumentContext CaptureContext(UIApplication app)
     {
         try
         {
             var ctx = RevitContextService.Read(app);
-            return new RevitDocumentContext
+            var context = new RevitDocumentContext
             {
                 RevitVersion = ctx.RevitVersion,
                 ModelTitle = ctx.DocumentTitle,
@@ -464,6 +473,9 @@ public class ExternalEventHandler : IExternalEventHandler
                 IsWorkshared = ctx.IsWorkshared,
                 RevitUsername = ctx.RevitUsername
             };
+            // A hot reload can keep an older RevitMCP.Core without ProjectKey; the helper then fails to JIT and is skipped.
+            try { SetProjectKey(context, app); } catch (MissingMethodException) { }
+            return context;
         }
         catch
         {

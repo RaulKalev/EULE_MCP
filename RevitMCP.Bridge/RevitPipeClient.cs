@@ -33,6 +33,9 @@ public class RevitPipeClient
     private readonly string _clientName;
     private readonly RevitInstanceRegistry _registry;
 
+    /// <summary>The MCP client this bridge serves (--client), as the add-in sees it.</summary>
+    public string ClientName => _clientName;
+
     public RevitPipeClient(IConfiguration config)
     {
         _explicitPipeName = config["RevitMCP:PipeName"];

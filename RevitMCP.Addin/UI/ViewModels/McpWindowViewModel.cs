@@ -73,6 +73,7 @@ public class McpWindowViewModel : BaseViewModel
         PanicStopCommand = new RelayCommand(_ => _connector.PanicStop());
         ToggleThemeCommand = new RelayCommand(_ => ToggleTheme());
         OpenLogFolderCommand = new RelayCommand(_ => OpenLogFolder());
+        UsageReportCommand = new RelayCommand(_ => RunUsageReport(), _ => !_usageReportRunning);
         ClearActivityLogCommand = new RelayCommand(_ => ActivityLog.Clear());
         ApproveCommand = new RelayCommand(id => ApproveItem(id as string));
         RejectCommand = new RelayCommand(id => RejectItem(id as string));
@@ -120,6 +121,7 @@ public class McpWindowViewModel : BaseViewModel
     public ICommand PanicStopCommand { get; }
     public ICommand ToggleThemeCommand { get; }
     public ICommand OpenLogFolderCommand { get; }
+    public ICommand UsageReportCommand { get; }
     public ICommand ClearActivityLogCommand { get; }
     public ICommand ApproveCommand { get; }
     public ICommand RejectCommand { get; }
@@ -292,6 +294,40 @@ public class McpWindowViewModel : BaseViewModel
         var existing = resources.FirstOrDefault(d => d.Source?.OriginalString.Contains("Theme.xaml") == true);
         if (existing != null) resources.Remove(existing);
         resources.Add(new System.Windows.ResourceDictionary { Source = themeUri });
+    }
+
+    private bool _usageReportRunning;
+
+    /// <summary>
+    /// The monthly usage report for the previous month (docs/usage-reporting.md) — the same code as revit_usage_report,
+    /// run off the UI thread; opens the page or file when done.
+    /// </summary>
+    private void RunUsageReport()
+    {
+        _usageReportRunning = true;
+        CommandManager.InvalidateRequerySuggested();
+        Task.Run(() =>
+        {
+            string? open = null;
+            string message;
+            try
+            {
+                var (result, url) = RevitMCP.Addin.Tools.Usage.UsageReportService.Run(null, null, RevitMCP.Addin.Usage.UsageReportRunner.FormatBoth, "Connector window");
+                message = result.Message;
+                if (result.Success) open = url ?? result.HtmlPath;
+            }
+            catch (Exception ex)
+            {
+                message = "The usage report failed: " + ex.Message;
+            }
+            RunOnUi(() =>
+            {
+                _usageReportRunning = false;
+                CommandManager.InvalidateRequerySuggested();
+                if (open != null) RevitMCP.Addin.Tools.Usage.UsageReportService.Open(open);
+                else MessageBox.Show(message, "Usage report", MessageBoxButton.OK, MessageBoxImage.Information);
+            });
+        });
     }
 
     private void OpenLogFolder()
