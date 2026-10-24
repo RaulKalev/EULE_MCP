@@ -11,6 +11,9 @@ public sealed class MemoryRecallContext
     public string? ModelVersion { get; set; }
     public string User { get; set; } = string.Empty;
     public DateTimeOffset Now { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>How many syncs (or saves) the model may move on before an entry written in it is reported stale.</summary>
+    public int StaleAfterVersions { get; set; } = MemoryRecall.DefaultStaleAfterVersions;
 }
 
 public sealed class MemoryRecallOptions
@@ -89,13 +92,37 @@ public static class MemoryRecall
                string.Equals(MemoryPolicy.Slug(e.Project!), MemoryPolicy.Slug(project!), StringComparison.Ordinal);
     }
 
+    public const int DefaultStaleAfterVersions = 50;
+
+    /// <summary>
+    /// Stale when the entry was written in this model and the model has since moved on by at least
+    /// <see cref="MemoryRecallContext.StaleAfterVersions"/> syncs (<c>central:N:…</c>) or saves (<c>saves:N:…</c>).
+    /// The GUID part changes on every sync or save, so it is not compared; a lower count (another user's older local
+    /// copy) or a different kind of version is not stale.
+    /// </summary>
     public static (bool Stale, string? Reason) Staleness(MemoryEntry e, MemoryRecallContext context)
     {
         if (string.IsNullOrEmpty(e.ModelVersion) || string.IsNullOrEmpty(context.ModelVersion)) return (false, null);
         if (!string.Equals(e.Model, context.Model, StringComparison.OrdinalIgnoreCase)) return (false, null);
-        return e.ModelVersion == context.ModelVersion
-            ? (false, null)
-            : (true, "written against an earlier model");
+        if (!TryParseVersion(e.ModelVersion!, out var kind, out var then) ||
+            !TryParseVersion(context.ModelVersion!, out var nowKind, out var now) ||
+            !string.Equals(kind, nowKind, StringComparison.Ordinal))
+            return (false, null);
+        var moved = now - then;
+        if (moved < Math.Max(1, context.StaleAfterVersions)) return (false, null);
+        var unit = kind == "central" ? "syncs" : "saves";
+        return (true, $"written {moved} {unit} ago ({kind} {then}, now {now})");
+    }
+
+    /// <summary>"central:74:&lt;guid&gt;" → ("central", 74); "saves:12:&lt;guid&gt;" → ("saves", 12).</summary>
+    public static bool TryParseVersion(string version, out string kind, out long number)
+    {
+        kind = string.Empty;
+        number = 0;
+        var parts = version.Split(':');
+        if (parts.Length < 2) return false;
+        kind = parts[0].Trim().ToLowerInvariant();
+        return kind.Length > 0 && long.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out number);
     }
 
     public static double TierWeight(string scope) => scope switch

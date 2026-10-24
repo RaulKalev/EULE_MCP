@@ -334,7 +334,7 @@ public sealed partial class MemoryService
     public MemoryReviewData ReviewData(MemoryContext context)
     {
         var read = ReadTiers(context, "all");
-        var recall = context.ForRecall();
+        var recall = context.ForRecall(Settings.StaleAfterVersions);
         var data = new MemoryReviewData { Project = context.Project, User = UserOf(context), Now = context.Now, Tiers = read.Result.Tiers, Warnings = read.Result.Warnings };
         data.Entries = read.Snapshots
             .SelectMany(s => s.Snapshot.Entries)

@@ -52,6 +52,35 @@ public class MemoryLifecycleTests
     }
 
     [Fact]
+    public void ShownInHints_KeepsANoteActive_ButContradictionsStillMakeItDormant()
+    {
+        // A prose note whose use cannot be detected from tool arguments, shown in hints last week.
+        var shown = E(MemoryStates.Confirmed, daysAgo: 200);
+        shown.Counters.Shown = 40;
+        shown.Counters.LastShown = Now.AddDays(-7);
+        Assert.Equal(MemoryStates.Confirmed, MemoryLifecycle.Effective(shown, Now, Settings).State);
+
+        shown.Counters.LastShown = Now.AddDays(-100);
+        var (state, why) = MemoryLifecycle.Effective(shown, Now, Settings);
+        Assert.Equal(MemoryStates.Dormant, state);
+        Assert.Contains("not used or shown", why);
+
+        var contradicted = E(MemoryStates.Confirmed);
+        contradicted.Counters.LastShown = Now;
+        contradicted.Counters.Contradicted = 3;
+        Assert.Equal(MemoryStates.Dormant, MemoryLifecycle.Effective(contradicted, Now, Settings).State);
+    }
+
+    [Fact]
+    public void Usefulness_IsNeutralWithoutEvidence_HoweverOftenShown()
+    {
+        Assert.Equal(0.5, MemoryPolicy.Usefulness(new MemoryCounters()));
+        Assert.Equal(0.5, MemoryPolicy.Usefulness(new MemoryCounters { Shown = 100 }));
+        Assert.True(MemoryPolicy.Usefulness(new MemoryCounters { Shown = 4, Used = 4 }) > 0.5);
+        Assert.True(MemoryPolicy.Usefulness(new MemoryCounters { Shown = 20, Contradicted = 1 }) < 0.5);
+    }
+
+    [Fact]
     public void Contradicted_GoesDormant_FlipFlopStaysCandidate_StoredRetiredStays()
     {
         var contradicted = E(MemoryStates.Confirmed);
@@ -354,20 +383,77 @@ public sealed class MemoryPhase2ServiceTests : IDisposable
     }
 
     [Fact]
-    public void BasedOn_CreditsTheEntriesANoteReliedOn()
+    public void BasedOn_CreditsTheEntriesANoteReliedOn_WorkedOnlyWhenApproved()
     {
         var first = _service.Remember(Ctx(), Note("Detector tags use tag A always.")).Entry!;
-        var second = _service.Remember(Ctx(), new MemoryRememberRequest
+        var unapproved = _service.Remember(Ctx(), new MemoryRememberRequest
         {
             Key = "tags/sounder-tag-type",
             Value = "Sounder tags follow the detector tag style.",
             Reason = "Same legend as the detectors.",
             BasedOn = { first.Id, "not-an-id" }
         });
-
-        Assert.Equal(1, second.Credited);
+        Assert.Equal(1, unapproved.Credited);
         var e = _service.List(Ctx(), "project", null, null, 0, 10).Hits.Single(h => h.Entry.Id == first.Id).Entry;
-        Assert.Equal(1, e.Counters.Worked);
+        Assert.Equal((1, 0), (e.Counters.Used, e.Counters.Worked));
+
+        // Approved in Revit (not Direct Edit): the note was reviewed, so what it relied on worked.
+        _service.Remember(Ctx(), new MemoryRememberRequest
+        {
+            Key = "tags/beacon-tag-type",
+            Value = "Beacon tags follow the detector tag style.",
+            Reason = "Same legend as the detectors.",
+            BasedOn = { first.Id },
+            Approved = true
+        });
+        e = _service.List(Ctx(), "project", null, null, 0, 10).Hits.Single(h => h.Entry.Id == first.Id).Entry;
+        Assert.Equal((2, 1), (e.Counters.Used, e.Counters.Worked));
+    }
+
+    [Fact]
+    public void ApprovedProjectNote_IsConfirmed_AndReachesOtherUsersHints()
+    {
+        _settings.Hints = true;
+        var unapproved = _service.Remember(Ctx("u1"), Note("Detector tags use tag A always."));
+        Assert.Equal(MemoryStates.Candidate, unapproved.Entry!.State);
+        Assert.Contains("candidate", unapproved.Message);
+        Assert.Empty(_service.Hints(Ctx("u2"), "detector tags")!.Hits);
+
+        // The same note approved in Revit confirms the existing entry.
+        var approved = _service.Remember(Ctx("u1"), new MemoryRememberRequest
+        {
+            Key = "tags/detector-tag-type", Value = "Detector tags use tag A always.", Reason = "Client standard.", Approved = true
+        });
+        Assert.Equal(MemoryWriteKind.Reaffirm, approved.Kind);
+        Assert.Contains("confirmed", approved.Message);
+        Assert.Equal(MemoryStates.Confirmed, Assert.Single(_service.Hints(Ctx("u2"), "detector tags")!.Hits).Entry.State);
+
+        // A new approved value is confirmed straight away; a personal note never is.
+        var replaced = _service.Remember(Ctx("u2"), new MemoryRememberRequest
+        {
+            Key = "tags/detector-tag-type", Value = "Detector tags use tag B since the client's new legend.", Reason = "Client change.", Approved = true
+        });
+        Assert.Equal(MemoryStates.Confirmed, replaced.Entry!.State);
+        var personal = _service.Remember(Ctx("u1"), new MemoryRememberRequest
+        {
+            Key = "tags/my-side", Value = "I place detector tags on the right side.", Reason = "Habit.", Scope = MemoryScopes.Personal, Approved = true
+        });
+        Assert.Equal(MemoryStates.Candidate, personal.Entry!.State);
+    }
+
+    [Fact]
+    public void ApprovedFlipFlop_StaysACandidate()
+    {
+        Remember("u1", "Detector tags use tag A always.");
+        Remember("u2", "Detector tags use tag B always.");
+        var back = Remember("u1", "Detector tags use tag A always.");
+        Assert.Contains(MemoryPolicy.FlagFlipFlop, back.Entry!.Flags);
+        Assert.Equal(MemoryStates.Candidate, back.Entry.State);
+
+        MemoryRememberResult Remember(string user, string value) => _service.Remember(Ctx(user), new MemoryRememberRequest
+        {
+            Key = "tags/detector-tag-type", Value = value, Reason = "Client standard.", Approved = true
+        });
     }
 
     [Fact]

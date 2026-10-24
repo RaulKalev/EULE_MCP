@@ -45,6 +45,9 @@ public sealed class MemoryCounters
     /// <summary>When a later action last matched the entry (from the usage tallies; not stored in the entry file).</summary>
     public DateTimeOffset? LastUsed { get; set; }
 
+    /// <summary>When a recall or a route hint last showed the entry (from the usage tallies). Keeps a note in hints active.</summary>
+    public DateTimeOffset? LastShown { get; set; }
+
     public MemoryCounters Clone() => (MemoryCounters)MemberwiseClone();
 
     public void Add(MemoryCounters other)
@@ -55,6 +58,7 @@ public sealed class MemoryCounters
         Contradicted += other.Contradicted;
         Remembered += other.Remembered;
         if (other.LastUsed != null && (LastUsed == null || other.LastUsed > LastUsed)) LastUsed = other.LastUsed;
+        if (other.LastShown != null && (LastShown == null || other.LastShown > LastShown)) LastShown = other.LastShown;
     }
 }
 

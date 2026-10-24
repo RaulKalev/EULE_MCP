@@ -116,8 +116,10 @@ so recall enumerates the folder directly.
   last-write time on every recall. A note written on one machine is visible to the next recall on
   every other machine with no step in between.
 - **Staleness is computed, not rebuilt.** Recall compares each entry's `modelVersion` with the open
-  document's current version (the same reads `revit_graph_status` uses) and marks older entries
-  `"written against an earlier model"` in the response.
+  document's current version (the same reads `revit_graph_status` uses) and marks an entry stale when
+  the model has moved on by at least `memory.staleAfterVersions` (50) syncs (`central:N`) or saves
+  (`saves:N`): `"written 63 syncs ago (central 11, now 74)"`. Only the count is compared — the GUID
+  part changes on every sync — and a lower count (another user's older local copy) is not stale.
 - **Offline fallback.** When the share is unreachable the add-in reads and writes a local mirror
   under `%LOCALAPPDATA%\RKTools\RevitMCP\MemoryMirror\<project>\` and copies pending entries to the
   share when it returns. Because entries are independent files, replay is a plain copy.
@@ -241,6 +243,8 @@ reachable.
 ## Human review
 
 - **Approval queue.** A `remember` with `scope=project` is an approval-gated write like any other.
+  Approving it in Revit is the review: the note is stored as `confirmed` and reaches everyone's hints.
+  In Direct Edit nobody approved it, so it stays a `candidate` until confirmed on the review page.
 - **Review page.** `revit_memory_page` publishes the project's memory as a model page
   ([model-pages.md](model-pages.md)): one table, each entry with its state, source, counters and
   staleness, with confirm / retire / promote actions that write back through the same
@@ -290,9 +294,9 @@ matching `[McpServerTool]` in `RevitMCP.Bridge/RevitMcpTools.cs`.
 | Hooks into existing tools | `GraphRouteTool`, `ServerInstructions` | `memory` block in the route response; two lines: recall before a write, remember at task end |
 
 Configuration keys (`memory.*`, user then company config): `enabled`, `companyFolder`,
-`projectFolderName` (default `.rktools\memory`), `hints`, `hintLimit`, `observer.enabled`,
-`observer.minSupport`, `dormantAfterDays`, `retireAfterDays`, `maxEntriesPerProject`,
-`valueMaxLength`.
+`projectFolderName` (default `.rktools\memory`), `projectRootSkipFolders`, `hints`, `hintLimit`,
+`observer.enabled`, `observer.minSupport`, `dormantAfterDays`, `retireAfterDays`,
+`staleAfterVersions`, `maxEntriesPerProject`, `valueMaxLength`.
 
 ---
 
@@ -332,8 +336,14 @@ relaxes destructive tools, and Direct Edit still skips approval as for every oth
 
 - **Project tier:** `<project root>\.rktools\memory\` (`memory.projectFolderName`). The project root
   is `projectRoot` when given, else the nearest folder above the **central** model file that has a
-  `.rktools` folder (the project-config rule), else the central model's own folder. Cloud and server
-  models have no folder: they get personal memory only unless `projectRoot` is passed.
+  `.rktools` folder (the project-config rule; a `.rktools` at a drive or share root is ignored, since it
+  would merge every project), else the project folder **guessed** by walking up past stage, discipline
+  and Revit folders: for `…\0035_Kool\4_EN\02_PP\Revit\X.rvt` that is `0035_Kool`, so EP, PP and TP
+  share one memory. The folder names skipped are a regex, `memory.projectRootSkipFolders` (default: an
+  optional number prefix, then EP/PP/TP/TJ, a discipline such as EN/EL/AR/KV, or Revit/BIM/Models/IFC …).
+  A guessed root comes with a warning in remember, recall and list that says where memory went and to
+  create `.rktools` in the project's top folder (or pass `projectRoot`) if the guess is wrong. Cloud and
+  server models have no folder: they get personal memory only unless `projectRoot` is passed.
 - **Personal tier:** `%AppData%\RKTools\RevitMCP\Memory\`. A personal note is bound to the open
   project unless `anyProject=true`.
 - **Mirror:** `%LOCALAPPDATA%\RKTools\RevitMCP\MemoryMirror\<project>-<hash of the folder>\` holds a
@@ -356,8 +366,11 @@ relaxes destructive tools, and Direct Edit still skips approval as for every oth
 - **Keys:** the agent passes a topic path (`tags/detector-tag-type`); the store adds the tier and
   project (`project/1626/tags/detector-tag-type`, `personal/1626/…`, `personal/…` with
   `anyProject`). Keys are lowercase ASCII with diacritics dropped.
-- **Every new entry starts as `candidate`.** Recall weights candidates below confirmed entries and
-  flip-flops lower still; phase 2 adds the lifecycle that confirms them.
+- **Every new entry starts as `candidate`** — except a project note a person approved in Revit, which
+  is stored as `confirmed` (since 2026-10-24; before that approved notes stayed candidates and only
+  their author saw them in hints). An approved note that reopens a flip-flop stays a candidate. Recall
+  weights candidates below confirmed entries and flip-flops lower still; phase 2 adds the lifecycle
+  that confirms the rest.
 
 ### Write-time rules as implemented
 
@@ -372,7 +385,8 @@ with two or more authors on the key gets the `flip-flop` flag. At `memory.maxEnt
 (`memory_full`) while superseding an existing key still works.
 
 Configuration read in phase 1 (user config first, then company): `memory.enabled`,
-`memory.projectFolderName`, `memory.valueMaxLength`, `memory.maxEntriesPerProject`.
+`memory.projectFolderName`, `memory.valueMaxLength`, `memory.maxEntriesPerProject`; added later:
+`memory.projectRootSkipFolders` and `memory.staleAfterVersions` (50).
 
 ### Code
 
@@ -414,13 +428,17 @@ entry is in its state (`lifecycle`).
 
 | Effective state | When |
 |---|---|
-| retired | Stored as retired; a recipe names a tool the connector no longer has; unused for `dormantAfterDays` + `retireAfterDays` (90 + 365) |
-| dormant | Unused for `dormantAfterDays` (90); or contradicted at least `confirmAfterUses` times and more often than it worked |
+| retired | Stored as retired; a recipe names a tool the connector no longer has; not used or shown for `dormantAfterDays` + `retireAfterDays` (90 + 365) |
+| dormant | Not used or shown for `dormantAfterDays` (90); or contradicted at least `confirmAfterUses` times and more often than it worked |
 | candidate | A flip-flop not settled by a person; otherwise no evidence yet |
-| confirmed | Stored as confirmed; worked `confirmAfterUses` (3) times; or written (or observed) by two or more people |
+| confirmed | Stored as confirmed (approved in Revit, or on the review page); worked `confirmAfterUses` (3) times; or written (or observed) by two or more people |
 
-"Unused" is measured from the later of `updated` and the last use in the tallies, so an entry used
-again is confirmed again. Two rules from the design table are not applied: "stage passed" (the
+Idle time is measured from the latest of `updated`, the last use and the last time a recall or a route
+hint showed the entry (`lastShown` in the tallies), so an entry used again is confirmed again. Being
+shown counts because the use of most prose notes cannot be detected from tool arguments: before
+2026-10-24 a note shown in hints every day still went dormant after 90 days. Contradictions still make
+it dormant. For the same reason usefulness stays neutral (0.5) until an entry has been used, worked or
+contradicted at least once; being shown alone no longer lowers its rank. Two rules from the design table are not applied: "stage passed" (the
 connector does not know the project's current stage) and "model version moved on" (every sync
 moves it; staleness is reported per entry instead).
 
@@ -433,8 +451,8 @@ does an observed default called with a different value. Counts go to the user's 
 `lastUsed`. A call still waiting for approval is not an outcome; the approved execution or the
 rejection that follows is. Prose entries match on whole words. For prose notes the agent can also
 pass `basedOn=[ids]` to `revit_memory_remember`: each cited entry counts as used, and as worked only
-when the note is a project note (approved) — so unapproved personal notes cannot confirm shared
-entries.
+when the note is a project note a person approved in Revit — so personal notes and Direct Edit notes
+cannot confirm shared entries.
 
 ### Workflow observer
 
@@ -475,7 +493,8 @@ changes nothing shared.
 
 `memory.companyFolder`, `memory.hints` (true since 2026-10-24), `memory.hintLimit` (5), `memory.observer.enabled`
 (true), `memory.observer.minSupport` (3), `memory.observer.minSessions` (2),
-`memory.confirmAfterUses` (3), `memory.dormantAfterDays` (90), `memory.retireAfterDays` (365).
+`memory.confirmAfterUses` (3), `memory.dormantAfterDays` (90), `memory.retireAfterDays` (365),
+`memory.projectRootSkipFolders` (see *Where entries live*), `memory.staleAfterVersions` (50).
 
 ### Code
 

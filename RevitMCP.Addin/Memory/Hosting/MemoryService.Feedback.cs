@@ -41,7 +41,7 @@ public sealed partial class MemoryService
             var shown = hits.Where(h => ids.Contains(h.Entry.Id)).ToList();
             if (shown.Count == 0) continue;
             // The company folder is usually read-only for users; its usage simply goes uncounted then.
-            if (!cache.Store.AddShown(user, shown.Select(h => h.Entry.Id)) && scope != MemoryScopes.Company)
+            if (!cache.Store.AddShown(user, shown.Select(h => h.Entry.Id), context.Now) && scope != MemoryScopes.Company)
                 read.Result.Warnings.Add($"The usage tally in {snapshot.Folder} could not be updated.");
             cache.Invalidate();
             watch.AddRange(shown.Select(h => new PendingHint

@@ -20,19 +20,23 @@ public sealed class MemoryContext
 
     /// <summary>Why <see cref="ProjectFolder"/> is null.</summary>
     public string? ProjectProblem { get; set; }
+
+    /// <summary>The project folder was guessed (no <c>.rktools</c> above the model): where memory went and how to pin it.</summary>
+    public string? ProjectWarning { get; set; }
     public string? Model { get; set; }
     public string? ModelVersion { get; set; }
     public string User { get; set; } = string.Empty;
     public string? Client { get; set; }
     public DateTimeOffset Now { get; set; } = DateTimeOffset.UtcNow;
 
-    public MemoryRecallContext ForRecall() => new()
+    public MemoryRecallContext ForRecall(int staleAfterVersions = MemoryRecall.DefaultStaleAfterVersions) => new()
     {
         Project = Project,
         Model = Model,
         ModelVersion = ModelVersion,
         User = User,
-        Now = Now
+        Now = Now,
+        StaleAfterVersions = staleAfterVersions
     };
 }
 
@@ -49,8 +53,14 @@ public sealed class MemoryRememberRequest
     /// <summary>Personal scope only: the note applies in every project, not just the open one.</summary>
     public bool AnyProject { get; set; }
 
-    /// <summary>Ids of recalled entries this note relied on: each counts as used and worked.</summary>
+    /// <summary>Ids of recalled entries this note relied on: each counts as used, and as worked when the note is approved.</summary>
     public List<string> BasedOn { get; set; } = new();
+
+    /// <summary>
+    /// A person approved this call in Revit (not Direct Edit). An approved project note is stored as confirmed, so it
+    /// reaches everyone's hints at once; without approval it stays a candidate until it is confirmed.
+    /// </summary>
+    public bool Approved { get; set; }
 }
 
 public sealed class MemoryRememberResult
@@ -212,10 +222,12 @@ public sealed partial class MemoryService : IDisposable
             Tags = MemoryPolicy.NormalizeTags(request.Tags),
             Stage = Blank(request.Stage)?.ToUpperInvariant(),
             Source = source,
-            Authors = new List<string> { author }
+            Authors = new List<string> { author },
+            // A person approved it at the Revit screen: that is the review the project tier asks for.
+            State = scope == MemoryScopes.Project && request.Approved ? MemoryStates.Confirmed : MemoryStates.Candidate
         };
 
-        var credited = Credit(context, request.BasedOn, scope == MemoryScopes.Project);
+        var credited = Credit(context, request.BasedOn, scope == MemoryScopes.Project && request.Approved);
         if (scope == MemoryScopes.Company)
         {
             var proposal = Propose(context, note);
@@ -227,6 +239,14 @@ public sealed partial class MemoryService : IDisposable
         if (cache == null) return Refuse("not_available", unavailable!);
         var result = Write(cache, note, context);
         result.Credited = credited;
+        if (result.Success && scope == MemoryScopes.Project && result.Entry != null)
+        {
+            var (state, _) = MemoryLifecycle.Effective(result.Entry, context.Now, settings, _toolExists);
+            result.Message += state == MemoryStates.Confirmed
+                ? " It is confirmed and shows in everyone's hints."
+                : " It is a candidate: only you see it in hints until it is confirmed (approved in Revit, confirmed on revit_memory_page, or written by a second person).";
+            if (context.ProjectWarning != null) result.Message += " " + context.ProjectWarning;
+        }
         return result;
     }
 
@@ -253,6 +273,9 @@ public sealed partial class MemoryService : IDisposable
                 foreach (var t in note.Tags) if (!entry.Tags.Contains(t)) entry.Tags.Add(t);
                 entry.Reason = note.Reason;
                 entry.Updated = context.Now;
+                // Approving the same value again confirms it, unless people disagree on it (the review page settles that).
+                if (note.State == MemoryStates.Confirmed && entry.State == MemoryStates.Candidate && !entry.Flags.Contains(MemoryPolicy.FlagFlipFlop))
+                    entry.State = MemoryStates.Confirmed;
                 if (string.Equals(entry.Model, context.Model, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(context.ModelVersion))
                     entry.ModelVersion = context.ModelVersion;
                 var location = cache.Store.Write(entry);
@@ -278,7 +301,12 @@ public sealed partial class MemoryService : IDisposable
             // A fixed id must never overwrite a stored entry (history, or one a person retired).
             if (note.Id != null && snapshot.FileEntries.ContainsKey(note.Id)) created.Id = Guid.NewGuid().ToString();
             created.Supersedes = decision.Existing?.Id;
-            if (decision.FlipFlop) created.Flags.Add(MemoryPolicy.FlagFlipFlop);
+            if (decision.FlipFlop)
+            {
+                created.Flags.Add(MemoryPolicy.FlagFlipFlop);
+                // One person's approval does not settle a disagreement between people.
+                created.State = MemoryStates.Candidate;
+            }
 
             var written = cache.Store.Write(created);
             result.Entry = created;
@@ -411,7 +439,7 @@ public sealed partial class MemoryService : IDisposable
         if (read.Snapshots.Count == 0) return read.Result;
 
         var all = read.Snapshots.SelectMany(s => s.Snapshot.Entries);
-        var hits = MemoryRecall.Rank(all, options, context.ForRecall());
+        var hits = MemoryRecall.Rank(all, options, context.ForRecall(Settings.StaleAfterVersions));
         read.Result.Hits = hits;
         read.Result.Total = hits.Count;
         RecordShown(context, hits, read);
@@ -441,7 +469,7 @@ public sealed partial class MemoryService : IDisposable
         var read = ReadTiers(context, scope);
         var tagList = MemoryPolicy.NormalizeTags(tags);
         var wantedState = Blank(state)?.ToLowerInvariant();
-        var recall = context.ForRecall();
+        var recall = context.ForRecall(Settings.StaleAfterVersions);
 
         var matching = read.Snapshots
             .SelectMany(s => s.Snapshot.Entries)
@@ -496,6 +524,7 @@ public sealed partial class MemoryService : IDisposable
                 continue;
             }
             var snapshot = Read(cache, context.Now);
+            if (s == MemoryScopes.Project && context.ProjectWarning != null) read.Result.Warnings.Add(context.ProjectWarning);
             foreach (var error in snapshot.Errors) read.Result.Warnings.Add($"Skipped an unreadable entry: {error}");
             if (snapshot.FromMirror) read.Result.Warnings.Add($"The {s} memory folder is unreachable; read from the local mirror.");
             read.Snapshots.Add((cache, snapshot, s));
