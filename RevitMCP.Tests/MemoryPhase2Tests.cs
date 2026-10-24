@@ -319,10 +319,13 @@ public sealed class MemoryPhase2ServiceTests : IDisposable
     }
 
     [Fact]
-    public void Hints_AreOffByDefault_AndShowOnlyConfirmedOrOwnCandidates()
+    public void Hints_AreOnByDefault_AndShowOnlyConfirmedOrOwnCandidates()
     {
         _service.Remember(Ctx("u1"), Note("Detector tags use tag A always."));
-        Assert.Null(_service.Hints(Ctx("u2"), "detector tags"));
+        Assert.True(new MemorySettings().Hints);
+
+        _settings.Hints = false;
+        Assert.Null(_service.Hints(Ctx("u1"), "detector tags"));
 
         _settings.Hints = true;
         Assert.Empty(_service.Hints(Ctx("u2"), "detector tags")!.Hits);

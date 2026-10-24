@@ -1,0 +1,43 @@
+{
+  "Label": "memory-hints-default-on",
+  "Model": "",
+  "StartedAt": "2026-10-24 14:31:37 \u002B03:00",
+  "BridgePath": "C:\\Users\\RaulKalev\\Documents\\AntiGravity\\EULE_MCP\\.claude\\worktrees\\revit-connector-deploy-benchmark-31d51b\\RevitMCP.Bridge\\bin\\Release\\net8.0\\RevitMCP.Bridge.exe",
+  "Schemas": [
+    {
+      "Profile": "full",
+      "ToolCount": 275,
+      "SchemaBytes": 363636,
+      "SchemaTokens": 90909,
+      "InstructionTokens": 563,
+      "Error": null
+    },
+    {
+      "Profile": "core",
+      "ToolCount": 21,
+      "SchemaBytes": 24515,
+      "SchemaTokens": 6129,
+      "InstructionTokens": 563,
+      "Error": null
+    },
+    {
+      "Profile": "query",
+      "ToolCount": 38,
+      "SchemaBytes": 41016,
+      "SchemaTokens": 10254,
+      "InstructionTokens": 563,
+      "Error": null
+    },
+    {
+      "Profile": "read-only",
+      "ToolCount": 187,
+      "SchemaBytes": 231884,
+      "SchemaTokens": 57971,
+      "InstructionTokens": 563,
+      "Error": null
+    }
+  ],
+  "GraphBuild": null,
+  "GraphIncremental": null,
+  "Scenarios": []
+}

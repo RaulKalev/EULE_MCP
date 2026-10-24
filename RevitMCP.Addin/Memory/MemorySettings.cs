@@ -24,10 +24,10 @@ public sealed class MemorySettings
     public string? CompanyFolder { get; set; }
 
     /// <summary>
-    /// Memory hints inside revit_graph_route. Off until the benchmark on a real project shows they pay for
-    /// themselves (docs/shared-memory.md, "Credit usage"); <c>memory.hints=true</c> switches them on.
+    /// Memory hints inside revit_graph_route. On since the memory-on/off benchmark on a real project
+    /// (docs/benchmarks, IPI2519, after the recall matching fix #113); <c>memory.hints=false</c> switches them off.
     /// </summary>
-    public bool Hints { get; set; }
+    public bool Hints { get; set; } = true;
     public int HintLimit { get; set; } = 5;
 
     public bool ObserverEnabled { get; set; } = true;
