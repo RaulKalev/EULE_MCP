@@ -137,6 +137,22 @@ Ranking: text match on key, value, reason and tags × tier weight (project > com
 recency × usefulness (`used`/`shown`) × same-user bonus; dormant and retired entries never appear
 in hints, retired ones only with `includeRetired=true`.
 
+Text matching (`MemoryRecall.TextMatch`) works on whole words, diacritics folded:
+
+- **Terms.** Query words of 3+ characters that are not common English or Estonian filler ("the",
+  "for", "ja", "kõik" …). A query of filler only matches nothing.
+- **Word forms.** A term matches a word that starts with it or that it starts with, up to four
+  letters apart (`kaamera`/`kaamerate`, `kõrgus`/`kõrgusel`; one letter for three-letter words,
+  `tag`/`tags`), or a 5+ letter word that differs only in the last letter (`kaamerad`/`kaamerat`).
+  Consonant gradation (`silt`/`sildid`) is not covered: store the base form in key or tags.
+- **Minimum share.** At least a third of the terms must match.
+- **Generic words.** Words every Revit request shares (tag, type, family, parameter, device,
+  silt, tüüp …) count toward the share but cannot carry a match alone: "detector tag type" does
+  not return a camera tag note.
+
+Measured on IPI2519 (2026-10-24): before this, one camera tag note matched "detector tag type" and
+"renumber the circuits on the panel" and missed "kaamerate sildid".
+
 Every recall response carries:
 
 ```json

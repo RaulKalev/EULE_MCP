@@ -49,6 +49,8 @@ public static class MemoryRecall
     public static List<MemoryHit> Rank(IEnumerable<MemoryEntry> entries, MemoryRecallOptions options, MemoryRecallContext context)
     {
         var terms = Terms(options.Query);
+        // A query made only of filler words matches nothing (an empty query still lists by tags).
+        if (terms.Count == 0 && !string.IsNullOrWhiteSpace(options.Query)) return new List<MemoryHit>();
         var tags = MemoryPolicy.NormalizeTags(options.Tags);
         var hits = new List<MemoryHit>();
         foreach (var e in entries)
@@ -115,38 +117,123 @@ public static class MemoryRecall
         return e.Flags.Contains(MemoryPolicy.FlagFlipFlop) ? weight * 0.5 : weight;
     }
 
+    /// <summary>Share of the query terms that must be found for an entry to match at all.</summary>
+    public const double MinTermShare = 1.0 / 3;
+
+    /// <summary>Words too common in requests to say what they are about (English and Estonian), folded.</summary>
+    private static readonly HashSet<string> StopWords = new(StringComparer.Ordinal)
+    {
+        "the", "and", "for", "with", "from", "into", "onto", "that", "this", "these", "those", "which", "what", "when",
+        "where", "how", "they", "them", "their", "are", "was", "were", "any", "each", "per", "our", "your", "its", "has", "have", "not", "but",
+        "can", "should", "must", "will", "new", "all", "only", "also", "then", "there", "here", "about", "use", "using",
+        "ning", "voi", "kui", "see", "need", "mis", "kus", "koik", "oma", "uus", "uued", "uute", "juures", "peal",
+        "jaoks", "iga", "igal", "nagu", "siis", "aga", "mida", "kas", "ole", "olla"
+    };
+
     /// <summary>
-    /// The share of query terms found (key and tags count three times, value twice, reason once). Zero when none
-    /// is found, so an unrelated entry never shows up just for being recent.
+    /// Words every Revit request shares (tag, type, family, parameter …). They count toward the share, but an entry
+    /// that matches only these does not match a query that also names what it is about ("detector tag type" must not
+    /// return the camera tag note). Prefix-matched like any term, so "tags" and "tüübid" are generic too.
+    /// </summary>
+    private static readonly string[] GenericWords =
+    {
+        "tag", "type", "family", "instance", "element", "parameter", "value", "category", "name", "revit", "model",
+        "project", "convention", "rule", "default", "device", "place", "set", "check", "find", "list", "get",
+        "silt", "sildi", "tuup", "perekond", "parameeter", "vaartus", "kategooria", "nimi", "mudel", "projekt", "seade",
+        "paiguta"
+    };
+
+    /// <summary>
+    /// Text match of the query terms against the entry's words (key and tags count three times, value twice, reason
+    /// once). Zero unless at least <see cref="MinTermShare"/> of the terms are found and, when the query has terms
+    /// beyond <see cref="GenericWords"/>, one of those is found — so an unrelated entry never shows up just for being
+    /// recent or for sharing "tag" with the query.
     /// </summary>
     private static double TextMatch(MemoryEntry e, List<string> terms)
     {
-        var key = Fold(e.Key.Replace('/', ' ').Replace('-', ' '));
-        var tags = Fold(string.Join(" ", e.Tags).Replace('-', ' '));
-        var value = Fold(e.Value);
-        var reason = Fold(e.Reason);
+        var key = Words(e.Key);
+        var tags = Words(string.Join(" ", e.Tags));
+        var value = Words(e.Value);
+        var reason = Words(e.Reason);
         double sum = 0;
         var found = 0;
+        var specific = 0;
+        var specificFound = 0;
         foreach (var t in terms)
         {
             double w = 0;
-            if (key.Contains(t)) w += 3;
-            if (tags.Contains(t)) w += 3;
-            if (value.Contains(t)) w += 2;
-            if (reason.Contains(t)) w += 1;
-            if (w > 0) found++;
+            if (AnyMatch(key, t)) w += 3;
+            if (AnyMatch(tags, t)) w += 3;
+            if (AnyMatch(value, t)) w += 2;
+            if (AnyMatch(reason, t)) w += 1;
+            var generic = IsGeneric(t);
+            if (!generic) specific++;
+            if (w > 0)
+            {
+                found++;
+                if (!generic) specificFound++;
+            }
             sum += w;
         }
-        if (found == 0) return 0;
+        if (found == 0 || found < terms.Count * MinTermShare) return 0;
+        if (specific > 0 && specificFound == 0) return 0;
         return sum / (terms.Count * 9.0) + (double)found / terms.Count;
     }
 
-    private static List<string> Terms(string query)
+    /// <summary>The query's search terms: folded words of 3+ characters that are not <see cref="StopWords"/>.</summary>
+    public static List<string> Terms(string query)
     {
         var terms = new List<string>();
-        foreach (var raw in Fold(query).Split(new[] { ' ', ',', ';', '/', '-', '_', '.', ':', '"', '\'', '(', ')' }, StringSplitOptions.RemoveEmptyEntries))
-            if (raw.Length >= 2 && !terms.Contains(raw)) terms.Add(raw);
+        foreach (var word in Words(query))
+            if (word.Length >= 3 && !StopWords.Contains(word) && !terms.Contains(word)) terms.Add(word);
         return terms;
+    }
+
+    /// <summary>
+    /// True when <paramref name="term"/> and <paramref name="word"/> are the same word in another form: equal, one
+    /// starts with the other and adds at most four letters (kaamera/kaamerate, korgus/korgusel; one for three-letter
+    /// words, tag/tags), or both
+    /// are 5+ letters and differ only in the last one (kaamerad/kaamerat). Whole words only, so "on" no longer
+    /// matches inside "convention".
+    /// </summary>
+    public static bool WordMatches(string term, string word)
+    {
+        if (term == word) return true;
+        var shorter = Math.Min(term.Length, word.Length);
+        var prefix = 0;
+        while (prefix < shorter && term[prefix] == word[prefix]) prefix++;
+        // Three-letter words only take a one-letter ending (tag/tags), not any longer word (car/cargo).
+        if (prefix == shorter) return shorter >= 3 && Math.Abs(term.Length - word.Length) <= (shorter == 3 ? 1 : 4);
+        return shorter >= 5 && prefix >= shorter - 1;
+    }
+
+    private static bool AnyMatch(List<string> words, string term)
+    {
+        foreach (var w in words)
+            if (WordMatches(term, w)) return true;
+        return false;
+    }
+
+    private static bool IsGeneric(string term)
+    {
+        foreach (var g in GenericWords)
+            if (WordMatches(term, g)) return true;
+        return false;
+    }
+
+    /// <summary>Folded words: runs of letters and digits, so keys, snake_case and "Tag:Type" split too.</summary>
+    private static List<string> Words(string? text)
+    {
+        var words = new List<string>();
+        if (string.IsNullOrEmpty(text)) return words;
+        var sb = new StringBuilder();
+        foreach (var c in Fold(text!))
+        {
+            if (char.IsLetterOrDigit(c)) { sb.Append(c); continue; }
+            if (sb.Length > 0) { words.Add(sb.ToString()); sb.Clear(); }
+        }
+        if (sb.Length > 0) words.Add(sb.ToString());
+        return words;
     }
 
     /// <summary>Lowercase, diacritics dropped, so "silt" finds "Silt" and "õ" matches "o".</summary>
