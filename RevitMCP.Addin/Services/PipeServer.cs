@@ -185,6 +185,8 @@ public class PipeServer
     private async Task HandleClientAsync(NamedPipeServerStream pipe, CancellationToken ct)
     {
         DiagLog("HandleClientAsync started");
+        // Set once the read loop ends; errors after that are the client hanging up (see PipeHangup).
+        var readLoopEnded = false;
         // NOTE: ALL construction is inside the try so any exception is caught and logged.
         try
         {
@@ -248,9 +250,15 @@ public class PipeServer
                 if (request != null)
                     await _logger.WriteAsync(request, result, _eventService.GetLastContext(), responseBytes);
             }
+            readLoopEnded = true;
             DiagLog($"While loop exited: IsCancelled={ct.IsCancellationRequested}, IsConnected={pipe.IsConnected}");
         }
         catch (OperationCanceledException) { }
+        catch (Exception ex) when (PipeHangup.IsAfterClose(ex, readLoopEnded))
+        {
+            // Disposing the writer flushes into the pipe the client already closed: a normal close, not an error.
+            DiagLog($"Client closed the pipe: {ex.GetType().Name}: {ex.Message}");
+        }
         catch (Exception ex)
         {
             DiagLog($"OUTER EXCEPTION in HandleClientAsync: {ex.GetType().Name}: {ex.Message}");
