@@ -5,7 +5,9 @@
     "roomNumber": "08",
     "deviceCategory": "Fire Alarm Devices",
     "linkedCategory": "Ducts",
-    "reducedProfile": "core"
+    "reducedProfile": "core",
+    "memoryQuery": "detector tag type",
+    "tagCategory": "Fire Alarm Device Tags"
   },
   "scenarios": [
     {
@@ -120,6 +122,29 @@
           { "tool": "revit_graph_query", "args": { "operation": "neighbors", "id": "{{roomId}}", "rel": "located_in", "direction": "in", "link": "links", "limit": 200 } }
         ] },
         { "name": "graph-reduced", "profile": "{{reducedProfile}}", "sameStepsAs": "graph" }
+      ]
+    },
+    {
+      "id": "memory-hints",
+      "title": "Shared memory on vs off: learn the project's convention before a write",
+      "description": "Run with memory.hints=true in the user config, on a project whose memory holds an entry matching memoryQuery. memory-off finds the convention as an agent without memory does (a live read of the existing tags); memory-hints gets it from the route's memory block; memory-recall asks memory explicitly.",
+      "setup": [
+        { "tool": "revit_memory_recall", "args": { "query": "{{memoryQuery}}", "scope": "all", "limit": 1 },
+          "bind": { "memoryEntry": "$.data.entries[0].id" },
+          "skipReason": "project memory has no entry matching memoryQuery (remember one first, or pass --var memoryQuery=...)" }
+      ],
+      "variants": [
+        { "name": "memory-off", "profile": "full", "steps": [
+          { "tool": "revit_graph_route", "args": { "intent": "{{memoryQuery}}", "memoryHint": false } },
+          { "tool": "revit_get_elements_info", "args": { "category": "{{tagCategory}}", "compact": true, "pageSize": 100, "graphFirst": false, "parameterNames": ["Family", "Type"] } }
+        ] },
+        { "name": "memory-hints", "profile": "full", "steps": [
+          { "tool": "revit_graph_route", "args": { "intent": "{{memoryQuery}}", "memoryHint": true } }
+        ] },
+        { "name": "memory-recall", "profile": "full", "steps": [
+          { "tool": "revit_graph_route", "args": { "intent": "{{memoryQuery}}", "memoryHint": false } },
+          { "tool": "revit_memory_recall", "args": { "query": "{{memoryQuery}}", "limit": 5 } }
+        ] }
       ]
     }
   ]

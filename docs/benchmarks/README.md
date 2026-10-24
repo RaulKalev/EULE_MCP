@@ -58,6 +58,27 @@ reported as *skipped* with the reason instead of producing misleading numbers. S
 `{{variable}}` placeholders and bind values from results with a small JSON path
 (`$.data.items[:10].id`, `[*]` for all).
 
+### Memory on vs off (`memory-hints`)
+
+The scenario the shared-memory design asks for before memory hints are switched on by default
+([shared-memory.md](../shared-memory.md), "Credit usage"). On a workstation with Revit:
+
+1. Open a real project model whose project memory holds an entry for the convention you measure,
+   e.g. remember "Detector tags use <type>" once with `revit_memory_remember`.
+2. Set `"memory": { "hints": true }` in `%AppData%\RKTools\MCP\user.config.json` (the `memory-off`
+   variant still opts out per call with `memoryHint=false`).
+3. Run, naming the query and the tag category of the model:
+
+```bash
+dotnet RevitMCP.Benchmark/bin/Release/net8.0/RevitMCP.Benchmark.dll --label memory-on-off-<model> --profiles full \
+  --var memoryQuery="detector tag type" --var tagCategory="Fire Alarm Device Tags"
+```
+
+`memory-off` pays for the live read an agent without memory makes to learn the convention;
+`memory-hints` gets it from the route's memory block; `memory-recall` asks memory explicitly. The
+scenario is skipped, with the reason, when memory has no matching entry. Record the report below;
+if `memory-hints` is clearly cheaper, `memory.hints` can default to on.
+
 ## Results
 
 | Report | Model | Notes |
