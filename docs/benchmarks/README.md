@@ -58,6 +58,27 @@ reported as *skipped* with the reason instead of producing misleading numbers. S
 `{{variable}}` placeholders and bind values from results with a small JSON path
 (`$.data.items[:10].id`, `[*]` for all).
 
+### Memory on vs off (`memory-hints`)
+
+The scenario the shared-memory design asks for before memory hints are switched on by default
+([shared-memory.md](../shared-memory.md), "Credit usage"). On a workstation with Revit:
+
+1. Open a real project model whose project memory holds an entry for the convention you measure,
+   e.g. remember "Detector tags use <type>" once with `revit_memory_remember`.
+2. Set `"memory": { "hints": true }` in `%AppData%\RKTools\MCP\user.config.json` (the `memory-off`
+   variant still opts out per call with `memoryHint=false`).
+3. Run, naming the query and the tag category of the model:
+
+```bash
+dotnet RevitMCP.Benchmark/bin/Release/net8.0/RevitMCP.Benchmark.dll --label memory-on-off-<model> --profiles full \
+  --var memoryQuery="detector tag type" --var tagCategory="Fire Alarm Device Tags"
+```
+
+`memory-off` pays for the live read an agent without memory makes to learn the convention;
+`memory-hints` gets it from the route's memory block; `memory-recall` asks memory explicitly. The
+scenario is skipped, with the reason, when memory has no matching entry. Record the report below;
+if `memory-hints` is clearly cheaper, `memory.hints` can default to on.
+
 ## Results
 
 | Report | Model | Notes |
@@ -70,6 +91,7 @@ reported as *skipped* with the reason instead of producing misleading numbers. S
 | [20261023-220217-shared-memory-phase2](20261023-220217-shared-memory-phase2.md) | none (`--schema-only`) | Shared memory phase 2: `memoryHint` on `revit_graph_route`, company scope and `basedOn` on `revit_memory_remember` — `core` ≈ 6.0k → 6.1k schema tokens, instructions ≈ 535 → 563. Route hints are off by default (`memory.hints`) until the memory-on/off run on a real project is recorded. |
 | [20261023-221627-shared-memory-phase3-4](20261023-221627-shared-memory-phase3-4.md) | none (`--schema-only`) | Shared memory phases 3 and 4: `revit_memory_page`, `revit_memory_forget` and `revit_memory_consolidate` join the `memory` group — `core` unchanged (21 tools ≈ 6.1k tokens), `full` 271 → 274 tools. |
 | [20261024-065913-usage-reporting](20261024-065913-usage-reporting.md) | none (`--schema-only`) | Usage reporting: `revit_usage_report` joins the `office` group — `core` unchanged (21 tools ≈ 6.1k tokens), `full` 274 → 275 tools. |
+| [20261024-103001-memory-on-off-IPI2519_PP_EN](20261024-103001-memory-on-off-IPI2519_PP_EN.md) | Raemõisa põhikool EN PP (55.1k elements, 633 security device tags, no fire-alarm devices) | Memory on vs off at 1eb64c8, measured on camera tags (`memoryQuery="camera tag type"`, `tagCategory="Security Device Tags"`, one personal entry): result tokens `memory-off` ≈ 8.0k (2 calls, 100 tags read live) → `memory-hints` ≈ 0.6k (1 call) → `memory-recall` ≈ 0.6k (2 calls). The memory block adds ≈ 150 tokens to the route. `full` schema unchanged (275 tools ≈ 90.9k). `category-inspect` live fails here: the whole-model read exceeds the 1 MB response cap. |
 
 A large model run is still to be recorded: open one (e.g. a full EN model with circuits) and run
 the benchmark with `--label <model>`; the panel and loop scenarios then also produce numbers.

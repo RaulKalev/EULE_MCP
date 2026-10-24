@@ -1,0 +1,428 @@
+{
+  "Label": "memory-on-off-IPI2519_PP_EN",
+  "Model": "IPI2519_PP_EN_raul.kalev",
+  "StartedAt": "2026-10-24 10:29:46 \u002B03:00",
+  "BridgePath": "C:\\Users\\RaulKalev\\EULE Dropbox\\0_EULE  Team folder (kogu kollektiiv)\\02_EULE REVIT TEMPLATE\\099-scriptid\\Pluginad\\EULE_MCP\\Bridge\\RevitMCP.Bridge.exe",
+  "Schemas": [
+    {
+      "Profile": "full",
+      "ToolCount": 275,
+      "SchemaBytes": 363636,
+      "SchemaTokens": 90909,
+      "InstructionTokens": 563,
+      "Error": null
+    }
+  ],
+  "GraphBuild": {
+    "Success": true,
+    "ElapsedMs": 6881,
+    "NodeCount": 39649,
+    "EdgeCount": 87174,
+    "ModelElementCount": 55100,
+    "Incremental": false,
+    "Error": null
+  },
+  "GraphIncremental": {
+    "Success": true,
+    "ElapsedMs": 460,
+    "NodeCount": 39649,
+    "EdgeCount": 87174,
+    "ModelElementCount": 55100,
+    "Incremental": true,
+    "Error": null
+  },
+  "Scenarios": [
+    {
+      "Id": "category-inspect",
+      "Title": "Inspect a category across the model",
+      "Skipped": null,
+      "Variants": [
+        {
+          "Name": "live",
+          "Profile": "full",
+          "SchemaTokens": 90909,
+          "Steps": [
+            {
+              "Tool": "revit_count_elements",
+              "Success": true,
+              "ResultBytes": 182,
+              "ResultTokens": 46,
+              "ElapsedMs": 25,
+              "LiveElements": 0,
+              "Error": null
+            },
+            {
+              "Tool": "revit_get_elements_info",
+              "Success": false,
+              "ResultBytes": 907,
+              "ResultTokens": 223,
+              "ElapsedMs": 497,
+              "LiveElements": 0,
+              "Error": "Response too large (1\u00A0319\u00A0896 bytes; limit 1\u00A0000\u00A0000 bytes). Narrow your query \u2014 use a category filter, element ids, a smaller pageSize, or limit parameter names."
+            }
+          ],
+          "Skipped": null,
+          "ToolCalls": 2,
+          "ResultBytes": 1089,
+          "ResultTokens": 269,
+          "ElapsedMs": 522,
+          "LiveElements": 0,
+          "Failures": 1
+        },
+        {
+          "Name": "graph",
+          "Profile": "full",
+          "SchemaTokens": 90909,
+          "Steps": [
+            {
+              "Tool": "revit_graph_summary",
+              "Success": true,
+              "ResultBytes": 8059,
+              "ResultTokens": 2015,
+              "ElapsedMs": 187,
+              "LiveElements": 0,
+              "Error": null
+            },
+            {
+              "Tool": "revit_graph_query",
+              "Success": true,
+              "ResultBytes": 23978,
+              "ResultTokens": 5962,
+              "ElapsedMs": 66,
+              "LiveElements": 0,
+              "Error": null
+            },
+            {
+              "Tool": "revit_get_elements_info",
+              "Success": true,
+              "ResultBytes": 6479,
+              "ResultTokens": 1604,
+              "ElapsedMs": 18,
+              "LiveElements": 10,
+              "Error": null
+            }
+          ],
+          "Skipped": null,
+          "ToolCalls": 3,
+          "ResultBytes": 38516,
+          "ResultTokens": 9581,
+          "ElapsedMs": 271,
+          "LiveElements": 10,
+          "Failures": 0
+        },
+        {
+          "Name": "graph-reduced",
+          "Profile": "core",
+          "SchemaTokens": 0,
+          "Steps": [],
+          "Skipped": "profile not selected",
+          "ToolCalls": 0,
+          "ResultBytes": 0,
+          "ResultTokens": 0,
+          "ElapsedMs": 0,
+          "LiveElements": 0,
+          "Failures": 0
+        }
+      ]
+    },
+    {
+      "Id": "room-devices",
+      "Title": "Locate devices in a specific room",
+      "Skipped": null,
+      "Variants": [
+        {
+          "Name": "live",
+          "Profile": "full",
+          "SchemaTokens": 90909,
+          "Steps": [
+            {
+              "Tool": "revit_get_elements_info",
+              "Success": true,
+              "ResultBytes": 208,
+              "ResultTokens": 52,
+              "ElapsedMs": 124,
+              "LiveElements": 0,
+              "Error": null
+            }
+          ],
+          "Skipped": null,
+          "ToolCalls": 1,
+          "ResultBytes": 208,
+          "ResultTokens": 52,
+          "ElapsedMs": 124,
+          "LiveElements": 0,
+          "Failures": 0
+        },
+        {
+          "Name": "graph",
+          "Profile": "full",
+          "SchemaTokens": 90909,
+          "Steps": [
+            {
+              "Tool": "revit_graph_query",
+              "Success": true,
+              "ResultBytes": 2495,
+              "ResultTokens": 623,
+              "ElapsedMs": 48,
+              "LiveElements": 0,
+              "Error": null
+            },
+            {
+              "Tool": "revit_get_elements_info",
+              "Success": true,
+              "ResultBytes": 7119,
+              "ResultTokens": 1773,
+              "ElapsedMs": 26,
+              "LiveElements": 7,
+              "Error": null
+            }
+          ],
+          "Skipped": null,
+          "ToolCalls": 2,
+          "ResultBytes": 9614,
+          "ResultTokens": 2396,
+          "ElapsedMs": 74,
+          "LiveElements": 7,
+          "Failures": 0
+        },
+        {
+          "Name": "graph-reduced",
+          "Profile": "core",
+          "SchemaTokens": 0,
+          "Steps": [],
+          "Skipped": "profile not selected",
+          "ToolCalls": 0,
+          "ResultBytes": 0,
+          "ResultTokens": 0,
+          "ElapsedMs": 0,
+          "LiveElements": 0,
+          "Failures": 0
+        }
+      ]
+    },
+    {
+      "Id": "panel-feed",
+      "Title": "Find everything fed by a panel",
+      "Skipped": null,
+      "Variants": [
+        {
+          "Name": "live",
+          "Profile": "full",
+          "SchemaTokens": 90909,
+          "Steps": [
+            {
+              "Tool": "revit_get_electrical_circuits",
+              "Success": true,
+              "ResultBytes": 1422,
+              "ResultTokens": 355,
+              "ElapsedMs": 54,
+              "LiveElements": 3,
+              "Error": null
+            }
+          ],
+          "Skipped": null,
+          "ToolCalls": 1,
+          "ResultBytes": 1422,
+          "ResultTokens": 355,
+          "ElapsedMs": 54,
+          "LiveElements": 3,
+          "Failures": 0
+        },
+        {
+          "Name": "graph",
+          "Profile": "full",
+          "SchemaTokens": 90909,
+          "Steps": [
+            {
+              "Tool": "revit_graph_query",
+              "Success": true,
+              "ResultBytes": 1842,
+              "ResultTokens": 460,
+              "ElapsedMs": 54,
+              "LiveElements": 0,
+              "Error": null
+            },
+            {
+              "Tool": "revit_get_elements_info",
+              "Success": true,
+              "ResultBytes": 1210,
+              "ResultTokens": 302,
+              "ElapsedMs": 13,
+              "LiveElements": 6,
+              "Error": null
+            }
+          ],
+          "Skipped": null,
+          "ToolCalls": 2,
+          "ResultBytes": 3052,
+          "ResultTokens": 762,
+          "ElapsedMs": 67,
+          "LiveElements": 6,
+          "Failures": 0
+        },
+        {
+          "Name": "graph-reduced",
+          "Profile": "core",
+          "SchemaTokens": 0,
+          "Steps": [],
+          "Skipped": "profile not selected",
+          "ToolCalls": 0,
+          "ResultBytes": 0,
+          "ResultTokens": 0,
+          "ElapsedMs": 0,
+          "LiveElements": 0,
+          "Failures": 0
+        }
+      ]
+    },
+    {
+      "Id": "level-devices",
+      "Title": "Find fire alarm devices on a level and inspect loop assignments",
+      "Skipped": "the model has no devices of that category on a level",
+      "Variants": []
+    },
+    {
+      "Id": "specialist-discovery",
+      "Title": "Use a specialist tool that is not in the core profile (list levels)",
+      "Skipped": null,
+      "Variants": [
+        {
+          "Name": "direct",
+          "Profile": "full",
+          "SchemaTokens": 90909,
+          "Steps": [
+            {
+              "Tool": "revit_list_levels",
+              "Success": true,
+              "ResultBytes": 518,
+              "ResultTokens": 130,
+              "ElapsedMs": 34,
+              "LiveElements": 0,
+              "Error": null
+            }
+          ],
+          "Skipped": null,
+          "ToolCalls": 1,
+          "ResultBytes": 518,
+          "ResultTokens": 130,
+          "ElapsedMs": 34,
+          "LiveElements": 0,
+          "Failures": 0
+        },
+        {
+          "Name": "discovery",
+          "Profile": "core",
+          "SchemaTokens": 0,
+          "Steps": [],
+          "Skipped": "profile not selected",
+          "ToolCalls": 0,
+          "ResultBytes": 0,
+          "ResultTokens": 0,
+          "ElapsedMs": 0,
+          "LiveElements": 0,
+          "Failures": 0
+        }
+      ]
+    },
+    {
+      "Id": "linked-target",
+      "Title": "Find linked-model elements of a category in a host room",
+      "Skipped": "no linked model in the graph has elements of the category",
+      "Variants": []
+    },
+    {
+      "Id": "memory-hints",
+      "Title": "Shared memory on vs off: learn the project\u0027s convention before a write",
+      "Skipped": null,
+      "Variants": [
+        {
+          "Name": "memory-off",
+          "Profile": "full",
+          "SchemaTokens": 90909,
+          "Steps": [
+            {
+              "Tool": "revit_graph_route",
+              "Success": true,
+              "ResultBytes": 1819,
+              "ResultTokens": 455,
+              "ElapsedMs": 115,
+              "LiveElements": 0,
+              "Error": null
+            },
+            {
+              "Tool": "revit_get_elements_info",
+              "Success": true,
+              "ResultBytes": 30510,
+              "ResultTokens": 7536,
+              "ElapsedMs": 121,
+              "LiveElements": 100,
+              "Error": null
+            }
+          ],
+          "Skipped": null,
+          "ToolCalls": 2,
+          "ResultBytes": 32329,
+          "ResultTokens": 7991,
+          "ElapsedMs": 236,
+          "LiveElements": 100,
+          "Failures": 0
+        },
+        {
+          "Name": "memory-hints",
+          "Profile": "full",
+          "SchemaTokens": 90909,
+          "Steps": [
+            {
+              "Tool": "revit_graph_route",
+              "Success": true,
+              "ResultBytes": 2435,
+              "ResultTokens": 609,
+              "ElapsedMs": 123,
+              "LiveElements": 0,
+              "Error": null
+            }
+          ],
+          "Skipped": null,
+          "ToolCalls": 1,
+          "ResultBytes": 2435,
+          "ResultTokens": 609,
+          "ElapsedMs": 123,
+          "LiveElements": 0,
+          "Failures": 0
+        },
+        {
+          "Name": "memory-recall",
+          "Profile": "full",
+          "SchemaTokens": 90909,
+          "Steps": [
+            {
+              "Tool": "revit_graph_route",
+              "Success": true,
+              "ResultBytes": 1819,
+              "ResultTokens": 455,
+              "ElapsedMs": 110,
+              "LiveElements": 0,
+              "Error": null
+            },
+            {
+              "Tool": "revit_memory_recall",
+              "Success": true,
+              "ResultBytes": 716,
+              "ResultTokens": 179,
+              "ElapsedMs": 37,
+              "LiveElements": 0,
+              "Error": null
+            }
+          ],
+          "Skipped": null,
+          "ToolCalls": 2,
+          "ResultBytes": 2535,
+          "ResultTokens": 634,
+          "ElapsedMs": 147,
+          "LiveElements": 0,
+          "Failures": 0
+        }
+      ]
+    }
+  ]
+}
