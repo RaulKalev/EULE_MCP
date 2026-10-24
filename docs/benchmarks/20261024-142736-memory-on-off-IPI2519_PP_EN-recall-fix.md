@@ -1,0 +1,75 @@
+# MCP benchmark - memory-on-off-IPI2519_PP_EN-recall-fix
+
+- Model: `IPI2519_PP_EN_raul.kalev`
+- Started: 2026-10-24 14:27:21 +03:00
+- Bridge: `C:\Users\RaulKalev\EULE Dropbox\0_EULE  Team folder (kogu kollektiiv)\02_EULE REVIT TEMPLATE\099-scriptid\Pluginad\EULE_MCP\Bridge\RevitMCP.Bridge.exe`
+- Token estimates: characters / 4 (approximation; bytes are exact)
+
+## Tool-schema cost per profile
+
+Paid once per session (or per request when the client does not cache tool definitions).
+
+| Profile | Tools | `tools/list` bytes | ~tokens | Instructions ~tokens |
+|---|---:|---:|---:|---:|
+| `full` | 275 | 363,636 | 90,909 | 563 |
+
+## Graph build cost
+
+| Build | Result | Elapsed | Nodes | Edges | Model elements |
+|---|---|---:|---:|---:|---:|
+| full | ok | 8,047 ms | 39,649 | 87,174 | 55,100 |
+| incremental | ok | 377 ms | 39,649 | 87,174 | 55,100 |
+
+## Scenarios
+
+Result cost is paid per call. *Total* = schema tokens of the profile + result tokens of the workflow.
+
+### Inspect a category across the model (`category-inspect`)
+
+| Variant | Profile | Calls | Result bytes | Result ~tokens | Schema ~tokens | Total ~tokens | Live elements | Elapsed | Failures |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| live | `full` | 2 | 1,089 | 269 | 90,909 | 91,178 | 0 | 350 ms | 1 |
+| graph | `full` | 3 | 38,517 | 9,580 | 90,909 | 100,489 | 10 | 200 ms | 0 |
+| graph-reduced | `core` | skipped: profile not selected ||||||||
+
+- live: `revit_get_elements_info` — Response too large (1 319 896 bytes; limit 1 000 000 bytes). Narrow your query — use a category filter, element ids, a smaller pageSize, or limit parameter names.
+
+### Locate devices in a specific room (`room-devices`)
+
+| Variant | Profile | Calls | Result bytes | Result ~tokens | Schema ~tokens | Total ~tokens | Live elements | Elapsed | Failures |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| live | `full` | 1 | 207 | 52 | 90,909 | 90,961 | 0 | 98 ms | 0 |
+| graph | `full` | 2 | 9,615 | 2,396 | 90,909 | 93,305 | 7 | 59 ms | 0 |
+| graph-reduced | `core` | skipped: profile not selected ||||||||
+
+### Find everything fed by a panel (`panel-feed`)
+
+| Variant | Profile | Calls | Result bytes | Result ~tokens | Schema ~tokens | Total ~tokens | Live elements | Elapsed | Failures |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| live | `full` | 1 | 1,422 | 355 | 90,909 | 91,264 | 3 | 25 ms | 0 |
+| graph | `full` | 2 | 3,052 | 763 | 90,909 | 91,672 | 6 | 44 ms | 0 |
+| graph-reduced | `core` | skipped: profile not selected ||||||||
+
+### Find fire alarm devices on a level and inspect loop assignments (`level-devices`)
+
+Skipped: the model has no devices of that category on a level
+
+### Use a specialist tool that is not in the core profile (list levels) (`specialist-discovery`)
+
+| Variant | Profile | Calls | Result bytes | Result ~tokens | Schema ~tokens | Total ~tokens | Live elements | Elapsed | Failures |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| direct | `full` | 1 | 518 | 130 | 90,909 | 91,039 | 0 | 24 ms | 0 |
+| discovery | `core` | skipped: profile not selected ||||||||
+
+### Find linked-model elements of a category in a host room (`linked-target`)
+
+Skipped: no linked model in the graph has elements of the category
+
+### Shared memory on vs off: learn the project's convention before a write (`memory-hints`)
+
+| Variant | Profile | Calls | Result bytes | Result ~tokens | Schema ~tokens | Total ~tokens | Live elements | Elapsed | Failures |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| memory-off | `full` | 2 | 32,327 | 7,991 | 90,909 | 98,900 | 100 | 194 ms | 0 |
+| memory-hints | `full` | 1 | 2,435 | 609 | 90,909 | 91,518 | 0 | 108 ms | 0 |
+| memory-recall | `full` | 2 | 2,534 | 634 | 90,909 | 91,543 | 0 | 116 ms | 0 |
+
