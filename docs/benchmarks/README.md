@@ -60,13 +60,15 @@ reported as *skipped* with the reason instead of producing misleading numbers. S
 
 ### Memory on vs off (`memory-hints`)
 
-The scenario the shared-memory design asks for before memory hints are switched on by default
-([shared-memory.md](../shared-memory.md), "Credit usage"). On a workstation with Revit:
+The scenario the shared-memory design asked for before memory hints were switched on by default
+([shared-memory.md](../shared-memory.md), "Credit usage"); they are on since the IPI2519 runs below.
+Re-run it after changes to recall matching or the route. On a workstation with Revit:
 
 1. Open a real project model whose project memory holds an entry for the convention you measure,
    e.g. remember "Detector tags use <type>" once with `revit_memory_remember`.
-2. Set `"memory": { "hints": true }` in `%AppData%\RKTools\MCP\user.config.json` (the `memory-off`
-   variant still opts out per call with `memoryHint=false`).
+2. Make sure hints are not switched off (`"memory": { "hints": false }` in
+   `%AppData%\RKTools\MCP\user.config.json` or the company config); the `memory-off` variant opts
+   out per call with `memoryHint=false`.
 3. Run, naming the query and the tag category of the model:
 
 ```bash
@@ -76,8 +78,8 @@ dotnet RevitMCP.Benchmark/bin/Release/net8.0/RevitMCP.Benchmark.dll --label memo
 
 `memory-off` pays for the live read an agent without memory makes to learn the convention;
 `memory-hints` gets it from the route's memory block; `memory-recall` asks memory explicitly. The
-scenario is skipped, with the reason, when memory has no matching entry. Record the report below;
-if `memory-hints` is clearly cheaper, `memory.hints` can default to on.
+scenario is skipped, with the reason, when memory has no matching entry. Record the report below.
+Also check a few unrelated intents with `revit_graph_route`: they must come back with `memory: null`.
 
 ## Results
 
@@ -93,6 +95,7 @@ if `memory-hints` is clearly cheaper, `memory.hints` can default to on.
 | [20261024-065913-usage-reporting](20261024-065913-usage-reporting.md) | none (`--schema-only`) | Usage reporting: `revit_usage_report` joins the `office` group — `core` unchanged (21 tools ≈ 6.1k tokens), `full` 274 → 275 tools. |
 | [20261024-103001-memory-on-off-IPI2519_PP_EN](20261024-103001-memory-on-off-IPI2519_PP_EN.md) | Raemõisa põhikool EN PP (55.1k elements, 633 security device tags, no fire-alarm devices) | Memory on vs off at 1eb64c8, measured on camera tags (`memoryQuery="camera tag type"`, `tagCategory="Security Device Tags"`, one personal entry): result tokens `memory-off` ≈ 8.0k (2 calls, 100 tags read live) → `memory-hints` ≈ 0.6k (1 call) → `memory-recall` ≈ 0.6k (2 calls). The memory block adds ≈ 150 tokens to the route. `full` schema unchanged (275 tools ≈ 90.9k). `category-inspect` live fails here: the whole-model read exceeds the 1 MB response cap. Recall matching then turned out too loose (the entry also matched "detector tag type" and "renumber the circuits on the panel"), fixed in #113. |
 | [20261024-142736-memory-on-off-IPI2519_PP_EN-recall-fix](20261024-142736-memory-on-off-IPI2519_PP_EN-recall-fix.md) | Raemõisa põhikool EN PP | Same run at 1d8ddaf, after #113 (word matching, filler words, minimum share, generic words): identical numbers (`memory-off` ≈ 8.0k → `memory-hints` ≈ 0.6k → `memory-recall` ≈ 0.6k result tokens). Checked live with hints on: the route carries the entry for "camera tag type" and returns `memory: null` for "detector tag type", "renumber the circuits on the panel" and "list sheets and their revisions"; recall now finds "kaamerate sildid". |
+| [20261024-143200-memory-hints-default-on](20261024-143200-memory-hints-default-on.md) | none (`--schema-only`) | `memory.hints` defaults to on (`"memory": { "hints": false }` switches it off). Schemas unchanged: `core` 21 tools ≈ 6.1k tokens, `full` 275 tools ≈ 90.9k, instructions ≈ 563. The cost moves to route results: ≈ 150 tokens per matching entry, nothing for unrelated intents (see the IPI2519 rows). |
 
 A large model run is still to be recorded: open one (e.g. a full EN model with circuits) and run
 the benchmark with `--label <model>`; the panel and loop scenarios then also produce numbers.

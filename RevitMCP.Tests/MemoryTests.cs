@@ -709,4 +709,14 @@ public sealed class MemoryProjectRootAndSettingsTests : IDisposable
         Assert.Equal(10, s.MaxEntriesPerProject); // clamped to the minimum
         Assert.Equal(MemorySettings.DefaultProjectFolderName, s.ProjectFolderName);
     }
+
+    [Fact]
+    public void Settings_HintsAreOnUnlessAConfigSwitchesThemOff()
+    {
+        Assert.True(MemorySettings.From(null, null).Hints);
+
+        var off = System.Text.Json.Nodes.JsonNode.Parse("""{ "memory": { "hints": false } }""")!.AsObject();
+        Assert.False(MemorySettings.From(off, null).Hints);
+        Assert.False(MemorySettings.From(null, off).Hints);
+    }
 }

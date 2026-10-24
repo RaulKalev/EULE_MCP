@@ -262,10 +262,12 @@ reachable.
 | Weekly consolidation pass | A few dozen entries, once a week, run by a lead |
 | What a hit replaces | Live reads of a category (thousands of tokens) or a rejected-and-retried write round |
 
-The direction is a saving; the size is to be proven with the benchmark (`RevitMCP.Benchmark`,
-[benchmarks/README.md](benchmarks/README.md)) on a real project session with memory on and off,
-before the hints are enabled by default. If the project-wide hit rate (`used`/`shown`) falls, the
-hint cap or the promotion threshold is tightened.
+Measured with the benchmark (`RevitMCP.Benchmark`, [benchmarks/README.md](benchmarks/README.md),
+"Memory on vs off") on IPI2519: for a matching convention the route with hints costs 1 call and
+≈ 0.6k result tokens, against 2 calls and ≈ 8.0k for an agent without memory reading the tags live;
+the memory block adds ≈ 150 tokens to the route. After the recall matching fix (#113) unrelated
+intents get no memory block. Hints are therefore on by default. If the project-wide hit rate
+(`used`/`shown`) falls, the hint cap or the promotion threshold is tightened.
 
 ---
 
@@ -384,7 +386,7 @@ Configuration read in phase 1 (user config first, then company): `memory.enabled
 Benchmark (schema only): `core` goes from 19 tools ≈ 5.3k tokens to 21 tools ≈ 6.0k tokens
 ([before](benchmarks/20261023-213314-shared-memory-phase1-before.md),
 [after](benchmarks/20261023-214349-shared-memory-phase1.md)). The memory-on/off run on a real project
-is still to be recorded before hints are enabled by default in phase 2.
+was recorded on 2026-10-24 (IPI2519); see *Credit usage*.
 
 ---
 
@@ -397,10 +399,10 @@ matching the intent and the detected category — when `memory.hints` is on. Hin
 entries and, of the candidates, only those the asking user wrote; dormant and retired entries never
 appear. `memoryHint=false` opts out per call.
 
-*Decision:* `memory.hints` is **off by default**. The section *Credit usage* asks for the
-memory-on/off benchmark on a real project before hints are enabled by default; until that report is
-recorded, a user or the company config switches them on with `"memory": { "hints": true }`. Recall,
-remember, the observer and the lifecycle work either way.
+*Decision:* `memory.hints` is **on by default** (since 2026-10-24). It was off until the
+memory-on/off benchmark on a real project was recorded; that run, and the recall matching fix it
+prompted (#113), are under *Credit usage*. A user or the company config switches hints off with
+`"memory": { "hints": false }`. Recall, remember, the observer and the lifecycle work either way.
 
 ### Lifecycle
 
@@ -471,7 +473,7 @@ changes nothing shared.
 
 ### Configuration added
 
-`memory.companyFolder`, `memory.hints` (false), `memory.hintLimit` (5), `memory.observer.enabled`
+`memory.companyFolder`, `memory.hints` (true since 2026-10-24), `memory.hintLimit` (5), `memory.observer.enabled`
 (true), `memory.observer.minSupport` (3), `memory.observer.minSessions` (2),
 `memory.confirmAfterUses` (3), `memory.dormantAfterDays` (90), `memory.retireAfterDays` (365).
 
