@@ -236,9 +236,9 @@ public sealed class MemoryStore
     }
 
     /// <summary>Counts each id as shown once in the user's own tally file. Never throws; false when it could not write.</summary>
-    public bool AddShown(string user, IEnumerable<string> ids) =>
+    public bool AddShown(string user, IEnumerable<string> ids, DateTimeOffset? at = null) =>
         AddTallies(user, ids.Where(id => !string.IsNullOrEmpty(id)).Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(id => id, _ => new MemoryCounters { Shown = 1 }, StringComparer.OrdinalIgnoreCase));
+            .ToDictionary(id => id, _ => new MemoryCounters { Shown = 1, LastShown = at ?? DateTimeOffset.UtcNow }, StringComparer.OrdinalIgnoreCase));
 
     /// <summary>
     /// Adds counter deltas (shown, used, worked, contradicted, last used) to the user's own tally file — the only
@@ -279,7 +279,8 @@ public sealed class MemoryStore
                         Used = p.Value.Used,
                         Worked = p.Value.Worked,
                         Contradicted = p.Value.Contradicted,
-                        LastUsed = p.Value.LastUsed
+                        LastUsed = p.Value.LastUsed,
+                        LastShown = p.Value.LastShown
                     }));
                 AtomicWrite(folder, fileName, json);
                 return true;
@@ -353,7 +354,8 @@ public sealed class MemoryStore
                     Used = Math.Max(0, pair.Value.Used),
                     Worked = Math.Max(0, pair.Value.Worked),
                     Contradicted = Math.Max(0, pair.Value.Contradicted),
-                    LastUsed = pair.Value.LastUsed
+                    LastUsed = pair.Value.LastUsed,
+                    LastShown = pair.Value.LastShown
                 };
             }
         }
@@ -370,6 +372,7 @@ public sealed class MemoryStore
         [JsonProperty("worked")] public int Worked { get; set; }
         [JsonProperty("contradicted")] public int Contradicted { get; set; }
         [JsonProperty("lastUsed", NullValueHandling = NullValueHandling.Ignore)] public DateTimeOffset? LastUsed { get; set; }
+        [JsonProperty("lastShown", NullValueHandling = NullValueHandling.Ignore)] public DateTimeOffset? LastShown { get; set; }
     }
 
     // ── Files ────────────────────────────────────────────────────────────────────────────────────────────

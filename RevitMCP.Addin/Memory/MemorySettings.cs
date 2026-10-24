@@ -24,6 +24,19 @@ public sealed class MemorySettings
     public string? CompanyFolder { get; set; }
 
     /// <summary>
+    /// Folder names skipped when the project folder is guessed (no <c>.rktools</c> above the model), case-insensitive:
+    /// an optional number prefix, then a design stage, a discipline or a software/output folder.
+    /// </summary>
+    public const string DefaultProjectRootSkipFolders =
+        @"^(\d+[\s._-]*)?(EP|PP|TP|TJ|EH|EN|EL|ES|ATS|NV|TV|AR|KV|VK|VVK|SK|IT|AV|Revit|BIM|Mudel|Mudelid|Model|Models|CAD|DWG|IFC|Joonised|Drawings)$";
+
+    /// <summary><c>memory.projectRootSkipFolders</c>: the regex of folder names skipped when guessing the project folder.</summary>
+    public string ProjectRootSkipFolders { get; set; } = DefaultProjectRootSkipFolders;
+
+    /// <summary>Syncs (or saves) the model may move on before an entry written in it is reported stale.</summary>
+    public int StaleAfterVersions { get; set; } = MemoryRecall.DefaultStaleAfterVersions;
+
+    /// <summary>
     /// Memory hints inside revit_graph_route. On since the memory-on/off benchmark on a real project
     /// (docs/benchmarks, IPI2519, after the recall matching fix #113); <c>memory.hints=false</c> switches them off.
     /// </summary>
@@ -60,6 +73,11 @@ public sealed class MemorySettings
 
         s.ValueMaxLength = Int(First(sections, "valueMaxLength"), s.ValueMaxLength, 80, 2000);
         s.MaxEntriesPerProject = Int(First(sections, "maxEntriesPerProject"), s.MaxEntriesPerProject, 10, 100_000);
+
+        s.StaleAfterVersions = Int(First(sections, "staleAfterVersions"), s.StaleAfterVersions, 1, 100_000);
+
+        var skipFolders = First(sections, "projectRootSkipFolders");
+        if (!string.IsNullOrWhiteSpace(skipFolders)) s.ProjectRootSkipFolders = skipFolders!.Trim();
 
         var companyFolder = First(sections, "companyFolder");
         if (!string.IsNullOrWhiteSpace(companyFolder)) s.CompanyFolder = Environment.ExpandEnvironmentVariables(companyFolder!.Trim());

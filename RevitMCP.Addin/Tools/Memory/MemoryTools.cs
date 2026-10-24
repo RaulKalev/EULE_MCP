@@ -24,7 +24,7 @@ internal static class MemoryToolSupport
 
         var signal = RevitModelVersionReader.Read(uiapp, doc);
         var explicitRoot = ToolArguments.GetString(request.Arguments, "projectRoot");
-        var (root, problem) = MemoryProjectRoot.Find(signal.ModelPath, explicitRoot);
+        var (root, problem, warning) = MemoryProjectRoot.Find(signal.ModelPath, explicitRoot, service.Settings.ProjectRootSkipFolders);
         // The observer only sees the model path; tell it where this model's project memory was put.
         if (root != null && !string.IsNullOrWhiteSpace(explicitRoot)) service.NoteProjectRoot(signal.ModelPath, root);
         return new MemoryContext
@@ -33,6 +33,7 @@ internal static class MemoryToolSupport
             ProjectRoot = root,
             ProjectFolder = root == null ? null : service.ProjectFolderFor(root),
             ProjectProblem = problem,
+            ProjectWarning = warning,
             Model = string.IsNullOrWhiteSpace(signal.ModelName) ? null : signal.ModelName,
             ModelVersion = string.IsNullOrWhiteSpace(signal.Value) ? null : signal.Value,
             User = string.IsNullOrWhiteSpace(signal.Username) ? Environment.UserName : signal.Username,
@@ -141,7 +142,9 @@ public class MemoryRememberTool : IRevitMcpTool, IConditionalApprovalTool
             Stage = ToolArguments.GetString(args, "stage"),
             Source = ToolArguments.GetString(args, "source", MemorySources.Agent),
             AnyProject = ToolArguments.GetBool(args, "anyProject"),
-            BasedOn = ToolArguments.GetStringArray(args, "basedOn").ToList()
+            BasedOn = ToolArguments.GetStringArray(args, "basedOn").ToList(),
+            // Set only when a person clicked Approve in Revit; Direct Edit runs the call without one.
+            Approved = request.IsApproved
         });
         sw.Stop();
 

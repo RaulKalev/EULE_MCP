@@ -20,13 +20,16 @@ public static class MemoryLifecycle
             if (missing != null) return (MemoryStates.Retired, $"names the tool {missing}, which no longer exists");
         }
 
+        // Being shown counts as activity: a note that keeps matching what people ask stays in hints, even when its use
+        // cannot be detected from tool arguments (most prose notes). Contradictions below still make it dormant.
         var lastActivity = e.Updated;
         if (e.Counters.LastUsed != null && e.Counters.LastUsed > lastActivity) lastActivity = e.Counters.LastUsed.Value;
+        if (e.Counters.LastShown != null && e.Counters.LastShown > lastActivity) lastActivity = e.Counters.LastShown.Value;
         var idleDays = (now - lastActivity).TotalDays;
         if (idleDays >= settings.DormantAfterDays + settings.RetireAfterDays)
-            return (MemoryStates.Retired, $"unused for {(int)idleDays} days");
+            return (MemoryStates.Retired, $"not used or shown for {(int)idleDays} days");
         if (idleDays >= settings.DormantAfterDays)
-            return (MemoryStates.Dormant, $"unused for {(int)idleDays} days");
+            return (MemoryStates.Dormant, $"not used or shown for {(int)idleDays} days");
 
         var c = e.Counters;
         if (c.Contradicted >= settings.ConfirmAfterUses && c.Contradicted > c.Worked)

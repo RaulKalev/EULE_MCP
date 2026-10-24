@@ -179,8 +179,13 @@ public static class MemoryPolicy
         };
     }
 
-    /// <summary>(used + worked + 1) / (shown + 2): 0.5 for an unseen entry, towards 1 when hints are acted on.</summary>
-    public static double Usefulness(MemoryCounters c) => (c.Used + c.Worked + 1.0) / (c.Shown + 2.0);
+    /// <summary>
+    /// (used + worked + 1) / (shown + 2): towards 1 when hints are acted on, towards 0 when they are shown and the
+    /// following calls go elsewhere. 0.5 while there is no evidence either way (never used, worked or contradicted):
+    /// the use of most prose notes cannot be detected, and being shown alone says nothing against them.
+    /// </summary>
+    public static double Usefulness(MemoryCounters c) =>
+        c.Used + c.Worked + c.Contradicted == 0 ? 0.5 : (c.Used + c.Worked + 1.0) / (c.Shown + 2.0);
 
     /// <summary>
     /// The per-project cap: when <paramref name="active"/> already holds <paramref name="max"/> entries, the

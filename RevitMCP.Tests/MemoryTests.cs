@@ -478,17 +478,40 @@ public class MemoryRecallTests
     }
 
     [Fact]
-    public void Staleness_OnlyForTheSameModelAtAnotherVersion()
+    public void Staleness_OnlyForTheSameModelMovedOnByEnoughSyncs()
     {
-        var e = E("project/1626/a", "Detector");
+        var e = E("project/1626/a", "Detector"); // written at central:10
         Assert.False(MemoryRecall.Staleness(e, Ctx()).Stale);
-        var (stale, reason) = MemoryRecall.Staleness(e, Ctx("central:11"));
-        Assert.True(stale);
-        Assert.Equal("written against an earlier model", reason);
 
-        var otherModel = Ctx("central:11");
+        // Every sync changes the version (and its GUID): a few syncs later the note is not stale.
+        Assert.False(MemoryRecall.Staleness(e, Ctx("central:11:0a1b")).Stale);
+        Assert.False(MemoryRecall.Staleness(e, Ctx("central:59")).Stale);
+
+        var (stale, reason) = MemoryRecall.Staleness(e, Ctx("central:60:9f8e"));
+        Assert.True(stale);
+        Assert.Equal("written 50 syncs ago (central 10, now 60)", reason);
+
+        var strict = Ctx("central:15");
+        strict.StaleAfterVersions = 5;
+        Assert.True(MemoryRecall.Staleness(e, strict).Stale);
+
+        // Another user's older local copy, another kind of version, another model: not stale.
+        Assert.False(MemoryRecall.Staleness(e, Ctx("central:3")).Stale);
+        Assert.False(MemoryRecall.Staleness(e, Ctx("saves:500:abc")).Stale);
+        var otherModel = Ctx("central:99");
         otherModel.Model = "1626_PP_EL";
         Assert.False(MemoryRecall.Staleness(e, otherModel).Stale);
+    }
+
+    [Theory]
+    [InlineData("central:74:9c903e28b54149369b6f030835950c9b", "central", 74)]
+    [InlineData("saves:12:abc", "saves", 12)]
+    [InlineData("central:10", "central", 10)]
+    public void TryParseVersion_ReadsKindAndCount(string version, string kind, long number)
+    {
+        Assert.True(MemoryRecall.TryParseVersion(version, out var k, out var n));
+        Assert.Equal(kind, k);
+        Assert.Equal(number, n);
     }
 }
 
@@ -617,7 +640,7 @@ public sealed class MemoryServiceTests : IDisposable
         _service.Remember(Ctx(), Note("Detector tags use tag A always."));
         _service.Remember(Ctx(), Note("I prefer detector tags placed to the right.", "tags/detector-side", MemoryScopes.Personal));
 
-        var read = _service.Recall(Ctx(version: "central:11"), new MemoryRecallOptions { Query = "detector tags", Limit = 5 });
+        var read = _service.Recall(Ctx(version: "central:60"), new MemoryRecallOptions { Query = "detector tags", Limit = 5 });
 
         Assert.Equal(2, read.Hits.Count);
         Assert.Equal(MemoryScopes.Project, read.Hits[0].Entry.Scope);
@@ -626,6 +649,8 @@ public sealed class MemoryServiceTests : IDisposable
 
         var again = _service.Recall(Ctx(), new MemoryRecallOptions { Query = "detector tags" });
         Assert.All(again.Hits, h => Assert.Equal(1, h.Entry.Counters.Shown));
+        // When it was shown survives the tally file, so a note in hints stays active (see MemoryLifecycle).
+        Assert.All(again.Hits, h => Assert.NotNull(h.Entry.Counters.LastShown));
         Assert.All(again.Hits, h => Assert.False(h.Stale));
 
         // Tallies never leak into entry files: reaffirming rewrites the file with its own counters only.
@@ -671,18 +696,41 @@ public sealed class MemoryProjectRootAndSettingsTests : IDisposable
     }
 
     [Fact]
-    public void Find_UsesTheNearestRktoolsAboveTheModel_ElseTheModelFolder()
+    public void Find_UsesTheNearestRktoolsAboveTheModel_ElseGuessesTheProjectFolderWithAWarning()
     {
         var project = Path.Combine(_root, "P1626");
         var models = Path.Combine(project, "EN", "Models");
         Directory.CreateDirectory(models);
         var model = Path.Combine(models, "1626_PP_EN.rvt");
 
-        Assert.Equal(models, MemoryProjectRoot.Find(model, null).Root);
+        // No .rktools: the discipline and model folders are skipped, and the answer says so.
+        var (guess, problem, warning) = MemoryProjectRoot.Find(model, null);
+        Assert.Equal(project, guess);
+        Assert.Null(problem);
+        Assert.Contains("No .rktools folder", warning);
 
         Directory.CreateDirectory(Path.Combine(project, ".rktools"));
-        Assert.Equal(project, MemoryProjectRoot.Find(model, null).Root);
+        var (root, _, none) = MemoryProjectRoot.Find(model, null);
+        Assert.Equal(project, root);
+        Assert.Null(none);
         Assert.Equal(models, MemoryProjectRoot.Find(model, models).Root);
+    }
+
+    [Fact]
+    public void GuessProjectFolder_SkipsStageDisciplineAndRevitFolders()
+    {
+        // The office layout: <project>\4_EN\02_PP\Revit\<model>.rvt — EP, PP and TP share one memory.
+        var kool = Path.Combine(_root, "0035_Kool");
+        Assert.Equal(kool, MemoryProjectRoot.GuessProjectFolder(Path.Combine(kool, "4_EN", "02_PP", "Revit")));
+        Assert.Equal(kool, MemoryProjectRoot.GuessProjectFolder(Path.Combine(kool, "4_EN", "03_TP", "Revit")));
+
+        // A folder that is not a stage, discipline or software folder is the project folder.
+        var other = Path.Combine(_root, "Projects", "Kool");
+        Assert.Equal(other, MemoryProjectRoot.GuessProjectFolder(other));
+
+        // A custom pattern from memory.projectRootSkipFolders; an invalid one falls back to the default.
+        Assert.Equal(Path.Combine(_root, "Kool"), MemoryProjectRoot.GuessProjectFolder(Path.Combine(_root, "Kool", "Elekter"), "^Elekter$"));
+        Assert.Equal(kool, MemoryProjectRoot.GuessProjectFolder(Path.Combine(kool, "Revit"), "(unclosed"));
     }
 
     [Theory]
@@ -691,7 +739,7 @@ public sealed class MemoryProjectRootAndSettingsTests : IDisposable
     [InlineData("RSN://server/1626_PP_EN.rvt")]
     public void Find_GivesAReasonWhenThereIsNoFolder(string path)
     {
-        var (root, problem) = MemoryProjectRoot.Find(path, null);
+        var (root, problem, _) = MemoryProjectRoot.Find(path, null);
         Assert.Null(root);
         Assert.Contains("scope=personal", problem);
     }

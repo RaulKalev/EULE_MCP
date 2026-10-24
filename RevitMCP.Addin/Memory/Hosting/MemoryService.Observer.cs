@@ -145,7 +145,7 @@ public sealed partial class MemoryService
         if (_explicitRoots.TryGetValue(modelPath, out var given)) return (given, null);
         if (_roots.TryGetValue(modelPath, out var cached) && DateTimeOffset.UtcNow - cached.Found < RootCacheTime)
             return (cached.Root, cached.Problem);
-        var (root, problem) = MemoryProjectRoot.Find(modelPath, null);
+        var (root, problem, _) = MemoryProjectRoot.Find(modelPath, null, Settings.ProjectRootSkipFolders);
         _roots[modelPath] = (root, problem, DateTimeOffset.UtcNow);
         return (root, problem);
     }
