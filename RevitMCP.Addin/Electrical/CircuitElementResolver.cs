@@ -19,7 +19,7 @@ public class CircuitElementResolver
     /// </summary>
     public (List<ElementId> Ids, string Error) ResolveElementIds(
         Document doc,
-        UIDocument uidoc,
+        UIDocument? uidoc,
         bool useSelection,
         long[] explicitIds,
         ElementQueryOptions? queryOptions,
@@ -27,6 +27,8 @@ public class CircuitElementResolver
     {
         if (useSelection)
         {
+            // uidoc is null only for a non-active document (#101); callers refuse useSelection for it first.
+            if (uidoc == null) return (new List<ElementId>(), $"useSelection needs '{doc.Title}' to be the active document.");
             var sel = uidoc.Selection.GetElementIds().Take(limit).ToList();
             return (sel, "");
         }

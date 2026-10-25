@@ -10,8 +10,8 @@ namespace RevitMCP.Tests;
 /// </summary>
 public class ToolDocumentMigrationTests
 {
-    /// <summary>Uses of ActiveUIDocument left in RevitMCP.Addin/Tools after wave 1 (core and query reads).</summary>
-    private const int MaxRemainingUses = 194;
+    /// <summary>Uses of ActiveUIDocument left in RevitMCP.Addin/Tools after wave 2 (edit and electrical writes).</summary>
+    private const int MaxRemainingUses = 163;
 
     /// <summary>Tools migrated so far (paths under RevitMCP.Addin/Tools).</summary>
     private static readonly string[] Migrated =
@@ -20,6 +20,14 @@ public class ToolDocumentMigrationTests
         "GetElementsInfoTool.cs", "GetElementParametersTool.cs", "CountElementsTool.cs", "FindElementsByParameterTool.cs",
         "GroupByParameterTool.cs", "GroupElementsTool.cs", "GetAvailableParametersTool.cs", "RunQueryPresetTool.cs",
         "CheckParameterCompletenessTool.cs", "ExportQueryToExcelTool.cs", Path.Combine("ParameterQA", "RunParameterQaRuleSetTool.cs"),
+        // Wave 2: edit and electrical writes (with their previews)
+        "AlignElementsTool.cs", "PreviewAlignElementsTool.cs", "CopyElementsTools.cs", "CreateLinesTool.cs",
+        "EditFamilyTypesTool.cs", "PreviewEditFamilyTypesTool.cs", "MoveElementsTool.cs", "PreviewMoveElementsTool.cs",
+        "PlaceFamilyInstancesTool.cs", "PlaceOnFaceTools.cs", "DeviceAdjustTools.cs", "SetParameterTool.cs",
+        "AddElementsToCircuitTool.cs", "ApplyCircuitLoadNamesTool.cs", "ApplyCircuitNumberingTool.cs",
+        "AssignDataDevicesToPatchPanelsTool.cs", "PreviewAssignDataDevicesToPatchPanelsTool.cs", "ChangeCircuitCableOrWireTypeTool.cs",
+        "CreateCableTypeTool.cs", "CreateElectricalCircuitTool.cs", "DrawCircuitArcsTools.cs", "MoveElementsBetweenCircuitsTool.cs",
+        "ReassignCircuitPanelTool.cs", "SetCircuitParameterTool.cs", "SetCircuitParametersBulkTool.cs", "SetCircuitPathModeTool.cs",
         // New in #101: worksets and ownership
         Path.Combine("Documents", "WorksetTools.cs"), Path.Combine("Documents", "OwnershipTools.cs"),
         Path.Combine("Documents", "OpenCloseDocumentTools.cs")

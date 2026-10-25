@@ -3,6 +3,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Electrical;
 using Autodesk.Revit.UI;
 using RevitMCP.Addin.Electrical;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Core.Models;
 
@@ -21,9 +22,12 @@ public class SetCircuitPathModeTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        if (uidoc?.Document == null) return Task.FromResult(Fail(request, "No active document."));
-        var doc = uidoc.Document;
+        var target = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (target == null) return Task.FromResult(documentFailure!);
+        var uidoc = ToolDocument.UiDocumentOf(uiapp, target);
+        if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+            return Task.FromResult(ToolDocument.ActiveRequired(request, "useSelection", target.Document.Title));
+        var doc = target.Document;
 
         var useSelection = ToolArguments.GetBool(request.Arguments, "useSelection");
         var circuitIds = ToolArguments.GetLongArray(request.Arguments, "circuitIds");
@@ -35,7 +39,7 @@ public class SetCircuitPathModeTool : IRevitMcpTool
         if (useSelection)
         {
             mode = "selection";
-            var selIds = uidoc.Selection.GetElementIds().ToList();
+            var selIds = uidoc!.Selection.GetElementIds().ToList();
             if (selIds.Count == 0)
                 return Task.FromResult(Fail(request, "No elements selected."));
 

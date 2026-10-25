@@ -61,7 +61,7 @@ internal static class FamilyInstancePlacer
     /// <summary>Creates one instance, using the overload the family's placement type requires.</summary>
     public static FamilyInstance CreateInstance(
         Document doc,
-        UIDocument uidoc,
+        UIDocument? uidoc,
         FamilySymbol symbol,
         FamilyPlacementType placementType,
         XYZ point,
@@ -120,10 +120,10 @@ internal static class FamilyInstancePlacer
         }
     }
 
-    public static Level? ResolveLevel(Document doc, UIDocument uidoc, Level? explicitLevel, XYZ point)
+    public static Level? ResolveLevel(Document doc, UIDocument? uidoc, Level? explicitLevel, XYZ point)
     {
         if (explicitLevel != null) return explicitLevel;
-        if (uidoc.ActiveView is ViewPlan plan && plan.GenLevel != null) return plan.GenLevel;
+        if (uidoc?.ActiveView is ViewPlan plan && plan.GenLevel != null) return plan.GenLevel;
         return PlacementHelpers.NearestLevel(doc, point.Z);
     }
 

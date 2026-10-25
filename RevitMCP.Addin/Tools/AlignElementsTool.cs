@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Placement;
 using RevitMCP.Core.Models;
@@ -35,22 +36,24 @@ public class AlignElementsTool : IRevitMcpTool
         CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        if (uidoc?.Document == null)
-            return Task.FromResult(Fail(request, "No active document."));
+        var target = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (target == null) return Task.FromResult(documentFailure!);
+        var uidoc = ToolDocument.UiDocumentOf(uiapp, target);
+        if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+            return Task.FromResult(ToolDocument.ActiveRequired(request, "useSelection", target.Document.Title));
 
-        var doc = uidoc.Document;
+        var doc = target.Document;
         var warnings = new List<string>();
 
         var options = AlignmentRequest.ParseOptions(request.Arguments, warnings, out var error);
         if (options == null)
             return Task.FromResult(Fail(request, error!));
 
-        var elements = AlignmentRequest.ResolveElements(uidoc, request.Arguments, warnings, out error);
+        var elements = AlignmentRequest.ResolveElements(target.Document, uidoc, request.Arguments, warnings, out error);
         if (elements == null)
             return Task.FromResult(Fail(request, error!));
 
-        var view = AlignmentRequest.ResolveSearchView(uidoc, request.Arguments, warnings, out error);
+        var view = AlignmentRequest.ResolveSearchView(target.Document, uidoc, request.Arguments, warnings, out error);
         if (view == null)
             return Task.FromResult(Fail(request, error!));
 

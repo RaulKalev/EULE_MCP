@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Placement;
 using RevitMCP.Core.Models;
@@ -30,9 +31,11 @@ public class PreviewAlignElementsTool : IRevitMcpTool
         CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        if (uidoc?.Document == null)
-            return Task.FromResult(Fail(request, "No active document."));
+        var target = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (target == null) return Task.FromResult(documentFailure!);
+        var uidoc = ToolDocument.UiDocumentOf(uiapp, target);
+        if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+            return Task.FromResult(ToolDocument.ActiveRequired(request, "useSelection", target.Document.Title));
 
         var warnings = new List<string>();
 
@@ -40,18 +43,18 @@ public class PreviewAlignElementsTool : IRevitMcpTool
         if (options == null)
             return Task.FromResult(Fail(request, error!));
 
-        var elements = AlignmentRequest.ResolveElements(uidoc, request.Arguments, warnings, out error);
+        var elements = AlignmentRequest.ResolveElements(target.Document, uidoc, request.Arguments, warnings, out error);
         if (elements == null)
             return Task.FromResult(Fail(request, error!));
 
-        var view = AlignmentRequest.ResolveSearchView(uidoc, request.Arguments, warnings, out error);
+        var view = AlignmentRequest.ResolveSearchView(target.Document, uidoc, request.Arguments, warnings, out error);
         if (view == null)
             return Task.FromResult(Fail(request, error!));
 
         foreach (var element in elements)
             options.ExcludedElementIds.Add(element.Id.Value);
 
-        var service = new AlignmentService(uidoc.Document, view, options);
+        var service = new AlignmentService(target.Document, view, options);
         var proposals = new List<object>();
         var canAlign = 0;
         var alreadyFlush = 0;
@@ -72,7 +75,7 @@ public class PreviewAlignElementsTool : IRevitMcpTool
                 warnings.Add($"{plan.ElementName} ({plan.ElementId}): {plan.BlockedReason}");
             }
 
-            var rotation = AlignmentPayload.RotationRadians(uidoc.Document, plan, options);
+            var rotation = AlignmentPayload.RotationRadians(target.Document, plan, options);
             proposals.Add(AlignmentPayload.Describe(plan, options, MaxAlternates, willMove: true, rotation));
         }
 

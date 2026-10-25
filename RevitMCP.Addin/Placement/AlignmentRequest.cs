@@ -99,14 +99,15 @@ internal static class AlignmentRequest
     }
 
     /// <summary>Resolves the elements to align. They must live in the host model — links are read-only.</summary>
+    /// <param name="uidoc">The active UI document, for useSelection; null for a non-active document (#101).</param>
     public static List<Element>? ResolveElements(
-        UIDocument uidoc,
+        Document doc,
+        UIDocument? uidoc,
         Dictionary<string, object?> arguments,
         List<string> warnings,
         out string? error)
     {
         error = null;
-        var doc = uidoc.Document;
         var elementIds = ToolArguments.GetLongArray(arguments, "elementIds");
         var useSelection = ToolArguments.GetBool(arguments, "useSelection");
 
@@ -117,6 +118,11 @@ internal static class AlignmentRequest
         }
         else if (useSelection)
         {
+            if (uidoc == null)
+            {
+                error = $"useSelection needs the document to be active, and '{doc.Title}' is not. Pass elementIds instead.";
+                return null;
+            }
             ids = uidoc.Selection.GetElementIds();
             if (ids.Count == 0)
             {
@@ -167,14 +173,15 @@ internal static class AlignmentRequest
     /// Picks the 3D view the ray casts run in. Ray casting only sees what is visible in that view,
     /// so the choice is reported back and obvious clipping is warned about.
     /// </summary>
+    /// <param name="uidoc">The active UI document, whose active 3D view is preferred; null for a non-active document (#101).</param>
     public static View3D? ResolveSearchView(
-        UIDocument uidoc,
+        Document doc,
+        UIDocument? uidoc,
         Dictionary<string, object?> arguments,
         List<string> warnings,
         out string? error)
     {
         error = null;
-        var doc = uidoc.Document;
         var viewId = ToolArguments.GetLong(arguments, "searchViewId");
 
         View3D? view;
@@ -192,7 +199,7 @@ internal static class AlignmentRequest
                 return null;
             }
         }
-        else if (uidoc.ActiveView is View3D active && !active.IsTemplate)
+        else if (uidoc?.ActiveView is View3D active && !active.IsTemplate)
         {
             view = active;
         }
