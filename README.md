@@ -37,6 +37,7 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | [Jobs: unattended work](docs/jobs.md) | 6 | Submit a whole job of tool calls with result binding; one approval, the connector runs it step by step between your own work, stops on failures or new Revit errors, survives a restart and publishes a report page |
 | [Plans: one approval per job](docs/plans.md) | 4 | Submit a plan (tools, element ids, categories, limits), approve once, then write calls inside it run without prompts; status, close, per-session plan id |
 | [Checkpoints and change review](docs/checkpoints.md) | 6 | Revit model warnings, checkpoints before a batch of writes, what changed since (by tool or user, before/now values, moves, new warnings), compensating rollback with manual approval |
+| [Schedules](docs/schedules.md) | 8 | Read schedule definitions and displayed rows, list schedulable fields, create and edit schedules from a spec (preview first), place them on sheets next to a viewport, export CSV/TXT/XLSX |
 | [Model graph (routing layer)](docs/model-graph.md) | 4 | Per-model SQLite graph of element ids and relationships: build, freshness status, structured queries (neighbors/find/path/subtree), summary |
 
 ## Supported environment
@@ -125,6 +126,7 @@ Important repository references:
 - [`docs/copy-elements.md`](docs/copy-elements.md) — copying any element Revit can copy, within a view, across views or in the model
 - [`docs/place-on-face.md`](docs/place-on-face.md) — placing face-based families on wall, ceiling and floor faces found from points, in the host model or in links
 - [`docs/place-from-cad.md`](docs/place-from-cad.md) — placing families at locations marked in an imported DWG, and reconstructing fixtures from loose DWG line work
+- [`docs/schedules.md`](docs/schedules.md) — reading schedule definitions and rows, creating and editing schedules from a spec, placing them on sheets, exporting CSV/TXT/XLSX
 - [`docs/skills.md`](docs/skills.md) — company skills, project overrides, and the skill runner
 - [`docs/shared-memory.md`](docs/shared-memory.md) — shared company memory: notes every colleague's agent recalls, kept in sync without rebuilds, learned from users' workflows, reviewed on a page and consolidated weekly
 - [`docs/standards-lookup.md`](docs/standards-lookup.md) — offline standards indexing and retrieval
