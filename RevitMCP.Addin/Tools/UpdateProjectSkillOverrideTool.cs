@@ -15,7 +15,7 @@ public class UpdateProjectSkillOverrideTool : IRevitMcpTool
 {
     public string Name => "revit_update_project_skill_override";
     public string Description => "Updates an existing project skill override. The changesJson is merged into the existing override (replaces top-level keys). Args: skillId, projectId, changesJson (JSON string), note (optional).";
-    public ToolPermission Permission => ToolPermission.ReadOnly;
+    public ToolPermission Permission => ToolPermission.DirectEdit;
     public ToolCategory Category => ToolCategory.Skills;
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)

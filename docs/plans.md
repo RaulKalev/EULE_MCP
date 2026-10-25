@@ -10,8 +10,8 @@ approvals bind to the document, and everything the plan does is recorded against
 |---|---|---|
 | `revit_plan_submit` | approval | Proposes a plan; the approval activates it and creates its checkpoint |
 | `revit_plan_status` | read-only | State, counters, remaining budget, calls not covered, checkpoint id |
-| `revit_plan_close` | read-only | Ends a plan early; returns the counters and the checkpoint diff summary |
-| `revit_plan_use` | bridge only | Sets or clears the plan id the bridge attaches to this session's write calls |
+| `revit_plan_close` | no approval | Ends a plan early; returns the counters and the checkpoint diff summary |
+| `revit_plan_use` | bridge only, no approval | Sets or clears the plan id the bridge attaches to this session's write calls |
 
 All four are in the `autonomy` tool group.
 

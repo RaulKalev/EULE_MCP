@@ -11,8 +11,8 @@ namespace RevitMCP.Addin.Tools;
 public class SelectClashElementsTool : IRevitMcpTool
 {
     public string Name => "revit_select_clash_elements";
-    public string Description => "Selects the source and target elements of a clash in the Revit UI. For linked-model targets, selects the RevitLinkInstance instead. Requires approval.";
-    public ToolPermission Permission => ToolPermission.RequiresApproval;
+    public string Description => "Selects the source and target elements of a clash in the Revit UI. For linked-model targets, selects the RevitLinkInstance instead.";
+    public ToolPermission Permission => ToolPermission.DirectEdit;
     public ToolCategory Category => ToolCategory.Coordination;
 
     private readonly ClashRunCacheService _cache = new();

@@ -46,7 +46,8 @@ Example:
 }
 ```
 
-If the config file does not exist, run `standards_validate_source_config` — it will create an example file at the correct location.
+If the config file does not exist, run `standards_validate_source_config`: it is read-only, so it creates nothing, but
+it returns the path and an example config (`exampleConfig`) to save there.
 
 ---
 
@@ -88,7 +89,9 @@ standards_get_document_chunk chunkId=... contextBefore=1 contextAfter=2
 
 ### `standards_validate_source_config`
 
-Validates all configured source paths. Reports missing paths and misconfigured sources. Creates an example config file if none exists.
+Validates all configured source paths. Reports missing paths and misconfigured sources. Read-only: when no config file
+exists it returns an example config to save, and writes nothing. (`standards_index_sources` writes the local index, so
+it is not advertised as read-only; it needs no approval.)
 
 ---
 

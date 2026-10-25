@@ -103,6 +103,7 @@ public class App : IExternalApplication
             handler.RegisterTool(new GetRoomBoundariesTool());
             handler.RegisterTool(new RevitMCP.Addin.Tools.ModelPages.PublishPageTool());
             handler.RegisterTool(new RevitMCP.Addin.Tools.ModelPages.ListPagesTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.ModelPages.RemovePageTool());
             // Not advertised by the bridge: sent by the model page listener when a user edits a value on a page.
             handler.RegisterTool(new RevitMCP.Addin.Tools.ModelPages.PageSetValuesTool());
             // Shared memory (Memory\, docs/shared-memory.md): durable notes every colleague's agent can recall.
@@ -445,6 +446,7 @@ public class App : IExternalApplication
             handler.RegisterTool(new RevitMCP.Addin.Tools.Checkpoints.GetWarningsTool());
             handler.RegisterTool(new RevitMCP.Addin.Tools.Checkpoints.CheckpointCreateTool());
             handler.RegisterTool(new RevitMCP.Addin.Tools.Checkpoints.CheckpointListTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Checkpoints.CheckpointRemoveTool());
             handler.RegisterTool(new RevitMCP.Addin.Tools.Checkpoints.CheckpointDiffTool());
             handler.RegisterTool(new RevitMCP.Addin.Tools.Checkpoints.PreviewCheckpointRollbackTool());
             handler.RegisterTool(new RevitMCP.Addin.Tools.Checkpoints.CheckpointRollbackTool());
@@ -460,6 +462,7 @@ public class App : IExternalApplication
             handler.RegisterTool(new RevitMCP.Addin.Tools.Jobs.JobSubmitTool());
             handler.RegisterTool(new RevitMCP.Addin.Tools.Jobs.JobStatusTool());
             handler.RegisterTool(new RevitMCP.Addin.Tools.Jobs.JobListTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Jobs.JobRemoveTool());
             handler.RegisterTool(new RevitMCP.Addin.Tools.Jobs.JobCancelTool());
             handler.RegisterTool(new RevitMCP.Addin.Tools.Jobs.JobResumeTool());
             handler.RegisterTool(new RevitMCP.Addin.Tools.Jobs.JobReportTool());
@@ -618,6 +621,8 @@ public class App : IExternalApplication
     private static void OnDocumentChanged(object? sender, DocumentChangedEventArgs e)
     {
         DocumentChangeTracker.MarkChanged(e.GetDocument());
+        // A read-only tool's temporary setup, always rolled back (H1): not a change to record.
+        if (RevitMCP.Addin.Checkpoints.TemporaryModelChanges.Active) return;
         RevitMCP.Addin.Graph.GraphChangeTracker.Record(e);
         RevitMCP.Addin.Checkpoints.CheckpointChangeTracker.Record(e);
         RevitMCP.Addin.Plans.PlanChangeRecorder.Record(e);

@@ -10,12 +10,14 @@ page that says what happened.
 |---|---|---|
 | `revit_job_submit` | approval | Submits steps, envelope and stop conditions; the approval activates the plan and starts the job |
 | `revit_job_status` | read-only | Progress, per-step results, counters; `waitSeconds` (≤ 25) long-polls until something changes |
-| `revit_job_list` | read-only | Jobs of this session and journaled earlier ones; `removeJobId` |
-| `revit_job_cancel` | read-only | Stops after the running step; nothing is undone |
+| `revit_job_list` | read-only | Jobs of this session and journaled earlier ones |
+| `revit_job_remove` | no approval | Deletes a finished job's journal (`jobId`) |
+| `revit_job_cancel` | no approval | Stops after the running step; nothing is undone |
 | `revit_job_resume` | approval | Resumes a paused, suspended or failed job from its first unfinished step |
 | `revit_job_report` | read-only | Publishes (or re-publishes) the handoff page |
 
-All six are in the `autonomy` tool group.
+All seven are in the `autonomy` tool group. "No approval" tools change connector state, not the model: they run without
+a prompt but are not advertised as read-only.
 
 ## Example
 

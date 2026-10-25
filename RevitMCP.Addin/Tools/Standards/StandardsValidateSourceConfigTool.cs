@@ -14,7 +14,7 @@ namespace RevitMCP.Addin.Tools.Standards;
 public class StandardsValidateSourceConfigTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name        => "standards_validate_source_config";
-    public string Description => "Validates the StandardsSources.json config file: checks source IDs are unique, paths exist, and reports any issues. Creates an example config if no config file exists.";
+    public string Description => "Validates the StandardsSources.json config file: checks source IDs are unique, paths exist, and reports any issues. Read-only: when no config file exists it returns an example to save, and creates nothing.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory   Category   => ToolCategory.Documentation;
 
@@ -24,15 +24,15 @@ public class StandardsValidateSourceConfigTool : IRevitMcpTool, IBackgroundMcpTo
     {
         var sw = Stopwatch.StartNew();
 
+        // Read-only: a missing config is reported with an example to save, never created here.
         if (!File.Exists(_sourceService.ConfigFilePath))
         {
-            var examplePath = _sourceService.SaveExample();
             return Task.FromResult(new McpToolResult
             {
                 RequestId  = request.RequestId,
                 Success    = true,
-                Message    = $"No config file found. An example config has been created at: {examplePath}. Edit it to point to your standards documents, then run standards_index_sources.",
-                Data       = new { configFile = examplePath, created = true },
+                Message    = $"No config file found at {_sourceService.ConfigFilePath}. Save exampleConfig there, point it to your standards documents, then run standards_index_sources.",
+                Data       = new { configFile = _sourceService.ConfigFilePath, exists = false, exampleConfig = StandardsSourceService.ExampleJson() },
                 DurationMs = sw.ElapsedMilliseconds
             });
         }

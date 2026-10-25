@@ -8,15 +8,21 @@ using System.Diagnostics;
 namespace RevitMCP.Addin.Tools;
 
 /// <summary>
-/// Runs a full skill (all enabled tasks in order). Read-only: does not modify the Revit model.
+/// Runs a full skill (all enabled tasks in order). A task such as naming.apply-mapping changes the model, so a run
+/// that would execute one needs approval; a run of checks and reports only does not.
 /// Args: skillId (required), projectId, useProjectOverride (bool, default false).
 /// </summary>
-public class RunSkillTool : IRevitMcpTool
+public class RunSkillTool : IRevitMcpTool, IConditionalApprovalTool
 {
     public string Name => "revit_run_skill";
-    public string Description => "Runs all enabled tasks in a company skill and returns a full results report. Read-only — does not modify the Revit model. Args: skillId (required), projectId, useProjectOverride (bool, default false). Call revit_preview_skill_run first to understand impact.";
-    public ToolPermission Permission => ToolPermission.ReadOnly;
+    public string Description => "Runs all enabled tasks in a company skill and returns a full results report. Needs approval when an enabled task changes the model (see revit_preview_skill_run modelChangingTasks); checks and reports run without. Args: skillId (required), projectId, useProjectOverride (bool, default false). Call revit_preview_skill_run first to understand impact.";
+    public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Skills;
+
+    public bool NeedsApproval(McpToolRequest request) => SkillRunner.WouldChangeModel(
+        ToolArguments.GetString(request.Arguments, "skillId"),
+        ToolArguments.GetString(request.Arguments, "projectId"),
+        ToolArguments.GetBool(request.Arguments, "useProjectOverride", false));
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {

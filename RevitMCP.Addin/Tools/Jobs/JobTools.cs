@@ -162,13 +162,13 @@ public sealed class JobStatusTool : IRevitMcpTool, IWaitingMcpTool
     }
 }
 
-/// <summary>revit_job_list (#100): jobs of this session and journaled earlier ones; removeJobId deletes one.</summary>
+/// <summary>revit_job_list (#100): jobs of this session and journaled earlier ones. Read-only: revit_job_remove deletes one.</summary>
 public sealed class JobListTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "revit_job_list";
     public string Description =>
         "Lists jobs: this session's and earlier ones from their journals (suspended by a Revit restart, finished), with " +
-        "state, progress, document and report url. removeJobId deletes a finished job's journal.";
+        "state, progress, document and report url. revit_job_remove deletes a finished job's journal.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Reports;
 
@@ -177,22 +177,13 @@ public sealed class JobListTool : IRevitMcpTool, IBackgroundMcpTool
         var service = JobToolSupport.Service(request, out var failure);
         if (service == null) return Task.FromResult(failure!);
 
-        var remove = ToolArguments.GetString(request.Arguments, "removeJobId").Trim();
-        var message = string.Empty;
-        if (remove.Length > 0)
-        {
-            if (!service.Remove(remove))
-                return Task.FromResult(JobToolSupport.Fail(request, $"Job {remove} was not removed: it is unknown or still running (cancel it first).", JobToolSupport.NotFound));
-            message = $"Removed job {remove}. ";
-        }
-
         var now = DateTimeOffset.Now;
         var jobs = service.All();
         return Task.FromResult(new McpToolResult
         {
             RequestId = request.RequestId,
             Success = true,
-            Message = message + $"{jobs.Count} job(s), {jobs.Count(j => !j.IsTerminal)} not finished.",
+            Message = $"{jobs.Count} job(s), {jobs.Count(j => !j.IsTerminal)} not finished.",
             Data = new
             {
                 jobs = jobs.Select(j => new
@@ -213,6 +204,37 @@ public sealed class JobListTool : IRevitMcpTool, IBackgroundMcpTool
     }
 }
 
+/// <summary>
+/// revit_job_remove (H1): deletes a finished job's journal, split off revit_job_list so the list stays read-only.
+/// The model is not changed, so it needs no approval.
+/// </summary>
+public sealed class JobRemoveTool : IRevitMcpTool, IBackgroundMcpTool
+{
+    public string Name => "revit_job_remove";
+    public string Description =>
+        "Deletes a finished job's journal (jobId, from revit_job_list); not while it runs (cancel it first). The model is not changed.";
+    public ToolPermission Permission => ToolPermission.DirectEdit;
+    public ToolCategory Category => ToolCategory.Reports;
+
+    public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
+    {
+        var service = JobToolSupport.Service(request, out var failure);
+        if (service == null) return Task.FromResult(failure!);
+
+        var id = ToolArguments.GetString(request.Arguments, "jobId").Trim();
+        if (id.Length == 0) return Task.FromResult(JobToolSupport.Fail(request, "jobId is required."));
+        if (!service.Remove(id))
+            return Task.FromResult(JobToolSupport.Fail(request, $"Job {id} was not removed: it is unknown or still running (cancel it first).", JobToolSupport.NotFound));
+        return Task.FromResult(new McpToolResult
+        {
+            RequestId = request.RequestId,
+            Success = true,
+            Message = $"Removed job {id}. The model was not changed.",
+            Data = new { removed = id }
+        });
+    }
+}
+
 /// <summary>revit_job_cancel (#100): stops a job after its running step. Nothing is undone.</summary>
 public sealed class JobCancelTool : IRevitMcpTool, IBackgroundMcpTool
 {
@@ -221,7 +243,8 @@ public sealed class JobCancelTool : IRevitMcpTool, IBackgroundMcpTool
         "Cancels a job: it stops after the running step (a step waiting for approval stops at once and its approval is " +
         "rejected). Nothing is undone — review with revit_checkpoint_diff and roll back with revit_checkpoint_rollback if needed. " +
         "The report page is published.";
-    public ToolPermission Permission => ToolPermission.ReadOnly;
+    // Stops a job: not read-only, but it changes no model element and needs no approval.
+    public ToolPermission Permission => ToolPermission.DirectEdit;
     public ToolCategory Category => ToolCategory.Elements;
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)

@@ -11,8 +11,8 @@ namespace RevitMCP.Addin.Tools;
 public class SelectUncircuitedElementsTool : IRevitMcpTool
 {
     public string Name => "revit_select_uncircuited_elements";
-    public string Description => "Selects elements not assigned to any electrical circuit in the Revit UI. Requires approval. Accepts: categories (string[]), filters (JSON array), replaceSelection (bool, default true), zoomToSelection (bool, default false), limit (default 500).";
-    public ToolPermission Permission => ToolPermission.RequiresApproval;
+    public string Description => "Selects elements not assigned to any electrical circuit in the Revit UI. Accepts: categories (string[]), filters (JSON array), replaceSelection (bool, default true), zoomToSelection (bool, default false), limit (default 500).";
+    public ToolPermission Permission => ToolPermission.DirectEdit;
     public ToolCategory Category => ToolCategory.Electrical;
 
     private static readonly string[] DefaultCategories =

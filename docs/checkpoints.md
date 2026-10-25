@@ -10,7 +10,8 @@ as far as Revit allows. They are in the `autonomy` tool group (not in the `core`
 | `revit_get_warnings` | read-only | Revit's own warnings (`Document.GetWarnings()`), grouped by description or listed, filtered, paged, with element ids |
 | `revit_checkpoint_create` | read-only | Remembers "now": the warning set and, for a scope, a snapshot of parameter values and locations |
 | `revit_checkpoint_diff` | read-only | Everything changed since a checkpoint: added / modified / deleted, who did it, before/now values, moves, transactions, new and resolved warnings |
-| `revit_checkpoint_list` | read-only | Checkpoints of the open documents; `removeCheckpointId` deletes a record |
+| `revit_checkpoint_list` | read-only | Checkpoints of the open documents |
+| `revit_checkpoint_remove` | no approval | Deletes one checkpoint record (`checkpointId`); the model is not changed |
 | `revit_preview_checkpoint_rollback` | read-only | What a rollback would do and what it cannot |
 | `revit_checkpoint_rollback` | destructive, manual approval | Compensating transaction back to the checkpoint |
 

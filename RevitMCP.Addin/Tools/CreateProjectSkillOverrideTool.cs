@@ -18,7 +18,7 @@ public class CreateProjectSkillOverrideTool : IRevitMcpTool
 {
     public string Name => "revit_create_project_skill_override";
     public string Description => "Creates a project-specific override for a company skill. Args: skillId, projectId, projectName, changesJson (JSON string of override data), note (optional).";
-    public ToolPermission Permission => ToolPermission.ReadOnly;
+    public ToolPermission Permission => ToolPermission.DirectEdit;
     public ToolCategory Category => ToolCategory.Skills;
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)

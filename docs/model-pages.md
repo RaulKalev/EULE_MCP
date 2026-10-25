@@ -10,10 +10,11 @@ in any of that, so going through a list and fixing values costs no tokens.
 | Tool | Permission | Purpose |
 |---|---|---|
 | `revit_publish_page` | Read-only | Stores the HTML (`html`, or `htmlPath` to an `.html` file, max 2 MB), binds it to the active model, and opens `http://127.0.0.1:<port>/p/<pageId>`. `pageId` replaces an earlier page and keeps its link; `open=false` only returns the link |
-| `revit_list_pages` | Read-only | Published pages with title, model, whether they belong to the active model, and url. `removePageId` deletes one |
+| `revit_list_pages` | Read-only | Published pages with title, model, whether they belong to the active model, and url |
+| `revit_remove_page` | No approval | Deletes one page (`pageId`); its link stops working. Not read-only |
 | `revit_page_set_values` | Requires approval | Internal: the write a page sends when the user edits a value. Registered in the add-in only, not advertised by the bridge |
 
-The first two are in the `pages` tool group; the server instructions point agents at
+The first three are in the `pages` tool group; the server instructions point agents at
 `revit_publish_page`. "Read-only" there means the model: the tool writes the page to
 `%LOCALAPPDATA%\RevitMCP\Pages`.
 

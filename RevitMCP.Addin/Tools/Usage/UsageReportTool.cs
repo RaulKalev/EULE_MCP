@@ -70,7 +70,7 @@ public class UsageReportTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name => "revit_usage_report";
     public string Description => "Monthly connector usage report from the shared usage folder (users, projects, clients, tools, outcomes, credits, estimated time saved). Args: month (yyyy-MM, default previous), sharedFolder, format (html|xlsx|both), open.";
-    public ToolPermission Permission => ToolPermission.ReadOnly;
+    public ToolPermission Permission => ToolPermission.DirectEdit;
     public ToolCategory Category => ToolCategory.Reports;
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)

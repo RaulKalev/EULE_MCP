@@ -8,14 +8,20 @@ namespace RevitMCP.Addin.Tools;
 
 /// <summary>
 /// Runs a single named task from within a skill. Useful for re-running or debugging
-/// individual tasks without running the full skill. Read-only.
+/// individual tasks without running the full skill. Needs approval only for a task that changes the model.
 /// </summary>
-public class RunSkillTaskTool : IRevitMcpTool
+public class RunSkillTaskTool : IRevitMcpTool, IConditionalApprovalTool
 {
     public string Name => "revit_run_skill_task";
-    public string Description => "Runs a single task within a skill by its task ID. Read-only. Useful for re-running a specific check or report without repeating all tasks. Args: skillId (required), taskId (required), projectId, useProjectOverride (bool).";
-    public ToolPermission Permission => ToolPermission.ReadOnly;
+    public string Description => "Runs a single task within a skill by its task ID. Needs approval when the task changes the model (e.g. naming.apply-mapping); checks and reports run without. Useful for re-running a specific check or report without repeating all tasks. Args: skillId (required), taskId (required), projectId, useProjectOverride (bool).";
+    public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Skills;
+
+    public bool NeedsApproval(McpToolRequest request) => SkillRunner.WouldChangeModel(
+        ToolArguments.GetString(request.Arguments, "skillId"),
+        ToolArguments.GetString(request.Arguments, "projectId"),
+        ToolArguments.GetBool(request.Arguments, "useProjectOverride", false),
+        ToolArguments.GetString(request.Arguments, "taskId"));
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {

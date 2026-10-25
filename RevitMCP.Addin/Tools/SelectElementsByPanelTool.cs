@@ -18,7 +18,7 @@ public class SelectElementsByPanelTool : IRevitMcpTool
 {
     public string Name => "revit_select_elements_by_panel";
     public string Description => "Selects every element connected to any circuit assigned to a panel, in one operation — the fast path for \"select all elements on panel X\" instead of selecting circuit by circuit. Accepts: panelName or panelElementId (one required), systemType (optional filter, e.g. 'PowerCircuit'), replaceSelection (bool, default true), zoomToSelection (bool, default false).";
-    public ToolPermission Permission => ToolPermission.ReadOnly;
+    public ToolPermission Permission => ToolPermission.DirectEdit;
     public ToolCategory Category => ToolCategory.Electrical;
 
     private static readonly PanelResolver _panelResolver = new();

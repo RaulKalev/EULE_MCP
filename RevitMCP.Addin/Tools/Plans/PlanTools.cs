@@ -142,7 +142,8 @@ public sealed class PlanCloseTool : IRevitMcpTool
     public string Description =>
         "Ends a plan: later calls with its planId need their own approval again. Returns the final counters and a " +
         "summary of what changed since the plan's checkpoint (revit_checkpoint_diff for details). Does not change the model.";
-    public ToolPermission Permission => ToolPermission.ReadOnly;
+    // Ends the plan: not read-only, but it changes no model element and needs no approval.
+    public ToolPermission Permission => ToolPermission.DirectEdit;
     public ToolCategory Category => ToolCategory.Reports;
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
@@ -194,7 +195,8 @@ public sealed class PlanShowChangesTool : IRevitMcpTool
     public const string ToolName = "revit_plan_show_changes";
     public string Name => ToolName;
     public string Description => "Selects the elements a plan changed in the active document (used by the MCP window).";
-    public ToolPermission Permission => ToolPermission.ReadOnly;
+    // Selection only: not read-only, no approval (like the revit_select_* tools).
+    public ToolPermission Permission => ToolPermission.DirectEdit;
     public ToolCategory Category => ToolCategory.Selection;
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)

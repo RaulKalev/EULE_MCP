@@ -29,6 +29,7 @@
     <!-- Checkpoints (#98): change netting, snapshot and warning diffs, rollback planning, store (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Checkpoints\CheckpointModels.cs" Link="Checkpoints\CheckpointModels.cs" />
     <Compile Include="..\RevitMCP.Addin\Checkpoints\CheckpointIds.cs" Link="Checkpoints\CheckpointIds.cs" />
+    <Compile Include="..\RevitMCP.Addin\Checkpoints\TemporaryModelChanges.cs" Link="Checkpoints\TemporaryModelChanges.cs" />
     <Compile Include="..\RevitMCP.Addin\Checkpoints\CheckpointStore.cs" Link="Checkpoints\CheckpointStore.cs" />
     <Compile Include="..\RevitMCP.Addin\Checkpoints\ChangeNetting.cs" Link="Checkpoints\ChangeNetting.cs" />
     <Compile Include="..\RevitMCP.Addin\Checkpoints\SnapshotDiff.cs" Link="Checkpoints\SnapshotDiff.cs" />
@@ -174,6 +175,9 @@
     <!-- ParameterQA pure-logic files (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\ParameterQA\ParameterQaRuleSet.cs" Link="ParameterQA\ParameterQaRuleSet.cs" />
     <Compile Include="..\RevitMCP.Addin\ParameterQA\ParameterQaRuleSetService.cs" Link="ParameterQA\ParameterQaRuleSetService.cs" />
+    <!-- Standards source config (no Revit API): the read-only validation's example (H1) -->
+    <Compile Include="..\RevitMCP.Addin\Standards\StandardsModels.cs" Link="Standards\StandardsModels.cs" />
+    <Compile Include="..\RevitMCP.Addin\Standards\StandardsSourceService.cs" Link="Standards\StandardsSourceService.cs" />
     <!-- Configuration pure-logic files (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Configuration\ConfigPathResolver.cs" Link="Configuration\ConfigPathResolver.cs" />
     <Compile Include="..\RevitMCP.Addin\Configuration\JsonConfigService.cs" Link="Configuration\JsonConfigService.cs" />

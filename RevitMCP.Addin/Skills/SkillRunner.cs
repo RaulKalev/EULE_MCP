@@ -39,6 +39,24 @@ public class SkillRunner
     public static SkillTaskRegistry TaskRegistry => _taskRegistry;
 
     /// <summary>
+    /// True when <see cref="Run"/> with these arguments would execute an enabled task that changes the model
+    /// (<see cref="ISkillTask.ChangesModel"/>), so revit_run_skill / revit_run_skill_task ask for approval only then.
+    /// An unknown skill runs nothing and changes nothing.
+    /// </summary>
+    public static bool WouldChangeModel(string skillId, string? projectId, bool useProjectOverride, string? singleTaskId = null)
+    {
+        var skill = _registry.Get(skillId);
+        if (skill is null) return false;
+        if (useProjectOverride && !string.IsNullOrWhiteSpace(projectId) && _overrideService.Load(skillId, projectId!) is { } projectOverride)
+            skill = _merger.Merge(skill, projectOverride).Merged;
+
+        return skill.Tasks.Any(t =>
+            t.Enabled &&
+            (singleTaskId is null || t.Id.Equals(singleTaskId, StringComparison.OrdinalIgnoreCase)) &&
+            _taskRegistry.Get(t.Id)?.ChangesModel == true);
+    }
+
+    /// <summary>
     /// Runs a full skill or a single named task within a skill.
     /// </summary>
     /// <param name="uiapp">Active Revit UIApplication (called on Revit API thread).</param>

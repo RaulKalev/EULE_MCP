@@ -3,6 +3,7 @@ using System.IO;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Newtonsoft.Json.Linq;
+using RevitMCP.Addin.Checkpoints;
 using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.RoomDevices;
@@ -87,6 +88,9 @@ public sealed class ExportViewImageTool : IRevitMcpTool
         var baseName = Path.Combine(folder, $"view_{view.Id.Value}_{DateTime.Now:yyyyMMdd_HHmmss_fff}");
 
         string? exported = null;
+        // ExportImage needs a document without an open transaction, so the temporary setup is committed inside a group
+        // that is always rolled back. The scope keeps that net-zero change out of checkpoints, plans and the graph.
+        using (TemporaryModelChanges.Begin())
         using (var group = new TransactionGroup(doc, "Revit MCP - Export View Image"))
         {
             group.Start();

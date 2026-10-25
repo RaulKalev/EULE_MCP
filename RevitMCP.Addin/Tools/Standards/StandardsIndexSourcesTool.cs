@@ -14,7 +14,7 @@ public class StandardsIndexSourcesTool : IRevitMcpTool, IBackgroundMcpTool
 {
     public string Name        => "standards_index_sources";
     public string Description => "Indexes (or re-indexes) company standards sources into the local search cache. Pass sourceId to re-index a specific source, or omit to index all enabled sources. Set force=true to reprocess unchanged files.";
-    public ToolPermission Permission => ToolPermission.ReadOnly;   // Writes only to local AppData cache, not source documents
+    public ToolPermission Permission => ToolPermission.DirectEdit;   // Writes the local search index (AppData), not the model: no approval, but not read-only
     public ToolCategory   Category   => ToolCategory.Documentation;
 
     private static readonly StandardsSourceService _sourceService = new();

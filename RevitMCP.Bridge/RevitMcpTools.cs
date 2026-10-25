@@ -608,7 +608,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
-    [McpServerTool(Name = "revit_select_linked_elements", ReadOnly = true),
+    [McpServerTool(Name = "revit_select_linked_elements"),
      Description("Selects elements INSIDE a linked model in the host Revit UI — like a user picking linked elements interactively. " +
                  "Required: linkInstanceId, elementIds (ids in the LINKED document, e.g. from revit_query_linked_elements). " +
                  "Does not modify model data.")]
@@ -1028,8 +1028,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
-    [McpServerTool(Name = "standards_index_sources", ReadOnly = true),
-     Description("Indexes company standards documents for search. Can target a specific source or all enabled sources. Use force=true to rebuild stale indexes.")]
+    [McpServerTool(Name = "standards_index_sources"),
+     Description("Indexes company standards documents for search. Can target a specific source or all enabled sources. Use force=true to rebuild stale indexes. Writes the local search index (not read-only; no approval).")]
     public async Task<string> StandardsIndexSources(
         [Description("Source ID to index. Leave null to index all enabled sources.")] string? sourceId = null,
         [Description("Force full re-index even if files are unchanged.")] bool force = false,
@@ -1069,7 +1069,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "standards_validate_source_config", ReadOnly = true),
-     Description("Validates the StandardsSources.json configuration. Reports missing paths, misconfigured sources, and creates an example config if none exists.")]
+     Description("Validates the StandardsSources.json configuration. Reports missing paths and misconfigured sources. Read-only: when no config exists it returns an example to save (exampleConfig) and creates nothing.")]
     public async Task<string> StandardsValidateSourceConfig(CancellationToken cancellationToken = default)
     {
         var result = await pipeClient.SendAsync("standards_validate_source_config", new Dictionary<string, object?>(), cancellationToken);
@@ -1090,7 +1090,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
-    [McpServerTool(Name = "revit_propose_master_skill_update", ReadOnly = true),
+    [McpServerTool(Name = "revit_propose_master_skill_update"),
      Description("Proposes a company master skill update based on a project override. Writes a proposal JSON to the local proposals folder only — NEVER modifies company master files.")]
     public async Task<string> ProposeSkillMasterUpdate(
         [Description("The skill ID to propose an update for.")] string skillId,
@@ -4042,7 +4042,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_select_circuit_elements"),
-     Description("Selects all elements connected to a circuit in the Revit UI. Requires approval.")]
+     Description("Selects all elements connected to a circuit in the Revit UI. Changes only the selection, not the model; needs no approval.")]
     public async Task<string> SelectCircuitElements(
         [Description("Element ID of the circuit")] long circuitId,
         [Description("Replace current selection (default true)")] bool replaceSelection = true,
@@ -4082,7 +4082,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_select_uncircuited_elements"),
-     Description("Selects elements not assigned to any electrical circuit in the Revit UI. Requires approval.")]
+     Description("Selects elements not assigned to any electrical circuit in the Revit UI. Changes only the selection, not the model; needs no approval.")]
     public async Task<string> SelectUncircuitedElements(
         [Description("Categories to search (default: all electrical categories)")] string[]? categories = null,
         [Description(FiltersDescription)] string? filters = null,
@@ -5605,7 +5605,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_select_clash_elements"),
-     Description("Selects the source and target elements of a clash in the Revit UI. For linked-model targets, selects the RevitLinkInstance instead. Requires approval.")]
+     Description("Selects the source and target elements of a clash in the Revit UI. For linked-model targets, selects the RevitLinkInstance instead. Changes only the selection, not the model; needs no approval.")]
     public async Task<string> SelectClashElements(
         [Description("Clash ID (required)")] string clashId,
         CancellationToken cancellationToken = default)
@@ -5823,7 +5823,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_run_skill"),
-     Description("Runs all enabled tasks in a company skill. Some tasks may create Revit views — requires approval. " +
+     Description("Runs all enabled tasks in a company skill. Needs approval when an enabled task changes the model (revit_preview_skill_run lists modelChangingTasks); checks and reports run without. " +
                  "Call revit_preview_skill_run first to understand the impact. " +
                  "Args: skillId (required), projectId, useProjectOverride (bool, default false).")]
     public async Task<string> RunSkill(
@@ -5843,7 +5843,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_run_skill_task"),
-     Description("Runs a single task within a skill. Useful for re-running or debugging one task. Requires approval. " +
+     Description("Runs a single task within a skill. Useful for re-running or debugging one task. Needs approval when the task changes the model. " +
                  "Args: skillId (required), taskId (required), projectId, useProjectOverride (bool).")]
     public async Task<string> RunSkillTask(
         [Description("ID of the skill containing the task")] string skillId,
@@ -5863,7 +5863,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
-    [McpServerTool(Name = "revit_manage_project_skill_override", ReadOnly = true),
+    [McpServerTool(Name = "revit_manage_project_skill_override"),
      Description("Manages a project-specific override for a company skill. action=create (new override; supports projectName, changesJson, note), update (merge changesJson into existing; supports note), reset (delete override, revert to master). changesJson structure: {\"tasks\":{\"<taskId>\":{\"enabled\":true,\"settings\":{\"clearanceMm\":100}}}}.")]
     public async Task<string> ManageProjectSkillOverride(
         [Description("Action: create | update | reset")] string action,
@@ -5912,7 +5912,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
-    [McpServerTool(Name = "revit_configure_sheet_naming_skill", ReadOnly = true),
+    [McpServerTool(Name = "revit_configure_sheet_naming_skill"),
      Description("Convenience tool to configure the sheet naming skill override for a project. " +
                  "Creates or updates the project skill override for 'company.lehed.nimetamise-kontroll', enabling Excel comparison and report export tasks. " +
                  "Args: projectId (required), projectName, excelFilePath, enableExcelComparison, enableExcelReport, enableJsonReport, allowedDisciplines, allowedStages.")]
@@ -6131,18 +6131,16 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     // ── Configuration / State Tools ───────────────────────────────────────────
 
     [McpServerTool(Name = "config_read", ReadOnly = true),
-     Description("Reads a JSON configuration file for a given scope (company, user, project, tool-state). Read-only. Returns the config as a JSON object.")]
+     Description("Reads a JSON configuration file for a given scope (company, user, project, tool-state). Read-only: a missing file is reported, never created (config_update createIfMissing=true creates one). Returns the config as a JSON object.")]
     public async Task<string> ConfigRead(
         [Description("Configuration scope: company | user | project | tool-state")] string scope,
         [Description("Project root directory — required when scope=project.")] string projectRoot = "",
-        [Description("If true and the file does not exist, create it with an empty object {}. Default false.")] bool createIfMissing = false,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
         {
             ["scope"] = scope,
-            ["projectRoot"] = projectRoot,
-            ["createIfMissing"] = createIfMissing
+            ["projectRoot"] = projectRoot
         };
         var result = await pipeClient.SendAsync("config_read", args, cancellationToken);
         return FormatResult(result);
@@ -6191,16 +6189,14 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "config_get_project_config", ReadOnly = true),
-     Description("Reads the project-scoped MCP config file (.rktools/mcp.project.config.json) inside the specified project root. Read-only.")]
+     Description("Reads the project-scoped MCP config file (.rktools/mcp.project.config.json) inside the specified project root. Read-only: a missing file is reported, never created (config_set_project_config writes one).")]
     public async Task<string> ConfigGetProjectConfig(
         [Description("Project root directory (folder that contains the .rktools subfolder).")] string projectRoot,
-        [Description("If true and the file does not exist, create it with an empty object {}. Default false.")] bool createIfMissing = false,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
         {
-            ["projectRoot"] = projectRoot,
-            ["createIfMissing"] = createIfMissing
+            ["projectRoot"] = projectRoot
         };
         var result = await pipeClient.SendAsync("config_get_project_config", args, cancellationToken);
         return FormatResult(result);
@@ -6993,13 +6989,18 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_list_pages", ReadOnly = true),
-     Description("Lists the model pages published with revit_publish_page: pageId, title, model, whether it belongs to the active model, last update and url. removePageId deletes one page.")]
-    public async Task<string> ListPages(
-        [Description("Delete this page before listing. Empty = list only.")] string? removePageId = null,
+     Description("Lists the model pages published with revit_publish_page: pageId, title, model, whether it belongs to the active model, last update and url. revit_remove_page deletes one.")]
+    public async Task<string> ListPages(CancellationToken cancellationToken = default)
+        => FormatResult(await pipeClient.SendAsync("revit_list_pages", new Dictionary<string, object?>(), cancellationToken));
+
+    [McpServerTool(Name = "revit_remove_page"),
+     Description("Deletes one published model page; its link stops working. The model is not changed; no approval.")]
+    public async Task<string> RemovePage(
+        [Description("Page id from revit_list_pages.")] string pageId,
         CancellationToken cancellationToken = default)
     {
-        var args = new Dictionary<string, object?> { ["removePageId"] = removePageId ?? string.Empty };
-        return FormatResult(await pipeClient.SendAsync("revit_list_pages", args, cancellationToken));
+        var args = new Dictionary<string, object?> { ["pageId"] = pageId };
+        return FormatResult(await pipeClient.SendAsync("revit_remove_page", args, cancellationToken));
     }
 
     // ── Shared memory: durable decisions and corrections every colleague's agent can recall ───────────────
@@ -7488,18 +7489,28 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_checkpoint_list", ReadOnly = true),
-     Description("Lists the checkpoints of the open documents (or of one with document): id, title, age, snapshot size, recorded transactions, whether change tracking is complete (false after a Revit restart), plan id. removeCheckpointId deletes one checkpoint record (the model is not changed).")]
+     Description("Lists the checkpoints of the open documents (or of one with document): id, title, age, snapshot size, recorded transactions, whether change tracking is complete (false after a Revit restart), plan id. revit_checkpoint_remove deletes one.")]
     public async Task<string> CheckpointList(
-        [Description("Delete this checkpoint record.")] string? removeCheckpointId = null,
+        [Description(DocumentArgDescription + " Empty here = every open document.")] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["document"] = document ?? string.Empty };
+        return FormatResult(await pipeClient.SendAsync("revit_checkpoint_list", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_checkpoint_remove"),
+     Description("Deletes one checkpoint record: it can no longer be diffed or rolled back. The model is not changed; no approval.")]
+    public async Task<string> CheckpointRemove(
+        [Description("Checkpoint id from revit_checkpoint_list.")] string checkpointId,
         [Description(DocumentArgDescription + " Empty here = every open document.")] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
         {
-            ["removeCheckpointId"] = removeCheckpointId ?? string.Empty,
+            ["checkpointId"] = checkpointId,
             ["document"] = document ?? string.Empty
         };
-        return FormatResult(await pipeClient.SendAsync("revit_checkpoint_list", args, cancellationToken));
+        return FormatResult(await pipeClient.SendAsync("revit_checkpoint_remove", args, cancellationToken));
     }
 
     [McpServerTool(Name = "revit_preview_checkpoint_rollback", ReadOnly = true),
@@ -7599,7 +7610,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         return FormatResult(result);
     }
 
-    [McpServerTool(Name = "revit_plan_use", ReadOnly = true),
+    [McpServerTool(Name = "revit_plan_use"),
      Description("Sets the plan id this session attaches to every following write call, or clears it with an empty planId. revit_plan_submit sets it by itself; use this to switch between plans or to stop using one without closing it. Bridge-local: does not call Revit.")]
     public Task<string> PlanUse(
         [Description("Plan id to attach; empty clears it.")] string? planId = null)
@@ -7672,16 +7683,21 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_job_list", ReadOnly = true),
-     Description("Lists jobs of this Revit session and earlier ones from their journals (suspended by a restart, finished): state, progress, document, whether it can be resumed, report url. removeJobId deletes a finished job's journal.")]
-    public async Task<string> JobList(
-        [Description("Delete this job's journal (not while it runs).")] string? removeJobId = null,
+     Description("Lists jobs of this Revit session and earlier ones from their journals (suspended by a restart, finished): state, progress, document, whether it can be resumed, report url. revit_job_remove deletes a finished job's journal.")]
+    public async Task<string> JobList(CancellationToken cancellationToken = default)
+        => FormatResult(await pipeClient.SendAsync("revit_job_list", new Dictionary<string, object?>(), cancellationToken));
+
+    [McpServerTool(Name = "revit_job_remove"),
+     Description("Deletes a finished job's journal (not while it runs: cancel it first). The model is not changed; no approval.")]
+    public async Task<string> JobRemove(
+        [Description("Job id from revit_job_list.")] string jobId,
         CancellationToken cancellationToken = default)
     {
-        var args = new Dictionary<string, object?> { ["removeJobId"] = removeJobId ?? string.Empty };
-        return FormatResult(await pipeClient.SendAsync("revit_job_list", args, cancellationToken));
+        var args = new Dictionary<string, object?> { ["jobId"] = jobId };
+        return FormatResult(await pipeClient.SendAsync("revit_job_remove", args, cancellationToken));
     }
 
-    [McpServerTool(Name = "revit_job_cancel", ReadOnly = true),
+    [McpServerTool(Name = "revit_job_cancel"),
      Description("Cancels a job after its running step (a step waiting for approval stops at once, its approval rejected). Nothing is undone: review with revit_checkpoint_diff, undo with revit_checkpoint_rollback. Publishes the report page.")]
     public async Task<string> JobCancel(
         [Description("Job id.")] string jobId,
