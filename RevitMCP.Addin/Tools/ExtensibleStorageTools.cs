@@ -3,6 +3,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Autodesk.Revit.DB.ExtensibleStorage;
 using RevitMCP.Addin.ExtensibleStorage;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Core.Models;
 
@@ -30,9 +31,9 @@ public sealed class ListExtensibleStorageSchemasTool : IRevitMcpTool
         CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null)
-            return Task.FromResult(Fail(request, "No active document."));
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
 
         var nameFilter = ToolArguments.GetString(request.Arguments, "schemaNameFilter");
         var vendorFilter = ToolArguments.GetString(request.Arguments, "vendorIdFilter");
@@ -152,11 +153,12 @@ public sealed class ReadExtensibleStorageTool : IRevitMcpTool
         CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        if (uidoc?.Document == null)
-            return Task.FromResult(Fail(request, "No active document."));
-
-        var doc = uidoc.Document;
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
+        var uidoc = ToolDocument.UiDocumentOf(uiapp, documentTarget);
+        if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+            return Task.FromResult(ToolDocument.ActiveRequired(request, "useSelection", documentTarget.Document.Title));
         var warnings = new List<string>();
 
         var schemaGuidArg = ToolArguments.GetString(request.Arguments, "schemaGuid");
@@ -361,7 +363,7 @@ public sealed class ReadExtensibleStorageTool : IRevitMcpTool
     /// <summary>Resolves the target elements from explicit IDs, the selection, or a document scan.</summary>
     private static List<Element> ResolveElements(
         Document doc,
-        UIDocument uidoc,
+        UIDocument? uidoc,
         long[] elementIds,
         bool useSelection,
         bool scanDocument,
@@ -387,7 +389,8 @@ public sealed class ReadExtensibleStorageTool : IRevitMcpTool
 
         if (useSelection)
         {
-            var selected = uidoc.Selection.GetElementIds();
+            // The tool refuses useSelection for a non-active document (#101) before this runs.
+            var selected = uidoc!.Selection.GetElementIds();
             if (selected.Count == 0)
             {
                 error = "useSelection=true but nothing is selected in Revit.";

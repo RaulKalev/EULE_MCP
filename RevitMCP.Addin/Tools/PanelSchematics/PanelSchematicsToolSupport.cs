@@ -21,13 +21,15 @@ internal static class PanelSchematicsToolSupport
         return result;
     }
 
+    /// <summary>The request's project document (#101): the active one, or the one <c>document=</c> names.</summary>
     public static Document? ActiveDocument(UIApplication uiapp, McpToolRequest request, out McpToolResult? failure)
     {
-        var doc = uiapp.ActiveUIDocument?.Document;
-        failure = doc == null ? Fail(request, "No active document.", null) : null;
-        if (doc != null && doc.IsFamilyDocument)
+        var target = RevitMCP.Addin.Documents.ToolDocument.Resolve(uiapp, request, out failure);
+        if (target == null) return null;
+        var doc = target.Document;
+        if (doc.IsFamilyDocument)
         {
-            failure = Fail(request, "The active document is a family; open the project.", null);
+            failure = Fail(request, "The document is a family; open the project.", null);
             return null;
         }
         return doc;

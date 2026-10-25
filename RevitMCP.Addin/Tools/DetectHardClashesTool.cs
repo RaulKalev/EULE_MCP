@@ -3,6 +3,7 @@ using Autodesk.Revit.UI;
 using Newtonsoft.Json.Linq;
 using RevitMCP.Addin.Coordination.Clash.DTOs;
 using RevitMCP.Addin.Coordination.Clash.Services;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Tools;
 using RevitMCP.Core.Models;
@@ -24,8 +25,9 @@ public class DetectHardClashesTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null) return Task.FromResult(Fail(request, "No active document."));
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
 
         var args = request.Arguments;
         var sourceCategories = ToolArguments.GetStringArray(args, "sourceCategories");

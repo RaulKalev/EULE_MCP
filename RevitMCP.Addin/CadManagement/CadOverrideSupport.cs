@@ -57,7 +57,7 @@ internal static class CadOverrideSupport
 {
     public static IReadOnlyList<View> ResolveViews(
         Document document,
-        View activeView,
+        View? activeView,
         long viewId,
         IEnumerable<long> viewIds,
         bool allowActiveFallback,
@@ -68,7 +68,15 @@ internal static class CadOverrideSupport
             ids.Insert(0, viewId);
 
         if (ids.Count == 0 && allowActiveFallback)
+        {
+            // A non-active document (#101) has no active view: the caller must name one.
+            if (activeView == null)
+            {
+                warnings.Add($"'{document.Title}' is not the active document, so it has no active view: pass viewId.");
+                return Array.Empty<View>();
+            }
             return new[] { activeView };
+        }
 
         var result = new List<View>();
         foreach (var id in ids.Distinct())

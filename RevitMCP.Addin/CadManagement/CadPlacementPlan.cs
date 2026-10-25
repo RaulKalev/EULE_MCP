@@ -68,8 +68,15 @@ internal static class CadPlacementPlanner
         CancellationToken cancellationToken = default)
     {
         error = null;
-        var uidoc = uiapp.ActiveUIDocument;
-        var doc = uidoc!.Document;
+        // The request's document (#101): the active one unless it names another; uidoc only for its active view.
+        var target = RevitMCP.Addin.Documents.ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (target == null)
+        {
+            error = documentFailure!.Message;
+            return null;
+        }
+        var doc = target.Document;
+        var uidoc = RevitMCP.Addin.Documents.ToolDocument.UiDocumentOf(uiapp, target);
         var arguments = request.Arguments;
 
         var import = CadPlacementRequest.ResolveImport(doc, arguments, out error);

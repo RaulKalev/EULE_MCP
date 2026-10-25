@@ -24,9 +24,10 @@ public sealed class ListCadImportsTool : IRevitMcpTool
         CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        if (uidoc?.Document == null || uidoc.ActiveView == null)
-            return Task.FromResult(Fail(request, "No active document or view."));
+        var documentTarget = RevitMCP.Addin.Documents.ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
+        var activeView = RevitMCP.Addin.Documents.ToolDocument.UiDocumentOf(uiapp, documentTarget)?.ActiveView;
 
         var warnings = new List<string>();
         var viewId = ToolArguments.GetLong(request.Arguments, "viewId");
@@ -35,14 +36,14 @@ public sealed class ListCadImportsTool : IRevitMcpTool
         var importNameFilter = ToolArguments.GetString(request.Arguments, "importNameFilter");
         var limit = Math.Max(0, ToolArguments.GetInt(request.Arguments, "limit", 0));
         var views = CadOverrideSupport.ResolveViews(
-            uidoc.Document, uidoc.ActiveView, viewId, Array.Empty<long>(), true, warnings);
+            doc, activeView, viewId, Array.Empty<long>(), true, warnings);
         if (views.Count == 0)
             return Task.FromResult(Fail(request, warnings.FirstOrDefault() ?? "View was not found."));
 
         var view = views[0];
-        var settingsView = CadOverrideSupport.ResolveSettingsView(uidoc.Document, view, useViewTemplate);
+        var settingsView = CadOverrideSupport.ResolveSettingsView(doc, view, useViewTemplate);
         var snapshots = CadOverrideSupport.Capture(
-            uidoc.Document, view, settingsView, includeLayers, importNameFilter, limit);
+            doc, view, settingsView, includeLayers, importNameFilter, limit);
         var portable = CadOverrideSupport.ToPortableChanges(snapshots);
 
         var imports = snapshots
@@ -190,9 +191,10 @@ internal static class CadSetToolExecutor
         CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        if (uidoc?.Document == null || uidoc.ActiveView == null)
-            return Fail(request, "No active document or view.");
+        var documentTarget = RevitMCP.Addin.Documents.ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return documentFailure!;
+        var doc = documentTarget.Document;
+        var activeView = RevitMCP.Addin.Documents.ToolDocument.UiDocumentOf(uiapp, documentTarget)?.ActiveView;
 
         var warnings = new List<string>();
         var errors = new List<string>();
@@ -204,12 +206,12 @@ internal static class CadSetToolExecutor
         var viewIds = ToolArguments.GetLongArray(request.Arguments, "viewIds");
         var useViewTemplate = ToolArguments.GetBool(request.Arguments, "useViewTemplate", true);
         var views = CadOverrideSupport.ResolveViews(
-            uidoc.Document, uidoc.ActiveView, viewId, viewIds, true, warnings);
+            doc, activeView, viewId, viewIds, true, warnings);
         if (views.Count == 0)
             return Fail(request, warnings.FirstOrDefault() ?? "No target views were found.");
 
         var plan = CadOverrideSupport.BuildPlan(
-            uidoc.Document, views, changes, useViewTemplate, warnings);
+            doc, views, changes, useViewTemplate, warnings);
         if (plan.Count == 0)
             return Fail(request, "No applicable CAD categories were found. " + string.Join(" ", warnings));
 
@@ -235,7 +237,7 @@ internal static class CadSetToolExecutor
         cancellationToken.ThrowIfCancellationRequested();
         var results = new List<object>();
         var transaction = CadOverrideSupport.ApplyPlan(
-            uidoc.Document, plan, cancellationToken, warnings, results);
+            doc, plan, cancellationToken, warnings, results);
         sw.Stop();
 
         return new McpToolResult
@@ -271,9 +273,10 @@ internal static class CadCopyToolExecutor
         CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        if (uidoc?.Document == null || uidoc.ActiveView == null)
-            return Fail(request, "No active document or view.");
+        var documentTarget = RevitMCP.Addin.Documents.ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return documentFailure!;
+        var doc = documentTarget.Document;
+        var activeView = RevitMCP.Addin.Documents.ToolDocument.UiDocumentOf(uiapp, documentTarget)?.ActiveView;
 
         var warnings = new List<string>();
         var sourceViewId = ToolArguments.GetLong(request.Arguments, "sourceViewId");
@@ -284,7 +287,7 @@ internal static class CadCopyToolExecutor
         var importNameFilter = ToolArguments.GetString(request.Arguments, "importNameFilter");
 
         var sourceViews = CadOverrideSupport.ResolveViews(
-            uidoc.Document, uidoc.ActiveView, sourceViewId, Array.Empty<long>(), true, warnings);
+            doc, activeView, sourceViewId, Array.Empty<long>(), true, warnings);
         if (sourceViews.Count == 0)
             return Fail(request, warnings.FirstOrDefault() ?? "Source view was not found.");
         if (targetViewIds.Length == 0)
@@ -292,16 +295,16 @@ internal static class CadCopyToolExecutor
 
         var sourceView = sourceViews[0];
         var targetViews = CadOverrideSupport.ResolveViews(
-                uidoc.Document, uidoc.ActiveView, 0, targetViewIds, false, warnings)
+                doc, activeView, 0, targetViewIds, false, warnings)
             .Where(view => view.Id != sourceView.Id)
             .ToList();
         if (targetViews.Count == 0)
             return Fail(request, "No valid target views were found.");
 
         var sourceSettingsView = CadOverrideSupport.ResolveSettingsView(
-            uidoc.Document, sourceView, useSourceViewTemplate);
+            doc, sourceView, useSourceViewTemplate);
         var snapshots = CadOverrideSupport.Capture(
-            uidoc.Document,
+            doc,
             sourceView,
             sourceSettingsView,
             includeLayers,
@@ -312,7 +315,7 @@ internal static class CadCopyToolExecutor
 
         var changes = CadOverrideSupport.ToPortableChanges(snapshots);
         var plan = CadOverrideSupport.BuildPlan(
-            uidoc.Document, targetViews, changes, useTargetViewTemplates, warnings);
+            doc, targetViews, changes, useTargetViewTemplates, warnings);
         if (plan.Count == 0)
             return Fail(request, "No matching CAD imports/layers were found in the target views. " +
                                  string.Join(" ", warnings));
@@ -344,7 +347,7 @@ internal static class CadCopyToolExecutor
         cancellationToken.ThrowIfCancellationRequested();
         var results = new List<object>();
         var transaction = CadOverrideSupport.ApplyPlan(
-            uidoc.Document, plan, cancellationToken, warnings, results);
+            doc, plan, cancellationToken, warnings, results);
         sw.Stop();
         return new McpToolResult
         {

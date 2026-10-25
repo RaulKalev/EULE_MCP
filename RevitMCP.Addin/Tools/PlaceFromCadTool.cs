@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RevitMCP.Addin.CadManagement;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Placement;
 using RevitMCP.Addin.Transactions;
@@ -36,11 +37,12 @@ public class PlaceFromCadTool : IRevitMcpTool
         CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        if (uidoc?.Document == null)
-            return Task.FromResult(Fail(request, "No active document."));
-
-        var doc = uidoc.Document;
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
+        var uidoc = ToolDocument.UiDocumentOf(uiapp, documentTarget);
+        if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+            return Task.FromResult(ToolDocument.ActiveRequired(request, "useSelection", documentTarget.Document.Title));
         var warnings = new List<string>();
 
         var plan = CadPlacementPlanner.Build(uiapp, request, warnings, out var error, cancellationToken);
