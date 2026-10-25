@@ -41,6 +41,9 @@ category, name, type, level, location (point in mm and rotation, or line endpoin
 - Each value is stored twice: as the display string (what the diff shows, the same formatting as
   `revit_get_element_parameters`) and as the raw stored value in internal units (what a rollback writes back,
   so `1200 mm` is restored exactly, never re-parsed). Read-only parameters store no raw value.
+- A text note's text and width are no parameters; they are snapshotted as the pseudo-parameters `(Text)` and
+  `(Width)` (display in paper mm, raw in feet), so `revit_set_text_notes` edits show in the diff and roll back
+  (text first, then width; the restored text is plain, formatting such as bold runs is not kept).
 - A scope that resolves to more than `QueryLimits.MaxScanElements` (20 000) elements is refused with status
   `snapshot_too_large` and the count; nothing is snapshotted silently in part.
 - `useSelection` needs the document to be active. Selection and view scopes are resolved to ids at creation.

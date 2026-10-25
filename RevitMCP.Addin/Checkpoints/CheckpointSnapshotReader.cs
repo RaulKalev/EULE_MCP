@@ -91,7 +91,18 @@ internal sealed class CheckpointSnapshotReader
         FillIdentity(element, snapshot);
         ReadLocation(element, snapshot);
         ReadParameters(element, parameterNames, snapshot);
+        if (element is TextNote note) ReadTextNote(note, snapshot);
         return snapshot;
+    }
+
+    /// <summary>Text and width are no parameters: kept as the pseudo-parameters of <see cref="TextNoteSnapshot"/>.</summary>
+    private static void ReadTextNote(TextNote note, ElementSnapshot snapshot)
+    {
+        string? text = null;
+        double? width = null;
+        try { text = note.Text; } catch { }
+        try { width = note.Width; } catch { }
+        TextNoteSnapshot.Add(snapshot, text, width);
     }
 
     /// <summary>Category, name, type and level only — what the change tracker caches for later deletions.</summary>

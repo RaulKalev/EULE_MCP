@@ -44,6 +44,7 @@ public class RunFireAlarmCircuitPresetTool : IRevitMcpTool
             loopName          = l.LoopName,
             loopKind          = l.LoopKind,
             deviceCount       = l.DeviceCount,
+            sounderCount      = l.SounderCount,
             levels            = l.Levels.Select(lv => new { levelName = lv.LevelName, deviceCount = lv.DeviceCount }).ToList<object>(),
             deviceTypeSummary = l.DeviceTypeSummary.Select(ts => new { deviceType = ts.DeviceType, count = ts.Count }).ToList<object>(),
             circuitInfo = l.CircuitInfo == null ? null : (object)new

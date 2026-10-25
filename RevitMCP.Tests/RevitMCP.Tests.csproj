@@ -38,6 +38,7 @@
     <Compile Include="..\RevitMCP.Addin\Checkpoints\RollbackPlanner.cs" Link="Checkpoints\RollbackPlanner.cs" />
     <Compile Include="..\RevitMCP.Addin\Checkpoints\CheckpointDiffReport.cs" Link="Checkpoints\CheckpointDiffReport.cs" />
     <Compile Include="..\RevitMCP.Addin\Checkpoints\SnapshotParameterSelection.cs" Link="Checkpoints\SnapshotParameterSelection.cs" />
+    <Compile Include="..\RevitMCP.Addin\Checkpoints\TextNoteSnapshot.cs" Link="Checkpoints\TextNoteSnapshot.cs" />
     <!-- Plans (#99): envelope parsing, argument scope, post-check, classification, registry, summary (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Plans\PlanModels.cs" Link="Plans\PlanModels.cs" />
     <Compile Include="..\RevitMCP.Addin\Plans\PlanArgs.cs" Link="Plans\PlanArgs.cs" />
@@ -47,6 +48,7 @@
     <Compile Include="..\RevitMCP.Addin\Plans\PlanToolClassification.cs" Link="Plans\PlanToolClassification.cs" />
     <Compile Include="..\RevitMCP.Addin\Plans\PlanRegistry.cs" Link="Plans\PlanRegistry.cs" />
     <Compile Include="..\RevitMCP.Addin\Plans\PlanSummary.cs" Link="Plans\PlanSummary.cs" />
+    <Compile Include="..\RevitMCP.Addin\Plans\BridgeToolRoutes.cs" Link="Plans\BridgeToolRoutes.cs" />
     <!-- Jobs (#100): definition parsing, JSON path, state machine, journal, report page, summary (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Jobs\JobModels.cs" Link="Jobs\JobModels.cs" />
     <Compile Include="..\RevitMCP.Addin\Jobs\JobJsonPath.cs" Link="Jobs\JobJsonPath.cs" />
@@ -54,6 +56,7 @@
     <Compile Include="..\RevitMCP.Addin\Jobs\JobStateMachine.cs" Link="Jobs\JobStateMachine.cs" />
     <Compile Include="..\RevitMCP.Addin\Jobs\JobJournalStore.cs" Link="Jobs\JobJournalStore.cs" />
     <Compile Include="..\RevitMCP.Addin\Jobs\JobReportHtml.cs" Link="Jobs\JobReportHtml.cs" />
+    <Compile Include="..\RevitMCP.Addin\Jobs\JobChangeScope.cs" Link="Jobs\JobChangeScope.cs" />
     <Compile Include="..\RevitMCP.Addin\Jobs\JobSummary.cs" Link="Jobs\JobSummary.cs" />
     <Compile Include="..\RevitMCP.Addin\Jobs\JobService.cs" Link="Jobs\JobService.cs" />
     <!-- Usage reporting: shared copy, aggregation, time saved, costs, report files (no Revit API) -->
@@ -90,6 +93,7 @@
     <Compile Include="..\RevitMCP.Addin\Services\LongRunningTools.cs" Link="Services\LongRunningTools.cs" />
     <Compile Include="..\RevitMCP.Addin\Approval\DirectEditDefault.cs" Link="Approval\DirectEditDefault.cs" />
     <Compile Include="..\RevitMCP.Bridge\ToolSearchIndex.cs" Link="Bridge\ToolSearchIndex.cs" />
+    <Compile Include="..\RevitMCP.Bridge\ToolArgumentCoercion.cs" Link="Bridge\ToolArgumentCoercion.cs" />
     <Compile Include="..\RevitMCP.Benchmark\Core\BenchmarkReport.cs" Link="Benchmark\BenchmarkReport.cs" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
@@ -104,6 +108,8 @@
          winsqlite3 bundle so the linked Graph sources run on Linux/CI as well as Windows. -->
     <PackageReference Include="Microsoft.Data.Sqlite.Core" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
+    <!-- The MCP SDK, to check ToolArgumentCoercion against the schemas and argument binding the bridge really uses. -->
+    <PackageReference Include="ModelContextProtocol" />
   </ItemGroup>
 
   <!-- RevitMCP.Core and RevitMCP.Village have no Revit dependency — safe to reference directly -->
@@ -120,6 +126,8 @@
     <Compile Include="..\RevitMCP.Addin\Electrical\CircuitArcPlanner.cs" Link="Electrical\CircuitArcPlanner.cs" />
     <Compile Include="..\RevitMCP.Addin\Electrical\CableResistanceProfileService.cs" Link="Electrical\CableResistanceProfileService.cs" />
     <Compile Include="..\RevitMCP.Addin\Electrical\FireAlarmLoopClassifier.cs" Link="Electrical\FireAlarmLoopClassifier.cs" />
+    <Compile Include="..\RevitMCP.Addin\Electrical\FireAlarmVoltageDropEvaluator.cs" Link="Electrical\FireAlarmVoltageDropEvaluator.cs" />
+    <Compile Include="..\RevitMCP.Addin\Electrical\CircuitNumberComparer.cs" Link="Electrical\CircuitNumberComparer.cs" />
     <!-- Query response/projection logic (pure DTO shaping; no Revit API dependency) -->
     <Compile Include="..\RevitMCP.Addin\Query\ElementInfoDto.cs" Link="Query\ElementInfoDto.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\ElementQueryResponseFormatter.cs" Link="Query\ElementQueryResponseFormatter.cs" />
@@ -145,6 +153,7 @@
     <Compile Include="..\RevitMCP.Addin\Coordination\Clash\Services\ClashSummaryService.cs" Link="Coordination\Clash\Services\ClashSummaryService.cs" />
     <Compile Include="..\RevitMCP.Addin\Coordination\Clash\Services\ClashPresetService.cs" Link="Coordination\Clash\Services\ClashPresetService.cs" />
     <Compile Include="..\RevitMCP.Addin\Coordination\Clash\Services\ClashRunCacheService.cs" Link="Coordination\Clash\Services\ClashRunCacheService.cs" />
+    <Compile Include="..\RevitMCP.Addin\Coordination\Clash\Services\ClashCategoryRules.cs" Link="Coordination\Clash\Services\ClashCategoryRules.cs" />
     <!-- FileSystem pure-logic files -->
     <Compile Include="..\RevitMCP.Addin\FileSystem\FilePathPolicy.cs" Link="FileSystem\FilePathPolicy.cs" />
     <Compile Include="..\RevitMCP.Addin\FileSystem\FileSystemService.cs" Link="FileSystem\FileSystemService.cs" />
@@ -188,6 +197,8 @@
     <Compile Include="..\RevitMCP.Addin\Tagging\TagCollisionMath.cs" Link="Tagging\TagCollisionMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Tagging\TagTemplateMath.cs" Link="Tagging\TagTemplateMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Tagging\TagTargetVisibilityMath.cs" Link="Tagging\TagTargetVisibilityMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Tagging\RetagDecision.cs" Link="Tagging\RetagDecision.cs" />
+    <Compile Include="..\RevitMCP.Bridge\TagToolArgs.cs" Link="Bridge\TagToolArgs.cs" />
     <Compile Include="..\RevitMCP.Addin\Documentation\Placement\PlaceViewsNameMatcher.cs" Link="Documentation\Placement\PlaceViewsNameMatcher.cs" />
     <Compile Include="..\RevitMCP.Addin\Families\FamilyTypeNamePlanner.cs" Link="Families\FamilyTypeNamePlanner.cs" />
     <Compile Include="..\RevitMCP.Addin\Electrical\CableTypeCreationPlanner.cs" Link="Electrical\CableTypeCreationPlanner.cs" />

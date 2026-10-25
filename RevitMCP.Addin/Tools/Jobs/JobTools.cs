@@ -360,8 +360,14 @@ public sealed class JobReportTool : IRevitMcpTool
         }
         else if (job.CheckpointId != null && CheckpointChangeTracker.Store is { } store)
         {
-            checkpoint = store.Find(job.ModelId, job.CheckpointId);
-            if (checkpoint != null) (diff, warningDiff, _) = CheckpointSupport.ComputeDiff(doc, checkpoint);
+            var full = store.Find(job.ModelId, job.CheckpointId);
+            if (full != null)
+            {
+                // Only what the job's own steps changed: the checkpoint keeps recording other work and later changes.
+                checkpoint = JobChangeScope.Of(full, job.Id);
+                diff = JobChangeScope.Diff(checkpoint, CheckpointSupport.ComputeDeltas(doc, full));
+                warningDiff = WarningDiff.Compare(full.Warnings, RevitWarningReader.Read(doc, out _));
+            }
         }
         var plan = PlanService.Current?.Registry.Get(job.PlanId);
         var html = JobReportHtml.Build(job, checkpoint, diff, warningDiff, plan, DateTimeOffset.Now);

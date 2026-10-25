@@ -82,6 +82,14 @@ public static class DeliveryIssueBuilder
             "Verify the file is complete.",
             filePath: fileName);
 
+    public static IssueDto UnparsedSheetNumbers(string runId, int seq, int count, IEnumerable<string> examples, IEnumerable<string> disciplineFilter)
+        => Make(runId, seq, IssueSeverity.Warning, "UnparsedSheetNumber",
+            $"{count} Revit sheet(s) skipped: sheet number not recognised",
+            $"disciplineFilter [{string.Join(", ", disciplineFilter)}] was given, but {count} sheet number(s) could not be parsed into " +
+            $"{{project}}_{{stage}}_{{discipline}}-{{group}}-{{sequence}}[_{{text}}] or {{discipline}}-{{group}}-{{sequence}}, so their discipline is unknown " +
+            $"and they were not checked. Examples: {string.Join(", ", examples)}.",
+            "Rename the sheets to the delivery numbering convention, or run the check without disciplineFilter to include them.");
+
     // ── Excel register issues ─────────────────────────────────────────────────
 
     public static IssueDto RegisterRowMissingFile(string runId, int seq, string sheetNumber, string extension)

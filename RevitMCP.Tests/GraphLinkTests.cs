@@ -131,4 +131,49 @@ public class GraphLinkTests
         Assert.NotNull(GraphIncrementalPlanner.UnsafeReason("link", added: true, deleted: false));
         Assert.NotNull(GraphIncrementalPlanner.UnsafeReason("link", added: false, deleted: true));
     }
+
+    // ── host vs linked counts for routing (H8) ───────────────────────────────
+
+    [Fact]
+    public void Summarize_SplitsHostAndLinkedElementCounts()
+    {
+        using var db = BuildSample();
+        var s = db.Summarize(topN: 10, sampleSize: 0);
+
+        var host = s.ElementsByCategory.Single(c => c.Key == "Electrical Fixtures");
+        Assert.Equal((1L, 0L, 1L), (host.Count, host.Linked, host.Host));
+        var doors = s.ElementsByCategory.Single(c => c.Key == "Doors");
+        Assert.Equal((1L, 1L, 0L), (doors.Count, doors.Linked, doors.Host));
+        Assert.Equal(2, s.ElementsByLevel.Single().Linked);   // no levels in the sample: one empty-level row
+        Assert.Equal(0, s.NodesByKind.Single(c => c.Key == "element").Linked);   // kind counts carry no split
+    }
+
+    [Fact]
+    public void RoutingCounts_OneCategory_IsCaseInsensitive_AndSkipsTheRest()
+    {
+        using var db = BuildSample();
+        var one = db.RoutingCounts(" doors ");
+        var row = Assert.Single(one.ElementsByCategory);
+        Assert.Equal((0L, 1L), (row.Host, row.Linked));
+        Assert.Empty(one.NodesByKind);
+        Assert.Empty(db.RoutingCounts("Walls").ElementsByCategory);
+
+        var all = db.RoutingCounts();
+        Assert.Equal(3, all.ElementsByCategory.Count);
+        Assert.NotEmpty(all.NodesByKind);
+    }
+
+    [Fact]
+    public void RoutingState_CountsHostElementsOnly_AndKeepsLinkedCategoriesForMatching()
+    {
+        using var db = BuildSample();
+        var state = new GraphRoutingState { Exists = true };
+        state.SetCounts(db.RoutingCounts());
+
+        Assert.Equal(1, state.HostCount("Electrical Fixtures"));
+        Assert.Equal(0, state.HostCount("Fire Alarm Devices"));
+        Assert.Equal(1, state.LinkedCount("fire alarm devices"));
+        Assert.False(state.LinkedElementsByCategory.ContainsKey("Electrical Fixtures"));
+        Assert.Contains("Doors", state.Categories);
+    }
 }

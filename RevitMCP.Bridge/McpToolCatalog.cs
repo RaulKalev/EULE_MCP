@@ -1,5 +1,7 @@
 using System.Reflection;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 namespace RevitMCP.Bridge;
@@ -120,7 +122,8 @@ internal static class McpToolCatalog
         GetToolMethods().Select(item => CreateTool(item.Method)).ToList();
 
     private static McpServerTool CreateTool(MethodInfo method) =>
-        McpServerTool.Create(method, context => context.Services!.GetRequiredService(method.DeclaringType!));
+        new LenientArgumentsTool(
+            McpServerTool.Create(method, context => context.Services!.GetRequiredService(method.DeclaringType!)));
 
     public static bool IsFullProfile(string profile, string? explicitToolNames, string? toolGroups = null)
     {
@@ -194,6 +197,37 @@ internal static class McpToolCatalog
         {
             throw new InvalidOperationException(
                 "Unknown RevitMCP tool name(s): " + string.Join(", ", unknown));
+        }
+    }
+}
+
+/// <summary>
+/// Every bridge tool, advertised or dispatched through revit_tools_call, goes through this wrapper. It turns a number
+/// or boolean sent for a string parameter into that string before the SDK binds the arguments
+/// (<see cref="ToolArgumentCoercion"/>), and returns a failure's real message as an error result instead of letting
+/// the SDK replace it with its generic "An error occurred invoking '...'".
+/// </summary>
+internal sealed class LenientArgumentsTool(McpServerTool inner) : DelegatingMcpServerTool(inner)
+{
+    public override async ValueTask<CallToolResult> InvokeAsync(
+        RequestContext<CallToolRequestParams> request, CancellationToken cancellationToken = default)
+    {
+        if (request.Params is { } callParams)
+            callParams.Arguments = ToolArgumentCoercion.Coerce(callParams.Arguments, ProtocolTool.InputSchema);
+        try
+        {
+            return await base.InvokeAsync(request, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return new CallToolResult
+            {
+                IsError = true,
+                Content = [new TextContentBlock
+                {
+                    Text = JsonSerializer.Serialize(new { success = false, message = $"{ProtocolTool.Name} failed: {ex.Message}" })
+                }]
+            };
         }
     }
 }

@@ -17,25 +17,6 @@ public class ClashCandidateInfo
 
 public class ClashCandidateCollector
 {
-    public static readonly Dictionary<string, BuiltInCategory> CategoryMap =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["Cable Trays"]           = BuiltInCategory.OST_CableTray,
-            ["Conduits"]              = BuiltInCategory.OST_Conduit,
-            ["Ducts"]                 = BuiltInCategory.OST_DuctCurves,
-            ["Pipes"]                 = BuiltInCategory.OST_PipeCurves,
-            ["Walls"]                 = BuiltInCategory.OST_Walls,
-            ["Floors"]                = BuiltInCategory.OST_Floors,
-            ["Ceilings"]              = BuiltInCategory.OST_Ceilings,
-            ["Structural Framing"]    = BuiltInCategory.OST_StructuralFraming,
-            ["Structural Columns"]    = BuiltInCategory.OST_StructuralColumns,
-            ["Structural Foundations"]= BuiltInCategory.OST_StructuralFoundation,
-            ["Generic Models"]        = BuiltInCategory.OST_GenericModel,
-            ["Mechanical Equipment"]  = BuiltInCategory.OST_MechanicalEquipment,
-            ["Electrical Fixtures"]   = BuiltInCategory.OST_ElectricalFixtures,
-            ["Fire Alarm Devices"]    = BuiltInCategory.OST_FireAlarmDevices,
-        };
-
     public (List<ClashCandidateInfo> candidates, List<string> warnings) Collect(
         Document hostDoc,
         IEnumerable<string> categoryNames,
@@ -49,6 +30,7 @@ public class ClashCandidateCollector
         var warnings = new List<string>();
         var linkFilters = linkNameFilters?.ToList() ?? new List<string>();
         var cats = categoryNames.ToList();
+        var resolvedCats = new Dictionary<string, BuiltInCategory>(StringComparer.OrdinalIgnoreCase);
 
         // Host document.
         // "ImportedGeometry" is a special pseudo-category: only collected when explicitly listed
@@ -63,7 +45,11 @@ public class ClashCandidateCollector
                     CollectImportedGeometryFromDoc(hostDoc, result, warnings, limit);
                 continue;
             }
-            if (!CategoryMap.TryGetValue(catName, out var bic)) { warnings.Add($"Unknown category '{catName}' — skipped."); continue; }
+            // Any physical model category resolves (ClashCategoryRules), by alias, "OST_" name or document name.
+            var resolved = ClashCategoryDiscoveryService.Resolve(hostDoc, catName, out var resolveError);
+            if (resolved == null) { warnings.Add(resolveError!); continue; }
+            var bic = resolved.Value;
+            resolvedCats[catName] = bic;
             if (!includeGenericModels && bic == BuiltInCategory.OST_GenericModel) continue;
             CollectFromDoc(hostDoc, bic, catName, "Host", null, null, Transform.Identity, result, limit);
         }
@@ -87,7 +73,8 @@ public class ClashCandidateCollector
                 // "ImportedGeometry" from linked documents is not collected (complex transforms,
                 // rarely meaningful for clash purposes). Skip silently.
                 if (catName.Equals("ImportedGeometry", StringComparison.OrdinalIgnoreCase)) continue;
-                if (!CategoryMap.TryGetValue(catName, out var bic)) continue;
+                // Built-in categories are the same in every document, so the host resolution applies.
+                if (!resolvedCats.TryGetValue(catName, out var bic)) continue;
                 if (!includeGenericModels && bic == BuiltInCategory.OST_GenericModel) continue;
                 CollectFromDoc(linkDoc, bic, catName, link.Name, link.Id.Value, link.Name, transform, result, limit);
             }
@@ -131,9 +118,8 @@ public class ClashCandidateCollector
         string modelLabel, long? linkInstanceId, string? linkName,
         Transform transform, List<ClashCandidateInfo> result, int limit)
     {
-        IEnumerable<Element> elements = new FilteredElementCollector(doc)
-            .OfCategory(bic)
-            .WhereElementIsNotElementType();
+        // Same instance set the category discovery counts (view-independent, not types).
+        IEnumerable<Element> elements = ClashCategoryDiscoveryService.InstancesOf(doc, new ElementId(bic));
 
         if (limit > 0 && result.Count < limit)
             elements = elements.Take(limit - result.Count);

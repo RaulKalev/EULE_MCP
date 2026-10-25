@@ -2396,13 +2396,13 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("View ID. Defaults to active view.")] long viewId = 0,
         [Description("Managed tag IDs.")] long[]? tagIds = null,
         [Description("Referenced host IDs.")] long[]? elementIds = null,
-        [Description("Right, Left, Up, or Down.")] string direction = "Right",
+        [Description("Right, Left, Up, or Down. Given: each head goes that way (nearest free spot when collision avoidance is on). Omitted: a collision-free tag keeps its head; others go Right.")] string? direction = null,
         [Description("Smart Tags anchor position.")] string anchorPoint = "Center",
         [Description("Attached length in mm.")] double attachedLengthMm = 0,
         [Description("Free length in mm.")] double freeLengthMm = 0,
-        [Description("Use leaders.")] bool addLeader = false,
-        [Description("Attached or Free.")] string leaderEndCondition = "Attached",
-        [Description("Horizontal or Vertical.")] string orientation = "Horizontal",
+        [Description("Leader on/off. Omit to keep each tag's leader.")] bool? addLeader = null,
+        [Description("Attached or Free (tags with a leader). Omit to keep each tag's.")] string? leaderEndCondition = null,
+        [Description("Horizontal or Vertical. Omit to keep each tag's orientation.")] string? orientation = null,
         [Description("Rotation in degrees.")] double rotationDegrees = 0,
         [Description("Follow host rotation.")] bool detectElementRotation = false,
         [Description("Enable collision avoidance.")] bool enableCollisionDetection = true,
@@ -2411,7 +2411,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
-        var args = BuildRetagArgs(
+        var args = TagToolArgs.BuildRetagArgs(
             viewId, tagIds, elementIds, direction, anchorPoint,
             attachedLengthMm, freeLengthMm, addLeader, leaderEndCondition,
             orientation, rotationDegrees, detectElementRotation,
@@ -2430,13 +2430,13 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("View ID. Defaults to active view.")] long viewId = 0,
         [Description("Managed tag IDs.")] long[]? tagIds = null,
         [Description("Referenced host IDs.")] long[]? elementIds = null,
-        [Description("Right, Left, Up, or Down.")] string direction = "Right",
+        [Description("Right, Left, Up, or Down. Given: each head goes that way (nearest free spot when collision avoidance is on). Omitted: a collision-free tag keeps its head; others go Right.")] string? direction = null,
         [Description("Smart Tags anchor position.")] string anchorPoint = "Center",
         [Description("Attached length in mm.")] double attachedLengthMm = 0,
         [Description("Free length in mm.")] double freeLengthMm = 0,
-        [Description("Use leaders.")] bool addLeader = false,
-        [Description("Attached or Free.")] string leaderEndCondition = "Attached",
-        [Description("Horizontal or Vertical.")] string orientation = "Horizontal",
+        [Description("Leader on/off. Omit to keep each tag's leader.")] bool? addLeader = null,
+        [Description("Attached or Free (tags with a leader). Omit to keep each tag's.")] string? leaderEndCondition = null,
+        [Description("Horizontal or Vertical. Omit to keep each tag's orientation.")] string? orientation = null,
         [Description("Rotation in degrees.")] double rotationDegrees = 0,
         [Description("Follow host rotation.")] bool detectElementRotation = false,
         [Description("Enable collision avoidance.")] bool enableCollisionDetection = true,
@@ -2445,7 +2445,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
-        var args = BuildRetagArgs(
+        var args = TagToolArgs.BuildRetagArgs(
             viewId, tagIds, elementIds, direction, anchorPoint,
             attachedLengthMm, freeLengthMm, addLeader, leaderEndCondition,
             orientation, rotationDegrees, detectElementRotation,
@@ -2607,43 +2607,6 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         if (analyzedTemplate != null)
             args["analyzedTemplate"] = analyzedTemplate;
         return args;
-    }
-
-    private static Dictionary<string, object?> BuildRetagArgs(
-        long viewId,
-        long[]? tagIds,
-        long[]? elementIds,
-        string direction,
-        string anchorPoint,
-        double attachedLengthMm,
-        double freeLengthMm,
-        bool addLeader,
-        string leaderEndCondition,
-        string orientation,
-        double rotationDegrees,
-        bool detectElementRotation,
-        bool enableCollisionDetection,
-        double collisionGapMm,
-        double minimumOffsetMm)
-    {
-        return new Dictionary<string, object?>
-        {
-            ["viewId"] = viewId,
-            ["tagIds"] = tagIds ?? [],
-            ["elementIds"] = elementIds ?? [],
-            ["direction"] = direction,
-            ["anchorPoint"] = anchorPoint,
-            ["attachedLengthMm"] = attachedLengthMm,
-            ["freeLengthMm"] = freeLengthMm,
-            ["addLeader"] = addLeader,
-            ["leaderEndCondition"] = leaderEndCondition,
-            ["orientation"] = orientation,
-            ["rotationDegrees"] = rotationDegrees,
-            ["detectElementRotation"] = detectElementRotation,
-            ["enableCollisionDetection"] = enableCollisionDetection,
-            ["collisionGapMm"] = collisionGapMm,
-            ["minimumOffsetMm"] = minimumOffsetMm
-        };
     }
 
     [McpServerTool(Name = "revit_create_text_notes"),
@@ -5363,7 +5326,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     // ── Coordination / Clash Detection ──────────────────────────────────────────
 
     [McpServerTool(Name = "revit_list_clashable_categories", ReadOnly = true),
-     Description("Lists all element categories available for clash detection in the active document and loaded links, with element counts. Use before running detect or candidate tools.")]
+     Description("Lists every model category with solid geometry (any discipline: devices, fixtures, equipment, doors, fittings, ...) in the active document and loaded links, with element counts. Pass these names to the detect or candidate tools.")]
     public async Task<string> ListClashableCategories(
         [Description("Include linked models (default true)")] bool includeLinks = true,
         [Description("Include Generic Models category (default true)")] bool includeGenericModels = true,
@@ -6728,8 +6691,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
 
     [McpServerTool(Name = "revit_graph_summary", ReadOnly = true),
      Description("Summarises the model graph for cheap orientation at session start: node counts per kind, element counts per " +
-                 "category/level/workset, panels with circuit and fed-element counts, orphan circuits (no panel / no elements), " +
-                 "and elements with no located_in edge. Includes built_at, central_version, stale and the routing-only note.")]
+                 "category/level/workset (count = host model, linked = in linked models), panels with circuit and fed-element " +
+                 "counts, orphan circuits (no panel / no elements), and elements with no located_in edge. Includes built_at, central_version, stale and the routing-only note.")]
     public async Task<string> GraphSummary(
         [Description("Maximum rows per count list (1-200). Default 25.")] int topN = 25,
         [Description("Sample ids listed for orphan circuits and unlocated elements (0-200). Default 25.")] int sampleSize = 25,

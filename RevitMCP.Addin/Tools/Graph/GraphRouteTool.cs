@@ -59,6 +59,9 @@ public sealed class GraphRouteTool : IRevitMcpTool
                     stale_reason = state.StaleReason,
                     nodesByKind = state.NodesByKind,
                     categories = state.Categories.Take(25).ToList(),
+                    // Categories with linked-model elements and how many: host tools cannot read those ids.
+                    linkedElementsByCategory = state.LinkedElementsByCategory.Count == 0 ? null
+                        : state.LinkedElementsByCategory.OrderByDescending(p => p.Value).Take(25).ToDictionary(p => p.Key, p => p.Value),
                     levels = state.Levels
                 },
                 steps = plan.Steps.Select((s, i) => new { step = i + 1, tool = s.Tool, args = s.Args, why = s.Why }).ToList(),

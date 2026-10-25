@@ -139,6 +139,12 @@ public sealed class GraphCount
 {
     public string Key { get; set; } = string.Empty;
     public long Count { get; set; }
+    /// <summary>
+    /// For element counts: how many of <see cref="Count"/> are linked-model nodes (ids link:&lt;instance&gt;:&lt;id&gt;),
+    /// which host tools cannot read. <see cref="Host"/> is the rest. Zero for other counts.
+    /// </summary>
+    public long Linked { get; set; }
+    public long Host => Count - Linked;
 }
 
 public sealed class GraphPanelSummary
