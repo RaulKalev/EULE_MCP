@@ -171,6 +171,7 @@ internal static class SetTextNotesExecutor
         }
 
         var applied = new List<object>();
+        var done = new List<(NoteWork Work, bool? FormattingPreserved)>();
         var failed = 0;
         var (txSuccess, diagnostics) = RevitTransactionRunner.Run(doc, "Revit MCP - Edit Text Notes", () =>
         {
@@ -184,13 +185,22 @@ internal static class SetTextNotesExecutor
                         formattingPreserved = ApplyText(work.Note, work.Plan);
                     if (work.WidthChanged)
                         work.Note.Width = work.NewWidthFt;
-                    applied.Add(Describe(work, formattingPreserved));
+                    done.Add((work, formattingPreserved));
                 }
                 catch (Exception ex)
                 {
                     failed++;
                     skipped.Add(Skip(work.Note, work.ViewName, $"Revit refused the edit: {ex.Message}"));
                 }
+            }
+
+            // Revit re-fits a note's width to new text only when it regenerates, so the width read before that is
+            // stale (M21: reported 51.9 → 51.9 while the note became 57.4 mm). Report what Revit ended up with.
+            try { doc.Regenerate(); } catch { }
+            foreach (var (work, formattingPreserved) in done)
+            {
+                try { work.NewWidthFt = work.Note.Width; } catch { }
+                applied.Add(Describe(work, formattingPreserved));
             }
         });
         sw.Stop();
@@ -355,7 +365,27 @@ internal static class SetTextNotesExecutor
         }
 
         scope = $"view '{view.Name}' ({view.Id.Value})";
-        return new FilteredElementCollector(doc, view.Id).OfClass(typeof(TextNote)).Cast<TextNote>().ToList();
+        return TextNotesInView(doc, view.Id);
+    }
+
+    /// <summary>
+    /// The notes of a view: those it owns (also when hidden there, e.g. by a filter or the crop: M8 missed note 36262
+    /// in its own view 36243) plus those it shows (a dependent view shows its parent's notes).
+    /// </summary>
+    internal static List<TextNote> TextNotesInView(Document doc, ElementId viewId)
+    {
+        var notes = new FilteredElementCollector(doc).OfClass(typeof(TextNote)).OwnedByView(viewId).Cast<TextNote>().ToList();
+        try
+        {
+            var owned = new HashSet<long>(notes.Select(n => n.Id.Value));
+            notes.AddRange(new FilteredElementCollector(doc, viewId).OfClass(typeof(TextNote)).Cast<TextNote>()
+                .Where(n => !owned.Contains(n.Id.Value)));
+        }
+        catch (Autodesk.Revit.Exceptions.ArgumentException)
+        {
+            // A view that cannot be used to collect visible elements (e.g. a schedule): its own notes are enough.
+        }
+        return notes;
     }
 
     private static string? WorksharingBlock(Document doc, ElementId id)

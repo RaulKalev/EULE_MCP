@@ -30,6 +30,10 @@ public sealed class ElementDelta
     public double? RotationBeforeRad { get; set; }
     public double? RotationNowRad { get; set; }
 
+    /// <summary>Facing before and now (CCW from +X), when the element is a family instance that rotated.</summary>
+    public double? FacingBeforeRad { get; set; }
+    public double? FacingNowRad { get; set; }
+
     public bool Rotated => RotationBeforeRad != null && RotationNowRad != null;
     public bool HasChanges => Missing || Parameters.Count > 0 || Moved != null || Rotated;
 }
@@ -69,6 +73,11 @@ public static class SnapshotDiff
         {
             delta.RotationBeforeRad = r0;
             delta.RotationNowRad = r1;
+            if (before.FacingRad is double f0 && now.FacingRad is double f1)
+            {
+                delta.FacingBeforeRad = f0;
+                delta.FacingNowRad = f1;
+            }
         }
         return delta;
     }

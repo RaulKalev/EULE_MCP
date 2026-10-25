@@ -378,6 +378,20 @@ public class MoveElementsMathTests
     }
 
     [Fact]
+    public void Summarise_PreviewListsReadyElementsAsReady_NotFailed()
+    {
+        // M22: a single movable element came back under elementIds.failed in the preview.
+        var plan = MoveElementsMath.Build(Move(1, x: 76871.5), Fixture, false, true, Tolerance);
+        Assert.Equal(MoveStatus.Ready, plan.Status);
+
+        var summary = MoveElementsMath.Summarise(new[] { plan });
+
+        Assert.Equal(new long[] { 1 }, summary.Ready);
+        Assert.Empty(summary.Failed);
+        Assert.Equal(0, summary.ProblemCount);
+    }
+
+    [Fact]
     public void AnAtomicBatchThatFailsMidWay_ReportsTheMovedElementsAsRolledBack()
     {
         var plans = new List<MovePlan>

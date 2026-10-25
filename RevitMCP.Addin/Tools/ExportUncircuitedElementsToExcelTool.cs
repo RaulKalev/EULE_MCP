@@ -91,9 +91,8 @@ public class ExportUncircuitedElementsToExcelTool : IRevitMcpTool
                 if (returnParams.Length > 0)
                 {
                     var readOpts = new ParameterReadOptions { IncludeInstanceParameters = true, IncludeTypeParameters = true };
-                    foreach (var p in _paramReader.ReadParameters(doc, element, readOpts))
-                        if (returnParams.Any(rp => ParameterMatcher.Matches(p.Name, rp, "ContainsNormalized")))
-                            paramDict[p.Name] = p.Value;
+                    paramDict = ParameterValueMap.Build(_paramReader.ReadParameters(doc, element, readOpts),
+                        p => returnParams.Any(rp => ParameterMatcher.Matches(p.Name, rp, "ContainsNormalized")));
                 }
                 records.Add((eid.Value, element.Category?.Name ?? "", fi.Symbol?.Family?.Name ?? "", typeElem?.Name ?? element.Name, level, paramDict));
             }

@@ -60,11 +60,9 @@ public class FindElementsOnCircuitTool : IRevitMcpTool
                     Dictionary<string, string>? paramValues = null;
                     if (returnParams.Length > 0)
                     {
-                        paramValues = new Dictionary<string, string>();
                         var readOpts = new ParameterReadOptions { IncludeInstanceParameters = true, IncludeTypeParameters = true };
-                        foreach (var p in _paramReader.ReadParameters(doc, e, readOpts))
-                            if (returnParams.Any(rp => ParameterMatcher.Matches(p.Name, rp, "ContainsNormalized")))
-                                paramValues[p.Name] = p.Value;
+                        paramValues = ParameterValueMap.Build(_paramReader.ReadParameters(doc, e, readOpts),
+                            p => returnParams.Any(rp => ParameterMatcher.Matches(p.Name, rp, "ContainsNormalized")));
                     }
                     elements.Add(new
                     {

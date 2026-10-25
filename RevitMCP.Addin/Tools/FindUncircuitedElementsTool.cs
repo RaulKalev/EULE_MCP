@@ -148,13 +148,9 @@ public class FindUncircuitedElementsTool : IRevitMcpTool
         Dictionary<string, string>? parameters = null;
         if (returnParams.Length > 0)
         {
-            parameters = new Dictionary<string, string>();
             var readOpts = new ParameterReadOptions { IncludeInstanceParameters = true, IncludeTypeParameters = true };
-            foreach (var p in _paramReader.ReadParameters(doc, element, readOpts))
-            {
-                if (returnParams.Any(rp => ParameterMatcher.Matches(p.Name, rp, "ContainsNormalized")))
-                    parameters[p.Name] = p.Value;
-            }
+            parameters = ParameterValueMap.Build(_paramReader.ReadParameters(doc, element, readOpts),
+                p => returnParams.Any(rp => ParameterMatcher.Matches(p.Name, rp, "ContainsNormalized")));
         }
 
         return new

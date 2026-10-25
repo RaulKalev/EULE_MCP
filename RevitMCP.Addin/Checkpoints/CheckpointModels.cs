@@ -77,6 +77,12 @@ public sealed class ElementSnapshot : ElementIdentity
     /// <summary>LocationPoint.Rotation in radians, or null.</summary>
     [JsonProperty("rotation", NullValueHandling = NullValueHandling.Ignore)] public double? RotationRad { get; set; }
 
+    /// <summary>
+    /// FacingOrientation of a family instance as an angle in radians, CCW from +X — the convention of revit_rotate_elements
+    /// and the device checks. It differs from <see cref="RotationRad"/> by the family's own facing at rotation 0 (often 90°).
+    /// </summary>
+    [JsonProperty("facing", NullValueHandling = NullValueHandling.Ignore)] public double? FacingRad { get; set; }
+
     /// <summary>Parameter name → value as display string (the formatting of revit_get_element_parameters).</summary>
     [JsonProperty("parameters")] public Dictionary<string, string?> Parameters { get; set; } = new(StringComparer.Ordinal);
 

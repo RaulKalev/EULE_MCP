@@ -109,7 +109,10 @@ public static class JobReportHtml
                 lines.AddRange(e.Delta.Parameters.Select(p => (p.Name, p.Before, p.Now, (string?)p.Name)));
                 if (e.Delta.Moved != null)
                     lines.Add(("asukoht", Mm(e.Delta.Moved.FromMm), Mm(e.Delta.Moved.ToMm) + $" ({e.Delta.Moved.DistanceMm.ToString(CultureInfo.InvariantCulture)} mm)", null));
-                if (e.Delta.Rotated)
+                // The facing matches what revit_rotate_elements reports; the insertion rotation can differ by 90° (M20).
+                if (e.Delta.FacingBeforeRad is double f0 && e.Delta.FacingNowRad is double f1)
+                    lines.Add(("suund", Deg(f0), Deg(f1), null));
+                else if (e.Delta.Rotated)
                     lines.Add(("pööre", Deg(e.Delta.RotationBeforeRad!.Value), Deg(e.Delta.RotationNowRad!.Value), null));
             }
             if (lines.Count == 0)
@@ -227,7 +230,7 @@ public static class JobReportHtml
 
     private static string Mm(double[] values) => string.Join(", ", values.Select(v => v.ToString("0", CultureInfo.InvariantCulture)));
 
-    private static string Deg(double rad) => (rad * 180 / Math.PI).ToString("0.##", CultureInfo.InvariantCulture) + "°";
+    private static string Deg(double rad) => ((rad * 180 / Math.PI % 360 + 360) % 360).ToString("0.##", CultureInfo.InvariantCulture) + "°";
 
     private static string Shorten(string? text, int max) => string.IsNullOrEmpty(text) ? string.Empty : text!.Length <= max ? text : text.Substring(0, max) + "…";
 

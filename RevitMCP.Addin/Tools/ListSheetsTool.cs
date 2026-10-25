@@ -120,9 +120,7 @@ public class ListSheetsTool : IRevitMcpTool
             if (paramReader != null)
             {
                 var pvals = paramReader.ReadParameters(doc, s, paramReadOpts);
-                var pd = new Dictionary<string, string?>();
-                foreach (var p in pvals) pd[p.Name] = p.Value;
-                extraParams = pd;
+                extraParams = ParameterValueMap.Build(pvals).ToDictionary(p => p.Key, p => (string?)p.Value);
             }
 
             var entry = new Dictionary<string, object?>

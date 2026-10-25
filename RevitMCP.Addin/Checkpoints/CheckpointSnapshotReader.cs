@@ -160,6 +160,10 @@ internal sealed class CheckpointSnapshotReader
                 case LocationPoint point:
                     snapshot.LocationMm = ToMm(point.Point);
                     try { snapshot.RotationRad = point.Rotation; } catch { /* not every point location has a rotation */ }
+                    if (element is FamilyInstance instance)
+                    {
+                        try { snapshot.FacingRad = Math.Atan2(instance.FacingOrientation.Y, instance.FacingOrientation.X); } catch { }
+                    }
                     break;
                 case LocationCurve curve when curve.Curve != null && curve.Curve.IsBound:
                     var start = ToMm(curve.Curve.GetEndPoint(0));

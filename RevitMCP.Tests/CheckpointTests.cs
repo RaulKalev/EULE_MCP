@@ -442,6 +442,31 @@ public class RollbackPlannerTests
         Assert.Null(location.TranslateMm);
         Assert.Equal(-Math.PI / 2, location.RotateRad!.Value, 6);
     }
+
+    [Fact]
+    public void Rotation_AlsoReportsTheFacing_AsTheRotateToolDoes()
+    {
+        // M20: the diff said 90° → 180° (insertion rotation) for what revit_rotate_elements called 180° → 270° (facing).
+        var before = Snap("A", 0);
+        before.RotationRad = Math.PI / 2;
+        before.FacingRad = Math.PI;
+        var now = Snap("A", 0);
+        now.RotationRad = Math.PI;
+        now.FacingRad = -Math.PI / 2;   // Atan2 range: 270° comes back as -90°
+
+        var delta = SnapshotDiff.Compare(1, before, now);
+
+        Assert.Equal(Math.PI, delta.FacingBeforeRad!.Value, 6);
+        Assert.Equal(-Math.PI / 2, delta.FacingNowRad!.Value, 6);
+        var cp = CheckpointWith((1, before));
+        cp.Batches.Add(new ChangeBatch { Attribution = "agent:revit_rotate_elements", Modified = new[] { 1L } });
+        var json = Newtonsoft.Json.JsonConvert.SerializeObject(
+            CheckpointDiffReport.Build(cp, DiffFor(cp, new() { [1] = now }), null, new DiffReportOptions { Include = "elements" }, DateTimeOffset.Now));
+        Assert.Contains("\"beforeDeg\":90.0", json);
+        Assert.Contains("\"nowDeg\":180.0", json);
+        Assert.Contains("\"facingBeforeDeg\":180.0", json);
+        Assert.Contains("\"facingNowDeg\":270.0", json);
+    }
 }
 
 public class CheckpointStoreTests : IDisposable

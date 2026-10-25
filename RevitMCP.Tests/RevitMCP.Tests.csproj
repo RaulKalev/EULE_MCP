@@ -137,6 +137,7 @@
     <Compile Include="..\RevitMCP.Addin\Query\ParameterResolution.cs" Link="Query\ParameterResolution.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\ParameterReadOptions.cs" Link="Query\ParameterReadOptions.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\ParameterValueDto.cs" Link="Query\ParameterValueDto.cs" />
+    <Compile Include="..\RevitMCP.Addin\Query\ParameterValueMap.cs" Link="Query\ParameterValueMap.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\TagInfoDto.cs" Link="Query\TagInfoDto.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\ParameterFilterDto.cs" Link="Query\ParameterFilterDto.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\ParameterFilterEvaluator.cs" Link="Query\ParameterFilterEvaluator.cs" />

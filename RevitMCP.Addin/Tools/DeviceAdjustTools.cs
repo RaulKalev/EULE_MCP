@@ -13,7 +13,7 @@ namespace RevitMCP.Addin.Tools;
 internal sealed class AdjustPlanEntry
 {
     public DeviceRecord Device { get; set; } = null!;
-    /// <summary>ready | unchanged | stale | blocked</summary>
+    /// <summary>Preview: ready | unchanged | stale | blocked. After the write: changed or rolledBack (was ready), failed.</summary>
     public string Status { get; set; } = "ready";
     public string Reason { get; set; } = string.Empty;
     public double? CurrentValue { get; set; }
@@ -80,7 +80,7 @@ internal static class DeviceAdjustSupport
         List<AdjustPlanEntry> plan, List<string> warnings, string unit, Action<AdjustPlanEntry> apply, CancellationToken ct)
     {
         var atomic = ToolArguments.GetBool(request.Arguments, "atomic", true);
-        var results = new List<object>();
+        var outcomes = new List<(AdjustPlanEntry Entry, string? Error)>();
         var changed = 0;
         var failed = 0;
 
@@ -91,7 +91,7 @@ internal static class DeviceAdjustSupport
             ct.ThrowIfCancellationRequested();
             if (!entry.WillChange)
             {
-                results.Add(entry.Payload(unit));
+                outcomes.Add((entry, null));
                 continue;
             }
 
@@ -102,15 +102,26 @@ internal static class DeviceAdjustSupport
                 apply(entry);
                 sub.Commit();
                 changed++;
-                results.Add(entry.Payload(unit));
+                entry.Status = "changed";   // X8: the result said "ready" after the change was made
+                outcomes.Add((entry, null));
             }
             catch (Exception ex)
             {
                 if (sub.GetStatus() == TransactionStatus.Started) sub.RollBack();
                 failed++;
-                results.Add(entry.Payload(unit, ex.Message));
+                outcomes.Add((entry, ex.Message));
             }
         }
+
+        if (atomic && failed > 0)
+        {
+            foreach (var (entry, _) in outcomes.Where(o => o.Entry.Status == "changed"))
+            {
+                entry.Status = "rolledBack";
+                entry.Reason = "Rolled back: another element failed (atomic=true).";
+            }
+        }
+        var results = outcomes.Select(o => o.Entry.Payload(unit, o.Error)).ToList();
 
         if (atomic && failed > 0)
         {

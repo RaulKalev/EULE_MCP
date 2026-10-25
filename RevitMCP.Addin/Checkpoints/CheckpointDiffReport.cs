@@ -204,11 +204,30 @@ public static class CheckpointDiffReport
                 ["distanceMm"] = e.Delta.Moved.DistanceMm
             };
         if (e.Delta.Rotated)
-            row["rotated"] = new Dictionary<string, object?>
+        {
+            // beforeDeg/nowDeg: the insertion rotation (LocationPoint.Rotation). facing*: the direction the element faces,
+            // CCW from +X, as revit_rotate_elements reports it; the two differ by the family's own facing (M20).
+            var rotated = new Dictionary<string, object?>
             {
-                ["beforeDeg"] = Math.Round(e.Delta.RotationBeforeRad!.Value * 180 / Math.PI, 2),
-                ["nowDeg"] = Math.Round(e.Delta.RotationNowRad!.Value * 180 / Math.PI, 2)
+                ["beforeDeg"] = Degrees(e.Delta.RotationBeforeRad!.Value),
+                ["nowDeg"] = Degrees(e.Delta.RotationNowRad!.Value)
             };
+            if (e.Delta.FacingBeforeRad is double f0 && e.Delta.FacingNowRad is double f1)
+            {
+                rotated["facingBeforeDeg"] = Degrees(f0);
+                rotated["facingNowDeg"] = Degrees(f1);
+            }
+            row["rotated"] = rotated;
+        }
         return row;
+    }
+
+    /// <summary>Radians as degrees in [0, 360), two decimals.</summary>
+    private static double Degrees(double radians)
+    {
+        var deg = radians * 180 / Math.PI % 360;
+        if (deg < 0) deg += 360;
+        deg = Math.Round(deg, 2);
+        return deg >= 360 ? 0 : deg;
     }
 }

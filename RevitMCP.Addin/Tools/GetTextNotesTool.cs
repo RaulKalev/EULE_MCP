@@ -72,9 +72,7 @@ public class GetTextNotesTool : IRevitMcpTool
                 scopeViewId = activeView.Id;
             }
 
-            notes = new FilteredElementCollector(doc, scopeViewId)
-                .OfClass(typeof(TextNote))
-                .Cast<TextNote>();
+            notes = SetTextNotesExecutor.TextNotesInView(doc, scopeViewId);
         }
 
         // Apply text filter

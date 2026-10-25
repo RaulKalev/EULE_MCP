@@ -208,6 +208,9 @@ public sealed class MovePlan
 /// <summary>Element ids grouped by outcome. Every element lands in exactly one list.</summary>
 public sealed class MoveSummary
 {
+    /// <summary>Would move (a preview): not a failure. Without this bucket a preview listed them as failed (M22).</summary>
+    public List<long> Ready { get; } = new();
+
     public List<long> Moved { get; } = new();
 
     /// <summary>Nothing to do — already within the negligible distance of the target.</summary>
@@ -519,6 +522,7 @@ public static class MoveElementsMath
             var bucket = plan.Status switch
             {
                 MoveStatus.Moved => summary.Moved,
+                MoveStatus.Ready => summary.Ready,
                 MoveStatus.AlreadyThere => summary.Skipped,
                 MoveStatus.Stale => summary.Stale,
                 MoveStatus.Missing => summary.Missing,

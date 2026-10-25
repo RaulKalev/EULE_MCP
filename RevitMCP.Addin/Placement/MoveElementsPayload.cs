@@ -34,6 +34,7 @@ internal static class MoveElementsPayload
 
     public static object Summarise(MoveSummary summary) => new
     {
+        ready = summary.Ready,
         moved = summary.Moved,
         skipped = summary.Skipped,
         stale = summary.Stale,
