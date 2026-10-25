@@ -5363,7 +5363,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     // ── Coordination / Clash Detection ──────────────────────────────────────────
 
     [McpServerTool(Name = "revit_list_clashable_categories", ReadOnly = true),
-     Description("Lists all element categories available for clash detection in the active document and loaded links, with element counts. Use before running detect or candidate tools.")]
+     Description("Lists every model category with solid geometry (any discipline: devices, fixtures, equipment, doors, fittings, ...) in the active document and loaded links, with element counts. Pass these names to the detect or candidate tools.")]
     public async Task<string> ListClashableCategories(
         [Description("Include linked models (default true)")] bool includeLinks = true,
         [Description("Include Generic Models category (default true)")] bool includeGenericModels = true,

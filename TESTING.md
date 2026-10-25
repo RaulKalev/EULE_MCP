@@ -2287,7 +2287,11 @@ The 17 coordination tools implement a **Revit-native bounding-box clash detectio
 ```
 call revit_list_clashable_categories
 ```
-**Expected:** JSON array of objects `{category, elementCount}`. At minimum one entry with `elementCount > 0`.
+**Expected:** `{categories: [{category, count, source}], count}`: one entry per physical model category that has
+instances with solid geometry, per source (`Host` or link name), common clash categories first, then by name. Not a
+fixed list: an EN model also shows e.g. Communication Devices, Data Devices, Security Devices, Lighting Fixtures,
+Electrical Equipment; doors and fittings appear when the model has them. Rooms, spaces, circuits, wires, groups and
+lines never appear.
 
 ### 35.2 `revit_list_clashable_links`
 
@@ -2314,6 +2318,13 @@ call revit_get_clash_candidates with sourceCategories=["Electrical Equipment"] a
 call revit_get_clash_candidates with sourceCategories=["Ducts"] and targetCategories=["Conduits"] and linkId=<id>
 ```
 **Expected:** Counts sourced from the link model.
+
+**Prompt (any model category):**
+```
+call revit_get_clash_candidates with sourceCategories=["Communication Devices", "OST_Doors"] and targetCategories=["Rooms", "Nonexistent"]
+```
+**Expected:** Source candidates are collected (a document category name and an `OST_` name both resolve). Warnings say
+`Rooms` cannot be clash-checked (no physical geometry) and `Nonexistent` is unknown, with suggestions when a similar name exists.
 
 ---
 
