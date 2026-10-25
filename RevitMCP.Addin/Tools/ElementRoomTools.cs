@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Architecture;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.RoomDevices;
 using RevitMCP.Core.Models;
@@ -33,9 +34,12 @@ public sealed class GetElementRoomsTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        var doc = uidoc?.Document;
-        if (doc == null) return Task.FromResult(ElementRoomSupport.Fail(request, "No active document."));
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
+        var uidoc = ToolDocument.UiDocumentOf(uiapp, documentTarget);
+        if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+            return Task.FromResult(ToolDocument.ActiveRequired(request, "useSelection", documentTarget.Document.Title));
 
         var args = request.Arguments;
         var ids = ToolArguments.GetLongArray(args, "elementIds");
@@ -269,8 +273,9 @@ public sealed class GetRoomBoundariesTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null) return Task.FromResult(ElementRoomSupport.Fail(request, "No active document."));
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
 
         var args = request.Arguments;
         var roomIds = ToolArguments.GetLongArray(args, "roomIds");

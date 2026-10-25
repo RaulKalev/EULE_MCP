@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Electrical;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Query;
 using RevitMCP.Core.Models;
@@ -32,10 +33,12 @@ public class FindUncircuitedElementsTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        if (uidoc?.Document == null)
-            return Task.FromResult(Fail(request, "No active document."));
-        var doc = uidoc.Document;
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
+        var uidoc = ToolDocument.UiDocumentOf(uiapp, documentTarget);
+        if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+            return Task.FromResult(ToolDocument.ActiveRequired(request, "useSelection", documentTarget.Document.Title));
 
         var categories = ToolArguments.GetStringArray(request.Arguments, "categories");
         if (categories.Length == 0) categories = DefaultCategories;
@@ -58,7 +61,7 @@ public class FindUncircuitedElementsTool : IRevitMcpTool
         IEnumerable<Element> candidates;
         if (useSelection)
         {
-            candidates = uidoc.Selection.GetElementIds()
+            candidates = uidoc!.Selection.GetElementIds()
                 .Select(eid => doc.GetElement(eid))
                 .Where(e => e != null)!;
         }

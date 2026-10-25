@@ -3,6 +3,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using ClosedXML.Excel;
 using RevitMCP.Addin.Export;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Core.Models;
 
@@ -20,9 +21,9 @@ public class ExportSheetListToExcelTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null)
-            return Task.FromResult(Fail(request, "No active document."));
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
 
         var includePlacedViews = ToolArguments.GetBool(request.Arguments, "includePlacedViews", true);
         var fileName = ToolArguments.GetString(request.Arguments, "fileName", "Revit_Sheet_List.xlsx");

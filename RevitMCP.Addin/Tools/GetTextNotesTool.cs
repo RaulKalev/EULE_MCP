@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Core.Models;
 
@@ -16,11 +17,12 @@ public class GetTextNotesTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        if (uidoc?.Document == null)
-            return Task.FromResult(Fail(request, "No active document."));
-
-        var doc = uidoc.Document;
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
+        var uidoc = ToolDocument.UiDocumentOf(uiapp, documentTarget);
+        if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+            return Task.FromResult(ToolDocument.ActiveRequired(request, "useSelection", documentTarget.Document.Title));
         var useSelection = ToolArguments.GetBool(request.Arguments, "useSelection");
         var viewId = ToolArguments.GetLong(request.Arguments, "viewId", -1L);
         var textFilter = ToolArguments.GetString(request.Arguments, "textFilter");
@@ -31,7 +33,7 @@ public class GetTextNotesTool : IRevitMcpTool
 
         if (useSelection)
         {
-            var selIds = uidoc.Selection.GetElementIds();
+            var selIds = uidoc!.Selection.GetElementIds();
             var selNotes = new List<TextNote>();
             int skipped = 0;
             foreach (var id in selIds)
@@ -62,6 +64,8 @@ public class GetTextNotesTool : IRevitMcpTool
             }
             else
             {
+                if (uidoc == null)
+                    return Task.FromResult(Fail(request, $"'{doc.Title}' is not the active document, so it has no active view: pass viewId, or viewId=0 for all views."));
                 var activeView = uidoc.ActiveView;
                 if (activeView == null)
                     return Task.FromResult(Fail(request, "No active view. Pass viewId=0 to collect from all views."));

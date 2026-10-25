@@ -5,6 +5,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RevitMCP.Addin.Configuration;
 using RevitMCP.Addin.Families;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.RoomDevices;
 using RevitMCP.Core.Models;
@@ -26,8 +27,9 @@ public sealed class GetDeviceCodesTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null) return Task.FromResult(RoomToolSupport.Fail(request, "No active document."));
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
 
         var context = DeviceCodeContext.Load(doc, request.Arguments, out var error);
         if (context == null) return Task.FromResult(RoomToolSupport.Fail(request, error!));
@@ -71,8 +73,9 @@ public sealed class SetDeviceCodesTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null) return Task.FromResult(RoomToolSupport.Fail(request, "No active document."));
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
         var args = request.Arguments;
 
         var root = ProjectConfigLocator.FindProjectRoot(doc, ToolArguments.GetString(args, "projectRoot"));
@@ -234,8 +237,9 @@ public sealed class PreviewEnsureDeviceTypesTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null) return Task.FromResult(RoomToolSupport.Fail(request, "No active document."));
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
 
         var entries = DeviceTypePlanner.Build(doc, request.Arguments, out var context, out var error);
         if (entries == null) return Task.FromResult(RoomToolSupport.Fail(request, error!));
@@ -272,8 +276,9 @@ public sealed class EnsureDeviceTypesTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null) return Task.FromResult(RoomToolSupport.Fail(request, "No active document."));
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
 
         var entries = DeviceTypePlanner.Build(doc, request.Arguments, out var context, out var error);
         if (entries == null) return Task.FromResult(RoomToolSupport.Fail(request, error!));
@@ -410,8 +415,9 @@ public sealed class PreviewPlaceAtWallTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null) return Task.FromResult(RoomToolSupport.Fail(request, "No active document."));
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
         var plan = DevicePlacementService.PlanAtWall(doc, request.Arguments, out var error);
         return Task.FromResult(plan == null ? RoomToolSupport.Fail(request, error!) : PlacementToolSupport.Preview(request, sw, plan));
     }
@@ -431,8 +437,9 @@ public sealed class PlaceAtWallTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null) return Task.FromResult(RoomToolSupport.Fail(request, "No active document."));
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
         var plan = DevicePlacementService.PlanAtWall(doc, request.Arguments, out var error);
         return Task.FromResult(plan == null
             ? RoomToolSupport.Fail(request, error!)
@@ -456,8 +463,9 @@ public sealed class PreviewPlaceInRoomTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null) return Task.FromResult(RoomToolSupport.Fail(request, "No active document."));
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
         var plan = DevicePlacementService.PlanInRoom(doc, request.Arguments, out var error);
         return Task.FromResult(plan == null ? RoomToolSupport.Fail(request, error!) : PlacementToolSupport.Preview(request, sw, plan));
     }
@@ -476,8 +484,9 @@ public sealed class PlaceInRoomTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null) return Task.FromResult(RoomToolSupport.Fail(request, "No active document."));
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
         var plan = DevicePlacementService.PlanInRoom(doc, request.Arguments, out var error);
         return Task.FromResult(plan == null
             ? RoomToolSupport.Fail(request, error!)

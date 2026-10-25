@@ -3,6 +3,7 @@ using System.IO;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Newtonsoft.Json.Linq;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.RoomDevices;
 using RevitMCP.Core.Models;
@@ -28,16 +29,20 @@ public sealed class ExportViewImageTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        var doc = uidoc?.Document;
-        if (doc == null) return Task.FromResult(RoomToolSupport.Fail(request, "No active document."));
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
+        var uidoc = ToolDocument.UiDocumentOf(uiapp, documentTarget);
+        if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+            return Task.FromResult(ToolDocument.ActiveRequired(request, "useSelection", documentTarget.Document.Title));
         var args = request.Arguments;
         var warnings = new List<string>();
 
         var viewId = ToolArguments.GetLong(args, "viewId");
-        var view = viewId != 0 ? doc.GetElement(new ElementId(viewId)) as View : uidoc!.ActiveView;
+        // A non-active document (#101) has no active view: it needs viewId.
+        var view = viewId != 0 ? doc.GetElement(new ElementId(viewId)) as View : uidoc?.ActiveView;
         if (view == null || view.IsTemplate)
-            return Task.FromResult(RoomToolSupport.Fail(request, viewId != 0 ? $"Element {viewId} is not a view." : "No active view."));
+            return Task.FromResult(RoomToolSupport.Fail(request, viewId != 0 ? $"Element {viewId} is not a view." : uidoc == null ? $"'{doc.Title}' is not the active document: pass viewId." : "No active view."));
 
         // Crop region in host mm.
         Bounds2? crop = null;

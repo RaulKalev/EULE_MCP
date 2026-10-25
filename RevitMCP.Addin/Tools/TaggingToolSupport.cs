@@ -42,6 +42,12 @@ namespace RevitMCP.Addin.Tools
         {
             error = null;
             var useSelection = ToolArguments.GetBool(arguments, "useSelection");
+            if (useSelection && uidoc == null)
+            {
+                // A non-active document (#101) has no selection.
+                error = $"useSelection needs the document to be active, and '{doc.Title}' is not. Pass elementIds instead.";
+                return null;
+            }
             var tagAllInView = ToolArguments.GetBool(arguments, "tagAllInView");
             var ids = useSelection
                 ? uidoc.Selection.GetElementIds().Select(id => id.Value).ToArray()
