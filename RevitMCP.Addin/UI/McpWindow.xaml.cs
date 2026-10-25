@@ -347,7 +347,10 @@ public partial class McpWindow : Window
             ClosePeek();
     }
 
-    /// <summary>The strip's thin line: fades in and pulses while the agent calls tools; static with animations off.</summary>
+    /// <summary>
+    /// The strip's activity outline: while the agent calls tools it fades in, breathes, and a brighter segment runs
+    /// around the edge; a static outline with animations off.
+    /// </summary>
     private void UpdateActivityLine()
     {
         var active = ViewModel.IsAgentActive && ViewModel.IsCompact;
@@ -355,35 +358,72 @@ public partial class McpWindow : Window
         if (!active)
         {
             _pulsing = false;
-            ActivityLine.BeginAnimation(OpacityProperty, new DoubleAnimation { To = 0, Duration = fade }, HandoffBehavior.SnapshotAndReplace);
+            var fadeOut = new DoubleAnimation { To = 0, Duration = fade };
+            fadeOut.Completed += (_, _) =>
+            {
+                if (_pulsing) return;
+                ActivityOutline.BeginAnimation(OpacityProperty, null);
+                ActivitySweep.BeginAnimation(System.Windows.Shapes.Shape.StrokeDashOffsetProperty, null);
+                ActivitySweep.Visibility = Visibility.Collapsed;
+            };
+            ActivityLine.BeginAnimation(OpacityProperty, fadeOut, HandoffBehavior.SnapshotAndReplace);
             return;
         }
         if (ThemeManager.ReducedMotion)
         {
             _pulsing = false;
+            ActivitySweep.BeginAnimation(System.Windows.Shapes.Shape.StrokeDashOffsetProperty, null);
+            ActivitySweep.Visibility = Visibility.Collapsed;
+            ActivityOutline.BeginAnimation(OpacityProperty, null);
+            ActivityOutline.Opacity = 1;
             ActivityLine.BeginAnimation(OpacityProperty, new DoubleAnimation { To = 0.8, Duration = fade }, HandoffBehavior.SnapshotAndReplace);
             return;
         }
         if (_pulsing) return;   // already fading in or pulsing; a further tool call changes nothing
         _pulsing = true;
-        var fadeIn = new DoubleAnimation { To = 0.3, Duration = fade };
-        fadeIn.Completed += (_, _) =>
+        ActivityOutline.BeginAnimation(OpacityProperty, new DoubleAnimation
         {
-            if (!_pulsing) return;
-            ActivityLine.BeginAnimation(OpacityProperty, new DoubleAnimation
-            {
-                From = 0.3,
-                To = 0.8,
-                Duration = TimeSpan.FromSeconds(1.2),
-                AutoReverse = true,
-                RepeatBehavior = RepeatBehavior.Forever,
-                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
-            });
-        };
-        ActivityLine.BeginAnimation(OpacityProperty, fadeIn, HandoffBehavior.SnapshotAndReplace);
+            From = 0.25,
+            To = 0.6,
+            Duration = TimeSpan.FromSeconds(1.2),
+            AutoReverse = true,
+            RepeatBehavior = RepeatBehavior.Forever,
+            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+        });
+        ActivitySweep.Visibility = Visibility.Visible;
+        StartSweep();
+        ActivityLine.BeginAnimation(OpacityProperty, new DoubleAnimation { To = 1, Duration = fade }, HandoffBehavior.SnapshotAndReplace);
     }
 
     private bool _pulsing;
+
+    /// <summary>
+    /// One dash a fifth of the outline long, run clockwise round it once every 1.6 s. Dash lengths count in stroke
+    /// thicknesses along the stroke's centre line, so the period is the rounded rectangle's centre-line perimeter.
+    /// </summary>
+    private void StartSweep()
+    {
+        var thickness = ActivitySweep.StrokeThickness;
+        var width = (ActivitySweep.ActualWidth > 0 ? ActivitySweep.ActualWidth : CompactWidth) - thickness;
+        var height = (ActivitySweep.ActualHeight > 0 ? ActivitySweep.ActualHeight : CompactHeight) - thickness;
+        var radius = Math.Max(0, ActivitySweep.RadiusX - thickness / 2);
+        var perimeter = (2 * (width + height) - (8 - 2 * Math.PI) * radius) / thickness;
+        var dash = perimeter / 5;
+        ActivitySweep.StrokeDashArray = new System.Windows.Media.DoubleCollection { dash, perimeter - dash };
+        ActivitySweep.BeginAnimation(System.Windows.Shapes.Shape.StrokeDashOffsetProperty, new DoubleAnimation
+        {
+            From = perimeter,
+            To = 0,
+            Duration = TimeSpan.FromSeconds(1.6),
+            RepeatBehavior = RepeatBehavior.Forever
+        });
+    }
+
+    /// <summary>A peek changes the strip's height, and with it the perimeter the dash runs round.</summary>
+    private void ActivitySweep_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (_pulsing && !ThemeManager.ReducedMotion) StartSweep();
+    }
 
     /// <summary>The status dot's brush comes from a converter, which does not follow a palette swap by itself.</summary>
     private void RefreshPaletteBindings()
@@ -483,12 +523,8 @@ public partial class McpWindow : Window
         }
         catch { }
 
-        // Closed while collapsed: reopen collapsed (the bounds above are the full window's, at the strip's corner).
-        if (ReadBool(_savedState, "Compact") == true)
-        {
-            WindowStartupLocation = WindowStartupLocation.Manual;
-            Collapse();
-        }
+        // The window always opens expanded, even when it was closed collapsed (the user's call, 2026-10-25): the bounds
+        // above are the full window's at the strip's corner, which is where expanding the strip would have put it.
     }
 
     private void SaveWindowState()
@@ -508,8 +544,7 @@ public partial class McpWindow : Window
                 [nameof(WindowPlacement.Width)] = bounds.Width,
                 [nameof(WindowPlacement.Height)] = bounds.Height,
                 ["DarkMode"] = _theme.IsDarkMode,
-                ["Debug"] = ViewModel.IsDebugMode,
-                ["Compact"] = ViewModel.IsCompact
+                ["Debug"] = ViewModel.IsDebugMode
             };
             Directory.CreateDirectory(Path.GetDirectoryName(WindowStatePath)!);
             File.WriteAllText(WindowStatePath, state.ToJsonString());

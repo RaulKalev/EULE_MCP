@@ -1197,15 +1197,33 @@
             </StackPanel>
         </StackPanel>
 
-        <!--  Activity: fades in and pulses while the agent calls tools (static with animations off)  -->
-        <Rectangle
+        <!--
+            Activity: while the agent calls tools a 3 px outline breathes around the strip's edge and a brighter segment
+            runs around it (the window's code sets the dash to the perimeter). With animations off: a static outline.
+            Radius 7 follows the Windows 11 window corner.
+        -->
+        <Grid
             x:Name="ActivityLine"
             Grid.RowSpan="2"
-            Height="2"
-            VerticalAlignment="Bottom"
-            Fill="{DynamicResource Accent}"
             IsHitTestVisible="False"
-            Opacity="0" />
+            Opacity="0">
+            <Rectangle
+                x:Name="ActivityOutline"
+                Opacity="0.35"
+                RadiusX="7"
+                RadiusY="7"
+                Stroke="{DynamicResource Accent}"
+                StrokeThickness="3" />
+            <Rectangle
+                x:Name="ActivitySweep"
+                RadiusX="7"
+                RadiusY="7"
+                SizeChanged="ActivitySweep_SizeChanged"
+                Stroke="{DynamicResource Accent}"
+                StrokeDashCap="Round"
+                StrokeThickness="3"
+                Visibility="Collapsed" />
+        </Grid>
     </Grid>
     </Grid>
 </Window>
