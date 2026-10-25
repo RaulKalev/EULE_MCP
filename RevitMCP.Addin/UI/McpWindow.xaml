@@ -43,6 +43,7 @@
             <converters:BoolToVisibilityConverter x:Key="Visible" />
             <converters:BoolToVisibilityConverter x:Key="Hidden" Invert="True" />
             <converters:IndexToBoolConverter x:Key="IsIndex" />
+            <converters:SeverityToBrushConverter x:Key="SeverityBrush" />
 
             <!--  Page host: a TabControl without headers (the segmented control selects the page)  -->
             <!--  Foreground: the system theme styles of TabControl and TabItem set it to black, and the pages inherit it  -->
@@ -99,10 +100,10 @@
     </Window.Resources>
 
     <Grid
-        x:Name="RootGrid"
         TextElement.FontFamily="{StaticResource Font.Text}"
         TextElement.FontSize="{StaticResource FontSize.Body}"
         TextElement.Foreground="{DynamicResource Text.Primary}">
+    <Grid x:Name="RootGrid" Visibility="{Binding IsCompact, Converter={StaticResource Hidden}}">
         <Grid.RowDefinitions>
             <RowDefinition Height="40" />
             <RowDefinition Height="Auto" />
@@ -128,7 +129,7 @@
                     AutomationProperties.Name="Minimize"
                     Click="MinimizeButton_Click"
                     Style="{StaticResource CaptionButton}"
-                    ToolTip="Minimize (reopen from the RK Tools ribbon)">
+                    ToolTip="Collapse to a status strip (Ctrl+M)">
                     <materialDesign:PackIcon
                         Width="16"
                         Height="16"
@@ -1078,5 +1079,133 @@
                 </StackPanel>
             </Border>
         </Grid>
+    </Grid>
+
+    <!--
+        ============ Compact status strip (Minimize, Ctrl+M) ============
+        The window shrinks in place to one 40 px row: status dot, the most important thing right now, a count, the
+        emergency stop and expand. It takes its own mouse input (IsHitTestVisibleInChrome) so a click can expand it;
+        a press that moves past the drag threshold drags the window instead. Never focusable: a peek must not take
+        focus from Revit.
+    -->
+    <Grid
+        x:Name="CompactStrip"
+        AutomationProperties.Name="MCP connector status"
+        Background="{DynamicResource Toolbar.Material}"
+        Focusable="False"
+        MouseEnter="CompactStrip_MouseEnter"
+        MouseLeave="CompactStrip_MouseLeave"
+        MouseLeftButtonDown="CompactStrip_MouseLeftButtonDown"
+        MouseLeftButtonUp="CompactStrip_MouseLeftButtonUp"
+        MouseMove="CompactStrip_MouseMove"
+        ToolTip="{Binding HeadlineText}"
+        Visibility="{Binding IsCompact, Converter={StaticResource Visible}}"
+        WindowChrome.IsHitTestVisibleInChrome="True">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="40" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <DockPanel Margin="16,0,6,0">
+            <Button
+                AutomationProperties.Name="Expand the connector window"
+                Click="ExpandButton_Click"
+                DockPanel.Dock="Right"
+                Focusable="False"
+                Style="{StaticResource Button.Icon}"
+                ToolTip="Expand (Ctrl+M or Escape)">
+                <materialDesign:PackIcon
+                    Width="16"
+                    Height="16"
+                    Kind="ChevronUp" />
+            </Button>
+            <Button
+                AutomationProperties.Name="Emergency stop: reject all requests and disconnect"
+                Command="{Binding PanicStopCommand}"
+                DockPanel.Dock="Right"
+                Focusable="False"
+                Foreground="{DynamicResource Status.Error}"
+                Style="{StaticResource Button.Icon}"
+                ToolTip="Emergency stop: rejects every request waiting for approval and disconnects all agents">
+                <materialDesign:PackIcon
+                    Width="16"
+                    Height="16"
+                    Kind="StopCircleOutline" />
+            </Button>
+            <Border
+                Margin="6,0,6,0"
+                DockPanel.Dock="Right"
+                Style="{StaticResource CountPill}"
+                Visibility="{Binding HasHeadlineCount, Converter={StaticResource Visible}}">
+                <TextBlock HorizontalAlignment="Center" Text="{Binding HeadlineCount}" />
+            </Border>
+            <Ellipse
+                x:Name="StatusDot"
+                Width="8"
+                Height="8"
+                Margin="0,0,10,0"
+                VerticalAlignment="Center"
+                DockPanel.Dock="Left">
+                <Ellipse.Fill>
+                    <MultiBinding Converter="{StaticResource SeverityBrush}">
+                        <Binding Path="HeadlineSeverity" />
+                        <Binding RelativeSource="{RelativeSource Self}" />
+                    </MultiBinding>
+                </Ellipse.Fill>
+            </Ellipse>
+            <TextBlock
+                VerticalAlignment="Center"
+                AutomationProperties.LiveSetting="Polite"
+                FontWeight="SemiBold"
+                Text="{Binding HeadlineText}"
+                TextTrimming="CharacterEllipsis" />
+        </DockPanel>
+
+        <!--  Peek: a new request while collapsed; DataContext is that request (set by the window)  -->
+        <StackPanel
+            x:Name="PeekPanel"
+            Grid.Row="1"
+            Margin="16,0,16,8"
+            Visibility="Collapsed">
+            <TextBlock
+                Margin="0,0,0,6"
+                Style="{StaticResource Type.Caption}"
+                TextTrimming="CharacterEllipsis"
+                TextWrapping="NoWrap">
+                <Run Text="{Binding Tool, Mode=OneWay}" /><Run Text=" · " /><Run Text="{Binding Summary, Mode=OneWay}" />
+            </TextBlock>
+            <StackPanel Orientation="Horizontal">
+                <Button
+                    Height="{StaticResource Size.IconButton}"
+                    Margin="0,0,8,0"
+                    AutomationProperties.Name="Approve this request"
+                    Click="PeekDecision_Click"
+                    Command="{Binding DataContext.ApproveCommand, ElementName=CompactStrip}"
+                    CommandParameter="{Binding ApprovalId}"
+                    Content="Approve"
+                    Focusable="False"
+                    Style="{StaticResource Button.Primary}" />
+                <Button
+                    Height="{StaticResource Size.IconButton}"
+                    AutomationProperties.Name="Reject this request"
+                    Click="PeekDecision_Click"
+                    Command="{Binding DataContext.RejectCommand, ElementName=CompactStrip}"
+                    CommandParameter="{Binding ApprovalId}"
+                    Content="Reject"
+                    Focusable="False"
+                    Style="{StaticResource Button.Secondary}" />
+            </StackPanel>
+        </StackPanel>
+
+        <!--  Activity: fades in and pulses while the agent calls tools (static with animations off)  -->
+        <Rectangle
+            x:Name="ActivityLine"
+            Grid.RowSpan="2"
+            Height="2"
+            VerticalAlignment="Bottom"
+            Fill="{DynamicResource Accent}"
+            IsHitTestVisible="False"
+            Opacity="0" />
+    </Grid>
     </Grid>
 </Window>

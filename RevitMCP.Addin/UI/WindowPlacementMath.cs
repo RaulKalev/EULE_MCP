@@ -34,6 +34,29 @@ public static class WindowPlacementMath
         return new WindowPlacement(left, top, width, height);
     }
 
+    /// <summary>
+    /// The collapsed status strip: <paramref name="width"/> × <paramref name="height"/> at the normal window's top-left
+    /// corner, so the window shrinks in place, moved only as far as needed to stay inside <paramref name="availableArea"/>.
+    /// Also used for the taller peek, which then grows upward when the strip sits at the bottom edge.
+    /// </summary>
+    public static WindowPlacement Compact(
+        WindowPlacement normal,
+        WindowPlacement availableArea,
+        double width,
+        double height)
+    {
+        if (!IsValidArea(availableArea))
+            return new WindowPlacement(IsFinite(normal.Left) ? normal.Left : 0, IsFinite(normal.Top) ? normal.Top : 0, width, height);
+
+        width = Math.Min(width, availableArea.Width);
+        height = Math.Min(height, availableArea.Height);
+        var left = IsFinite(normal.Left) ? normal.Left : availableArea.Left;
+        var top = IsFinite(normal.Top) ? normal.Top : availableArea.Top;
+        left = Clamp(left, availableArea.Left, availableArea.Left + availableArea.Width - width);
+        top = Clamp(top, availableArea.Top, availableArea.Top + availableArea.Height - height);
+        return new WindowPlacement(left, top, width, height);
+    }
+
     private static bool IsValidArea(WindowPlacement area) =>
         IsFinite(area.Left)
         && IsFinite(area.Top)

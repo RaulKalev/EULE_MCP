@@ -2,8 +2,11 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Windows;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using MaterialDesignThemes.Wpf;
 using RevitMCP.Addin.UI.Themes;
 using RevitMCP.Addin.UI.ViewModels;
@@ -48,20 +51,17 @@ public partial class McpWindow : Window
         ViewModel.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(McpWindowViewModel.IsDebugMode) && IsLoaded) SaveWindowState();
+            else if (e.PropertyName == nameof(McpWindowViewModel.IsAgentActive)) UpdateActivityLine();
+            else if (e.PropertyName == nameof(McpWindowViewModel.PendingCount)) ClosePeekIfDecided();
         };
+        ViewModel.ApprovalArrived += OpenPeek;
+        _theme.Applied += RefreshPaletteBindings;
+
+        _peekTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher) { Interval = PeekDuration };
+        _peekTimer.Tick += (_, _) => ClosePeek();
 
         StateChanged += (_, _) => UpdateMaximizedState();
         Closing += (_, _) => SaveWindowState();
-    }
-
-    /// <summary>
-    /// A Revit-owned window has no taskbar entry. Sending it to the native minimized state leaves an inaccessible
-    /// desktop thumbnail, so minimize by hiding it and let the ribbon command restore the same window instance.
-    /// </summary>
-    public void MinimizeToRevit()
-    {
-        SaveWindowState();
-        Hide();
     }
 
     public void HideAndSave()
@@ -70,10 +70,17 @@ public partial class McpWindow : Window
         Hide();
     }
 
+    /// <summary>
+    /// The ribbon command. A strip that is already showing expands; a hidden window comes back in the mode it was
+    /// left in (a window closed while collapsed reopens collapsed).
+    /// </summary>
     public void ShowAndActivate()
     {
         if (WindowState == WindowState.Minimized)
             WindowState = WindowState.Normal;
+
+        if (IsVisible && ViewModel.IsCompact)
+            Expand();
 
         if (!IsVisible)
             Show();
@@ -104,7 +111,7 @@ public partial class McpWindow : Window
     private void UpdateThemeIcon() =>
         ThemeIcon.Kind = _theme.IsDarkMode ? PackIconKind.WeatherNight : PackIconKind.WhiteBalanceSunny;
 
-    private void MinimizeButton_Click(object sender, RoutedEventArgs e) => MinimizeToRevit();
+    private void MinimizeButton_Click(object sender, RoutedEventArgs e) => Collapse();
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => HideAndSave();
 
@@ -129,6 +136,24 @@ public partial class McpWindow : Window
             return;
         }
 
+        if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.M)
+        {
+            if (ViewModel.IsCompact) Expand();
+            else Collapse();
+            e.Handled = true;
+            return;
+        }
+
+        if (ViewModel.IsCompact)
+        {
+            if (e.Key == Key.Escape)
+            {
+                Expand();
+                e.Handled = true;
+            }
+            return;
+        }
+
         if (Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && e.Key == Key.D)
         {
             ViewModel.IsDebugMode = !ViewModel.IsDebugMode;
@@ -148,6 +173,225 @@ public partial class McpWindow : Window
         if (page < 0) return;
         ViewModel.SelectedTabIndex = page;
         e.Handled = true;
+    }
+
+    // ── Compact status strip ─────────────────────────────────────────────────
+    private const double CompactWidth = 280;
+    private const double CompactHeight = 40;
+    private static readonly TimeSpan PeekDuration = TimeSpan.FromSeconds(6);
+
+    private readonly DispatcherTimer _peekTimer;
+    private WindowPlacement? _normalBounds;
+    private ResizeMode _normalResizeMode = ResizeMode.CanResize;
+    private double _normalMinWidth;
+    private double _normalMinHeight;
+    private bool _peekOpen;
+    private double _topBeforePeek;
+    private Point? _pressPoint;
+
+    /// <summary>
+    /// Minimize: shrink in place to the 40 px status strip. A Revit-owned window has no taskbar entry, so the native
+    /// minimized state would leave an unreachable thumbnail; the strip keeps the state visible instead.
+    /// </summary>
+    public void Collapse()
+    {
+        if (ViewModel.IsCompact) return;
+        if (WindowState != WindowState.Normal) WindowState = WindowState.Normal;
+
+        _normalBounds = CurrentBounds();
+        _normalResizeMode = ResizeMode;
+        _normalMinWidth = MinWidth;
+        _normalMinHeight = MinHeight;
+
+        MinWidth = 0;
+        MinHeight = 0;
+        ResizeMode = ResizeMode.NoResize;
+        SetBounds(WindowPlacementMath.Compact(_normalBounds, AvailableArea(), CompactWidth, CompactHeight));
+        ViewModel.IsCompact = true;
+        UpdateActivityLine();
+        if (IsLoaded) SaveWindowState();
+    }
+
+    /// <summary>Back to the full window at its saved size; its corner follows the strip if the strip was moved.</summary>
+    public void Expand()
+    {
+        if (!ViewModel.IsCompact) return;
+        HidePeek();
+
+        ViewModel.IsCompact = false;
+        ResizeMode = _normalResizeMode;
+        MinWidth = _normalMinWidth;
+        MinHeight = _normalMinHeight;
+
+        var normal = _normalBounds ?? new WindowPlacement(Left, Top, 360, 620);
+        SetBounds(WindowPlacementMath.Normalize(
+            new WindowPlacement(Left, Top, normal.Width, normal.Height), AvailableArea(), MinWidth, MinHeight, 360, 620));
+        _normalBounds = null;
+        SaveWindowState();
+    }
+
+    private WindowPlacement CurrentBounds()
+    {
+        var bounds = WindowState == WindowState.Normal
+            ? new Rect(Left, Top, ActualWidth > 0 ? ActualWidth : Width, ActualHeight > 0 ? ActualHeight : Height)
+            : RestoreBounds;
+        return new WindowPlacement(bounds.Left, bounds.Top, bounds.Width, bounds.Height);
+    }
+
+    private void SetBounds(WindowPlacement bounds)
+    {
+        BeginAnimation(HeightProperty, null);
+        Left = bounds.Left;
+        Top = bounds.Top;
+        Width = bounds.Width;
+        Height = bounds.Height;
+    }
+
+    /// <summary>The whole desktop across monitors, as for restoring saved bounds (a strip may sit on any monitor).</summary>
+    private static WindowPlacement AvailableArea() => new(
+        SystemParameters.VirtualScreenLeft,
+        SystemParameters.VirtualScreenTop,
+        SystemParameters.VirtualScreenWidth,
+        SystemParameters.VirtualScreenHeight);
+
+    private void ExpandButton_Click(object sender, RoutedEventArgs e) => Expand();
+
+    // A press on the strip (not on a button: buttons handle their own presses) expands on release, unless the pointer
+    // moved past the system drag threshold first; then it drags the window.
+    private void CompactStrip_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) => _pressPoint = e.GetPosition(this);
+
+    private void CompactStrip_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (_pressPoint is not { } start || e.LeftButton != MouseButtonState.Pressed) return;
+        var delta = e.GetPosition(this) - start;
+        if (Math.Abs(delta.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(delta.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+        _pressPoint = null;
+        try { DragMove(); } catch (InvalidOperationException) { }
+        SaveWindowState();
+    }
+
+    private void CompactStrip_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_pressPoint == null) return;
+        _pressPoint = null;
+        Expand();
+    }
+
+    private void CompactStrip_MouseEnter(object sender, MouseEventArgs e) => _peekTimer.Stop();
+
+    private void CompactStrip_MouseLeave(object sender, MouseEventArgs e)
+    {
+        _pressPoint = null;
+        if (_peekOpen) _peekTimer.Start();
+    }
+
+    /// <summary>
+    /// A new request while collapsed: grow the strip to show it with Approve/Reject. Never activates the window, so
+    /// Revit keeps the focus. A second request while open only replaces the content and restarts the timer.
+    /// </summary>
+    private void OpenPeek(PendingApprovalItem item)
+    {
+        if (!ViewModel.IsCompact || !IsVisible) return;
+        PeekPanel.DataContext = item;
+        if (!CompactStrip.IsMouseOver)
+        {
+            _peekTimer.Stop();
+            _peekTimer.Start();
+        }
+        if (_peekOpen) return;
+
+        _peekOpen = true;
+        PeekPanel.Visibility = Visibility.Visible;
+        PeekPanel.Measure(new Size(Width, double.PositiveInfinity));
+        var peek = WindowPlacementMath.Compact(
+            new WindowPlacement(Left, Top, Width, Height), AvailableArea(), Width, CompactHeight + PeekPanel.DesiredSize.Height);
+        _topBeforePeek = Top;
+        Top = peek.Top;
+        Motion.Animate(this, HeightProperty, peek.Height);
+        Motion.Play(PeekPanel, 4);
+    }
+
+    private void ClosePeek()
+    {
+        _peekTimer.Stop();
+        if (!_peekOpen) return;
+        _peekOpen = false;
+        Motion.Animate(this, HeightProperty, CompactHeight, () =>
+        {
+            if (_peekOpen) return;   // reopened meanwhile
+            PeekPanel.Visibility = Visibility.Collapsed;
+            Top = _topBeforePeek;
+        });
+    }
+
+    /// <summary>Closes the peek at once, without animation (expanding, or a decision made elsewhere).</summary>
+    private void HidePeek()
+    {
+        _peekTimer.Stop();
+        if (!_peekOpen) return;
+        _peekOpen = false;
+        PeekPanel.Visibility = Visibility.Collapsed;
+        BeginAnimation(HeightProperty, null);
+        Height = CompactHeight;
+        Top = _topBeforePeek;
+    }
+
+    // Click runs before the button's command, which still gets its CommandParameter: the DataContext stays.
+    private void PeekDecision_Click(object sender, RoutedEventArgs e) => HidePeek();
+
+    private void ClosePeekIfDecided()
+    {
+        if (_peekOpen && PeekPanel.DataContext is PendingApprovalItem item &&
+            ViewModel.PendingApprovals.All(p => p.ApprovalId != item.ApprovalId))
+            ClosePeek();
+    }
+
+    /// <summary>The strip's thin line: fades in and pulses while the agent calls tools; static with animations off.</summary>
+    private void UpdateActivityLine()
+    {
+        var active = ViewModel.IsAgentActive && ViewModel.IsCompact;
+        var fade = TimeSpan.FromMilliseconds(ThemeManager.ReducedMotion ? 100 : 200);
+        if (!active)
+        {
+            _pulsing = false;
+            ActivityLine.BeginAnimation(OpacityProperty, new DoubleAnimation { To = 0, Duration = fade }, HandoffBehavior.SnapshotAndReplace);
+            return;
+        }
+        if (ThemeManager.ReducedMotion)
+        {
+            _pulsing = false;
+            ActivityLine.BeginAnimation(OpacityProperty, new DoubleAnimation { To = 0.8, Duration = fade }, HandoffBehavior.SnapshotAndReplace);
+            return;
+        }
+        if (_pulsing) return;   // already fading in or pulsing; a further tool call changes nothing
+        _pulsing = true;
+        var fadeIn = new DoubleAnimation { To = 0.3, Duration = fade };
+        fadeIn.Completed += (_, _) =>
+        {
+            if (!_pulsing) return;
+            ActivityLine.BeginAnimation(OpacityProperty, new DoubleAnimation
+            {
+                From = 0.3,
+                To = 0.8,
+                Duration = TimeSpan.FromSeconds(1.2),
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
+            });
+        };
+        ActivityLine.BeginAnimation(OpacityProperty, fadeIn, HandoffBehavior.SnapshotAndReplace);
+    }
+
+    private bool _pulsing;
+
+    /// <summary>The status dot's brush comes from a converter, which does not follow a palette swap by itself.</summary>
+    private void RefreshPaletteBindings()
+    {
+        BindingOperations.GetMultiBindingExpression(StatusDot, System.Windows.Shapes.Shape.FillProperty)?.UpdateTarget();
+        if (!IsLoaded) return;
+        _pulsing = false;   // the animation setting may have changed: restart the line in the right form
+        UpdateActivityLine();
     }
 
     // ── Direct Edit confirmation (in-window sheet) ───────────────────────────
@@ -238,15 +482,25 @@ public partial class McpWindow : Window
             Height = restored.Height;
         }
         catch { }
+
+        // Closed while collapsed: reopen collapsed (the bounds above are the full window's, at the strip's corner).
+        if (ReadBool(_savedState, "Compact") == true)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Collapse();
+        }
     }
 
     private void SaveWindowState()
     {
         try
         {
-            var bounds = WindowState == WindowState.Normal
-                ? new Rect(Left, Top, ActualWidth, ActualHeight)
-                : RestoreBounds;
+            // Collapsed: the full window's size at the strip's corner, so expanding and reopening both restore it.
+            var bounds = ViewModel.IsCompact && _normalBounds != null
+                ? new Rect(Left, Top, _normalBounds.Width, _normalBounds.Height)
+                : WindowState == WindowState.Normal
+                    ? new Rect(Left, Top, ActualWidth, ActualHeight)
+                    : RestoreBounds;
             var state = new JsonObject
             {
                 [nameof(WindowPlacement.Left)] = bounds.Left,
@@ -254,7 +508,8 @@ public partial class McpWindow : Window
                 [nameof(WindowPlacement.Width)] = bounds.Width,
                 [nameof(WindowPlacement.Height)] = bounds.Height,
                 ["DarkMode"] = _theme.IsDarkMode,
-                ["Debug"] = ViewModel.IsDebugMode
+                ["Debug"] = ViewModel.IsDebugMode,
+                ["Compact"] = ViewModel.IsCompact
             };
             Directory.CreateDirectory(Path.GetDirectoryName(WindowStatePath)!);
             File.WriteAllText(WindowStatePath, state.ToJsonString());

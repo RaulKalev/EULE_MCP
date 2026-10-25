@@ -87,7 +87,14 @@ public class ThemeManager
         {
             // A theme that fails to apply leaves the previous palette in place.
         }
+        Applied?.Invoke();
     }
+
+    /// <summary>
+    /// After every palette change (user toggle, high contrast, animation setting). Values a converter looked up
+    /// from the palette do not follow DynamicResource, so their bindings are refreshed on this.
+    /// </summary>
+    public event Action? Applied;
 
     private static bool IsPaletteSource(ResourceDictionary d)
     {

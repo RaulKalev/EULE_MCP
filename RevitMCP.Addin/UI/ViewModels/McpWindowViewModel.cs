@@ -48,11 +48,31 @@ public class McpWindowViewModel : BaseViewModel
             _pipeName = _connector.PipeName;
         _isActiveInstance = _connector.IsActiveInstance;
 
-        ActivityLog.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoActivity));
+        // A tool call marks the agent active; the flag clears once no call was logged for AgentActiveWindow.
+        _agentTimer = new DispatcherTimer(DispatcherPriority.Background, _dispatcher) { Interval = AgentActiveWindow };
+        _agentTimer.Tick += (_, _) =>
+        {
+            _agentTimer.Stop();
+            IsAgentActive = false;
+        };
+        ActivityLog.CollectionChanged += (_, e) =>
+        {
+            OnPropertyChanged(nameof(HasNoActivity));
+            if (e.Action != System.Collections.Specialized.NotifyCollectionChangedAction.Add) return;
+            IsAgentActive = true;
+            _agentTimer.Stop();
+            _agentTimer.Start();
+        };
         PendingApprovals.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasNoPendingApprovals));
             OnPropertyChanged(nameof(PendingCount));
+        };
+        PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(IsRunning) or nameof(PendingCount) or nameof(ModelTitle) or
+                nameof(SelectedElementCount) or nameof(RunningJobCount) or nameof(IsAgentActive))
+                UpdateHeadline();
         };
         Plans.CollectionChanged += (_, _) =>
         {
@@ -103,6 +123,48 @@ public class McpWindowViewModel : BaseViewModel
         ShowPlanChangesCommand = new RelayCommand(id => ShowPlanChanges(id as string), _ => DispatchInternal != null);
         ToggleDirectEditCommand = new RelayCommand(_ => ToggleDirectEdit());
         MakeActiveCommand = new RelayCommand(_ => MakeActive(), _ => !_isActiveInstance);
+        UpdateHeadline();
+    }
+
+    // ── Compact status strip ─────────────────────────────────────────────────
+    /// <summary>How long after the last logged tool call the agent counts as active.</summary>
+    public static readonly TimeSpan AgentActiveWindow = TimeSpan.FromSeconds(2);
+
+    private readonly DispatcherTimer _agentTimer;
+    private bool _isCompact;
+    private bool _isAgentActive;
+    private string _headlineText = string.Empty;
+    private HeadlineSeverity _headlineSeverity;
+    private int _headlineCount;
+    private readonly HashSet<string> _knownApprovalIds = new(StringComparer.Ordinal);
+
+    /// <summary>The window is collapsed to the status strip (set by the window, which owns the geometry).</summary>
+    public bool IsCompact { get => _isCompact; set => SetProperty(ref _isCompact, value); }
+
+    /// <summary>A tool call was logged within <see cref="AgentActiveWindow"/>.</summary>
+    public bool IsAgentActive { get => _isAgentActive; private set => SetProperty(ref _isAgentActive, value); }
+
+    public string HeadlineText { get => _headlineText; private set => SetProperty(ref _headlineText, value); }
+    public HeadlineSeverity HeadlineSeverity { get => _headlineSeverity; private set => SetProperty(ref _headlineSeverity, value); }
+    public int HeadlineCount
+    {
+        get => _headlineCount;
+        private set { if (SetProperty(ref _headlineCount, value)) OnPropertyChanged(nameof(HasHeadlineCount)); }
+    }
+    public bool HasHeadlineCount => _headlineCount > 0;
+
+    /// <summary>A request that was not pending before arrived (the newest one when several did at once).</summary>
+    public event Action<PendingApprovalItem>? ApprovalArrived;
+
+    private void UpdateHeadline()
+    {
+        var job = Jobs.FirstOrDefault(j => j.IsRunning);
+        var (text, severity, count) = CompactHeadline.Compute(
+            IsRunning, PendingCount, job?.Title, job?.Done ?? 0, job?.Total ?? 0,
+            IsAgentActive, ModelTitle, SelectedElementCount);
+        HeadlineText = text;
+        HeadlineSeverity = severity;
+        HeadlineCount = count;
     }
 
     // ── Status tab ────────────────────────────────────────────────────────────
@@ -264,6 +326,12 @@ public class McpWindowViewModel : BaseViewModel
             if (PendingApprovals.Count > previousCount)
                 SelectedTabIndex = 1;
 
+            // The list is rebuilt on every change, so a new request is one whose id was not pending before.
+            var arrived = PendingApprovals.LastOrDefault(p => !_knownApprovalIds.Contains(p.ApprovalId));
+            _knownApprovalIds.Clear();
+            foreach (var p in PendingApprovals) _knownApprovalIds.Add(p.ApprovalId);
+            if (arrived != null) ApprovalArrived?.Invoke(arrived);
+
             RefreshRecentOutcomes();
             CommandManager.InvalidateRequerySuggested();
         });
@@ -369,6 +437,7 @@ public class McpWindowViewModel : BaseViewModel
         }
         RunningJobCount = Jobs.Count(j => j.IsRunning);
         OnPropertyChanged(nameof(HasNoJobs));
+        UpdateHeadline();   // a running job's progress changes without its count changing
         CommandManager.InvalidateRequerySuggested();
     }
 

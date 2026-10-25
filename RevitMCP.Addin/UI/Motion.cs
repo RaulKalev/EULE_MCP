@@ -75,4 +75,33 @@ public static class Motion
         var slide = new DoubleAnimation { From = inFlight ? (double?)null : (fromY ?? GetFromY(el)), To = 0, Duration = duration, EasingFunction = ease };
         t.BeginAnimation(TranslateTransform.YProperty, slide, HandoffBehavior.SnapshotAndReplace);
     }
+
+    /// <summary>
+    /// Moves a size-like property (e.g. a window's Height) to <paramref name="to"/> with the same ease, starting from its
+    /// current animated value so it can be interrupted. Reduced motion: the value is set at once. When it ends, the
+    /// animation is removed and the final value set as the base value, so later plain assignments take effect.
+    /// </summary>
+    public static void Animate(UIElement el, DependencyProperty property, double to, Action? completed = null)
+    {
+        if (ThemeManager.ReducedMotion)
+        {
+            el.BeginAnimation(property, null);
+            el.SetValue(property, to);
+            completed?.Invoke();
+            return;
+        }
+        var animation = new DoubleAnimation
+        {
+            To = to,
+            Duration = TimeSpan.FromMilliseconds(180),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        };
+        animation.Completed += (_, _) =>
+        {
+            el.BeginAnimation(property, null);
+            el.SetValue(property, to);
+            completed?.Invoke();
+        };
+        el.BeginAnimation(property, animation, HandoffBehavior.SnapshotAndReplace);
+    }
 }
