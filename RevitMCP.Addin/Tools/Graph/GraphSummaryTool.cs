@@ -20,6 +20,7 @@ public class GraphSummaryTool : IRevitMcpTool
     public string Description =>
         "Summarises the model graph: node counts per kind, element counts per category/level/workset, panels with " +
         "circuit and fed-element counts, orphan circuits (no panel / no elements) and elements with no located_in edge. " +
+        "Element counts are host-model elements; 'linked' gives the linked-model elements of the same row. " +
         "Arguments: topN (default 25), sampleSize (default 25), sharedFolder, dbPath. Cheap orientation for session start; " +
         "values are for routing only.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
@@ -50,9 +51,9 @@ public class GraphSummaryTool : IRevitMcpTool
                 topN,
                 nodesByKind = s.NodesByKind.ToDictionary(c => c.Key, c => c.Count),
                 edgesByRel = s.EdgesByRel.ToDictionary(c => c.Key, c => c.Count),
-                elementsByCategory = s.ElementsByCategory.Select(c => new { category = Label(c.Key), count = c.Count }).ToList(),
-                elementsByLevel = s.ElementsByLevel.Select(c => new { level = Label(c.Key), count = c.Count }).ToList(),
-                elementsByWorkset = s.ElementsByWorkset.Select(c => new { workset = Label(c.Key), count = c.Count }).ToList(),
+                elementsByCategory = s.ElementsByCategory.Select(c => Row("category", c)).ToList(),
+                elementsByLevel = s.ElementsByLevel.Select(c => Row("level", c)).ToList(),
+                elementsByWorkset = s.ElementsByWorkset.Select(c => Row("workset", c)).ToList(),
                 panels = s.Panels.Select(p => new
                 {
                     id = p.Id,
@@ -93,4 +94,15 @@ public class GraphSummaryTool : IRevitMcpTool
     }
 
     private static string Label(string key) => string.IsNullOrEmpty(key) ? "(none)" : key;
+
+    /// <summary>
+    /// One element-count row: count is the host-model elements (what host tools can read); linked, only when above 0,
+    /// is the elements of linked models (ids link:&lt;instance&gt;:&lt;id&gt;, read with revit_query_linked_elements).
+    /// </summary>
+    private static Dictionary<string, object> Row(string keyName, GraphCount c)
+    {
+        var row = new Dictionary<string, object> { [keyName] = Label(c.Key), ["count"] = c.Host };
+        if (c.Linked > 0) row["linked"] = c.Linked;
+        return row;
+    }
 }

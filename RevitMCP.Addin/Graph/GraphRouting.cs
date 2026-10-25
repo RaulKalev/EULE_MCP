@@ -12,11 +12,36 @@ public sealed class GraphRoutingState
     /// <summary>Element categories present in the graph (largest first).</summary>
     public List<string> Categories { get; set; } = [];
     public List<string> Levels { get; set; } = [];
-    /// <summary>Element count per category in the graph: what a category-wide live read would return, roughly.</summary>
+    /// <summary>
+    /// Host-model element count per category in the graph: what a category-wide live read would return, roughly.
+    /// Linked-model elements are not in it (host tools cannot read them); they are in <see cref="LinkedElementsByCategory"/>.
+    /// </summary>
     public Dictionary<string, long> ElementsByCategory { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Linked-model element count per category (ids link:&lt;instance&gt;:&lt;id&gt;); only categories with any.</summary>
+    public Dictionary<string, long> LinkedElementsByCategory { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     public bool Usable => Exists && !Stale;
     public long Count(string kind) => NodesByKind.TryGetValue(kind, out var n) ? n : 0;
+    public long HostCount(string? category) =>
+        category != null && ElementsByCategory.TryGetValue(category.Trim(), out var n) ? n : 0;
+    public long LinkedCount(string? category) =>
+        category != null && LinkedElementsByCategory.TryGetValue(category.Trim(), out var n) ? n : 0;
+
+    /// <summary>
+    /// Fills the counts from <see cref="GraphDatabase.RoutingCounts"/>: categories (host or linked, largest first),
+    /// host and linked counts per category, levels and nodes per kind.
+    /// </summary>
+    public void SetCounts(GraphSummaryResult counts)
+    {
+        foreach (var c in counts.NodesByKind) NodesByKind[c.Key] = c.Count;
+        foreach (var c in counts.ElementsByCategory.Where(c => !string.IsNullOrEmpty(c.Key)))
+        {
+            Categories.Add(c.Key);
+            ElementsByCategory[c.Key] = c.Host;
+            if (c.Linked > 0) LinkedElementsByCategory[c.Key] = c.Linked;
+        }
+        Levels = counts.ElementsByLevel.Select(c => c.Key).Where(k => !string.IsNullOrEmpty(k) && k != "(none)").ToList();
+    }
 }
 
 /// <summary>One suggested tool call. Values in angle brackets come from the previous step's result.</summary>
@@ -92,6 +117,13 @@ public static class GraphRouting
         };
         if (plan.Route == "general" && plan.Category != null) plan.Route = "category";
         if (plan.Route == "level" && plan.Category != null) plan.Route = "category";
+        // A category that exists only in linked models: host tools would find nothing, so route to the links.
+        if (plan.Route == "category" && state.HostCount(plan.Category) == 0 && state.LinkedCount(plan.Category) > 0)
+        {
+            plan.Route = "linked";
+            plan.Notes.Add($"'{plan.Category}' is only in linked models in the graph ({state.LinkedCount(plan.Category)} elements, " +
+                           "none in the host), so host tools return nothing for it.");
+        }
 
         if (!state.Exists)
         {
@@ -156,16 +188,20 @@ public static class GraphRouting
                     : $"Level '{plan.Level}': orient with the summary, then narrow by category and level.";
                 if (plan.Category == null)
                     plan.Steps.Add(Step("revit_graph_summary", "Which categories exist on that level.", Args(("topN", 15))));
-                plan.Steps.Add(Step("revit_graph_query", "Ids without reading parameters.",
-                    Args(("operation", "find"), ("kind", "element"), ("category", plan.Category ?? "<category>"), ("level", plan.Level), ("pageSize", 200))));
+                plan.Steps.Add(Step("revit_graph_query", "Host-model ids without reading parameters.",
+                    Args(("operation", "find"), ("kind", "element"), ("category", plan.Category ?? "<category>"), ("level", plan.Level),
+                        ("link", "host"), ("pageSize", 200))));
                 plan.Steps.Add(LiveRead("Read live values for the ids you need (page through large sets).", plan.Category));
+                if (state.LinkedCount(plan.Category) > 0)
+                    plan.Notes.Add($"The graph also holds {state.LinkedCount(plan.Category)} '{plan.Category}' elements from linked models: " +
+                                   "find with link=links, read them with revit_query_linked_elements.");
                 break;
 
             default:
                 plan.Summary = "Orient first: the summary lists categories, levels and panels; then narrow ids with find/subtree/neighbors.";
                 plan.Steps.Add(Step("revit_graph_summary", "Cheap overview of the model.", Args(("topN", 15))));
                 plan.Steps.Add(Step("revit_graph_query", "Narrow to the ids you need.",
-                    Args(("operation", "find"), ("kind", "element"), ("category", "<category>"), ("pageSize", 100))));
+                    Args(("operation", "find"), ("kind", "element"), ("category", "<category>"), ("link", "host"), ("pageSize", 100))));
                 plan.Steps.Add(LiveRead("Read live values by id.", null));
                 break;
         }
@@ -184,7 +220,8 @@ public static class GraphRouting
 
         var find = "revit_graph_query operation=find kind=element" +
                    (string.IsNullOrWhiteSpace(category) ? "" : $" category=\"{category}\"") +
-                   (string.IsNullOrWhiteSpace(level) ? "" : $" level=\"{level}\"");
+                   (string.IsNullOrWhiteSpace(level) ? "" : $" level=\"{level}\"") +
+                   " link=host";
         var tail = $" then call {tool} with elementIds (compact=true) for just the elements you need. Pass graphHint=false to silence this.";
 
         if (state == null || !state.Exists)
@@ -235,28 +272,31 @@ public static class GraphRouting
         && !read.SummaryOnly && !string.IsNullOrWhiteSpace(read.Category);
 
     /// <summary>
-    /// The number of elements the graph holds for the read's category when the read should be gated, else null:
-    /// only with a fresh graph (a missing or stale one cannot be trusted to route), and only from
-    /// <see cref="GateThreshold"/> elements up.
+    /// The number of host-model elements the graph holds for the read's category when the read should be gated, else
+    /// null: only with a fresh graph (a missing or stale one cannot be trusted to route), and only from
+    /// <see cref="GateThreshold"/> host elements up. Linked-model elements never count: the live tool reads the host only.
     /// </summary>
     public static long? GateCount(BroadRead read, GraphRoutingState? state)
     {
         if (!IsGateCandidate(read) || state == null || !state.Usable) return null;
-        return state.ElementsByCategory.TryGetValue(read.Category!.Trim(), out var count) && count >= GateThreshold ? count : null;
+        var count = state.HostCount(read.Category);
+        return count >= GateThreshold ? count : null;
     }
 
-    /// <summary>The two calls that replace a gated read: ids from the graph, then live values for the ids needed.</summary>
+    /// <summary>The two calls that replace a gated read: host ids from the graph, then live values for the ids needed.</summary>
     public static List<RouteStep> GateSteps(BroadRead read) => new()
     {
-        Step("revit_graph_query", "Ids, names and levels of the category without reading parameters; add level or nameContains to narrow.",
-            Args(("operation", "find"), ("kind", "element"), ("category", read.Category), ("pageSize", 200))),
+        Step("revit_graph_query", "Host-model ids, names and levels of the category without reading parameters; add level or nameContains to narrow.",
+            Args(("operation", "find"), ("kind", "element"), ("category", read.Category), ("link", "host"), ("pageSize", 200))),
         Step(read.Tool, "Live values only for the ids you need.",
             Args(("elementIds", "<ids from the previous step>"), ("compact", true)))
     };
 
-    public static string GateMessage(BroadRead read, long count) =>
-        $"Not read: '{read.Category}' has about {count} elements in the model graph. Narrow in the graph first " +
-        $"(revit_graph_query operation=find kind=element category=\"{read.Category}\"), then call {read.Tool} with elementIds. " +
+    /// <param name="linked">Elements of the category in linked models, which the gate did not count; mentioned when above 0.</param>
+    public static string GateMessage(BroadRead read, long count, long linked = 0) =>
+        $"Not read: '{read.Category}' has about {count} host-model elements in the model graph" +
+        (linked > 0 ? $" (plus {linked} in linked models, which this tool does not read)" : "") + ". Narrow in the graph first " +
+        $"(revit_graph_query operation=find kind=element category=\"{read.Category}\" link=host), then call {read.Tool} with elementIds. " +
         $"To read the whole category live anyway, repeat this call with {GateArg}=false.";
 
     // ── helpers ───────────────────────────────────────────────────────────────

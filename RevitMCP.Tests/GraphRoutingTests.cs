@@ -161,4 +161,55 @@ public class GraphRoutingTests
         Assert.Null(GraphRouting.GateCount(Read(), null));
         Assert.True(GraphRouting.IsGateCandidate(Read()));   // still a candidate: the caller refreshes the graph first
     }
+
+    // ── linked-model elements (H8) ────────────────────────────────────────────
+
+    private static GraphRoutingState WithLinkedLighting()
+    {
+        var state = WithCounts();
+        state.Categories = ["Lighting Fixtures", "Electrical Fixtures", "Fire Alarm Devices"];
+        state.ElementsByCategory["Lighting Fixtures"] = 0;
+        state.LinkedElementsByCategory["Lighting Fixtures"] = 701;
+        state.LinkedElementsByCategory["Electrical Fixtures"] = 900;
+        return state;
+    }
+
+    [Fact]
+    public void Gate_IgnoresLinkedElements_AndItsFindStaysInTheHost()
+    {
+        var state = WithLinkedLighting();
+        Assert.Null(GraphRouting.GateCount(Read("revit_get_elements_info", "Lighting Fixtures"), state));   // 701 only in links
+        Assert.Equal(2200, GraphRouting.GateCount(Read(), state));                                       // host count, not 3100
+
+        Assert.Equal("host", GraphRouting.GateSteps(Read()).First().Args["link"]);
+        var message = GraphRouting.GateMessage(Read(), 2200, 900);
+        Assert.Contains("2200 host-model elements", message);
+        Assert.Contains("plus 900 in linked models", message);
+        Assert.Contains("link=host", message);
+        Assert.DoesNotContain("linked models", GraphRouting.GateMessage(Read(), 2200));
+    }
+
+    [Fact]
+    public void CategoryPlan_FindsHostIds_AndNotesLinkedOnes()
+    {
+        var plan = GraphRouting.Plan("list electrical fixtures", WithLinkedLighting());
+        Assert.Equal("category", plan.Route);
+        var find = plan.Steps.First(s => s.Tool == "revit_graph_query");
+        Assert.Equal("host", find.Args["link"]);
+        Assert.Contains(plan.Notes, n => n.Contains("900") && n.Contains("revit_query_linked_elements"));
+
+        var general = GraphRouting.Plan("count things", Fresh());
+        Assert.Equal("host", general.Steps.First(s => s.Tool == "revit_graph_query").Args["link"]);
+        Assert.Contains("link=host", GraphRouting.BroadQueryHint("revit_get_elements_info", "Lines", null, 100, Fresh())!);
+    }
+
+    [Fact]
+    public void CategoryOnlyInLinks_RoutesToTheLinks()
+    {
+        var plan = GraphRouting.Plan("list lighting fixtures", WithLinkedLighting());
+        Assert.Equal("linked", plan.Route);
+        Assert.Equal("Lighting Fixtures", plan.Category);
+        Assert.Contains(plan.Steps, s => s.Tool == "revit_query_linked_elements");
+        Assert.Contains(plan.Notes, n => n.Contains("only in linked models") && n.Contains("701"));
+    }
 }

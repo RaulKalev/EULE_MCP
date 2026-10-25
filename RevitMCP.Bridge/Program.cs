@@ -45,8 +45,9 @@ var configuredToolGroups = builder.Configuration["RevitMCP:ToolGroups"];
 
 if (McpToolCatalog.IsFullProfile(configuredProfile, configuredToolNames, configuredToolGroups))
 {
-    // Compatibility profile: every tool, through the SDK's attributed registration path.
-    mcpBuilder.WithTools<RevitMcpTools>().WithTools<ToolDiscoveryTools>();
+    // Every tool. Built by the catalog like the other profiles, so numeric ids sent for string parameters are
+    // accepted and a failure's real message reaches the caller (LenientArgumentsTool).
+    mcpBuilder.WithTools(McpToolCatalog.CreateAllTools());
 }
 else
 {

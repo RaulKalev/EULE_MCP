@@ -269,15 +269,19 @@ that day). Two mechanisms make the graph the default path instead of a recommend
   left alone for ten minutes. Switch off per user with `{"$.graph.autoBuild": false}`.
 - **The gate.** `revit_get_elements_info` and `revit_find_elements_by_parameter` called for a **whole category**
   — no `elementIds`, no selection, no parameter `filters`, not `summaryOnly` — are not run when the graph is
-  fresh and holds 200 or more elements of that category. The result is `success: true`, `status: "graph_first"`,
-  with the element count and the two calls to make (`revit_graph_query find`, then the same tool with
-  `elementIds`). `graphFirst=false` on the call reads everything after all; `{"$.graph.enforce": false}` in the
-  user config switches the gate off.
+  fresh and holds 200 or more **host-model** elements of that category. The result is `success: true`,
+  `status: "graph_first"`, with the host count (`elementsInGraph`), the linked-model count (`elementsInLinks`) and the
+  two calls to make (`revit_graph_query find ... link=host`, then the same tool with `elementIds`).
+  `graphFirst=false` on the call reads everything after all; `{"$.graph.enforce": false}` in the user config
+  switches the gate off.
 
 What the gate deliberately leaves alone: reads with parameter filters (the graph holds no live values), reads by
 id or selection, summaries, grouping tools (their output is already aggregated), and everything when the graph
-is missing or stale and could not be refreshed. The count comes from the graph and includes indexed link
-elements, so it is "about", not exact.
+is missing or stale and could not be refreshed. The count comes from the graph, so it is "about", not exact.
+Linked-model elements (ids `link:<instance>:<id>`) are never counted: the gated tools read the host only, so a
+category that exists only in links is not gated, and `revit_graph_route` sends it to the linked route.
+`revit_graph_summary` gives each category, level and workset row its host `count` and, when there are any, its
+`linked` count.
 
 Examples:
 
@@ -287,7 +291,7 @@ revit_graph_route intent="which devices are in room 1.12?"
 revit_graph_route intent="everything fed by panel JK-1"
   → find kind=panel nameContains=JK-1 → subtree rel=fed_by depth=2 → get_circuit_info
 revit_graph_route intent="fire alarm devices on Teine korrus"
-  → find kind=element category="Fire Alarm Devices" level="Teine korrus" → get_elements_info elementIds=[…]
+  → find kind=element category="Fire Alarm Devices" level="Teine korrus" link=host → get_elements_info elementIds=[…]
 ```
 
 Measured on the Tarvastu EN model (`docs/benchmarks/`): inspecting a category costs about 145k result
