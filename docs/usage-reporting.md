@@ -208,7 +208,8 @@ day). Settings are re-read at most once a minute.
 ### Report
 
 `revit_usage_report month= sharedFolder= format=html|xlsx|both open=` (group `office`), and the
-**Usage Report** button on the connector window's Activity tab (previous month). Both run the same
+usage report button on the connector window's Activity page (previous month; the page shows with **Technical
+details** on). Both run the same
 code off the Revit thread. Output:
 
 - `<reportFolder>\<yyyy-MM>.html` with the model-page stylesheet embedded, so the file reads well on

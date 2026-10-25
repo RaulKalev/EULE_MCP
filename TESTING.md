@@ -381,13 +381,13 @@ Full approval workflow verification.
 
 ## 17. Direct Edit Safety Tests
 
-Direct Edit mode bypasses approval and should only be used for development/testing. These tests verify that the feature behaves correctly and is safe by default.
+Direct Edit mode bypasses approval. Every user can turn it on with the switch on the Status page. These tests verify that the feature behaves correctly and is safe by default.
 
 ### Test: Default state
 
 1. Start Revit with the add-in loaded.
 2. Open the MCP Connector window.
-3. Confirm the **Approval Required** button shows **Enabled** (Direct Edit is disabled by default).
+3. Confirm the **Direct Edit** switch on the Status page is off and reads "Off: every change waits for your approval."
 4. Confirm no confirmation dialog has appeared.
 
 ### Test: Enabling Direct Edit
@@ -395,15 +395,14 @@ Direct Edit mode bypasses approval and should only be used for development/testi
 1. With Approval Required enabled, call a write tool.
 2. Confirm approval appears in Pending tab (not executed).
 3. Reject the pending item.
-4. Click the **Approval Required: Enabled** button to toggle Direct Edit on.
-5. Confirm a confirmation dialog appears.
-6. Confirm the dialog clearly states that write tools will execute **immediately** without queuing.
-7. Confirm the dialog clearly labels this as **Dev/Admin Only**.
-8. Confirm the default focused button is **Cancel** (not Enable).
-9. Click **Cancel** — confirm Direct Edit is still disabled.
-10. Click the button again, confirm the dialog appears.
-11. Click **Enable Direct Edit**.
-12. Confirm the button now shows **Approval Required: Disabled** (red/warning color).
+4. Click the **Direct Edit** switch.
+5. Confirm a confirmation sheet appears inside the window.
+6. Confirm it clearly states that agents will change the model **without asking**.
+7. Confirm the focused button is **Cancel** (not Turn on), and that Esc cancels.
+8. Click **Cancel**: confirm the switch is still off.
+9. Click the switch again, confirm the sheet appears.
+10. Click **Turn on**.
+11. Confirm the switch is on (red), the card turns red and reads "On: agents change the model without asking."
 
 ### Test: Write tool with Direct Edit enabled
 
@@ -414,7 +413,7 @@ Direct Edit mode bypasses approval and should only be used for development/testi
 
 ### Test: Disabling Direct Edit
 
-1. Click the **Approval Required: Disabled** button.
+1. Click the **Direct Edit** switch while it is on.
 2. Confirm Direct Edit is disabled **without** a confirmation dialog.
 3. Call a write tool.
 4. Confirm approval appears in Pending tab (approval required again).

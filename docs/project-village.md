@@ -93,8 +93,8 @@ never throw.
 
 The village is **opt-in** because it starts a loopback listener. Either:
 
-- open the Revit MCP Connector window → Status tab → **Project Village** → *Enable Village* (the
-  choice is remembered in the user config), then *Open Village*; or
+- open the Revit MCP Connector window → Status page → tick **Technical details** → **Project Village** →
+  *Turn on* (the choice is remembered in the user config), then *Open*; or
 - set `village.enabled` in the user or company config:
 
 ```
@@ -795,7 +795,7 @@ Graph values are routing and visualization metadata captured at build time, not 
 
 | Symptom | Check |
 |---|---|
-| Status tab says "Enabled but not listening" | Ports 47800–47809 are busy; set `village.port` or free the port. Details in `%LOCALAPPDATA%\RevitMCP_startup.log` (`[VILLAGE …]`). |
+| The Status page (with **Technical details** on) says "Enabled but not listening" | Ports 47800–47809 are busy; set `village.port` or free the port. Details in `%LOCALAPPDATA%\RevitMCP_startup.log` (`[VILLAGE …]`). |
 | Page shows "reconnecting" | The connector was stopped or Revit closed; the page retries with backoff. |
 | Badge says "graph: none" | No graph for this model; run `revit_graph_build`, or check `graph.sharedFolder`. |
 | Badge says "graph: unknown" | Run `revit_graph_status` once; freshness is only known from graph tool responses. |

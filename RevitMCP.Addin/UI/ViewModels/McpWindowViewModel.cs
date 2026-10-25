@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
-using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 using RevitMCP.Addin.Approval;
@@ -32,8 +31,6 @@ public class McpWindowViewModel : BaseViewModel
     private bool _isWorkshared;
     private string _revitUsername = "—";
     private int _selectedElementCount;
-    private bool _isDarkTheme = true;
-    private string _pendingTabHeader = "PENDING";
     private bool _isDirectEditEnabled;
     private int _selectedTabIndex;
 
@@ -55,12 +52,11 @@ public class McpWindowViewModel : BaseViewModel
         PendingApprovals.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasNoPendingApprovals));
-            UpdatePendingTabHeader();
+            OnPropertyChanged(nameof(PendingCount));
         };
         Plans.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasPlans));
-            UpdatePendingTabHeader();
         };
         if (RevitMCP.Addin.Jobs.JobService.Current is { } jobService)
         {
@@ -81,6 +77,7 @@ public class McpWindowViewModel : BaseViewModel
         }
 
         RecentApprovalOutcomes.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRecentApprovalOutcomes));
+        Jobs.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasNoJobs));
 
         if (_approvalService != null)
         {
@@ -91,9 +88,9 @@ public class McpWindowViewModel : BaseViewModel
         StartCommand = new RelayCommand(_ => _connector.Start(), _ => !_isRunning);
         StopCommand = new RelayCommand(_ => _connector.Stop(), _ => _isRunning);
         PanicStopCommand = new RelayCommand(_ => _connector.PanicStop());
-        ToggleThemeCommand = new RelayCommand(_ => ToggleTheme());
         OpenLogFolderCommand = new RelayCommand(_ => OpenLogFolder());
         UsageReportCommand = new RelayCommand(_ => RunUsageReport(), _ => !_usageReportRunning);
+        DismissUsageReportMessageCommand = new RelayCommand(_ => UsageReportMessage = string.Empty);
         ClearActivityLogCommand = new RelayCommand(_ => ActivityLog.Clear());
         ApproveCommand = new RelayCommand(id => ApproveItem(id as string));
         RejectCommand = new RelayCommand(id => RejectItem(id as string));
@@ -118,7 +115,6 @@ public class McpWindowViewModel : BaseViewModel
     public bool IsWorkshared { get => _isWorkshared; set => SetProperty(ref _isWorkshared, value); }
     public string RevitUsername { get => _revitUsername; set => SetProperty(ref _revitUsername, value); }
     public int SelectedElementCount { get => _selectedElementCount; set => SetProperty(ref _selectedElementCount, value); }
-    public bool IsDarkTheme { get => _isDarkTheme; private set => SetProperty(ref _isDarkTheme, value); }
 
     // ── Activity tab ──────────────────────────────────────────────────────────
     public ObservableCollection<ActivityLogItem> ActivityLog { get; } = [];
@@ -132,13 +128,14 @@ public class McpWindowViewModel : BaseViewModel
     public ObservableCollection<ApprovalOutcomeItem> RecentApprovalOutcomes { get; } = [];
     public bool HasRecentApprovalOutcomes => RecentApprovalOutcomes.Count > 0;
     private const int RecentOutcomeCount = 10;
-    public string PendingTabHeader { get => _pendingTabHeader; private set => SetProperty(ref _pendingTabHeader, value); }
+    public int PendingCount => PendingApprovals.Count;
 
     /// <summary>Jobs (#100): this session's and journaled ones, newest first.</summary>
     public ObservableCollection<JobItem> Jobs { get; } = [];
     public bool HasNoJobs => Jobs.Count == 0;
-    private string _jobsTabHeader = "JOBS";
-    public string JobsTabHeader { get => _jobsTabHeader; private set => SetProperty(ref _jobsTabHeader, value); }
+    private int _runningJobCount;
+    public int RunningJobCount { get => _runningJobCount; private set { if (SetProperty(ref _runningJobCount, value)) OnPropertyChanged(nameof(HasRunningJobs)); } }
+    public bool HasRunningJobs => _runningJobCount > 0;
 
     /// <summary>Plans of this session (#99), newest first; active and exhausted ones can be revoked.</summary>
     public ObservableCollection<PlanItem> Plans { get; } = [];
@@ -149,19 +146,42 @@ public class McpWindowViewModel : BaseViewModel
     public Func<RevitMCP.Core.Models.McpToolRequest, Task<RevitMCP.Core.Models.McpToolResult>>? DispatchInternal { get; set; }
     public bool IsDirectEditEnabled { get => _isDirectEditEnabled; private set => SetProperty(ref _isDirectEditEnabled, value); }
     public int SelectedTabIndex { get => _selectedTabIndex; set => SetProperty(ref _selectedTabIndex, value); }
+
+    private bool _isDebugMode;
+
+    /// <summary>
+    /// Technical details (pipe, view, routing, Direct Edit, plan limits, the activity log). Off by default: what a
+    /// normal user needs is the connector state, the model and what waits for approval. The window persists it.
+    /// </summary>
+    public bool IsDebugMode
+    {
+        get => _isDebugMode;
+        set
+        {
+            if (!SetProperty(ref _isDebugMode, value)) return;
+            if (!value && SelectedTabIndex == ActivityTabIndex) SelectedTabIndex = 0;
+        }
+    }
+
+    public const int ActivityTabIndex = 3;
     public Action<Action<bool>>? RequestDirectEditConfirmation { get; set; }
 
     // ── Project Village (read-only visualizer; null when unavailable) ─────────
     private Village.Hosting.VillageStatusViewModel? _village;
-    public Village.Hosting.VillageStatusViewModel? Village { get => _village; set => SetProperty(ref _village, value); }
+    public Village.Hosting.VillageStatusViewModel? Village
+    {
+        get => _village;
+        set { if (SetProperty(ref _village, value)) OnPropertyChanged(nameof(HasVillage)); }
+    }
+    public bool HasVillage => _village != null;
 
     // ── Commands ──────────────────────────────────────────────────────────────
     public ICommand StartCommand { get; }
     public ICommand StopCommand { get; }
     public ICommand PanicStopCommand { get; }
-    public ICommand ToggleThemeCommand { get; }
     public ICommand OpenLogFolderCommand { get; }
     public ICommand UsageReportCommand { get; }
+    public ICommand DismissUsageReportMessageCommand { get; }
     public ICommand ClearActivityLogCommand { get; }
     public ICommand ApproveCommand { get; }
     public ICommand RejectCommand { get; }
@@ -284,13 +304,6 @@ public class McpWindowViewModel : BaseViewModel
     }
 
     // ── Plans (#99) ──────────────────────────────────────────────────────────
-    private void UpdatePendingTabHeader()
-    {
-        var active = Plans.Count(p => p.CanRevoke);
-        var header = PendingApprovals.Count > 0 ? $"PENDING ({PendingApprovals.Count})" : "PENDING";
-        PendingTabHeader = active > 0 ? $"{header} · PLANS ({active})" : header;
-    }
-
     /// <summary>Rebuilds the Plans section from the registry. Must run on the UI thread.</summary>
     private void RefreshPlans()
     {
@@ -345,6 +358,8 @@ public class McpWindowViewModel : BaseViewModel
                 IsRunning = job.State is RevitMCP.Addin.Jobs.JobState.Running or RevitMCP.Addin.Jobs.JobState.WaitingApproval,
                 IsBad = job.State is RevitMCP.Addin.Jobs.JobState.Failed or RevitMCP.Addin.Jobs.JobState.Suspended,
                 Progress = $"{job.DoneCount} / {job.Steps.Count} · {Math.Round(elapsed / 60000.0, 1)} min",
+                Done = job.DoneCount,
+                Total = job.Steps.Count,
                 StopReason = job.StopReason ?? string.Empty,
                 CanPause = job.State is RevitMCP.Addin.Jobs.JobState.Running or RevitMCP.Addin.Jobs.JobState.WaitingApproval,
                 CanResume = job.IsResumable,
@@ -352,8 +367,7 @@ public class McpWindowViewModel : BaseViewModel
                 HasReport = job.ReportUrl != null || job.CheckpointId != null
             });
         }
-        var running = Jobs.Count(j => j.IsRunning);
-        JobsTabHeader = running > 0 ? $"JOBS ({running})" : "JOBS";
+        RunningJobCount = Jobs.Count(j => j.IsRunning);
         OnPropertyChanged(nameof(HasNoJobs));
         CommandManager.InvalidateRequerySuggested();
     }
@@ -475,19 +489,16 @@ public class McpWindowViewModel : BaseViewModel
         CommandManager.InvalidateRequerySuggested();
     }
 
-    private void ToggleTheme()
-    {
-        IsDarkTheme = !IsDarkTheme;
-        var themeName = IsDarkTheme ? "DarkTheme" : "LightTheme";
-        var themeUri = new Uri($"pack://application:,,,/RevitMCP.Addin;component/UI/Themes/{themeName}.xaml");
-
-        var resources = Application.Current.Resources.MergedDictionaries;
-        var existing = resources.FirstOrDefault(d => d.Source?.OriginalString.Contains("Theme.xaml") == true);
-        if (existing != null) resources.Remove(existing);
-        resources.Add(new System.Windows.ResourceDictionary { Source = themeUri });
-    }
-
     private bool _usageReportRunning;
+    private string _usageReportMessage = string.Empty;
+
+    /// <summary>Why the last usage report did not open (shown inline on the Activity page instead of a message box).</summary>
+    public string UsageReportMessage
+    {
+        get => _usageReportMessage;
+        private set { if (SetProperty(ref _usageReportMessage, value)) OnPropertyChanged(nameof(HasUsageReportMessage)); }
+    }
+    public bool HasUsageReportMessage => _usageReportMessage.Length > 0;
 
     /// <summary>
     /// The monthly usage report for the previous month (docs/usage-reporting.md) — the same code as revit_usage_report,
@@ -496,6 +507,7 @@ public class McpWindowViewModel : BaseViewModel
     private void RunUsageReport()
     {
         _usageReportRunning = true;
+        UsageReportMessage = string.Empty;
         CommandManager.InvalidateRequerySuggested();
         Task.Run(() =>
         {
@@ -516,7 +528,7 @@ public class McpWindowViewModel : BaseViewModel
                 _usageReportRunning = false;
                 CommandManager.InvalidateRequerySuggested();
                 if (open != null) RevitMCP.Addin.Tools.Usage.UsageReportService.Open(open);
-                else MessageBox.Show(message, "Usage report", MessageBoxButton.OK, MessageBoxImage.Information);
+                else UsageReportMessage = message;
             });
         });
     }

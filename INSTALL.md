@@ -131,7 +131,7 @@ Each line is a JSON object with: `timestamp`, `user`, `client`, `tool`, `permiss
 ## Usage reporting (optional) — tell staff first
 
 The connector can copy every user's activity log to a shared folder for a monthly usage report
-(`revit_usage_report`, or **Usage Report** on the connector window's Activity tab; see
+(`revit_usage_report`, or the usage report button on the connector window's Activity page, shown with **Technical details** on; see
 [`docs/usage-reporting.md`](docs/usage-reporting.md)). It is **off** until an administrator sets
 `usage.sharedFolder` in the company config.
 
