@@ -23,6 +23,15 @@
     <Compile Include="..\RevitMCP.Addin\ModelPages\ModelPageHtml.cs" Link="ModelPages\ModelPageHtml.cs" />
     <Compile Include="..\RevitMCP.Addin\ModelPages\ModelPageServer.cs" Link="ModelPages\ModelPageServer.cs" />
     <Compile Include="..\RevitMCP.Addin\ModelPages\ModelPageEdits.cs" Link="ModelPages\ModelPageEdits.cs" />
+    <!-- Checkpoints (#98): change netting, snapshot and warning diffs, rollback planning, store (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\Checkpoints\CheckpointModels.cs" Link="Checkpoints\CheckpointModels.cs" />
+    <Compile Include="..\RevitMCP.Addin\Checkpoints\CheckpointIds.cs" Link="Checkpoints\CheckpointIds.cs" />
+    <Compile Include="..\RevitMCP.Addin\Checkpoints\CheckpointStore.cs" Link="Checkpoints\CheckpointStore.cs" />
+    <Compile Include="..\RevitMCP.Addin\Checkpoints\ChangeNetting.cs" Link="Checkpoints\ChangeNetting.cs" />
+    <Compile Include="..\RevitMCP.Addin\Checkpoints\SnapshotDiff.cs" Link="Checkpoints\SnapshotDiff.cs" />
+    <Compile Include="..\RevitMCP.Addin\Checkpoints\WarningDiff.cs" Link="Checkpoints\WarningDiff.cs" />
+    <Compile Include="..\RevitMCP.Addin\Checkpoints\CheckpointDiff.cs" Link="Checkpoints\CheckpointDiff.cs" />
+    <Compile Include="..\RevitMCP.Addin\Checkpoints\RollbackPlanner.cs" Link="Checkpoints\RollbackPlanner.cs" />
     <!-- Usage reporting: shared copy, aggregation, time saved, costs, report files (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Usage\UsageSettings.cs" Link="Usage\UsageSettings.cs" />
     <Compile Include="..\RevitMCP.Addin\Usage\UsageShare.cs" Link="Usage\UsageShare.cs" />
