@@ -46,6 +46,7 @@ internal static class GraphRoutingSupport
         try
         {
             if (!result.Success || result.Data == null) return;
+            if (RevitMCP.Addin.Documents.ToolDocument.TargetsOtherDocument(uiapp, request)) return;   // the graph describes the active model
             if (!GraphRouting.BroadLiveTools.Contains(request.ToolName)) return;
             if (!ToolArguments.GetBool(request.Arguments, OptOutArg, true)) return;
             if (ToolArguments.GetBool(request.Arguments, "useSelection")) return;
@@ -118,6 +119,7 @@ internal static class GraphRoutingSupport
         {
             var isGraphRead = GraphReadTools.Contains(request.ToolName);
             if (!isGraphRead && !GraphRouting.IsGateCandidate(ReadOf(request))) return null;
+            if (!isGraphRead && RevitMCP.Addin.Documents.ToolDocument.TargetsOtherDocument(uiapp, request)) return null;
             if (!EnabledForUser("autoBuild")) return null;
             var doc = uiapp.ActiveUIDocument?.Document;
             if (doc == null || doc.IsFamilyDocument) return null;
@@ -169,6 +171,7 @@ internal static class GraphRoutingSupport
         {
             var read = ReadOf(request);
             if (!GraphRouting.IsGateCandidate(read) || !EnabledForUser("enforce")) return null;
+            if (RevitMCP.Addin.Documents.ToolDocument.TargetsOtherDocument(uiapp, request)) return null;   // its graph is not the active one
 
             var state = ReadState(uiapp, request.Arguments);
             var count = GraphRouting.GateCount(read, state);

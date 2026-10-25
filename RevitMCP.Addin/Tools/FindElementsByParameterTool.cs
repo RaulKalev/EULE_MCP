@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Query;
 using RevitMCP.Core.Models;
@@ -20,9 +21,11 @@ public class FindElementsByParameterTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        if (uidoc?.Document == null)
-            return Task.FromResult(Fail(request, "No active document."));
+        var target = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (target == null) return Task.FromResult(documentFailure!);
+        var uidoc = ToolDocument.UiDocumentOf(uiapp, target);
+        if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+            return Task.FromResult(ToolDocument.ActiveRequired(request, "useSelection", target.Document.Title));
 
         var filtersParsed = ToolArguments.GetFiltersWithWarnings(request.Arguments);
 
@@ -54,11 +57,11 @@ public class FindElementsByParameterTool : IRevitMcpTool
             string.IsNullOrWhiteSpace(opts.Category) &&
             opts.Filters.Count == 0)
         {
-            var guidance = BuildNoNarrowingGuidance(uidoc.Document);
+            var guidance = BuildNoNarrowingGuidance(target.Document);
             return Task.FromResult(Fail(request, guidance));
         }
 
-        var result = _engine.Query(uidoc.Document, uidoc, opts, cancellationToken);
+        var result = _engine.Query(target.Document, uidoc, opts, cancellationToken);
         if (!result.Success)
             return Task.FromResult(Fail(request, result.Message));
 

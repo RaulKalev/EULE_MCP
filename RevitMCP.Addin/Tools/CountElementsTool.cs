@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Query;
 using RevitMCP.Core.Models;
@@ -19,9 +20,9 @@ public class CountElementsTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null)
-            return Task.FromResult(Fail(request, "No active document."));
+        var target = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (target == null) return Task.FromResult(documentFailure!);
+        var doc = target.Document;
 
         var filterCategory = ToolArguments.GetString(request.Arguments, "category");
         var groupBy = ToolArguments.GetString(request.Arguments, "groupBy", "Category");

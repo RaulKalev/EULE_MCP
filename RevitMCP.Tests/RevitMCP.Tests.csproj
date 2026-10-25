@@ -18,6 +18,9 @@
     <!-- Multi-document target and link-file matching (#90) -->
     <Compile Include="..\RevitMCP.Addin\Documents\DocumentTargetMatcher.cs" Link="Documents\DocumentTargetMatcher.cs" />
     <Compile Include="..\RevitMCP.Addin\Documents\LinkFileMatcher.cs" Link="Documents\LinkFileMatcher.cs" />
+    <!-- Worker document (#101): local file naming and open options (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\Documents\LocalFileNaming.cs" Link="Documents\LocalFileNaming.cs" />
+    <Compile Include="..\RevitMCP.Addin\Documents\OpenOptionsBuilder.cs" Link="Documents\OpenOptionsBuilder.cs" />
     <!-- Model pages: store, served HTML and the loopback listener (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\ModelPages\ModelPageStore.cs" Link="ModelPages\ModelPageStore.cs" />
     <Compile Include="..\RevitMCP.Addin\ModelPages\ModelPageHtml.cs" Link="ModelPages\ModelPageHtml.cs" />

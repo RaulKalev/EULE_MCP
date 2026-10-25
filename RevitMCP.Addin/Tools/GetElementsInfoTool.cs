@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Query;
 using RevitMCP.Core.Models;
@@ -18,9 +19,9 @@ public class GetElementsInfoTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        if (uidoc?.Document == null)
-            return Task.FromResult(Fail(request, "No active document."));
+        var target = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (target == null) return Task.FromResult(documentFailure!);
+        var uidoc = ToolDocument.UiDocumentOf(uiapp, target);
 
         var filtersParsed = ToolArguments.GetFiltersWithWarnings(request.Arguments);
 
@@ -51,7 +52,10 @@ public class GetElementsInfoTool : IRevitMcpTool
             return Task.FromResult(Fail(request, "Provide useSelection=true, elementIds, category, or set summaryOnly=true for a broad model summary."));
         }
 
-        var result = _engine.Query(uidoc.Document, uidoc, opts, cancellationToken);
+        if (opts.UseSelection && uidoc == null)
+            return Task.FromResult(ToolDocument.ActiveRequired(request, "useSelection", target.Document.Title));
+
+        var result = _engine.Query(target.Document, uidoc, opts, cancellationToken);
         if (!result.Success)
             return Task.FromResult(Fail(request, result.Message));
 
