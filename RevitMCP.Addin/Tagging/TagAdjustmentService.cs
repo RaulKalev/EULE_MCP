@@ -106,36 +106,46 @@ namespace RevitMCP.Addin.Tagging
                     options.MinimumOffsetMillimeters);
             var head = anchor + offsetDirection.Multiply(distance);
 
-            if (detector != null)
+            var collisionOn = detector != null;
+            var hasOldHead = oldState.TagHeadPosition != null;
+            var oldHeadFree =
+                RetagDecision.NeedsExistingHeadCheck(
+                    collisionOn,
+                    options.DirectionSpecified,
+                    hasOldHead) &&
+                !detector.HasCollisionAtPosition(oldState.TagHeadPosition);
+            switch (RetagDecision.ChooseHeadPlacement(
+                        collisionOn,
+                        options.DirectionSpecified,
+                        hasOldHead,
+                        oldHeadFree))
             {
-                if (oldState.TagHeadPosition != null &&
-                    !detector.HasCollisionAtPosition(oldState.TagHeadPosition))
-                {
+                case RetagHeadPlacement.KeepExisting:
                     head = oldState.TagHeadPosition;
-                }
-                else
-                {
+                    break;
+                case RetagHeadPlacement.NearestFreeToComputed:
                     bool ignored;
                     head = detector.FindValidPosition(anchor, head, out ignored);
-                }
+                    break;
             }
 
+            var hasLeader = RetagDecision.KeepUnlessSpecified(
+                options.HasLeaderSpecified,
+                options.HasLeader,
+                oldState.HasLeader);
             var newState = new TagStateSnapshot
             {
                 TagHeadPosition = head,
-                HasLeader = options.HasLeaderSpecified
-                    ? options.HasLeader
-                    : oldState.HasLeader,
-                LeaderEndCondition =
-                    (options.HasLeaderSpecified
-                         ? options.HasLeader
-                         : oldState.HasLeader) &&
-                    options.LeaderEndConditionSpecified
-                    ? options.LeaderEndCondition
-                    : oldState.LeaderEndCondition,
-                Orientation = options.OrientationSpecified
-                    ? options.Orientation
-                    : oldState.Orientation
+                HasLeader = hasLeader,
+                LeaderEndCondition = RetagDecision.ResolveLeaderEndCondition(
+                    hasLeader,
+                    options.LeaderEndConditionSpecified,
+                    options.LeaderEndCondition,
+                    oldState.LeaderEndCondition),
+                Orientation = RetagDecision.KeepUnlessSpecified(
+                    options.OrientationSpecified,
+                    options.Orientation,
+                    oldState.Orientation)
             };
             return new TagAdjustmentProposal
             {
