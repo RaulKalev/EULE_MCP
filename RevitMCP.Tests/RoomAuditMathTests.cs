@@ -202,6 +202,16 @@ public class RoomAuditMathTests
     }
 
     [Fact]
+    public void Coverage_UncoveredAreaNeverExceedsTheRoom()
+    {
+        // M18: 56.0 of 54.16 m² uncovered. Whole raster cells overstate the area at the boundary.
+        var r = RoomAuditMath.Coverage(Rect(0, 0, 7350, 7370), []);
+        Assert.Equal(r.Samples, r.Uncovered);
+        Assert.Equal(54.17, r.UncoveredAreaM2, 2);
+        Assert.Equal(r.UncoveredAreaM2, Assert.Single(r.Regions).AreaM2, 6);
+    }
+
+    [Fact]
     public void Coverage_Camera_OnlySeesItsSector()
     {
         var camera = new CoverageDevice { Position = new P2(0, 2000), RadiusMm = 30000, Facing = new P2(1, 0), FovDeg = 90 };

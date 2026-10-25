@@ -301,6 +301,19 @@ public static class RoomAuditMath
     }
 
     /// <summary>
+    /// The area one inside sample stands for: the room's real area shared equally by its samples. A raster cell
+    /// (step²) overstates it where cells straddle the boundary, so a fully uncovered room came out larger than
+    /// itself (M18: 56.0 of 54.16 m²). Falls back to the cell area when the polygon has no area.
+    /// </summary>
+    public static double SampleAreaM2(RoomPolygon polygon, int samples, double stepMm)
+    {
+        var cell = stepMm * stepMm / 1e6;
+        if (samples <= 0) return cell;
+        var room = RoomGeometryMath.AreaMm2(polygon) / 1e6;
+        return room > 0 ? room / samples : cell;
+    }
+
+    /// <summary>
     /// Samples the room on a <paramref name="stepMm"/> raster and reports the share covered by at least
     /// one device, with the uncovered samples grouped into connected regions (area + centre).
     /// </summary>
@@ -325,7 +338,7 @@ public static class RoomAuditMath
             uncovered[ix, iy] = true;
         }
 
-        var cellM2 = stepMm * stepMm / 1e6;
+        var cellM2 = SampleAreaM2(polygon, result.Samples, stepMm);
         result.UncoveredAreaM2 = Math.Round(result.Uncovered * cellM2, 2);
 
         // Group uncovered cells into 4-connected regions.

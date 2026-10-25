@@ -162,6 +162,18 @@ public class FireAlarmRulesTests
     }
 
     [Fact]
+    public void SoundCoverage_NoSounder_ReportsNoLevelsAndAtMostTheRoomArea()
+    {
+        // 54.17 m²: 15 × 15 samples on the 500 mm raster, which as whole cells made 56.25 m² (M17, M18).
+        var room = Poly((0, 0), (7350, 0), (7350, 7370), (0, 7370));
+        var r = FireAlarmRules.SoundCoverage(room, [], 65);
+        Assert.Null(r.MinLevelDb);
+        Assert.Null(r.MaxLevelDb);
+        Assert.Equal(r.Samples, r.BelowRequired);
+        Assert.Equal(54.17, r.BelowAreaM2, 2);
+    }
+
+    [Fact]
     public void Types_NormalizeCaseInsensitively()
     {
         Assert.Equal("pointSmoke", FireDeviceTypes.Normalize("POINTSMOKE"));

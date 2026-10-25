@@ -230,6 +230,16 @@ internal sealed class RoomSourceService
         return new RoomSource { HostDoc = hostDoc, Doc = linkDoc, Link = link, Transform = transform };
     }
 
+    /// <summary>The host model and every loaded link, for checks that concern any model (avoidCategories).</summary>
+    public static List<RoomSourceService> AllModels(Document hostDoc)
+    {
+        var models = new List<RoomSourceService> { new(new RoomSource { HostDoc = hostDoc, Doc = hostDoc }) };
+        foreach (var link in LoadedLinks(hostDoc))
+            if (ResolveSource(hostDoc, "link", link.Id.Value, out _) is { } source)
+                models.Add(new RoomSourceService(source));
+        return models;
+    }
+
     public static List<RevitLinkInstance> LoadedLinks(Document hostDoc) =>
         new FilteredElementCollector(hostDoc)
             .OfClass(typeof(RevitLinkInstance))
@@ -638,7 +648,9 @@ internal sealed class RoomSourceService
     /// the footprint and vertical bounds overlapping floor … top + 1.5 m (so items above a suspended
     /// ceiling still count, but other storeys do not).
     /// </summary>
-    public List<LinkedElementInRoom> ElementsInRoom(RoomRecord room, IEnumerable<string> categories, List<string> warnings)
+    /// <param name="resolvedCategories">Receives the requested names that exist as a category in this model.</param>
+    public List<LinkedElementInRoom> ElementsInRoom(
+        RoomRecord room, IEnumerable<string> categories, List<string> warnings, ICollection<string>? resolvedCategories = null)
     {
         var result = new List<LinkedElementInRoom>();
         var resolver = new Query.CategoryResolver();
@@ -654,6 +666,7 @@ internal sealed class RoomSourceService
                 warnings.Add($"Category '{name}' was not found in the {_source.Label}.");
                 continue;
             }
+            resolvedCategories?.Add(name);
 
             foreach (var e in new FilteredElementCollector(_source.Doc).OfCategoryId(resolved.Category.Id).WhereElementIsNotElementType())
             {

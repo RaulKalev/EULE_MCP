@@ -72,6 +72,7 @@ internal static class DevicePlacementService
     private static PlacementPlan? Setup(Document doc, Dictionary<string, object?> args, out string? error)
     {
         _avoidCache = null;
+        _avoidModels = null;
         var codes = DeviceCodeContext.Load(doc, args, out error);
         if (codes == null) return null;
         var rooms = RoomSourceService.FromArguments(doc, args, out error);
@@ -575,8 +576,7 @@ internal static class DevicePlacementService
         if (device.Code.AvoidCategories.Count == 0) return;
         var key = "avoid|" + room.SourceId + "|" + string.Join(",", device.Code.AvoidCategories);
         if (!AvoidCache.TryGetValue(key, out var elements))
-            AvoidCache[key] = elements = plan.Rooms.ElementsInRoom(room, device.Code.AvoidCategories, plan.Warnings)
-                .Select(e => (e.Element.Id.Value, e.Category, e.Plan)).ToList();
+            AvoidCache[key] = elements = AvoidElements(plan, room, device.Code.AvoidCategories);
 
         foreach (var (id, category, bounds) in elements)
         {
@@ -585,7 +585,34 @@ internal static class DevicePlacementService
         }
     }
 
+    /// <summary>
+    /// Elements of the avoid categories in the room, from the host model and every loaded link: what a device must not
+    /// sit over (luminaires, air terminals) is usually in another discipline's link, not where the rooms come from (M27).
+    /// A category warns only when no model has it.
+    /// </summary>
+    private static List<(long, string, Bounds2)> AvoidElements(PlacementPlan plan, RoomRecord room, IReadOnlyList<string> categories)
+    {
+        var models = _avoidModels ??= RoomSourceService.AllModels(plan.Rooms.Source.HostDoc);
+        var resolved = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var elements = new List<(long, string, Bounds2)>();
+        foreach (var model in models)
+        {
+            foreach (var e in model.ElementsInRoom(room, categories, new List<string>(), resolved))
+            {
+                var where = model.Source.IsLink ? $" in {model.Source.Label}" : string.Empty;
+                elements.Add((e.Element.Id.Value, e.Category + where, e.Plan));
+            }
+        }
+        foreach (var missing in categories.Where(c => !resolved.Contains(c)))
+        {
+            var warning = $"avoidCategories: '{missing}' was not found in the host model or any loaded link.";
+            if (!plan.Warnings.Contains(warning)) plan.Warnings.Add(warning);
+        }
+        return elements;
+    }
+
     [ThreadStatic] private static Dictionary<string, List<(long, string, Bounds2)>>? _avoidCache;
+    [ThreadStatic] private static List<RoomSourceService>? _avoidModels;
     private static Dictionary<string, List<(long, string, Bounds2)>> AvoidCache => _avoidCache ??= [];
 
     // ── Shared checks ─────────────────────────────────────────────────────────
@@ -611,6 +638,7 @@ internal static class DevicePlacementService
     private static void FinishChecks(Document doc, PlacementPlan plan)
     {
         _avoidCache = null;
+        _avoidModels = null;
         var existing = new Dictionary<long, List<(P2 P, double Z)>>();
         var planned = new List<PlannedDevice>();
 

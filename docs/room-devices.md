@@ -108,7 +108,7 @@ accept the map inline as `deviceCodes`, so codes can be tried before they are sa
 | `offsetFromCeilingMm` | Distance below the ceiling (ceiling devices) |
 | `doorSide`, `doorOffsetMm` | Default side (`lock`/`hinge`) and clearance for door-relative placement |
 | `rotationOffsetDeg` | Added to the computed facing when the family's front is not its facing direction |
-| `avoidCategories`, `clearanceMm` | Linked categories a device must not sit over (preview warning) |
+| `avoidCategories`, `clearanceMm` | Categories a device must not sit over, searched in the host model and every loaded link (preview warning) |
 | `maxSpacingMm`, `maxDistFromWallMm` | Grid defaults |
 | `coverageRadiusMm` | Coverage radius for `revit_check_coverage` (detectors, APs; default 7500) |
 | `fovDeg`, `rangeM` | Camera field of view and range for `revit_check_coverage` |
@@ -177,7 +177,9 @@ storey (floor − 100 mm … top + 1.5 m, so items above a suspended ceiling cou
 not). Rooms come from the room source (`source` / `linkInstanceId`); elements from
 `elementLinkInstanceIds` (e.g. the EK and KVJ links) and/or `includeHost`, defaulting to the room
 source model. Each element has its id, model, category, type, location and bounding box in host mm.
-The `avoidCategories` check of `place_in_room` uses the same lookup.
+The `avoidCategories` check of `place_in_room` uses the same lookup, over the host model and every loaded link (the
+luminaires and air terminals to avoid are usually in another discipline's link, not in the room source). Its
+warning names the link an element is in.
 
 ## Adjusting placed devices
 

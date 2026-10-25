@@ -257,7 +257,9 @@ public static class FireAlarmRules
         var bounds = RoomGeometryMath.BoundsOf(polygon.Outer);
         var quiet = new List<CoverageDevice>();
         var samples = RoomGeometryMath.SamplePoints(polygon, bounds, stepMm);
-        double min = double.MaxValue, max = double.MinValue;
+        // Infinities, not MaxValue/MinValue: with no sounder every level is -inf, and Math.Max(MinValue, -inf) stays
+        // MinValue, which was reported as maxLevelDb = -1.797e308 (M17).
+        double min = double.PositiveInfinity, max = double.NegativeInfinity;
 
         foreach (var p in samples)
         {
@@ -276,7 +278,7 @@ public static class FireAlarmRules
             result.MinLevelDb = double.IsNegativeInfinity(min) ? null : Math.Round(min, 1);
             result.MaxLevelDb = double.IsNegativeInfinity(max) ? null : Math.Round(max, 1);
         }
-        result.BelowAreaM2 = Math.Round(result.BelowRequired * stepMm * stepMm / 1e6, 2);
+        result.BelowAreaM2 = Math.Round(result.BelowRequired * RoomAuditMath.SampleAreaM2(polygon, result.Samples, stepMm), 2);
 
         // Group the quiet samples with the coverage clustering: a "device" covers every loud-enough point.
         if (result.BelowRequired > 0)
