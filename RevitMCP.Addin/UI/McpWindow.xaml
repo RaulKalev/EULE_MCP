@@ -1101,12 +1101,13 @@
         ToolTip="{Binding HeadlineText}"
         Visibility="{Binding IsCompact, Converter={StaticResource Visible}}"
         WindowChrome.IsHitTestVisibleInChrome="True">
+        <!--  The peek grows upward from the strip, which stays on the window's bottom edge  -->
         <Grid.RowDefinitions>
-            <RowDefinition Height="40" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="40" />
         </Grid.RowDefinitions>
 
-        <DockPanel Margin="16,0,6,0">
+        <DockPanel Grid.Row="1" Margin="16,0,6,0">
             <Button
                 AutomationProperties.Name="Expand the connector window"
                 Click="ExpandButton_Click"
@@ -1161,11 +1162,11 @@
                 TextTrimming="CharacterEllipsis" />
         </DockPanel>
 
-        <!--  Peek: a new request while collapsed; DataContext is that request (set by the window)  -->
+        <!--  Peek: a new request while collapsed, above the strip; DataContext is that request (set by the window)  -->
         <StackPanel
             x:Name="PeekPanel"
-            Grid.Row="1"
-            Margin="16,0,16,8"
+            Grid.Row="0"
+            Margin="16,12,16,0"
             Visibility="Collapsed">
             <TextBlock
                 Margin="0,0,0,6"
@@ -1198,9 +1199,9 @@
         </StackPanel>
 
         <!--
-            Activity: while the agent calls tools a 3 px outline breathes around the strip's edge and a brighter segment
-            runs around it (the window's code sets the dash to the perimeter). With animations off: a static outline.
-            Radius 7 follows the Windows 11 window corner.
+            Activity: while the agent calls tools a soft accent glow breathes in from the strip's edge (a blurred stroke
+            whose outer half the window clips, so it reads as light inside the edge) over a faint hairline. With
+            animations off: the glow holds still. Radius 7 follows the Windows 11 window corner.
         -->
         <Grid
             x:Name="ActivityLine"
@@ -1208,21 +1209,22 @@
             IsHitTestVisible="False"
             Opacity="0">
             <Rectangle
-                x:Name="ActivityOutline"
-                Opacity="0.35"
+                x:Name="ActivityGlow"
+                Opacity="0.4"
                 RadiusX="7"
                 RadiusY="7"
                 Stroke="{DynamicResource Accent}"
-                StrokeThickness="3" />
+                StrokeThickness="8">
+                <Rectangle.Effect>
+                    <BlurEffect KernelType="Gaussian" Radius="14" />
+                </Rectangle.Effect>
+            </Rectangle>
             <Rectangle
-                x:Name="ActivitySweep"
+                Opacity="0.45"
                 RadiusX="7"
                 RadiusY="7"
-                SizeChanged="ActivitySweep_SizeChanged"
                 Stroke="{DynamicResource Accent}"
-                StrokeDashCap="Round"
-                StrokeThickness="3"
-                Visibility="Collapsed" />
+                StrokeThickness="1" />
         </Grid>
     </Grid>
     </Grid>

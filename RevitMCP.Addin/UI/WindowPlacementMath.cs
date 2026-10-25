@@ -35,9 +35,10 @@ public static class WindowPlacementMath
     }
 
     /// <summary>
-    /// The collapsed status strip: <paramref name="width"/> × <paramref name="height"/> at the normal window's top-left
-    /// corner, so the window shrinks in place, moved only as far as needed to stay inside <paramref name="availableArea"/>.
-    /// Also used for the taller peek, which then grows upward when the strip sits at the bottom edge.
+    /// The collapsed status strip: <paramref name="width"/> × <paramref name="height"/> at the normal window's
+    /// bottom-left corner, so the window shrinks down onto its bottom edge (the user's call, 2026-10-25), moved only as
+    /// far as needed to stay inside <paramref name="availableArea"/>. Also used for the taller peek, which therefore
+    /// grows upward from the strip.
     /// </summary>
     public static WindowPlacement Compact(
         WindowPlacement normal,
@@ -45,17 +46,34 @@ public static class WindowPlacementMath
         double width,
         double height)
     {
+        var bottomTop = IsFinite(normal.Top) && IsFinite(normal.Height) ? normal.Top + normal.Height - height : double.NaN;
         if (!IsValidArea(availableArea))
-            return new WindowPlacement(IsFinite(normal.Left) ? normal.Left : 0, IsFinite(normal.Top) ? normal.Top : 0, width, height);
+            return new WindowPlacement(IsFinite(normal.Left) ? normal.Left : 0, IsFinite(bottomTop) ? bottomTop : 0, width, height);
 
         width = Math.Min(width, availableArea.Width);
         height = Math.Min(height, availableArea.Height);
         var left = IsFinite(normal.Left) ? normal.Left : availableArea.Left;
-        var top = IsFinite(normal.Top) ? normal.Top : availableArea.Top;
+        var top = IsFinite(bottomTop) ? bottomTop : availableArea.Top + availableArea.Height - height;
         left = Clamp(left, availableArea.Left, availableArea.Left + availableArea.Width - width);
         top = Clamp(top, availableArea.Top, availableArea.Top + availableArea.Height - height);
         return new WindowPlacement(left, top, width, height);
     }
+
+    /// <summary>
+    /// The full window a collapsed strip expands back to: <paramref name="normalWidth"/> × <paramref name="normalHeight"/>
+    /// standing on the strip's bottom edge (so it follows the strip if that was dragged), then kept inside
+    /// <paramref name="availableArea"/>.
+    /// </summary>
+    public static WindowPlacement Expanded(
+        WindowPlacement strip,
+        WindowPlacement availableArea,
+        double normalWidth,
+        double normalHeight,
+        double minimumWidth,
+        double minimumHeight)
+        => Normalize(
+            new WindowPlacement(strip.Left, strip.Top + strip.Height - normalHeight, normalWidth, normalHeight),
+            availableArea, minimumWidth, minimumHeight, normalWidth, normalHeight);
 
     private static bool IsValidArea(WindowPlacement area) =>
         IsFinite(area.Left)

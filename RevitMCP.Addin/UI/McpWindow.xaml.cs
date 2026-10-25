@@ -212,7 +212,7 @@ public partial class McpWindow : Window
         if (IsLoaded) SaveWindowState();
     }
 
-    /// <summary>Back to the full window at its saved size; its corner follows the strip if the strip was moved.</summary>
+    /// <summary>Back to the full window at its saved size, standing on the strip (it follows the strip if that was moved).</summary>
     public void Expand()
     {
         if (!ViewModel.IsCompact) return;
@@ -224,11 +224,13 @@ public partial class McpWindow : Window
         MinHeight = _normalMinHeight;
 
         var normal = _normalBounds ?? new WindowPlacement(Left, Top, 360, 620);
-        SetBounds(WindowPlacementMath.Normalize(
-            new WindowPlacement(Left, Top, normal.Width, normal.Height), AvailableArea(), MinWidth, MinHeight, 360, 620));
+        SetBounds(WindowPlacementMath.Expanded(StripBounds(), AvailableArea(), normal.Width, normal.Height, MinWidth, MinHeight));
         _normalBounds = null;
         SaveWindowState();
     }
+
+    /// <summary>The 40 px strip itself, without a peek growing above it.</summary>
+    private WindowPlacement StripBounds() => new(Left, _peekOpen ? _topBeforePeek : Top, Width, CompactHeight);
 
     private WindowPlacement CurrentBounds()
     {
@@ -299,30 +301,45 @@ public partial class McpWindow : Window
             _peekTimer.Stop();
             _peekTimer.Start();
         }
+        CancelPeekFade();   // a request arriving while the last peek fades out keeps it open
         if (_peekOpen) return;
 
+        // The peek sits above the strip and the window grows upward in one step, so the strip stays where it is;
+        // only the peek's content animates in (animating Height would drag the strip's row along with it).
         _peekOpen = true;
         PeekPanel.Visibility = Visibility.Visible;
         PeekPanel.Measure(new Size(Width, double.PositiveInfinity));
         var peek = WindowPlacementMath.Compact(
             new WindowPlacement(Left, Top, Width, Height), AvailableArea(), Width, CompactHeight + PeekPanel.DesiredSize.Height);
         _topBeforePeek = Top;
-        Top = peek.Top;
-        Motion.Animate(this, HeightProperty, peek.Height);
+        SetBounds(peek);
         Motion.Play(PeekPanel, 4);
     }
 
     private void ClosePeek()
     {
         _peekTimer.Stop();
-        if (!_peekOpen) return;
-        _peekOpen = false;
-        Motion.Animate(this, HeightProperty, CompactHeight, () =>
+        if (!_peekOpen || _peekFade != null) return;
+        PeekPanel.BeginAnimation(OpacityProperty, new DoubleAnimation
         {
-            if (_peekOpen) return;   // reopened meanwhile
-            PeekPanel.Visibility = Visibility.Collapsed;
-            Top = _topBeforePeek;
-        });
+            To = 0,
+            Duration = TimeSpan.FromMilliseconds(ThemeManager.ReducedMotion ? 0 : 150)
+        }, HandoffBehavior.SnapshotAndReplace);
+        _peekFade = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(ThemeManager.ReducedMotion ? 1 : 150) };
+        _peekFade.Tick += (_, _) => HidePeek();
+        _peekFade.Start();
+    }
+
+    /// <summary>The peek's fade-out before the window shrinks back onto the strip; null when none runs.</summary>
+    private DispatcherTimer? _peekFade;
+
+    private void CancelPeekFade()
+    {
+        if (_peekFade == null) return;
+        _peekFade.Stop();
+        _peekFade = null;
+        PeekPanel.BeginAnimation(OpacityProperty, null);
+        PeekPanel.Opacity = 1;
     }
 
     /// <summary>Closes the peek at once, without animation (expanding, or a decision made elsewhere).</summary>
@@ -331,6 +348,7 @@ public partial class McpWindow : Window
         _peekTimer.Stop();
         if (!_peekOpen) return;
         _peekOpen = false;
+        CancelPeekFade();
         PeekPanel.Visibility = Visibility.Collapsed;
         BeginAnimation(HeightProperty, null);
         Height = CompactHeight;
@@ -348,23 +366,20 @@ public partial class McpWindow : Window
     }
 
     /// <summary>
-    /// The strip's activity outline: while the agent calls tools it fades in, breathes, and a brighter segment runs
-    /// around the edge; a static outline with animations off.
+    /// The strip's activity glow: while the agent calls tools it fades in and breathes slowly (a 2.4 s ease in and
+    /// out, like a sleeping Mac's light); it holds still with animations off.
     /// </summary>
     private void UpdateActivityLine()
     {
         var active = ViewModel.IsAgentActive && ViewModel.IsCompact;
-        var fade = TimeSpan.FromMilliseconds(ThemeManager.ReducedMotion ? 100 : 200);
+        var fade = TimeSpan.FromMilliseconds(ThemeManager.ReducedMotion ? 100 : 400);
         if (!active)
         {
             _pulsing = false;
-            var fadeOut = new DoubleAnimation { To = 0, Duration = fade };
+            var fadeOut = new DoubleAnimation { To = 0, Duration = fade, EasingFunction = new SineEase { EasingMode = EasingMode.EaseOut } };
             fadeOut.Completed += (_, _) =>
             {
-                if (_pulsing) return;
-                ActivityOutline.BeginAnimation(OpacityProperty, null);
-                ActivitySweep.BeginAnimation(System.Windows.Shapes.Shape.StrokeDashOffsetProperty, null);
-                ActivitySweep.Visibility = Visibility.Collapsed;
+                if (!_pulsing) ActivityGlow.BeginAnimation(OpacityProperty, null);
             };
             ActivityLine.BeginAnimation(OpacityProperty, fadeOut, HandoffBehavior.SnapshotAndReplace);
             return;
@@ -372,58 +387,31 @@ public partial class McpWindow : Window
         if (ThemeManager.ReducedMotion)
         {
             _pulsing = false;
-            ActivitySweep.BeginAnimation(System.Windows.Shapes.Shape.StrokeDashOffsetProperty, null);
-            ActivitySweep.Visibility = Visibility.Collapsed;
-            ActivityOutline.BeginAnimation(OpacityProperty, null);
-            ActivityOutline.Opacity = 1;
-            ActivityLine.BeginAnimation(OpacityProperty, new DoubleAnimation { To = 0.8, Duration = fade }, HandoffBehavior.SnapshotAndReplace);
+            ActivityGlow.BeginAnimation(OpacityProperty, null);
+            ActivityGlow.Opacity = 0.7;
+            ActivityLine.BeginAnimation(OpacityProperty, new DoubleAnimation { To = 1, Duration = fade }, HandoffBehavior.SnapshotAndReplace);
             return;
         }
-        if (_pulsing) return;   // already fading in or pulsing; a further tool call changes nothing
+        if (_pulsing) return;   // already fading in or breathing; a further tool call changes nothing
         _pulsing = true;
-        ActivityOutline.BeginAnimation(OpacityProperty, new DoubleAnimation
+        ActivityGlow.BeginAnimation(OpacityProperty, new DoubleAnimation
         {
-            From = 0.25,
-            To = 0.6,
+            From = 0.35,
+            To = 0.95,
             Duration = TimeSpan.FromSeconds(1.2),
             AutoReverse = true,
             RepeatBehavior = RepeatBehavior.Forever,
             EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut }
         });
-        ActivitySweep.Visibility = Visibility.Visible;
-        StartSweep();
-        ActivityLine.BeginAnimation(OpacityProperty, new DoubleAnimation { To = 1, Duration = fade }, HandoffBehavior.SnapshotAndReplace);
+        ActivityLine.BeginAnimation(OpacityProperty, new DoubleAnimation
+        {
+            To = 1,
+            Duration = fade,
+            EasingFunction = new SineEase { EasingMode = EasingMode.EaseOut }
+        }, HandoffBehavior.SnapshotAndReplace);
     }
 
     private bool _pulsing;
-
-    /// <summary>
-    /// One dash a fifth of the outline long, run clockwise round it once every 1.6 s. Dash lengths count in stroke
-    /// thicknesses along the stroke's centre line, so the period is the rounded rectangle's centre-line perimeter.
-    /// </summary>
-    private void StartSweep()
-    {
-        var thickness = ActivitySweep.StrokeThickness;
-        var width = (ActivitySweep.ActualWidth > 0 ? ActivitySweep.ActualWidth : CompactWidth) - thickness;
-        var height = (ActivitySweep.ActualHeight > 0 ? ActivitySweep.ActualHeight : CompactHeight) - thickness;
-        var radius = Math.Max(0, ActivitySweep.RadiusX - thickness / 2);
-        var perimeter = (2 * (width + height) - (8 - 2 * Math.PI) * radius) / thickness;
-        var dash = perimeter / 5;
-        ActivitySweep.StrokeDashArray = new System.Windows.Media.DoubleCollection { dash, perimeter - dash };
-        ActivitySweep.BeginAnimation(System.Windows.Shapes.Shape.StrokeDashOffsetProperty, new DoubleAnimation
-        {
-            From = perimeter,
-            To = 0,
-            Duration = TimeSpan.FromSeconds(1.6),
-            RepeatBehavior = RepeatBehavior.Forever
-        });
-    }
-
-    /// <summary>A peek changes the strip's height, and with it the perimeter the dash runs round.</summary>
-    private void ActivitySweep_SizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        if (_pulsing && !ThemeManager.ReducedMotion) StartSweep();
-    }
 
     /// <summary>The status dot's brush comes from a converter, which does not follow a palette swap by itself.</summary>
     private void RefreshPaletteBindings()
@@ -524,16 +512,19 @@ public partial class McpWindow : Window
         catch { }
 
         // The window always opens expanded, even when it was closed collapsed (the user's call, 2026-10-25): the bounds
-        // above are the full window's at the strip's corner, which is where expanding the strip would have put it.
+        // above are the full window standing on the strip, which is where expanding the strip would have put it.
     }
 
     private void SaveWindowState()
     {
         try
         {
-            // Collapsed: the full window's size at the strip's corner, so expanding and reopening both restore it.
-            var bounds = ViewModel.IsCompact && _normalBounds != null
-                ? new Rect(Left, Top, _normalBounds.Width, _normalBounds.Height)
+            // Collapsed: the full window standing on the strip, where expanding would put it; reopening restores that.
+            var expanded = ViewModel.IsCompact && _normalBounds != null
+                ? WindowPlacementMath.Expanded(StripBounds(), AvailableArea(), _normalBounds.Width, _normalBounds.Height, 0, 0)
+                : null;
+            var bounds = expanded != null
+                ? new Rect(expanded.Left, expanded.Top, expanded.Width, expanded.Height)
                 : WindowState == WindowState.Normal
                     ? new Rect(Left, Top, ActualWidth, ActualHeight)
                     : RestoreBounds;

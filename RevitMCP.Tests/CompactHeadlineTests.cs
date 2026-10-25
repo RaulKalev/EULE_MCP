@@ -64,10 +64,10 @@ public class CompactHeadlineTests
     private static readonly WindowPlacement Area = new(0, 0, 1920, 1040);
 
     [Fact]
-    public void Compact_KeepsTheTopLeftCorner()
+    public void Compact_KeepsTheBottomLeftCorner()
     {
         var strip = WindowPlacementMath.Compact(new WindowPlacement(300, 200, 360, 620), Area, 280, 40);
-        Assert.Equal((300d, 200d, 280d, 40d), (strip.Left, strip.Top, strip.Width, strip.Height));
+        Assert.Equal((300d, 780d, 280d, 40d), (strip.Left, strip.Top, strip.Width, strip.Height));
     }
 
     [Fact]
@@ -77,7 +77,18 @@ public class CompactHeadlineTests
         Assert.Equal((1640d, 1000d), (rightEdge.Left, rightEdge.Top));
 
         var offScreen = WindowPlacementMath.Compact(new WindowPlacement(-500, -50, 360, 620), Area, 280, 40);
-        Assert.Equal((0d, 0d), (offScreen.Left, offScreen.Top));
+        Assert.Equal((0d, 530d), (offScreen.Left, offScreen.Top));
+    }
+
+    [Fact]
+    public void Expanded_StandsOnTheStrip()
+    {
+        var full = WindowPlacementMath.Expanded(new WindowPlacement(300, 780, 280, 40), Area, 360, 620, 320, 400);
+        Assert.Equal((300d, 200d, 360d, 620d), (full.Left, full.Top, full.Width, full.Height));
+
+        // A strip dragged to the top edge cannot hold the window above it: it opens downward instead.
+        var atTop = WindowPlacementMath.Expanded(new WindowPlacement(300, 0, 280, 40), Area, 360, 620, 320, 400);
+        Assert.Equal((300d, 0d), (atTop.Left, atTop.Top));
     }
 
     [Fact]
@@ -91,6 +102,6 @@ public class CompactHeadlineTests
     public void Compact_InvalidAreaKeepsTheCorner()
     {
         var strip = WindowPlacementMath.Compact(new WindowPlacement(10, 20, 360, 620), new WindowPlacement(0, 0, 0, 0), 280, 40);
-        Assert.Equal((10d, 20d, 280d, 40d), (strip.Left, strip.Top, strip.Width, strip.Height));
+        Assert.Equal((10d, 600d, 280d, 40d), (strip.Left, strip.Top, strip.Width, strip.Height));
     }
 }
