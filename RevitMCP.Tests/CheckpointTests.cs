@@ -662,3 +662,73 @@ public class CheckpointStoreBatchMarkTests : IDisposable
         Assert.Single(store.Find("m1", cp.Id)!.Batches);
     }
 }
+
+public class SnapshotParameterSelectionTests
+{
+    private static SnapshotParameterCandidate C(string name, bool readOnly, bool hasValue) => new(name, readOnly, hasValue);
+
+    [Fact]
+    public void KeepsWritableEmptyParametersAfterTheOnesWithAValue()
+    {
+        var selected = SnapshotParameterSelection.Select(new[]
+        {
+            C("Family", true, true),
+            C("Comments", false, false),
+            C("Mark", false, true),
+            C("Image", true, false)
+        }, 40);
+
+        Assert.Equal(new[] { "Mark", "Comments", "Family" }, selected.Select(c => c.Name));
+    }
+
+    [Fact]
+    public void CapKeepsWritableOnesFirst()
+    {
+        var selected = SnapshotParameterSelection.Select(new[]
+        {
+            C("Family", true, true),
+            C("Comments", false, false),
+            C("Mark", false, true)
+        }, 2);
+
+        Assert.Equal(new[] { "Mark", "Comments" }, selected.Select(c => c.Name));
+    }
+
+    [Fact]
+    public void DuplicateNamePrefersTheOneWithAValue()
+    {
+        var withValue = C("Category", false, true);
+        var selected = SnapshotParameterSelection.Select(new[] { C("Category", false, false), withValue }, 40);
+
+        Assert.Same(withValue, Assert.Single(selected));
+    }
+
+    [Fact]
+    public void ValueWrittenIntoAnEmptySnapshottedParameterIsAChange()
+    {
+        // The plan test on 25.10.2026: Comments was empty at the checkpoint, so it must be in the snapshot.
+        var before = new ElementSnapshot { Category = "Data Devices" };
+        before.Parameters["Comments"] = string.Empty;
+        var now = new ElementSnapshot { Category = "Data Devices" };
+        now.Parameters["Comments"] = "MCP test plan";
+
+        var delta = SnapshotDiff.Compare(2206192, before, now);
+
+        var comments = Assert.Single(delta.Parameters);
+        Assert.Equal("Comments", comments.Name);
+        Assert.True(delta.HasChanges);
+    }
+}
+
+public class InternalElementRuleTests
+{
+    [Theory]
+    [InlineData(false, false, true, false, true)]    // the hidden System Browser view
+    [InlineData(false, false, false, true, true)]    // a plain uncategorised Element
+    [InlineData(true, false, true, false, false)]    // an ordinary view (category Views)
+    [InlineData(false, true, false, false, false)]   // an element type without category
+    [InlineData(false, false, false, false, false)]  // a fill pattern, phase: real API class, no category
+    [InlineData(true, false, false, false, false)]   // a model element
+    public void OnlyUncategorisedViewsAndPlainElementsAreInternal(bool hasCategory, bool isElementType, bool isView, bool isPlainElement, bool expected)
+        => Assert.Equal(expected, InternalElementRule.IsInternal(hasCategory, isElementType, isView, isPlainElement));
+}
