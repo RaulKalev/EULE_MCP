@@ -187,6 +187,7 @@ Every element comes back with a `status`, and appears in exactly one list under
 | `Stale` | Disagrees with the supplied expected point | Yes |
 | `Missing` | No element with that id | Yes |
 | `UnsupportedLocation` | An absolute target (or expected coordinates) on an element with no `LocationPoint` | Yes |
+| `GroupMoved` | A group instance moved as a whole, its members with it (listed under `elementIds.moved`) | No |
 | `InGroup` | Member of a group; Revit only moves group members in group edit mode | Yes |
 | `OutOfViewPlane` | Owned by a view, and the move would leave that view's plane | Yes |
 | `Failed` | Revit refused the move | Yes |
@@ -200,9 +201,20 @@ call is a no-op.
 Pinned elements are never unpinned. With `skipPinned=false` the response says to unpin them
 in Revit and run again.
 
-Group members are never moved: outside group edit mode Revit either refuses or offers to
-ungroup, neither of which a batch should decide. Move the group instance itself (it has its own
-id and a `LocationPoint`), or ungroup first. The response names the group.
+### Groups
+
+Pass a **group instance** id to move the whole group: its `LocationPoint` is the group origin, so
+absolute targets and displacements both work, and every member travels with it. The preview
+marks the entry `isGroupInstance: true` with the member count; after the move its status is
+`GroupMoved`. `revit_rotate_elements` does the same — a group instance id turns the whole group
+about its origin — and `revit_copy_elements` copies the whole group (see
+[copy-elements.md](copy-elements.md)).
+
+Group **members** are never moved: outside group edit mode Revit either refuses or offers to
+ungroup, neither of which a batch should decide. A member stays `InGroup`, with `groupId` set and
+the reason "pass the group id … to move the whole group, or ungroup first". A group nested in
+another group is a member of its parent and is reported the same way. To edit members, ungroup
+with `revit_ungroup` ([transforms-and-groups.md](transforms-and-groups.md)).
 
 `InGroup` and `OutOfViewPlane` elements are listed under `elementIds.constrained`.
 

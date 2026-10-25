@@ -4,6 +4,7 @@ using Autodesk.Revit.UI;
 using Newtonsoft.Json.Linq;
 using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
+using RevitMCP.Addin.Placement;
 using RevitMCP.Addin.RoomDevices;
 using RevitMCP.Core.Models;
 
@@ -12,7 +13,19 @@ namespace RevitMCP.Addin.Tools;
 /// <summary>One element the rotate / set-elevation / assign-room tools will change.</summary>
 internal sealed class AdjustPlanEntry
 {
+    /// <summary>The family instance. Null only for a group-instance entry of the rotate tool (#108).</summary>
     public DeviceRecord Device { get; set; } = null!;
+
+    /// <summary>A group instance the rotate tool turns as a whole about the group origin (#108).</summary>
+    public Group? GroupInstance { get; set; }
+
+    /// <summary>The group origin in mm, for a group-instance entry.</summary>
+    public P2 GroupPoint { get; set; }
+    public double GroupZMm { get; set; }
+
+    /// <summary>The group a blocked member belongs to; pass this id to act on the whole group.</summary>
+    public long? GroupId { get; set; }
+
     /// <summary>Preview: ready | unchanged | stale | blocked. After the write: changed or rolledBack (was ready), failed.</summary>
     public string Status { get; set; } = "ready";
     public string Reason { get; set; } = string.Empty;
@@ -22,11 +35,20 @@ internal sealed class AdjustPlanEntry
     public string? TargetText { get; set; }
     public bool WillChange => Status == "ready";
 
+    /// <summary>The element that is changed: the group instance, or the device.</summary>
+    public Element Target => GroupInstance != null ? GroupInstance : (Element)Device.Element;
+
+    public long Id => GroupInstance?.Id.Value ?? Device.Id;
+
     public object Payload(string unit, string? error = null) => new
     {
-        elementId = Device.Id,
-        deviceCode = Device.Code?.Code,
-        point = Device.PointPayload(),
+        elementId = Id,
+        deviceCode = GroupInstance != null ? null : Device.Code?.Code,
+        point = GroupInstance != null
+            ? new { x = Math.Round(GroupPoint.X, 1), y = Math.Round(GroupPoint.Y, 1), z = Math.Round(GroupZMm, 1) }
+            : Device.PointPayload(),
+        isGroupInstance = GroupInstance != null,
+        groupId = GroupId,
         status = error != null ? "failed" : Status,
         reason = error ?? Reason,
         current = CurrentText ?? (CurrentValue is { } c ? Math.Round(c, 2).ToString(System.Globalization.CultureInfo.InvariantCulture) + unit : null),
@@ -148,7 +170,7 @@ internal static class DeviceAdjustSupport
 
     public static void CheckPinned(AdjustPlanEntry entry, Dictionary<string, object?> args)
     {
-        if (entry.Status == "ready" && entry.Device.Element.Pinned && ToolArguments.GetBool(args, "skipPinned", true))
+        if (entry.Status == "ready" && entry.Target.Pinned && ToolArguments.GetBool(args, "skipPinned", true))
         {
             entry.Status = "blocked";
             entry.Reason = "Element is pinned (skipPinned=true).";
@@ -171,16 +193,62 @@ internal static class RotatePlanner
         }
 
         var tolerance = ToolArguments.GetDouble(args, "angleToleranceDeg", 0.5);
-        var devices = DeviceAudit.Inventory(doc, null, [], requests.Select(r => r.Id).ToList(), warnings).ToDictionary(d => d.Id);
+
+        // Group instances (#108) are turned as a whole about the group origin; they are not family
+        // instances, so they stay out of the device inventory.
+        var groups = new Dictionary<long, Group>();
+        foreach (var (id, _) in requests)
+            if (doc.GetElement(new ElementId(id)) is Group group) groups[id] = group;
+
+        var devices = DeviceAudit.Inventory(doc, null, [], requests.Select(r => r.Id).Where(id => !groups.ContainsKey(id)).ToList(), warnings)
+            .ToDictionary(d => d.Id);
         var plan = new List<AdjustPlanEntry>();
 
         foreach (var (id, fields) in requests)
         {
-            if (!devices.TryGetValue(id, out var device)) continue;
-            var entry = new AdjustPlanEntry { Device = device, CurrentValue = device.FacingDeg };
-            plan.Add(entry);
+            AdjustPlanEntry entry;
+            P2 point;
+            if (groups.TryGetValue(id, out var groupInstance))
+            {
+                entry = GroupEntry(groupInstance);
+                plan.Add(entry);
+                if (entry.Status == "blocked") continue;
+                point = entry.GroupPoint;
 
-            if (device.FacingDeg is not { } current)
+                if (entry.CurrentValue == null)
+                {
+                    // Revit did not report the group's rotation: only a relative turn can be resolved.
+                    if (!DeviceAdjustSupport.Has(fields, "rotateByDeg"))
+                    {
+                        entry.Status = "blocked";
+                        entry.Reason = "Revit does not report this group's rotation, so angleDeg and faceToward cannot be resolved. Use rotateByDeg.";
+                        continue;
+                    }
+                    entry.CurrentValue = 0;
+                    entry.CurrentText = "unknown (relative turn)";
+                }
+            }
+            else
+            {
+                if (!devices.TryGetValue(id, out var device)) continue;
+                entry = new AdjustPlanEntry { Device = device, CurrentValue = device.FacingDeg };
+                plan.Add(entry);
+                point = device.Point;
+
+                if (device.Element.GroupId != ElementId.InvalidElementId)
+                {
+                    // A member keeps InGroup, now with the group id and the way to turn the whole group.
+                    var groupId = device.Element.GroupId.Value;
+                    string? groupName = null;
+                    try { groupName = doc.GetElement(device.Element.GroupId)?.Name; } catch { /* courtesy only */ }
+                    entry.Status = "blocked";
+                    entry.GroupId = groupId;
+                    entry.Reason = "InGroup: " + MoveElementsMath.GroupMemberReason(groupId, groupName, "rotate");
+                    continue;
+                }
+            }
+
+            if (entry.CurrentValue is not { } current)
             {
                 entry.Status = "blocked";
                 entry.Reason = "The element has no plan facing direction.";
@@ -194,7 +262,7 @@ internal static class RotatePlanner
                 target = current + ToolArguments.GetDouble(fields, "rotateByDeg");
             else if (fields.TryGetValue("faceToward", out var raw) && raw is JObject toward &&
                      toward["x"]?.Value<double?>() is { } x && toward["y"]?.Value<double?>() is { } y)
-                target = RoomAuditMath.FaceTowardDeg(device.Point, new P2(x, y));
+                target = RoomAuditMath.FaceTowardDeg(point, new P2(x, y));
 
             if (target == null)
             {
@@ -220,19 +288,53 @@ internal static class RotatePlanner
                 continue;
             }
 
-            entry.Reason = $"Rotate {RoomAuditMath.DeltaDeg(current, entry.TargetValue.Value):0.##}° about its insertion point.";
+            entry.Reason = entry.GroupInstance != null
+                ? $"Rotate the whole group {RoomAuditMath.DeltaDeg(current, entry.TargetValue.Value):0.##}° about its origin."
+                : $"Rotate {RoomAuditMath.DeltaDeg(current, entry.TargetValue.Value):0.##}° about its insertion point.";
             DeviceAdjustSupport.CheckPinned(entry, args);
         }
 
         return plan;
     }
 
+    /// <summary>
+    /// A group instance's entry (#108): its origin and its rotation (LocationPoint.Rotation, CCW from +X). A nested
+    /// group is a member of its parent and is blocked with the parent's id.
+    /// </summary>
+    private static AdjustPlanEntry GroupEntry(Group group)
+    {
+        var entry = new AdjustPlanEntry { GroupInstance = group };
+        if (group.GroupId != ElementId.InvalidElementId)
+        {
+            string? parentName = null;
+            try { parentName = group.Document.GetElement(group.GroupId)?.Name; } catch { /* courtesy only */ }
+            entry.Status = "blocked";
+            entry.GroupId = group.GroupId.Value;
+            entry.Reason = "InGroup: " + MoveElementsMath.GroupMemberReason(group.GroupId.Value, parentName, "rotate");
+            return entry;
+        }
+
+        if (group.Location is not LocationPoint lp)
+        {
+            entry.Status = "blocked";
+            entry.Reason = "The group has no origin point to rotate about.";
+            return entry;
+        }
+
+        entry.GroupPoint = new P2(RoomUnits.FtToMm(lp.Point.X), RoomUnits.FtToMm(lp.Point.Y));
+        entry.GroupZMm = RoomUnits.FtToMm(lp.Point.Z);
+        try { entry.CurrentValue = RoomGeometryMath.NormalizeDeg(lp.Rotation * 180.0 / Math.PI); }
+        catch { entry.CurrentValue = null; }
+        return entry;
+    }
+
     public static void Apply(Document doc, AdjustPlanEntry entry)
     {
-        var lp = (LocationPoint)entry.Device.Element.Location;
+        var element = entry.Target;
+        var lp = (LocationPoint)element.Location;
         var delta = RoomAuditMath.DeltaDeg(entry.CurrentValue!.Value, entry.TargetValue!.Value);
         var axis = Line.CreateBound(lp.Point, lp.Point + XYZ.BasisZ);
-        ElementTransformUtils.RotateElement(doc, entry.Device.Element.Id, axis, delta * Math.PI / 180.0);
+        ElementTransformUtils.RotateElement(doc, element.Id, axis, delta * Math.PI / 180.0);
     }
 }
 
@@ -243,7 +345,8 @@ public sealed class PreviewRotateElementsTool : IRevitMcpTool
         "Previews rotating elements about their own insertion point (vertical axis) without changes. " +
         "rotations=[{elementId, angleDeg (absolute facing, CCW from +X) | rotateByDeg | faceToward {x, y} (host mm), " +
         "expectedAngleDeg?}] or elementIds + one shared target. expectedAngleDeg is a staleness check within " +
-        "angleToleranceDeg (default 0.5). skipPinned (default true).";
+        "angleToleranceDeg (default 0.5). skipPinned (default true). A group instance id rotates the whole group about its " +
+        "origin; a group member is blocked as InGroup with its group id.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Elements;
 

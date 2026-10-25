@@ -17,6 +17,7 @@ internal static class MoveElementsPayload
         ownerViewName = plan.OwnerViewName,
         viewAxes = Axes(plan),
         groupId = plan.GroupId,
+        isGroupInstance = plan.IsGroupInstance,
         currentPointMm = Point(plan.CurrentPointMm),
         targetPointMm = Point(plan.TargetPointMm),
         translationMm = Point(plan.TranslationMm),

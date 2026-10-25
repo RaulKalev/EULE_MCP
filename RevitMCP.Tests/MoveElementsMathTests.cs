@@ -642,4 +642,74 @@ public class MoveElementsMathTests
         Assert.Null(error);
         Assert.Null(moves![0].TargetZMm);
     }
+
+    // ── Groups (#108) ────────────────────────────────────────────────────────
+
+    [Fact]
+    public void GroupInstance_IsReady_AndReportedAsGroupMovedOnceMoved()
+    {
+        // A group instance has a LocationPoint (its origin), so it plans like any point-located element.
+        var plan = MoveElementsMath.Build(Move(elementId: 900, x: 1000, y: 2000), new PointMm(0, 0, 0),
+            pinned: false, skipPinned: true, positionToleranceMm: Tolerance);
+        plan.IsGroupInstance = true;
+        Assert.Equal(MoveStatus.Ready, plan.Status);
+        Assert.True(plan.CanMove);
+
+        var member = MoveElementsMath.Build(Move(elementId: 901, x: 5), new PointMm(0, 0, 0), false, true, Tolerance);
+        plan.Status = MoveStatus.Moved;
+        member.Status = MoveStatus.Moved;
+
+        Assert.Equal(1, MoveElementsMath.MarkGroupMoves(new[] { plan, member }));
+        Assert.Equal(MoveStatus.GroupMoved, plan.Status);
+        Assert.Equal(MoveStatus.Moved, member.Status);
+
+        // Counted with the moved elements, not as a failure.
+        var summary = MoveElementsMath.Summarise(new[] { plan, member });
+        Assert.Equal(new long[] { 900, 901 }, summary.Moved);
+        Assert.Empty(summary.Failed);
+        Assert.Equal(0, summary.ProblemCount);
+    }
+
+    [Fact]
+    public void GroupInstance_ThatWasNotMoved_KeepsItsStatus()
+    {
+        var plan = MoveElementsMath.Build(Move(elementId: 900, x: 1000), new PointMm(0, 0, 0), false, true, Tolerance);
+        plan.IsGroupInstance = true;
+        plan.Status = MoveStatus.RolledBack;
+        Assert.Equal(0, MoveElementsMath.MarkGroupMoves(new[] { plan }));
+        Assert.Equal(MoveStatus.RolledBack, plan.Status);
+    }
+
+    [Fact]
+    public void GroupMember_StaysInGroup_WithTheGroupIdAndTheHint()
+    {
+        var ready = MoveElementsMath.Build(Move(elementId: 42, x: 1000), new PointMm(0, 0, 0), false, true, Tolerance);
+        var blocked = MoveElementsMath.BlockedAsGroupMember(ready, 7001, "Classroom EN");
+
+        Assert.Equal(MoveStatus.InGroup, blocked.Status);
+        Assert.Equal(7001, blocked.GroupId);
+        Assert.False(blocked.CanMove);
+        Assert.True(blocked.IsFailure);
+        Assert.Contains("'Classroom EN' (id 7001)", blocked.Reason);
+        Assert.Contains("pass the group id 7001 to move the whole group", blocked.Reason);
+        // The plan still shows where the element is and where it was asked to go.
+        Assert.Equal(ready.TargetPointMm, blocked.TargetPointMm);
+
+        Assert.Equal(new long[] { 42 }, MoveElementsMath.Summarise(new[] { blocked }).Constrained);
+    }
+
+    [Fact]
+    public void GroupMemberReason_NamesTheVerb()
+    {
+        Assert.Contains("pass the group id 5 to rotate the whole group", MoveElementsMath.GroupMemberReason(5, "G", "rotate"));
+        Assert.Contains("Revit only rotates group members", MoveElementsMath.GroupMemberReason(5, "G", "rotate"));
+    }
+
+    [Fact]
+    public void Blocked_KeepsTheGroupInstanceFlag()
+    {
+        var plan = MoveElementsMath.Build(Move(elementId: 900, x: 1000), new PointMm(0, 0, 0), false, true, Tolerance);
+        plan.IsGroupInstance = true;
+        Assert.True(MoveElementsMath.Blocked(plan, MoveStatus.OutOfViewPlane, "off plane").IsGroupInstance);
+    }
 }

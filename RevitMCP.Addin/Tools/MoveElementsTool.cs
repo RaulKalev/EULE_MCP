@@ -27,7 +27,8 @@ public class MoveElementsTool : IRevitMcpTool
         "positionToleranceMm (default 1.0) from them is reported stale and left alone. Optional: viewId (the view " +
         "whose axes deltaRightMm/deltaUpMm follow for model elements), atomic (default true — any failure undoes " +
         "the whole batch), skipPinned (default true). View-specific elements only move within their view's plane; " +
-        "group members are reported, not moved. Up to 2000 moves per call, in one transaction, reversible with a " +
+        "a group instance id moves the whole group (status GroupMoved); group members are reported as InGroup with " +
+        "their group id, not moved. Up to 2000 moves per call, in one transaction, reversible with a " +
         "single Revit undo. Run revit_preview_move_elements first.";
 
     public ToolPermission Permission => ToolPermission.RequiresApproval;
@@ -192,9 +193,13 @@ public class MoveElementsTool : IRevitMcpTool
                       "The model is unchanged."));
         }
 
+        // Committed: a group instance that moved is reported as the whole group (#108).
+        var groupsMoved = MoveElementsMath.MarkGroupMoves(plans);
+
         sw.Stop();
         var summaryMessage =
             $"Moved {moved} of {plans.Count} element(s)" +
+            $"{(groupsMoved > 0 ? $" ({groupsMoved} of them whole group instance(s))" : string.Empty)}" +
             $"{(blocked > 0 ? $", {blocked} blocked" : string.Empty)}" +
             $"{(runtimeFailures > 0 ? $", {runtimeFailures} failed" : string.Empty)}.";
 

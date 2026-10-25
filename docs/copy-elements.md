@@ -126,9 +126,14 @@ invented: the element is `Copied` with a note, and its copy is among `newElement
   reports the source `hostId` and the copy's `copyHostId`, and a note when they differ. If there
   is nothing to host the copy at the new position, Revit refuses and the entry is `Failed` with
   Revit's message.
+- **Group instances** are copied whole: Revit's copy of a group id is a new instance of the same
+  group type with all its members. The entry has `isGroupInstance: true` and a note with the
+  member count; the copy is paired with the source group, and the copied members are listed under
+  `dependents`.
 - **Group members** are handed to Revit like any other element, and the entry carries a note
-  that only that member — not the group — was asked for. To copy the whole group, copy the group
-  instance; it has its own id.
+  starting `InGroup:` with the group id: only that member — not the group — is copied; pass the
+  group id to copy the whole group. Arrays of copies and mirror-copies
+  ([transforms-and-groups.md](transforms-and-groups.md)) follow the same rules.
 - **Pinned elements** can be copied — copying does not move the original. The entry notes that
   the source is pinned.
 - **Tags and other annotations that reference an element** are best copied in the same request
