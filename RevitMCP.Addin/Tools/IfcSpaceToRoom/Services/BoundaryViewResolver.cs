@@ -1,4 +1,5 @@
 using Autodesk.Revit.DB;
+using RevitMCP.Addin.Documentation.Views;
 
 namespace RevitMCP.Addin.Tools.IfcSpaceToRoom.Services;
 
@@ -20,17 +21,12 @@ public class BoundaryViewResolver
     private ElementId? _floorPlanViewFamilyTypeId;
 
     /// <summary>
-    /// Pre-loads the first available Floor Plan <c>ViewFamilyType</c> from the document.
-    /// Call once before resolving views.
+    /// Pre-loads the Floor Plan <c>ViewFamilyType</c> to use: the document's default floor plan type, else the
+    /// first one (the shared <see cref="ViewFamilyTypeResolver"/>, #104). Call once before resolving views.
     /// </summary>
     public void LoadViewFamilyType(Document hostDoc)
     {
-        _floorPlanViewFamilyTypeId = new FilteredElementCollector(hostDoc)
-            .OfClass(typeof(ViewFamilyType))
-            .Cast<ViewFamilyType>()
-            .Where(vft => vft.ViewFamily == ViewFamily.FloorPlan)
-            .Select(vft => vft.Id)
-            .FirstOrDefault();
+        _floorPlanViewFamilyTypeId = ViewFamilyTypeResolver.ResolveDefault(hostDoc, ViewFamily.FloorPlan)?.Id;
     }
 
     /// <summary>

@@ -1,6 +1,6 @@
 using Autodesk.Revit.DB;
 using RevitMCP.Addin.Coordination.Clash.DTOs;
-using RevitMCP.Addin.Coordination.Clash.Geometry;
+using RevitMCP.Addin.Documentation.Views;
 
 namespace RevitMCP.Addin.Coordination.Clash.Review;
 
@@ -23,11 +23,8 @@ public class ClashReviewViewService
 
         if (existing != null) return existing;
 
-        // Create a new isometric 3D view
-        var viewFamilyType = new FilteredElementCollector(doc)
-            .OfClass(typeof(ViewFamilyType))
-            .Cast<ViewFamilyType>()
-            .FirstOrDefault(vft => vft.ViewFamily == ViewFamily.ThreeDimensional)
+        // Create a new isometric 3D view with the document's default 3D type, else the first one (#104).
+        var viewFamilyType = ViewFamilyTypeResolver.ResolveDefault(doc, ViewFamily.ThreeDimensional)
             ?? throw new InvalidOperationException("No 3D view family type found in document.");
 
         var view = View3D.CreateIsometric(doc, viewFamilyType.Id);
@@ -45,7 +42,6 @@ public class ClashReviewViewService
         ClashResultDto clash,
         double paddingMm)
     {
-        var padFeet = paddingMm / 304.8;
         BoundingBoxXYZ? box = null;
 
         // Try to compute from elements
@@ -59,7 +55,7 @@ public class ClashReviewViewService
 
         if (srcBox != null && tgtBox != null)
         {
-            box = UnionBoundingBoxes(srcBox, tgtBox);
+            box = ViewExtentService.Union(srcBox, tgtBox);
         }
         else if (srcBox != null)
         {
@@ -78,22 +74,7 @@ public class ClashReviewViewService
 
         if (box == null) return;
 
-        var expanded = ClashBoundingBoxHelper.Expand(box, paddingMm);
-        reviewView.SetSectionBox(expanded);
-        reviewView.IsSectionBoxActive = true;
-    }
-
-    private static BoundingBoxXYZ UnionBoundingBoxes(BoundingBoxXYZ a, BoundingBoxXYZ b)
-    {
-        var result = new BoundingBoxXYZ();
-        result.Min = new XYZ(
-            Math.Min(a.Min.X, b.Min.X),
-            Math.Min(a.Min.Y, b.Min.Y),
-            Math.Min(a.Min.Z, b.Min.Z));
-        result.Max = new XYZ(
-            Math.Max(a.Max.X, b.Max.X),
-            Math.Max(a.Max.Y, b.Max.Y),
-            Math.Max(a.Max.Z, b.Max.Z));
-        return result;
+        // The shared view extent service (#104): pad every side, then set and activate the section box.
+        ViewExtentService.ApplySectionBox(reviewView, ViewExtentService.Pad(box, paddingMm));
     }
 }
