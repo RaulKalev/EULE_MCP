@@ -133,7 +133,7 @@ public class ClashCandidateCollector
             if (bbox == null) continue;
             result.Add(new ClashCandidateInfo
             {
-                ElementId = imp.Id.Value, Category = "ImportedGeometry", UniqueId = imp.UniqueId, Type = SafeName(imp),
+                ElementId = imp.Id.Value, Category = "ImportedGeometry", UniqueId = imp.UniqueId, Type = CadManagement.CadPointExtractor.SafeName(imp),
                 Model = "Host", BoundingBox = bbox,
                 OwnerDocument = hostDoc, LinkTransform = Transform.Identity
             });

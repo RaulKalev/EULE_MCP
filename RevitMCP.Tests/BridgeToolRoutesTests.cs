@@ -211,4 +211,11 @@ public class BridgeToolRoutesTests
         }
         Assert.True(problems.Count == 0, string.Join("\n", problems));
     }
+
+    [Theory]
+    [InlineData("revit_detect_clearance_clashes", "revit_detect_clashes")]
+    [InlineData("revit_detect_hard_clashes", "revit_detect_clashes")]
+    [InlineData("revit_run_clash_preset", "revit_run_clash_preset")]
+    public void PublicNameIsTheBridgeToolThatRoutesThere(string addinTool, string expected) =>
+        Assert.Equal(expected, BridgeToolRoutes.PublicName(addinTool));
 }

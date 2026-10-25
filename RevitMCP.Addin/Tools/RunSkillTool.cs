@@ -1,4 +1,5 @@
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Skills;
 using RevitMCP.Core.Models;
@@ -77,6 +78,7 @@ public class RunSkillTool : IRevitMcpTool, IConditionalApprovalTool
                 RunId = runId,
                 Title = $"Skill Run — {runResult.SkillName ?? skillId}",
                 SourceTools = [Name],
+                ModelTitle = ToolDocument.Resolve(uiapp, request, out _)?.Document.Title,
                 Issues = issues
             };
         }

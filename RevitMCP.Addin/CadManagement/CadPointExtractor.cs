@@ -266,9 +266,20 @@ internal sealed class CadPointExtractor
     private static double ToMm(double feet) =>
         UnitUtils.ConvertFromInternalUnits(feet, UnitTypeId.Millimeters);
 
+    /// <summary>
+    /// An import's own Name is its positioning ("location &lt;Not Shared&gt;"), so 24 imports all read alike
+    /// (2026-10-25 check); the file name is on its type, which is what revit_list_cad_imports shows too.
+    /// </summary>
     public static string SafeName(Element element)
     {
-        try { return element.Name ?? string.Empty; }
+        try
+        {
+            if (element is ImportInstance import &&
+                element.Document.GetElement(import.GetTypeId()) is ElementType type &&
+                !string.IsNullOrWhiteSpace(type.Name))
+                return type.Name;
+            return element.Name ?? string.Empty;
+        }
         catch { return string.Empty; }
     }
 }

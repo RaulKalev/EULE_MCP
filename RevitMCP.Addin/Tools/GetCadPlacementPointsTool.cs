@@ -80,8 +80,9 @@ public class GetCadPlacementPointsTool : IRevitMcpTool
                 "drawn as a block around a circle yields one point, not two.");
         }
 
-        var returned = merged.Take(limit).ToList();
-        if (merged.Count > returned.Count)
+        // The layer inventory returns no points, so it must not claim to return some of them.
+        var returned = layers == null ? new List<CadPoint>() : merged.Take(limit).ToList();
+        if (layers != null && merged.Count > returned.Count)
         {
             warnings.Add(
                 $"Returning {returned.Count} of {merged.Count} point(s). Raise limit to see the rest, " +

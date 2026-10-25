@@ -142,7 +142,15 @@ public sealed class ExportViewImageTool : IRevitMcpTool
                 viewId = view.Id.Value,
                 viewName = view.Name,
                 pixelSize,
-                cropMm = crop is { } c ? new { minX = c.MinX - margin, minY = c.MinY - margin, maxX = c.MaxX + margin, maxY = c.MaxY + margin } : null,
+                cropMm = crop is { } c
+                    ? new
+                    {
+                        minX = Math.Round(c.MinX - margin, 1),
+                        minY = Math.Round(c.MinY - margin, 1),
+                        maxX = Math.Round(c.MaxX + margin, 1),
+                        maxY = Math.Round(c.MaxY + margin, 1)
+                    }
+                    : null,
                 highlighted = highlight.Length
             },
             warnings));

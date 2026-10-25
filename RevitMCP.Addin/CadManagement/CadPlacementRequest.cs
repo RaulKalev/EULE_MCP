@@ -56,9 +56,15 @@ internal static class CadPlacementRequest
 
         if (imports.Count > 1)
         {
-            var sample = string.Join("; ", imports.Take(10)
+            const int listed = 30;
+            var sample = string.Join("; ", imports
+                .OrderBy(i => CadPointExtractor.SafeName(i), StringComparer.OrdinalIgnoreCase)
+                .Take(listed)
                 .Select(i => $"{CadPointExtractor.SafeName(i)} (importInstanceId {i.Id.Value})"));
-            error = $"{imports.Count} CAD imports are present — pass importInstanceId. Found: {sample}";
+            var more = imports.Count > listed
+                ? $"; and {imports.Count - listed} more — revit_list_cad_imports lists them all"
+                : string.Empty;
+            error = $"{imports.Count} CAD imports are present — pass importInstanceId. Found: {sample}{more}";
             return null;
         }
 

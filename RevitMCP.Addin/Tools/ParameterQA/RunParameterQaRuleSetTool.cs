@@ -135,6 +135,7 @@ public class RunParameterQaRuleSetTool : IRevitMcpTool
                 RunId       = runId,
                 Title       = $"Parameter QA — {ruleSetName}",
                 SourceTools = [Name],
+                ModelTitle = doc.Title,
                 Issues      = issues
             };
         }

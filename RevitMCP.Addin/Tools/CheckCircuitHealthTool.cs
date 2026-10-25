@@ -194,6 +194,7 @@ public class CheckCircuitHealthTool : IRevitMcpTool
                 RunId = runId,
                 Title = $"Circuit Health — {panelName ?? "All Panels"}",
                 SourceTools = [Name],
+                ModelTitle = doc.Title,
                 Issues = issueDtos
             };
         }

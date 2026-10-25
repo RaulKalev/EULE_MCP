@@ -5,6 +5,7 @@ using RevitMCP.Addin.Coordination.Clash.DTOs;
 using RevitMCP.Addin.Coordination.Clash.Services;
 using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
+using RevitMCP.Addin.Plans;
 using RevitMCP.Addin.Tools;
 using RevitMCP.Core.Models;
 using RevitMCP.Core.Models.Issues;
@@ -76,7 +77,7 @@ public class DetectClearanceClashesTool : IRevitMcpTool
             {
                 IssueId = $"{reportRunId}-{i + 1:D4}",
                 RunId = reportRunId,
-                SourceTool = Name,
+                SourceTool = BridgeToolRoutes.PublicName(Name),
                 Severity = c.Severity switch
                 {
                     "Critical" => IssueSeverity.Critical,
@@ -97,7 +98,8 @@ public class DetectClearanceClashesTool : IRevitMcpTool
             {
                 RunId = reportRunId,
                 Title = $"Clearance Check — {ruleName} ({clearanceMm}mm, {distanceMode})",
-                SourceTools = [Name],
+                SourceTools = [BridgeToolRoutes.PublicName(Name)],
+                ModelTitle = doc.Title,
                 Issues = issues
             };
         }

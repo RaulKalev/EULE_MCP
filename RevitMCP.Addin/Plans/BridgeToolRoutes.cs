@@ -80,6 +80,13 @@ public static class BridgeToolRoutes
     public static BridgeToolRoute? Find(string? bridgeTool)
         => bridgeTool != null && Routes.TryGetValue(bridgeTool, out var route) ? route : null;
 
+    /// <summary>
+    /// The name the agent knows an add-in tool by: the combined bridge tool that routes to it, else the name itself.
+    /// Issue reports said "revit_detect_clearance_clashes", which no client can call (2026-10-25 check).
+    /// </summary>
+    public static string PublicName(string addinTool)
+        => Routes.Values.FirstOrDefault(r => r.Targets.Contains(addinTool, StringComparer.Ordinal))?.BridgeTool ?? addinTool;
+
     /// <summary>The add-in tools a name stands for: the route's targets for a combined bridge tool, else the name itself.</summary>
     public static IReadOnlyList<string> Expand(string tool)
         => Find(tool)?.Targets ?? new[] { tool };

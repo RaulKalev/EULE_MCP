@@ -99,6 +99,9 @@ public class ParameterReader
             case StorageType.String:
                 rawValue = p.AsString();
                 value = p.AsString() ?? string.Empty;
+                // "Family Name" / "Type Name" are empty on instances while Family and Type are filled (2026-10-25 check).
+                if (value.Length == 0 && IdentityName(p) is { Length: > 0 } identity)
+                    rawValue = value = identity;
                 break;
             case StorageType.Integer:
                 rawValue = p.AsInteger();
@@ -116,7 +119,10 @@ public class ParameterReader
                 var elementId = p.AsElementId();
                 var eid = elementId?.Value;
                 rawValue = eid;
-                value = ElementIdText(p, elementId);
+                // A parameter that is itself an id ("Type Id", "Host Id") keeps the number; the rest show the name.
+                value = name.EndsWith(" Id", StringComparison.OrdinalIgnoreCase)
+                    ? elementId == null || elementId == ElementId.InvalidElementId ? string.Empty : elementId.Value.ToString()
+                    : ElementIdText(p, elementId);
                 break;
             default:
                 value = string.Empty;
@@ -164,6 +170,23 @@ public class ParameterReader
             if (string.IsNullOrWhiteSpace(withSymbol) || !withSymbol.StartsWith(plain, StringComparison.Ordinal)) return null;
             var symbol = withSymbol.Substring(plain.Length).Trim();
             return symbol.Length > 0 ? symbol : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The family or type name behind the built-in "Family Name" / "Type Name" text parameters, else null.</summary>
+    private static string? IdentityName(Parameter p)
+    {
+        try
+        {
+            var id = p.Id.Value;
+            if (id != (long)BuiltInParameter.ALL_MODEL_FAMILY_NAME && id != (long)BuiltInParameter.ALL_MODEL_TYPE_NAME)
+                return null;
+            var identity = ReadIdentity(p.Element.Document, p.Element);
+            return id == (long)BuiltInParameter.ALL_MODEL_FAMILY_NAME ? identity.FamilyName : identity.TypeName;
         }
         catch
         {
