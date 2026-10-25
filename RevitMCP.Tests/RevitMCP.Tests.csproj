@@ -42,6 +42,14 @@
     <Compile Include="..\RevitMCP.Addin\Plans\PlanToolClassification.cs" Link="Plans\PlanToolClassification.cs" />
     <Compile Include="..\RevitMCP.Addin\Plans\PlanRegistry.cs" Link="Plans\PlanRegistry.cs" />
     <Compile Include="..\RevitMCP.Addin\Plans\PlanSummary.cs" Link="Plans\PlanSummary.cs" />
+    <!-- Jobs (#100): definition parsing, JSON path, state machine, journal, report page, summary (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\Jobs\JobModels.cs" Link="Jobs\JobModels.cs" />
+    <Compile Include="..\RevitMCP.Addin\Jobs\JobJsonPath.cs" Link="Jobs\JobJsonPath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Jobs\JobDefinitionParser.cs" Link="Jobs\JobDefinitionParser.cs" />
+    <Compile Include="..\RevitMCP.Addin\Jobs\JobStateMachine.cs" Link="Jobs\JobStateMachine.cs" />
+    <Compile Include="..\RevitMCP.Addin\Jobs\JobJournalStore.cs" Link="Jobs\JobJournalStore.cs" />
+    <Compile Include="..\RevitMCP.Addin\Jobs\JobReportHtml.cs" Link="Jobs\JobReportHtml.cs" />
+    <Compile Include="..\RevitMCP.Addin\Jobs\JobSummary.cs" Link="Jobs\JobSummary.cs" />
     <!-- Usage reporting: shared copy, aggregation, time saved, costs, report files (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Usage\UsageSettings.cs" Link="Usage\UsageSettings.cs" />
     <Compile Include="..\RevitMCP.Addin\Usage\UsageShare.cs" Link="Usage\UsageShare.cs" />
