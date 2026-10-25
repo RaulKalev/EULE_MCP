@@ -55,6 +55,9 @@ public class ToolSearchIndexTests
     [InlineData("plan status remaining calls", "revit_plan_status")]
     [InlineData("run a multi-step job unattended", "revit_job_submit")]
     [InlineData("job progress status", "revit_job_status")]
+    [InlineData("open own local copy of central", "revit_open_document")]
+    [InlineData("element ownership", "revit_get_ownership")]
+    [InlineData("list worksets", "revit_list_worksets")]
     public void IntentFindsTheTool_InTheTopThree(string query, string expected) =>
         Assert.Contains(expected, Top(query));
 

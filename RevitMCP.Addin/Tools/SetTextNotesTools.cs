@@ -356,22 +356,14 @@ internal static class SetTextNotesExecutor
 
     private static string? WorksharingBlock(Document doc, ElementId id)
     {
-        try
-        {
-            var checkout = WorksharingUtils.GetCheckoutStatus(doc, id, out var owner);
-            if (checkout == CheckoutStatus.OwnedByOtherUser)
-                return $"borrowed by another user ({owner}); not editable";
-
-            var updates = WorksharingUtils.GetModelUpdatesStatus(doc, id);
-            if (updates == ModelUpdatesStatus.UpdatedInCentral)
-                return "updated in central by another user; reload latest first";
-            if (updates == ModelUpdatesStatus.DeletedInCentral)
-                return "deleted in central";
-        }
-        catch (Exception)
-        {
-            // Status not available (e.g. detached copy): let Revit decide on commit.
-        }
+        // An unknown status (e.g. a detached copy) is left for Revit to decide on commit.
+        var info = RevitMCP.Addin.Documents.OwnershipReader.Read(doc, id);
+        if (info.OwnedByOther)
+            return $"borrowed by another user ({info.Owner}); not editable";
+        if (info.Central == "updatedInCentral")
+            return "updated in central by another user; reload latest first";
+        if (info.Central == "deletedInCentral")
+            return "deleted in central";
         return null;
     }
 

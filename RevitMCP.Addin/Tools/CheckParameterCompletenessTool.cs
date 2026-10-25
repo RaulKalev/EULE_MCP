@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.ParameterQA;
 using RevitMCP.Addin.Query;
@@ -21,11 +22,13 @@ public class CheckParameterCompletenessTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        if (uidoc?.Document == null)
-            return Task.FromResult(Fail(request, "No active document."));
+        var target = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (target == null) return Task.FromResult(documentFailure!);
+        var uidoc = ToolDocument.UiDocumentOf(uiapp, target);
+        if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+            return Task.FromResult(ToolDocument.ActiveRequired(request, "useSelection", target.Document.Title));
 
-        var doc = uidoc.Document;
+        var doc = target.Document;
         var category = ToolArguments.GetString(request.Arguments, "category");
         var useSelection = ToolArguments.GetBool(request.Arguments, "useSelection");
         var elementIds = ToolArguments.GetLongArray(request.Arguments, "elementIds");
@@ -45,7 +48,7 @@ public class CheckParameterCompletenessTool : IRevitMcpTool
 
         if (useSelection)
         {
-            sourceIds = uidoc.Selection.GetElementIds();
+            sourceIds = uidoc!.Selection.GetElementIds();
         }
         else if (elementIds.Length > 0)
         {

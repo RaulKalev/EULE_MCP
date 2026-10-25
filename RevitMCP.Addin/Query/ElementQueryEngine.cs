@@ -11,14 +11,16 @@ public class ElementQueryEngine
 {
     private readonly CategoryResolver _categoryResolver = new();
 
-    public ElementQueryResult Query(Document doc, UIDocument uidoc, ElementQueryOptions options, CancellationToken cancellationToken = default)
+    /// <param name="uidoc">The active UI document, only needed for <c>UseSelection</c>; null for a non-active document (#101).</param>
+    public ElementQueryResult Query(Document doc, UIDocument? uidoc, ElementQueryOptions options, CancellationToken cancellationToken = default)
     {
         // --- 1. Determine element source ---
         IEnumerable<ElementId> elementIds;
 
         if (options.UseSelection)
         {
-            var sel = uidoc.Selection.GetElementIds();
+            // Callers refuse useSelection for a non-active document before they get here.
+            var sel = uidoc?.Selection.GetElementIds() ?? (ICollection<ElementId>)new List<ElementId>();
             elementIds = sel;
         }
         else if (options.ElementIds.Count > 0)

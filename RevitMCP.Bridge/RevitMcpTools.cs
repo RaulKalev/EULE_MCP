@@ -313,6 +313,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     public async Task<string> GetElementParameters(
         [Description("List of element IDs to get parameters for (integers)")] long[]? elementIds = null,
         [Description("If true, read parameters from the current Revit selection instead of elementIds")] bool useSelection = false,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -320,6 +321,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["elementIds"] = elementIds ?? [],
             ["useSelection"] = useSelection
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_get_element_parameters", args, cancellationToken);
         return FormatResult(result);
     }
@@ -379,6 +381,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     public async Task<string> CountElements(
         [Description("Optional category name to filter by (e.g. 'Fire Alarm Devices'). Leave empty for all categories.")] string? category = null,
         [Description("Group results by: 'Category' (default) or 'FamilyAndType'")] string groupBy = "Category",
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -386,6 +389,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["category"] = category ?? string.Empty,
             ["groupBy"] = string.IsNullOrEmpty(groupBy) ? "Category" : groupBy
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_count_elements", args, cancellationToken);
         return FormatResult(result);
     }
@@ -398,6 +402,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("If true, each group also lists its element ids (capped by maxElementIdsPerGroup; counts are always complete). Default false.")] bool includeElementIds = false,
         [Description("Max element ids listed per group when includeElementIds=true (default 100).")] int maxElementIdsPerGroup = 100,
         [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -408,6 +413,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["maxElementIdsPerGroup"] = maxElementIdsPerGroup
         };
         args["graphHint"] = graphHint;
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_group_by_parameter", args, cancellationToken);
         return FormatResult(result);
     }
@@ -422,6 +428,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Include type parameters")] bool includeTypeParameters = true,
         [Description("Max elements to sample (default 500)")] int sampleLimit = 500,
         [Description("Max example values per parameter (default 5)")] int exampleValueLimit = 5,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -434,6 +441,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["sampleLimit"] = sampleLimit,
             ["exampleValueLimit"] = exampleValueLimit
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_get_available_parameters", args, cancellationToken);
         return FormatResult(result);
     }
@@ -455,6 +463,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Max elements (default 5000)")] int limit = 5000,
         [Description("Page size of the JSON element list. Defaults to 100, max 500.")] int pageSize = -1,
         [Description("Zero-based page of the JSON element list.")] int page = 0,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -466,6 +475,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["pageSize"] = pageSize,
             ["page"] = page
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_run_query_preset", args, cancellationToken);
         return FormatResult(result);
     }
@@ -482,6 +492,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Treat whitespace-only values as empty")] bool treatWhitespaceAsEmpty = true,
         [Description("Include problem element details")] bool includeElementIds = true,
         [Description("Max elements to check (default 5000)")] int limit = 5000,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -496,6 +507,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["includeElementIds"] = includeElementIds,
             ["limit"] = limit
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_check_parameter_completeness", args, cancellationToken);
         return FormatResult(result);
     }
@@ -678,6 +690,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("If true, return identity fields and parameter name/value pairs only, omitting verbose parameter metadata. Default false preserves the full response.")] bool compact = false,
         [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
         [Description("Default true: a whole-category read (no elementIds, selection or filters) of 200+ elements is not run when the model graph is fresh; the result has status graph_first with the calls to make instead. False reads the whole category live.")] bool graphFirst = true,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
@@ -703,6 +716,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         };
         args["graphHint"] = graphHint;
         args["graphFirst"] = graphFirst;
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_find_elements_by_parameter", args, cancellationToken);
         return FormatResult(result);
     }
@@ -727,6 +741,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("If true, return identity fields and parameter name/value pairs only, omitting verbose parameter metadata. Default false preserves the full response.")] bool compact = false,
         [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
         [Description("Default true: a whole-category read (no elementIds, selection or filters) of 200+ elements is not run when the model graph is fresh; the result has status graph_first with the calls to make instead. False reads the whole category live.")] bool graphFirst = true,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
@@ -752,6 +767,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         };
         args["graphHint"] = graphHint;
         args["graphFirst"] = graphFirst;
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_get_elements_info", args, cancellationToken);
         return FormatResult(result);
     }
@@ -765,6 +781,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("If true, include element IDs in each group")] bool includeElements = false,
         [Description("Max elements to scan (default 5000)")] int limit = 5000,
         [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         if (!TryParseJsonArray(groupBy, "groupBy", out var parsedGroupBy, out var groupByError))
@@ -782,6 +799,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["limit"] = limit
         };
         args["graphHint"] = graphHint;
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_group_elements", args, cancellationToken);
         return FormatResult(result);
     }
@@ -797,6 +815,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Output file name (default RevitMCP_Export.xlsx)")] string fileName = "RevitMCP_Export.xlsx",
         [Description("Max elements (default 5000)")] int limit = 5000,
         [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         if (!TryParseJsonArray(filters, "filters", out var parsedFilters, out var filtersError))
@@ -816,6 +835,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["limit"] = limit
         };
         args["graphHint"] = graphHint;
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_export_query_to_excel", args, cancellationToken);
         return FormatResult(result);
     }
@@ -5838,6 +5858,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Name of the rule set to run (see revit_list_parameter_qa_rule_sets)")] string ruleSetName,
         [Description("Maximum elements to check per rule")] int limitPerRule = 5000,
         [Description("Include a full IssueReportDto in the response")] bool returnIssueReport = true,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -5846,6 +5867,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["limitPerRule"]     = limitPerRule,
             ["returnIssueReport"] = returnIssueReport
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_run_parameter_qa_rule_set", args, cancellationToken);
         return FormatResult(result);
     }
@@ -7389,5 +7411,135 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     {
         var args = new Dictionary<string, object?> { ["jobId"] = jobId, ["open"] = open };
         return FormatResult(await pipeClient.SendAsync("revit_job_report", args, cancellationToken));
+    }
+
+    // ── Worker document: the agent's own local, worksets and ownership (#101) ────────────────
+
+    [McpServerTool(Name = "revit_open_document"),
+     Description("Opens a model as the agent's own document WITHOUT activating it (the user keeps theirs): a workshared central becomes a new local copy <central>_<user>_mcp.rvt (mode=newLocal, default for centrals), or mode=detach / plain. Pass the returned title as document=… to every following call. Nothing in central changes until revit_sync_with_central. Requires approval.")]
+    public async Task<string> OpenDocument(
+        [Description("Full path of the central model or a plain .rvt file (a share needs AllowNetworkPaths in FileAccessPolicy.json).")] string path,
+        [Description("newLocal (default for a central) | detach (worksets kept) | plain.")] string? mode = null,
+        [Description("Worksets to open: all (default) | editable (not borrowed by others) | lastViewed | closeAll | a list of names.")] object? worksets = null,
+        [Description("Folder for the new local. Default %LOCALAPPDATA%\\RevitMCP\\Locals.")] string? localFolder = null,
+        [Description("Audit while opening. Default false.")] bool audit = false,
+        [Description("Make it the active document (switches the user's view). Default false.")] bool activate = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["path"] = path,
+            ["mode"] = mode ?? string.Empty,
+            ["worksets"] = ToJToken(worksets),
+            ["localFolder"] = localFolder ?? string.Empty,
+            ["audit"] = audit,
+            ["activate"] = activate
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_open_document", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_close_document", Destructive = true),
+     Description("DESTRUCTIVE: closes an open document that is not the active one; save=true saves it first (a local is saved locally — sync before). Unsaved changes are lost otherwise. Does not relinquish: call revit_relinquish first. Always needs manual approval.")]
+    public async Task<string> CloseDocument(
+        [Description("Title or path of the document to close (required; never the active one).")] string document,
+        [Description("Save before closing. Default false.")] bool save = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["document"] = document, ["save"] = save };
+        return FormatResult(await pipeClient.SendAsync("revit_close_document", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_list_worksets", ReadOnly = true),
+     Description("Lists the user worksets of a workshared document: id, name, owner, open, editable (owned by you), default, visible by default, active. countElements=true adds element counts.")]
+    public async Task<string> ListWorksets(
+        [Description("Add the element count of each workset. Default false.")] bool countElements = false,
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["countElements"] = countElements, ["document"] = document ?? string.Empty };
+        return FormatResult(await pipeClient.SendAsync("revit_list_worksets", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_preview_set_workset", ReadOnly = true),
+     Description("Previews revit_set_workset WITHOUT changing anything: elements that would move to the workset, those skipped (owned by others, changed in central, not changeable) and the active workset change.")]
+    public async Task<string> PreviewSetWorkset(
+        [Description("Workset to make active (name or id).")] string? activeWorkset = null,
+        [Description("Elements to move.")] long[]? elementIds = null,
+        [Description("Workset to move them to (name or id).")] string? workset = null,
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = WorksetArgs(activeWorkset, elementIds, workset, document);
+        return FormatResult(await pipeClient.SendAsync("revit_preview_set_workset", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_set_workset"),
+     Description("Sets the active workset (new elements go there) and/or moves elements to a workset; elements owned by someone else are skipped with the owner's name. Requires approval; preview with revit_preview_set_workset.")]
+    public async Task<string> SetWorkset(
+        [Description("Workset to make active (name or id).")] string? activeWorkset = null,
+        [Description("Elements to move.")] long[]? elementIds = null,
+        [Description("Workset to move them to (name or id).")] string? workset = null,
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = WorksetArgs(activeWorkset, elementIds, workset, document);
+        return FormatResult(await pipeClient.SendAsync("revit_set_workset", args, cancellationToken));
+    }
+
+    private static Dictionary<string, object?> WorksetArgs(string? activeWorkset, long[]? elementIds, string? workset, string? document) => new()
+    {
+        ["activeWorkset"] = activeWorkset ?? string.Empty,
+        ["elementIds"] = elementIds ?? [],
+        ["workset"] = workset ?? string.Empty,
+        ["document"] = document ?? string.Empty
+    };
+
+    [McpServerTool(Name = "revit_get_ownership", ReadOnly = true),
+     Description("Who owns elements (elementIds) and worksets (worksets) in a workshared document: you, someone else (who) or nobody; creator and last changed by; whether central has a newer version or deleted it. Also the preview of revit_checkout_elements.")]
+    public async Task<string> GetOwnership(
+        [Description("Element ids (max 5000).")] long[]? elementIds = null,
+        [Description("Workset names.")] string[]? worksets = null,
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["elementIds"] = elementIds ?? [],
+            ["worksets"] = worksets ?? [],
+            ["document"] = document ?? string.Empty
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_get_ownership", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_checkout_elements"),
+     Description("Checks out (borrows) elements so this local can edit them: reports what was obtained, what you already owned and what others own (and who). Talks to central. Requires approval.")]
+    public async Task<string> CheckoutElements(
+        [Description("Element ids to borrow (max 5000).")] long[] elementIds,
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["elementIds"] = elementIds ?? [], ["document"] = document ?? string.Empty };
+        return FormatResult(await pipeClient.SendAsync("revit_checkout_elements", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_relinquish"),
+     Description("Gives ownership back to central without syncing: what=[elements (every borrowed element), userWorksets, standardWorksets, familyWorksets, viewWorksets] or all (default). Talks to central. Requires approval.")]
+    public async Task<string> Relinquish(
+        [Description("What to relinquish; default all.")] string[]? what = null,
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["what"] = what ?? [], ["document"] = document ?? string.Empty };
+        return FormatResult(await pipeClient.SendAsync("revit_relinquish", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_reload_latest"),
+     Description("Pulls the latest changes from central into a workshared local (Reload Latest) without syncing your own; says whether anything changed. Refresh the graph with revit_graph_build after. Requires approval.")]
+    public async Task<string> ReloadLatest(
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["document"] = document ?? string.Empty };
+        return FormatResult(await pipeClient.SendAsync("revit_reload_latest", args, cancellationToken));
     }
 }

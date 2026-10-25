@@ -19,11 +19,7 @@ internal static class DocumentToolSupport
     /// <summary>Resolves the <c>document</c> argument; null with <paramref name="failure"/> set when it does not resolve.</summary>
     public static RevitDocumentResolver.DocumentTarget? ResolveTarget(
         UIApplication uiapp, McpToolRequest request, out McpToolResult? failure)
-    {
-        var target = RevitDocumentResolver.Resolve(uiapp, request, out var error);
-        failure = target == null ? Fail(request, error ?? "Document was not found.", "validation_failed") : null;
-        return target;
-    }
+        => ToolDocument.Resolve(uiapp, request, out failure);
 
     /// <summary>Link loads, saves and syncs cannot run while a transaction is open on the document.</summary>
     public static string? CheckNoOpenTransaction(Document doc)

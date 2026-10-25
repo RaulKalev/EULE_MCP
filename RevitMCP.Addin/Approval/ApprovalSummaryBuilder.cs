@@ -63,6 +63,12 @@ public static class ApprovalSummaryBuilder
             "revit_delete_elements"             => BuildDeleteElements(request),
             // Normally built live by CheckpointRollbackTool (IApprovalSummaryTool); this is the fallback.
             "revit_checkpoint_rollback"         => BuildCheckpointRollback(request),
+            // Worker document (#101)
+            "revit_open_document"               => BuildOpenDocument(request),
+            "revit_set_workset"                 => BuildSetWorkset(request),
+            "revit_checkout_elements"           => $"Check out (borrow) {ToolArguments.GetLongArray(request.Arguments, "elementIds").Distinct().Count()} element(s){DocumentSuffix(request)} so this local can edit them. Talks to central.",
+            "revit_relinquish"                  => $"Relinquish {(ToolArguments.GetStringArray(request.Arguments, "what") is { Length: > 0 } what ? string.Join(", ", what) : "everything you own")}{DocumentSuffix(request)} without syncing. Talks to central.",
+            "revit_reload_latest"               => $"Reload the latest changes from central into{(DocumentSuffix(request) is { Length: > 0 } d ? d.Replace(" in ", " ") : " the active document")} without syncing your own.",
             // Element alignment and DWG-driven placement
             "revit_align_elements"              => BuildAlignElements(request),
             "revit_align_in_view"               => BuildAlignInView(request),
@@ -862,6 +868,35 @@ public static class ApprovalSummaryBuilder
     {
         var elementCount = ToolArguments.GetLongArray(request.Arguments, "elementIds").Distinct().Count();
         return $"DESTRUCTIVE: Delete {elementCount} element{(elementCount == 1 ? "" : "s")} plus dependent elements. Manual approval required.";
+    }
+
+    private static string DocumentSuffix(McpToolRequest request)
+        => ToolArguments.GetString(request.Arguments, "document") is { Length: > 0 } doc ? $" in '{doc}'" : string.Empty;
+
+    private static string BuildOpenDocument(McpToolRequest request)
+    {
+        var path = ToolArguments.GetString(request.Arguments, "path");
+        var mode = ToolArguments.GetString(request.Arguments, "mode");
+        var worksets = request.Arguments.TryGetValue("worksets", out var w) && w is JArray array
+            ? string.Join(", ", array.Select(t => t.ToString()))
+            : ToolArguments.GetString(request.Arguments, "worksets", "all");
+        var how = mode.ToLowerInvariant() switch
+        {
+            "detach" => "detached from central (worksets kept)",
+            "plain" => "as a plain file",
+            _ => "as a new local copy of its central (or plainly when it is not workshared)"
+        };
+        var activate = ToolArguments.GetBool(request.Arguments, "activate") ? ", and activate it" : ", without activating it";
+        return $"Open '{System.IO.Path.GetFileName(path)}' {how} (worksets: {worksets}){activate}. Nothing in central changes until revit_sync_with_central.";
+    }
+
+    private static string BuildSetWorkset(McpToolRequest request)
+    {
+        var parts = new List<string>();
+        if (ToolArguments.GetString(request.Arguments, "activeWorkset") is { Length: > 0 } active) parts.Add($"make '{active}' the active workset");
+        var ids = ToolArguments.GetLongArray(request.Arguments, "elementIds").Distinct().Count();
+        if (ids > 0) parts.Add($"move {ids} element(s) to workset '{ToolArguments.GetString(request.Arguments, "workset")}'");
+        return (parts.Count > 0 ? char.ToUpperInvariant(parts[0][0]) + string.Join(" and ", parts).Substring(1) : "Change worksets") + DocumentSuffix(request) + ".";
     }
 
     private static string BuildCheckpointRollback(McpToolRequest request)

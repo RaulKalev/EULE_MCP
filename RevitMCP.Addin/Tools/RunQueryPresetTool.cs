@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Autodesk.Revit.UI;
 using RevitMCP.Addin.Export;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Presets;
 using RevitMCP.Addin.Query;
@@ -25,9 +26,11 @@ public class RunQueryPresetTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        if (uidoc?.Document == null)
-            return Task.FromResult(Fail(request, "No active document."));
+        var target = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (target == null) return Task.FromResult(documentFailure!);
+        var uidoc = ToolDocument.UiDocumentOf(uiapp, target);
+        if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+            return Task.FromResult(ToolDocument.ActiveRequired(request, "useSelection", target.Document.Title));
 
         var presetName = ToolArguments.GetString(request.Arguments, "presetName");
         if (string.IsNullOrWhiteSpace(presetName))
@@ -60,7 +63,7 @@ public class RunQueryPresetTool : IRevitMcpTool
             Limit = limit
         };
 
-        var queryResult = _queryEngine.Query(uidoc.Document, uidoc, queryOpts);
+        var queryResult = _queryEngine.Query(target.Document, uidoc, queryOpts);
         if (!queryResult.Success)
             return Task.FromResult(Fail(request, queryResult.Message));
 

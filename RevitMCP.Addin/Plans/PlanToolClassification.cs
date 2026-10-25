@@ -28,6 +28,7 @@ public static class PlanToolClassification
         "revit_add_elements_", "revit_change_", "revit_reassign_", "revit_edit_", "revit_select_", "revit_panelschematics_",
         "revit_focus_", "revit_copy_cad_", "revit_activate_", "revit_save_", "revit_sync_", "revit_reload_", "revit_remove_",
         "revit_delete", "revit_checkpoint_", "revit_memory_", "revit_export_", "revit_update_skill", "revit_plan_", "revit_job_",
+        "revit_open_", "revit_close_", "revit_checkout_", "revit_relinquish",
         "revit_page_", "sync_ifc_", "config_", "file_", "excel_"
     };
 

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Query;
 using RevitMCP.Core.Models;
@@ -17,12 +18,14 @@ public class GetElementParametersTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        if (uidoc?.Document == null)
-            return Task.FromResult(Fail(request, "No active document."));
+        var target = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (target == null) return Task.FromResult(documentFailure!);
 
-        var doc = uidoc.Document;
+        var doc = target.Document;
+        var uidoc = ToolDocument.UiDocumentOf(uiapp, target);
         var useSelection = ToolArguments.GetBool(request.Arguments, "useSelection");
+        if (useSelection && uidoc == null)
+            return Task.FromResult(ToolDocument.ActiveRequired(request, "useSelection", doc.Title));
         var elementIds = ToolArguments.GetLongArray(request.Arguments, "elementIds");
         var includeInstance = ToolArguments.GetBool(request.Arguments, "includeInstanceParameters", true);
         var includeType = ToolArguments.GetBool(request.Arguments, "includeTypeParameters", true);
@@ -30,7 +33,7 @@ public class GetElementParametersTool : IRevitMcpTool
 
         ICollection<ElementId> ids;
         if (useSelection)
-            ids = uidoc.Selection.GetElementIds();
+            ids = uidoc!.Selection.GetElementIds();
         else if (elementIds.Length > 0)
             ids = elementIds.Select(id => new ElementId(id)).ToList();
         else
