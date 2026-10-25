@@ -248,4 +248,17 @@
     <!-- Project Village: only the add-in-side graph reader is linked here; the rest of the module comes from the RevitMCP.Village project reference above. -->
     <Compile Include="..\RevitMCP.Addin\Village\VillageGraphReader.cs" Link="Village\VillageGraphReader.cs" />
   </ItemGroup>
+
+  <!-- #103 Schedules: spec parsing, planner, filter-type map, placement geometry, table paging/export names,
+       approval summaries (no Revit API). FuzzyNameMatcher feeds the planner's suggestions; if another branch links it
+       too, keep one entry. -->
+  <ItemGroup>
+    <Compile Include="..\RevitMCP.Addin\Schedules\ScheduleSpec.cs" Link="Schedules\ScheduleSpec.cs" />
+    <Compile Include="..\RevitMCP.Addin\Schedules\SchedulePlanner.cs" Link="Schedules\SchedulePlanner.cs" />
+    <Compile Include="..\RevitMCP.Addin\Schedules\ScheduleFilterTypeMap.cs" Link="Schedules\ScheduleFilterTypeMap.cs" />
+    <Compile Include="..\RevitMCP.Addin\Schedules\SchedulePlacement.cs" Link="Schedules\SchedulePlacement.cs" />
+    <Compile Include="..\RevitMCP.Addin\Schedules\ScheduleTableMath.cs" Link="Schedules\ScheduleTableMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Approval\SchedulesApprovalSummaries.cs" Link="Approval\SchedulesApprovalSummaries.cs" />
+    <Compile Include="..\RevitMCP.Addin\Documentation\Placement\FuzzyNameMatcher.cs" Link="Documentation\Placement\FuzzyNameMatcher.cs" />
+  </ItemGroup>
 </Project>
