@@ -23,6 +23,9 @@ The duplication tools are reached through the shared `revit_duplicate` /
 [`tool-consolidation.md`](tool-consolidation.md). The underlying add-in tools are
 `revit_duplicate_family_types` and `revit_preview_duplicate_family_types`.
 
+Loading, reloading and purging whole families, and creating project and shared parameters, are covered in
+[`families-and-parameters.md`](families-and-parameters.md).
+
 ## Typical flow
 
 1. Find the source type:

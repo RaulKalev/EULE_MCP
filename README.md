@@ -33,6 +33,7 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | [Standards](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Standards) | 5 | Offline indexing, search, and contextual retrieval |
 | [Files, Excel, and configuration](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Files-Excel-Configuration) | 16 | Policy-scoped files, standalone workbooks, scoped JSON state |
 | [Family types, creation, and IFC](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Family-IFC) | 10 | Family type duplication and editing, DWG-to-Detail-Item families, IFC Space-to-Room |
+| [Families and parameters](docs/families-and-parameters.md) | 11 | List, load (overwrite policy, one undo step), reload and purge unused families; list project and shared parameters, create them from the shared parameter file and bind categories |
 | [Worker document](docs/worker-document.md) | 9 | Open your own local copy of a central in the background, worksets, ownership, checkout and relinquish, reload latest, close; `document=` on the core and query reads |
 | [Jobs: unattended work](docs/jobs.md) | 6 | Submit a whole job of tool calls with result binding; one approval, the connector runs it step by step between your own work, stops on failures or new Revit errors, survives a restart and publishes a report page |
 | [Plans: one approval per job](docs/plans.md) | 4 | Submit a plan (tools, element ids, categories, limits), approve once, then write calls inside it run without prompts; status, close, per-session plan id |
@@ -122,6 +123,7 @@ Important repository references:
 - [`docs/extensible-storage.md`](docs/extensible-storage.md) — reading add-in data stored on elements
 - [`docs/family-types.md`](docs/family-types.md) — duplicating, renaming, and re-parameterising family types
 - [`docs/geometry-queries.md`](docs/geometry-queries.md) — element geometry, elements in a box or radius, nearest surface, line of sight and clearance, in host mm
+- [`docs/families-and-parameters.md`](docs/families-and-parameters.md) — listing, loading, reloading and purging families; creating and binding project and shared parameters
 - [`docs/mcp-performance.md`](docs/mcp-performance.md) — lower-latency queries and reduced-credit tool profiles
 - [`docs/project-village.md`](docs/project-village.md) — opt-in "Project Village" activity visualizer with a flyer board of query results and Show in Revit (no AI calls, no model changes)
 - [`docs/model-graph.md`](docs/model-graph.md) — per-model routing graph: find element ids cheaply before querying the live model
