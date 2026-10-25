@@ -36,6 +36,32 @@ public class RevitPipeClient
     /// <summary>The MCP client this bridge serves (--client), as the add-in sees it.</summary>
     public string ClientName => _clientName;
 
+    private volatile string? _activePlanId;
+
+    /// <summary>
+    /// The plan (#99) attached to every following write request of this session; set by revit_plan_submit and
+    /// revit_plan_use, cleared by revit_plan_close. Null = no plan.
+    /// </summary>
+    public string? ActivePlanId
+    {
+        get => _activePlanId;
+        set => _activePlanId = string.IsNullOrWhiteSpace(value) ? null : value!.Trim();
+    }
+
+    /// <summary>
+    /// Adds the active plan id to a write request that does not name one. Reads (the catalog's ReadOnly flag)
+    /// and the plan tools themselves are left alone.
+    /// </summary>
+    internal static Dictionary<string, object?> WithPlanId(string toolName, Dictionary<string, object?> arguments, string? planId)
+    {
+        if (planId == null ||
+            toolName.StartsWith("revit_plan_", StringComparison.Ordinal) ||
+            arguments.ContainsKey("planId") ||
+            McpToolCatalog.IsReadOnlyTool(toolName))
+            return arguments;
+        return new Dictionary<string, object?>(arguments) { ["planId"] = planId };
+    }
+
     public RevitPipeClient(IConfiguration config)
     {
         _explicitPipeName = config["RevitMCP:PipeName"];
@@ -53,7 +79,7 @@ public class RevitPipeClient
         var request = new McpToolRequest
         {
             ToolName = toolName,
-            Arguments = arguments,
+            Arguments = WithPlanId(toolName, arguments, _activePlanId),
             ClientName = _clientName
         };
 
