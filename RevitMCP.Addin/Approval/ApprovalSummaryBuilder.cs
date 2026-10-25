@@ -110,7 +110,9 @@ public static class ApprovalSummaryBuilder
 
     /// <summary>Approval summaries the domain areas (#102-#109) build for their own write tools.</summary>
     private static string? BuildDomainSummary(McpToolRequest request) =>
-        MepApprovalSummaries.TryBuild(request)
+        FamiliesAndParametersApprovalSummaries.TryBuild(request)
+        ?? ViewCreationApprovalSummaries.TryBuild(request)
+        ?? MepApprovalSummaries.TryBuild(request)
         ?? TransformsAndGroupsApprovalSummaries.TryBuild(request);
 
     private static int CountItems(McpToolRequest request, string key)

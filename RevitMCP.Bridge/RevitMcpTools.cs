@@ -125,6 +125,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Subset of parameter names to return. Leave empty to include all. Case-insensitive.")] string[]? parameterNames = null,
         [Description("If true, include a geometry summary (solid/mesh/curve counts, estimated volume). Default true.")] bool includeGeometrySummary = true,
         [Description("Maximum number of elements to process. Default 50.")] int limit = 50,
+        [Description("Keep the pre-#107 fields (boundingBoxMm) next to the new bbox. Default true, for one release.")] bool legacy = true,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -132,7 +133,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["includeParameters"]    = includeParameters,
             ["parameterNames"]       = parameterNames ?? [],
             ["includeGeometrySummary"] = includeGeometrySummary,
-            ["limit"]                = limit
+            ["limit"]                = limit,
+            ["legacy"]               = legacy
         };
         var result = await pipeClient.SendAsync("revit_inspect_selected_elements", args, cancellationToken);
         return FormatResult(result);
@@ -3110,10 +3112,12 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Also read elements from the host model")] bool includeHost = false,
         [Description("Level name")] string? levelName = null,
         [Description("Max elements per room (default 500)")] int limitPerRoom = 500,
+        [Description("Keep the pre-#107 flat bbox fields (minX…maxZ) next to the new ones. Default true, for one release.")] bool legacy = true,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = RoomArgs(source, linkInstanceId, levelName, null);
+        args["legacy"] = legacy;
         args["categories"] = categories;
         args["roomNumber"] = roomNumber ?? string.Empty;
         args["roomNumbers"] = roomNumbers ?? [];
