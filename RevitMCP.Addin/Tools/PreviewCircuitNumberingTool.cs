@@ -37,12 +37,14 @@ public class PreviewCircuitNumberingTool : IRevitMcpTool
         if (circuits.Count == 0)
             return Task.FromResult(Fail(request, $"No circuits found for panel '{panelName}'."));
 
+        // Circuit numbers sort naturally (1, 2, 10 — not 1, 10, 2), or a renumbering would scramble the panel.
+        // The apply step writes exactly the pairs this preview returns, so this is the only ordering.
         var sorted = sortBy.Equals("LoadName", StringComparison.OrdinalIgnoreCase)
             ? circuits.OrderBy(c =>
             {
                 string ln = ""; try { ln = c.LookupParameter("Load Name")?.AsString() ?? ""; } catch { } return ln;
-            }).ThenBy(c => c.CircuitNumber).ToList()
-            : circuits.OrderBy(c => c.CircuitNumber).ToList();
+            }).ThenBy(c => c.CircuitNumber, CircuitNumberComparer.Instance).ThenBy(c => c.Id.Value).ToList()
+            : circuits.OrderBy(c => c.CircuitNumber, CircuitNumberComparer.Instance).ThenBy(c => c.Id.Value).ToList();
 
         int num = startNumber;
         int changedCount = 0;
