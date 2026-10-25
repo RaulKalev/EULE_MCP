@@ -248,4 +248,11 @@
     <!-- Project Village: only the add-in-side graph reader is linked here; the rest of the module comes from the RevitMCP.Village project reference above. -->
     <Compile Include="..\RevitMCP.Addin\Village\VillageGraphReader.cs" Link="Village\VillageGraphReader.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- #104 view creation: spec parsing, planning (fan-out, names, callout rules), section box and extent math (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\Documentation\Views\ViewCreateSpec.cs" Link="Documentation\Views\ViewCreateSpec.cs" />
+    <Compile Include="..\RevitMCP.Addin\Documentation\Views\ViewCreatePlanner.cs" Link="Documentation\Views\ViewCreatePlanner.cs" />
+    <Compile Include="..\RevitMCP.Addin\Documentation\Views\SectionBoxMath.cs" Link="Documentation\Views\SectionBoxMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Documentation\Views\ViewExtentMath.cs" Link="Documentation\Views\ViewExtentMath.cs" />
+  </ItemGroup>
 </Project>
