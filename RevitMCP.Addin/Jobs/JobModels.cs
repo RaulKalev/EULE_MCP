@@ -119,6 +119,9 @@ public sealed class Job
     /// <summary>Time spent running before the current run segment (pauses and suspensions do not count).</summary>
     [JsonProperty("elapsedMs")] public long ElapsedMs { get; set; }
 
+    /// <summary>When the current run segment started; null while the job does not run.</summary>
+    [JsonIgnore] public DateTimeOffset? SegmentStartedAt { get; set; }
+
     /// <summary>New warnings (since the checkpoint) the user accepted by resuming: errors and all.</summary>
     [JsonProperty("acceptedNewErrors")] public int AcceptedNewErrors { get; set; }
     [JsonProperty("acceptedNewWarnings")] public int AcceptedNewWarnings { get; set; }

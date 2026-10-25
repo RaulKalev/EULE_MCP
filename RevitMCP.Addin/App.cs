@@ -446,6 +446,13 @@ public class App : IExternalApplication
             handler.RegisterTool(new RevitMCP.Addin.Tools.Plans.PlanCloseTool());
             // Not advertised by the bridge: the Pending tab's "Show changes" button.
             handler.RegisterTool(new RevitMCP.Addin.Tools.Plans.PlanShowChangesTool());
+            // Jobs (Jobs\, docs/jobs.md, #100): whole jobs run by the connector under one plan. Service wired below.
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Jobs.JobSubmitTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Jobs.JobStatusTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Jobs.JobListTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Jobs.JobCancelTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Jobs.JobResumeTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Jobs.JobReportTool());
 
             var eventService = new ExternalEventService(handler);
 
@@ -463,6 +470,24 @@ public class App : IExternalApplication
                 _ = logger.WriteAsync(decided, outcome.Result!, handler.GetLastContext());
             };
             handler.RegisterTool(new GetApprovalStatusTool(approvalService));
+
+            try
+            {
+                RevitMCP.Addin.Jobs.JobService.Current = new RevitMCP.Addin.Jobs.JobService(
+                    (request, timeoutMs) => eventService.DispatchAsync(request, timeoutMs),
+                    approvalService,
+                    new RevitMCP.Addin.Jobs.JobJournalStore(System.IO.Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RevitMCP", "Jobs")),
+                    handler.GetToolPermission, handler.IsBackgroundTool,
+                    planId => RevitMCP.Addin.Plans.PlanService.Current?.Registry.Get(planId),
+                    (plan, state, reason) => RevitMCP.Addin.Plans.PlanService.Current?.Finish(plan, state, reason),
+                    (request, result) => _ = logger.WriteAsync(request, result, handler.GetLastContext()));
+                RevitMCP.Addin.Jobs.JobService.Current.LoadSuspended();
+            }
+            catch (Exception ex)
+            {
+                DiagLog($"Job service unavailable: {ex.Message}");
+            }
 
             // Each add-in load hosts its own unique pipe. The load id is essential for
             // AppLoader hot reloads: an orphan listener from the previous assembly can

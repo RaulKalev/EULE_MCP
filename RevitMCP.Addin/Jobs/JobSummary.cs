@@ -25,6 +25,57 @@ public static class JobSummary
         return sb.ToString();
     }
 
+    /// <summary>
+    /// A job as revit_job_status returns it: state, progress, compact steps and, with <paramref name="results"/> &gt; 0,
+    /// the stored results of the last finished steps.
+    /// </summary>
+    public static Dictionary<string, object?> Describe(Job job, DateTimeOffset now, int results = 0)
+    {
+        var running = job.Steps.FirstOrDefault(s => s.State is JobStepState.Running or JobStepState.WaitingApproval);
+        var elapsedMs = job.ElapsedMs + (job.SegmentStartedAt is { } since ? (long)(now - since).TotalMilliseconds : 0);
+        var dto = new Dictionary<string, object?>
+        {
+            ["jobId"] = job.Id,
+            ["title"] = job.Title,
+            ["state"] = Camel(job.State.ToString()),
+            ["stopReason"] = job.StopReason,
+            ["document"] = job.DocumentTitle,
+            ["client"] = job.ClientName,
+            ["planId"] = job.PlanId,
+            ["checkpointId"] = job.CheckpointId,
+            ["progress"] = new Dictionary<string, object?>
+            {
+                ["done"] = job.DoneCount,
+                ["total"] = job.Steps.Count,
+                ["runningStep"] = running == null ? null : running.Index + 1
+            },
+            ["steps"] = job.Steps.Select(s => new Dictionary<string, object?>
+            {
+                ["index"] = s.Index + 1,
+                ["title"] = s.DisplayTitle,
+                ["tool"] = s.Tool,
+                ["state"] = Camel(s.State.ToString()) + (s.Tolerated ? " (continued)" : string.Empty),
+                ["status"] = s.Status,
+                ["message"] = s.Message is { Length: > 200 } m ? m.Substring(0, 200) + "…" : s.Message,
+                ["ms"] = s.DurationMs
+            }).ToList(),
+            ["newWarnings"] = new Dictionary<string, object?> { ["total"] = job.NewWarnings, ["errors"] = job.NewErrors },
+            ["elapsedMinutes"] = Math.Round(elapsedMs / 60000.0, 1),
+            ["createdAt"] = job.CreatedAt,
+            ["finishedAt"] = job.FinishedAt,
+            ["reportUrl"] = job.ReportUrl,
+            ["resumable"] = job.IsResumable
+        };
+        if (results > 0)
+        {
+            dto["results"] = job.Steps.Where(s => s.Result != null).OrderByDescending(s => s.Index).Take(results)
+                .Select(s => new Dictionary<string, object?> { ["index"] = s.Index + 1, ["result"] = s.Result }).ToList();
+        }
+        return dto;
+    }
+
+    private static string Camel(string name) => name.Length == 0 ? name : char.ToLowerInvariant(name[0]) + name.Substring(1);
+
     /// <summary>"Stops on the first failure or the first new Revit error." and the like.</summary>
     public static string StopLine(JobStopConditions stop)
     {

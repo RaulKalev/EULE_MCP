@@ -50,6 +50,7 @@
     <Compile Include="..\RevitMCP.Addin\Jobs\JobJournalStore.cs" Link="Jobs\JobJournalStore.cs" />
     <Compile Include="..\RevitMCP.Addin\Jobs\JobReportHtml.cs" Link="Jobs\JobReportHtml.cs" />
     <Compile Include="..\RevitMCP.Addin\Jobs\JobSummary.cs" Link="Jobs\JobSummary.cs" />
+    <Compile Include="..\RevitMCP.Addin\Jobs\JobService.cs" Link="Jobs\JobService.cs" />
     <!-- Usage reporting: shared copy, aggregation, time saved, costs, report files (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Usage\UsageSettings.cs" Link="Usage\UsageSettings.cs" />
     <Compile Include="..\RevitMCP.Addin\Usage\UsageShare.cs" Link="Usage\UsageShare.cs" />

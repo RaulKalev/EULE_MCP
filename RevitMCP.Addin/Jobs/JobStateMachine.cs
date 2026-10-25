@@ -55,6 +55,10 @@ public static class JobStateMachine
             case StepOutcome.Skipped:
                 step.State = JobStepState.Skipped;
                 break;
+            case StepOutcome.Failed when job.PendingControl == "cancel":
+                // The step was cut short by the cancel (an approval wait ended): that is a cancel, not a failure.
+                step.State = JobStepState.Cancelled;
+                return JobDecision.Halt(JobState.Cancelled, "cancelled");
             case StepOutcome.Failed:
                 step.State = JobStepState.Failed;
                 if (!step.ContinueOnError && job.Stop.StopOnFailure)
