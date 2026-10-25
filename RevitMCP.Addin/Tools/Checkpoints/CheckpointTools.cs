@@ -174,47 +174,13 @@ public sealed class CheckpointCreateTool : IRevitMcpTool
             Parameters = ToolArguments.GetStringArray(args, "parameters").Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
         };
 
-        var snapshot = new Dictionary<long, ElementSnapshot>();
-        if (!scope.IsEmpty)
-        {
-            var ids = CheckpointSnapshotReader.ResolveScope(uiapp, doc, target.IsActive, scope, out var scopeError);
-            if (ids == null) return Task.FromResult(CheckpointSupport.Fail(request, scopeError!));
-            var cap = QueryLimits.Default.MaxScanElements;
-            if (ids.Count > cap)
-                return Task.FromResult(CheckpointSupport.Fail(request,
-                    $"The scope resolves to {ids.Count:N0} elements; a snapshot holds at most {cap:N0}. Narrow it (elementIds, fewer categories, a view), or create the checkpoint without a scope to track change ids and warnings only.",
-                    CheckpointSupport.SnapshotTooLarge, new { elements = ids.Count, cap }));
-
-            var reader = new CheckpointSnapshotReader(doc);
-            foreach (var id in ids)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var snap = reader.Read(id, scope.Parameters.Count > 0 ? scope.Parameters : null);
-                if (snap != null) snapshot[id] = snap;
-            }
-            // Selection and views are resolved now; store the ids so a diff after a restart covers the same elements.
-            scope.ElementIds = snapshot.Keys.OrderBy(i => i).ToList();
-        }
-
-        var warnings = RevitWarningReader.Read(doc, out var unreadable);
         var client = string.IsNullOrWhiteSpace(request.ClientName) ? "agent" : request.ClientName.Trim();
-        var checkpoint = new Checkpoint
-        {
-            Id = CheckpointIds.NewId(),
-            Title = CheckpointStore.NormalizeTitle(ToolArguments.GetString(args, "title") is { Length: > 0 } t ? t : $"{client} {DateTime.Now:HH:mm}"),
-            ModelId = CheckpointChangeTracker.ModelIdOf(doc),
-            DocumentTitle = doc.Title,
-            CreatedAt = DateTimeOffset.Now,
-            DocumentVersion = DocumentChangeTracker.Capture(doc),
-            CreatedBy = client,
-            Warnings = warnings,
-            Scope = scope.IsEmpty ? null : scope,
-            Snapshot = snapshot
-        };
-
-        List<Checkpoint> evicted;
-        try { evicted = store!.Add(checkpoint); }
-        catch (ArgumentException ex) { return Task.FromResult(CheckpointSupport.Fail(request, ex.Message, "tool_execution_failed")); }
+        var title = ToolArguments.GetString(args, "title") is { Length: > 0 } t ? t : $"{client} {DateTime.Now:HH:mm}";
+        var checkpoint = CheckpointSupport.Create(uiapp, target, store!, scope, title, client, request, cancellationToken,
+            out var evicted, out var unreadable, out failure);
+        if (checkpoint == null) return Task.FromResult(failure!);
+        var snapshot = checkpoint.Snapshot;
+        var warnings = checkpoint.Warnings;
 
         var result = new McpToolResult
         {

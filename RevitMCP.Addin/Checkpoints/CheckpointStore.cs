@@ -179,6 +179,32 @@ public sealed class CheckpointStore : IDisposable
         ScheduleSave();
     }
 
+    /// <summary>
+    /// The batch count of every checkpoint of the model, so the batches of a call that was rolled back whole (a
+    /// plan violation, #99) can be dropped again with <see cref="ResetBatches"/>.
+    /// </summary>
+    public Dictionary<string, int> MarkBatches(string modelId)
+    {
+        lock (Gate) return Load(modelId).ToDictionary(cp => cp.Id, cp => cp.Batches.Count, StringComparer.Ordinal);
+    }
+
+    /// <summary>Drops batches recorded after <paramref name="mark"/>: the model is back where it was then.</summary>
+    public void ResetBatches(string modelId, IReadOnlyDictionary<string, int> mark)
+    {
+        var changed = false;
+        lock (Gate)
+        {
+            foreach (var cp in Load(modelId))
+            {
+                if (!mark.TryGetValue(cp.Id, out var count) || cp.Batches.Count <= count) continue;
+                cp.Batches.RemoveRange(count, cp.Batches.Count - count);
+                _dirty.Add(cp);
+                changed = true;
+            }
+        }
+        if (changed) ScheduleSave();
+    }
+
     /// <summary>Ids that no checkpoint of the model has an identity for yet (so the tracker reads only those).</summary>
     public List<long> MissingIdentities(string modelId, IEnumerable<long> ids)
     {

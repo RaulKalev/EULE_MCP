@@ -636,3 +636,29 @@ public class CheckpointDiffReportTests
         Assert.False(agentOnly.ContainsKey("added"));
     }
 }
+
+public class CheckpointStoreBatchMarkTests : IDisposable
+{
+    private readonly string _folder = Path.Combine(Path.GetTempPath(), "rmcp-cpm-" + Guid.NewGuid().ToString("N"));
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_folder, true); } catch { }
+    }
+
+    [Fact]
+    public void ResetDropsTheBatchesOfARolledBackCall()
+    {
+        using var store = new CheckpointStore(_folder, TimeSpan.FromMilliseconds(10));
+        var cp = new Checkpoint { Id = CheckpointIds.NewId(), ModelId = "m1", Title = "t", CreatedAt = DateTimeOffset.Now };
+        store.Add(cp);
+        store.Record("m1", new ChangeBatch { Modified = new[] { 1L } }, null);
+
+        var mark = store.MarkBatches("m1");
+        store.Record("m1", new ChangeBatch { Added = new[] { 2L } }, null);
+        store.Record("m1", new ChangeBatch { Deleted = new[] { 2L }, Operation = "TransactionUndone" }, null);
+        store.ResetBatches("m1", mark);
+
+        Assert.Single(store.Find("m1", cp.Id)!.Batches);
+    }
+}

@@ -44,4 +44,60 @@ public static class PlanSummary
         sb.Append("Everything runs without further prompts inside these limits and is undoable per call; a checkpoint is created for review and rollback.");
         return sb.ToString();
     }
+
+    /// <summary>A plan's state, counters and remaining budget, as revit_plan_status returns it.</summary>
+    public static Dictionary<string, object?> Describe(Plan plan, DateTimeOffset now)
+    {
+        var env = plan.Envelope;
+        return new Dictionary<string, object?>
+        {
+            ["planId"] = plan.Id,
+            ["title"] = plan.Title,
+            ["state"] = plan.State.ToString().ToLowerInvariant(),
+            ["stateReason"] = plan.StateReason,
+            ["document"] = plan.DocumentTitle,
+            ["client"] = plan.ClientName,
+            ["checkpointId"] = plan.CheckpointId,
+            ["activatedAt"] = plan.ActivatedAt,
+            ["expiresAt"] = plan.ExpiresAt,
+            ["expiresInMinutes"] = plan.ExpiresAt is { } at && !plan.IsEnded ? Math.Max(0, Math.Round((at - now).TotalMinutes, 1)) : null,
+            ["counters"] = new Dictionary<string, object?>
+            {
+                ["calls"] = plan.Calls,
+                ["touched"] = plan.Touched.Count,
+                ["added"] = plan.Added,
+                ["modified"] = plan.Modified,
+                ["deleted"] = plan.Deleted
+            },
+            ["remaining"] = new Dictionary<string, object?>
+            {
+                ["calls"] = Math.Max(0, env.MaxCalls - plan.Calls),
+                ["elements"] = Math.Max(0, env.MaxElementsTotal - plan.Touched.Count)
+            },
+            ["envelope"] = new Dictionary<string, object?>
+            {
+                ["tools"] = env.Tools,
+                ["elementIds"] = env.ElementIds.Count,
+                ["categories"] = env.Categories.ToList(),
+                ["levelIds"] = env.LevelIds.ToList(),
+                ["viewIds"] = env.ViewIds.ToList(),
+                ["worksets"] = env.Worksets.ToList(),
+                ["allowCreate"] = env.AllowCreate,
+                ["allowModify"] = env.AllowModify,
+                ["maxElementsPerCall"] = env.MaxElementsPerCall,
+                ["maxElementsTotal"] = env.MaxElementsTotal,
+                ["maxCalls"] = env.MaxCalls,
+                ["strict"] = env.Strict
+            },
+            ["violations"] = plan.Violations.Count,
+            ["recentViolations"] = plan.Violations.Skip(Math.Max(0, plan.Violations.Count - 10)).Select(v => new Dictionary<string, object?>
+            {
+                ["at"] = v.At,
+                ["tool"] = v.Tool,
+                ["kind"] = v.Kind,
+                ["reason"] = v.Reason,
+                ["ids"] = v.Ids.Take(20).ToList()
+            }).ToList()
+        };
+    }
 }

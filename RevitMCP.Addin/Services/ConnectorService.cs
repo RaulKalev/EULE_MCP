@@ -63,6 +63,7 @@ public class ConnectorService
     public void PanicStop()
     {
         _approvalService?.RejectAll();
+        RevitMCP.Addin.Plans.PlanService.Current?.RevokeAll("Panic Stop");
         _eventService.CancelAllPending("Request cancelled by Panic Stop.");
         _pipeServer.Stop();
         _registration?.Unregister();
