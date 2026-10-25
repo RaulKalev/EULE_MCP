@@ -118,6 +118,15 @@ internal sealed class AuditContext
         }
 
         var devices = DeviceAudit.Inventory(doc, codes, DeviceAudit.Codes(args), [], warnings);
+        if (filter.LevelName.Length > 0)
+        {
+            // levelName limits the rooms, so it limits the devices too: devices of other storeys would
+            // otherwise all be reported as outside every room.
+            var total = devices.Count;
+            devices = devices.Where(d => RoomAuditMath.OnStorey(index.Candidates, d.ZMm, d.Level != null ? d.LevelElevationMm : null)).ToList();
+            if (devices.Count < total)
+                warnings.Add($"levelName '{filter.LevelName}': {total - devices.Count} device(s) on other levels were left out.");
+        }
         foreach (var d in devices) index.Locate(d);
         return new AuditContext { Codes = codes, Index = index, Devices = devices };
     }
@@ -211,7 +220,8 @@ public sealed class CheckDevicesPerRoomTool : IRevitMcpTool
         "level, ceiling: gap below the linked ceiling). rules=[{code, min?, max?, roomFilter? (name regex), " +
         "excludeRoomFilter?, roomNumbers?, minAreaM2?, maxAreaM2?}] — e.g. every room needs ATS_SA ≥ 1 except WCs under " +
         "4 m²: {code:'ATS_SA', min:1, minAreaM2:4} plus {code:'ATS_SA', min:1, excludeRoomFilter:'WC'}. " +
-        "Rooms from source/linkInstanceId (levelName); devices from the device code map (codes[] limits the codes).";
+        "Rooms from source/linkInstanceId (levelName limits rooms and devices); devices from the device code map (codes[] " +
+        "limits the codes). devicesOutsideRooms lists the first 50; devicesOutsideRoomsTotal counts all.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Elements;
 
@@ -270,16 +280,20 @@ public sealed class CheckDevicesPerRoomTool : IRevitMcpTool
             });
         }
 
-        var outside = audit.Devices.Where(d => d.RoomIndex < 0).Select(d => new
+        var maxOutside = RoomAuditMath.MaxListedOutsideRooms;
+        var outsideTotal = audit.Devices.Count(d => d.RoomIndex < 0);
+        var outside = audit.Devices.Where(d => d.RoomIndex < 0).Take(maxOutside).Select(d => new
         {
             elementId = d.Id,
             deviceCode = d.Code?.Code,
             point = d.PointPayload()
         }).ToList();
+        if (outsideTotal > outside.Count)
+            warnings.Add($"{outsideTotal} device(s) are outside every room; only the first {outside.Count} are listed (devicesOutsideRoomsTotal).");
 
         sw.Stop();
         return Task.FromResult(RoomToolSupport.Ok(request, sw,
-            $"{findings.Count} rule violation(s), {outside.Count} device(s) outside rooms, {heightIssues.Count} height issue(s) " +
+            $"{findings.Count} rule violation(s), {outsideTotal} device(s) outside rooms, {heightIssues.Count} height issue(s) " +
             $"— {audit.Devices.Count} device(s) in {audit.Index.Rooms.Count} room(s).",
             new
             {
@@ -303,6 +317,7 @@ public sealed class CheckDevicesPerRoomTool : IRevitMcpTool
                     max = f.Max,
                     kind = f.Kind
                 }).ToList(),
+                devicesOutsideRoomsTotal = outsideTotal,
                 devicesOutsideRooms = outside,
                 heightDeviations = heightIssues
             },
@@ -322,7 +337,9 @@ public sealed class CheckDeviceAlignmentTool : IRevitMcpTool
         "offsetFromCeilingMm; floor: height above level vs heightMm. Devices outside every room are listed too. " +
         "toleranceMm (default 20). Returns suggestedMoves ready for revit_preview_move_elements / revit_move_elements " +
         "(targets + expected current coordinates); revit_align_elements is the alternative for snapping to surfaces. " +
-        "Rooms from source/linkInstanceId (levelName); devices from the device code map (codes[] limits the codes).";
+        "Rooms from source/linkInstanceId (levelName limits rooms and devices); devices from the device code map (codes[] " +
+        "limits the codes). issues lists the first 50 devices outside every room; " +
+        "devicesOutsideRoomsTotal counts all.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Elements;
 
@@ -343,12 +360,15 @@ public sealed class CheckDeviceAlignmentTool : IRevitMcpTool
         var moves = new List<object>();
         var notes = new Dictionary<string, int>();
         int ok = 0;
+        var maxOutside = RoomAuditMath.MaxListedOutsideRooms;
+        int outsideTotal = 0;
 
         foreach (var d in audit.Devices.Where(d => d.Code != null))
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (d.RoomIndex < 0)
             {
+                if (outsideTotal++ >= maxOutside) continue;
                 issues.Add(new
                 {
                     elementId = d.Id,
@@ -404,14 +424,18 @@ public sealed class CheckDeviceAlignmentTool : IRevitMcpTool
         }
 
         warnings.AddRange(notes.Select(n => $"{n.Key} ({n.Value} device(s))"));
+        if (outsideTotal > maxOutside)
+            warnings.Add($"{outsideTotal} device(s) are outside every room; only the first {maxOutside} are listed in issues.");
+        var offMount = issues.Count - Math.Min(outsideTotal, maxOutside);
         sw.Stop();
         return Task.FromResult(RoomToolSupport.Ok(request, sw,
-            $"{issues.Count} device(s) off their mount, {ok} aligned (tolerance {tolerance:0.#} mm).",
+            $"{offMount} device(s) off their mount, {outsideTotal} outside every room, {ok} aligned (tolerance {tolerance:0.#} mm).",
             new
             {
                 source = audit.Index.Service.Source.Label,
                 devicesChecked = audit.Devices.Count(d => d.Code != null),
                 aligned = ok,
+                devicesOutsideRoomsTotal = outsideTotal,
                 issues,
                 suggestedMoves = moves
             },
