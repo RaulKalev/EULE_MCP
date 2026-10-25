@@ -422,6 +422,23 @@ public class App : IExternalApplication
             handler.RegisterTool(new GraphSummaryTool());
             handler.RegisterTool(new GraphRouteTool());
 
+            // Checkpoints (Checkpoints\, docs/checkpoints.md, #98): Revit warnings, change diff and rollback.
+            try
+            {
+                RevitMCP.Addin.Checkpoints.CheckpointChangeTracker.Store = new RevitMCP.Addin.Checkpoints.CheckpointStore(
+                    System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RevitMCP", "Checkpoints"));
+            }
+            catch (Exception ex)
+            {
+                DiagLog($"Checkpoint store unavailable: {ex.Message}");
+            }
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Checkpoints.GetWarningsTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Checkpoints.CheckpointCreateTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Checkpoints.CheckpointListTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Checkpoints.CheckpointDiffTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Checkpoints.PreviewCheckpointRollbackTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Checkpoints.CheckpointRollbackTool());
+
             var eventService = new ExternalEventService(handler);
 
             var approvalService = new ApprovalService();
@@ -548,6 +565,8 @@ public class App : IExternalApplication
         try { _village?.Dispose(); } catch { }
         try { _modelPages?.Dispose(); } catch { }
         try { _memory?.Dispose(); } catch { }
+        try { RevitMCP.Addin.Checkpoints.CheckpointChangeTracker.Store?.Dispose(); } catch { }
+        RevitMCP.Addin.Checkpoints.CheckpointChangeTracker.Store = null;
         _connector?.PanicStop();
         return Result.Succeeded;
     }
@@ -556,6 +575,7 @@ public class App : IExternalApplication
     {
         DocumentChangeTracker.MarkChanged(e.GetDocument());
         RevitMCP.Addin.Graph.GraphChangeTracker.Record(e);
+        RevitMCP.Addin.Checkpoints.CheckpointChangeTracker.Record(e);
     }
 
     private static void AddRibbonButton(UIControlledApplication application)

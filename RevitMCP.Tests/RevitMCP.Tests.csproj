@@ -32,6 +32,7 @@
     <Compile Include="..\RevitMCP.Addin\Checkpoints\WarningDiff.cs" Link="Checkpoints\WarningDiff.cs" />
     <Compile Include="..\RevitMCP.Addin\Checkpoints\CheckpointDiff.cs" Link="Checkpoints\CheckpointDiff.cs" />
     <Compile Include="..\RevitMCP.Addin\Checkpoints\RollbackPlanner.cs" Link="Checkpoints\RollbackPlanner.cs" />
+    <Compile Include="..\RevitMCP.Addin\Checkpoints\CheckpointDiffReport.cs" Link="Checkpoints\CheckpointDiffReport.cs" />
     <!-- Usage reporting: shared copy, aggregation, time saved, costs, report files (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Usage\UsageSettings.cs" Link="Usage\UsageSettings.cs" />
     <Compile Include="..\RevitMCP.Addin\Usage\UsageShare.cs" Link="Usage\UsageShare.cs" />

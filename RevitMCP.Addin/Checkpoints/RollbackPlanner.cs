@@ -41,6 +41,9 @@ public sealed class RollbackValue
     /// <summary>The value at checkpoint time; empty when the parameter had none.</summary>
     public string Value { get; set; } = string.Empty;
     public string? Current { get; set; }
+
+    /// <summary>The checkpoint-time stored value (<see cref="RawParameterValue"/>).</summary>
+    public string Raw { get; set; } = string.Empty;
 }
 
 public sealed class RollbackLocation
@@ -141,7 +144,19 @@ public static class RollbackPlanner
         if (wantsValues)
         {
             foreach (var p in delta.Parameters)
-                plan.Values.Add(new RollbackValue { Id = entry.Id, Parameter = p.Name, Value = p.Before ?? string.Empty, Current = p.Now });
+            {
+                if (!before.Raw.TryGetValue(p.Name, out var raw) || !RawParameterValue.TryParse(raw, out var kind, out _))
+                {
+                    plan.Skipped.Add(Skip(entry.Id, "restoreValues", $"'{p.Name}' is read-only or a type parameter and cannot be restored"));
+                    continue;
+                }
+                if (kind == 'E')
+                {
+                    plan.Skipped.Add(Skip(entry.Id, "restoreValues", $"'{p.Name}' holds an element reference; set it back with revit_set_parameter"));
+                    continue;
+                }
+                plan.Values.Add(new RollbackValue { Id = entry.Id, Parameter = p.Name, Value = p.Before ?? string.Empty, Current = p.Now, Raw = raw });
+            }
         }
 
         if (wantsLocation)

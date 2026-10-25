@@ -70,6 +70,35 @@ public sealed class ElementSnapshot : ElementIdentity
 
     /// <summary>Parameter name → value as display string (the formatting of revit_get_element_parameters).</summary>
     [JsonProperty("parameters")] public Dictionary<string, string?> Parameters { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Parameter name → stored value in internal units, encoded by <see cref="RawParameterValue"/>, for an exact
+    /// restore. Absent for read-only parameters, which cannot be restored.
+    /// </summary>
+    [JsonProperty("raw")] public Dictionary<string, string> Raw { get; set; } = new(StringComparer.Ordinal);
+}
+
+/// <summary>
+/// A parameter's stored value as text: "S:" string, "I:" integer, "D:" double in internal units (round-trip),
+/// "E:" element id. Restoring from it never goes through display-unit parsing.
+/// </summary>
+public static class RawParameterValue
+{
+    public static string String(string? value) => "S:" + (value ?? string.Empty);
+    public static string Integer(int value) => "I:" + value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    public static string Double(double value) => "D:" + value.ToString("R", System.Globalization.CultureInfo.InvariantCulture);
+    public static string ElementId(long value) => "E:" + value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>Splits an encoded value into its kind (S, I, D, E) and text; false for anything malformed.</summary>
+    public static bool TryParse(string? raw, out char kind, out string text)
+    {
+        kind = '\0';
+        text = string.Empty;
+        if (raw == null || raw.Length < 2 || raw[1] != ':' || "SIDE".IndexOf(raw[0]) < 0) return false;
+        kind = raw[0];
+        text = raw.Substring(2);
+        return true;
+    }
 }
 
 /// <summary>The identity of one Revit warning across snapshots.</summary>

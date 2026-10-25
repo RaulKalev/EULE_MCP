@@ -283,7 +283,45 @@ public class RollbackPlannerTests
     }
 
     private static ElementSnapshot Snap(string mark, double x = 0)
-        => new() { Category = "Electrical Fixtures", LocationMm = new[] { x, 0.0, 0.0 }, Parameters = { ["Mark"] = mark } };
+        => new()
+        {
+            Category = "Electrical Fixtures",
+            LocationMm = new[] { x, 0.0, 0.0 },
+            Parameters = { ["Mark"] = mark },
+            Raw = { ["Mark"] = RawParameterValue.String(mark) }
+        };
+
+    [Fact]
+    public void ParametersWithoutAStoredValueOrWithElementIdsAreNotRestored()
+    {
+        var before = Snap("A");
+        before.Parameters["Area"] = "12 m²";                       // read-only: no raw value stored
+        before.Parameters["Wire Type"] = "Cu 3x1.5";
+        before.Raw["Wire Type"] = RawParameterValue.ElementId(77);
+        var now = Snap("A");
+        now.Parameters["Area"] = "14 m²";
+        now.Parameters["Wire Type"] = "Cu 3x2.5";
+        var cp = CheckpointWith((1, before));
+        cp.Batches.Add(new ChangeBatch { Attribution = "agent:revit_set_parameter", Modified = new[] { 1L } });
+        var diff = DiffFor(cp, new() { [1] = now });
+
+        var plan = RollbackPlanner.Plan(diff, cp, new RollbackOptions());
+
+        Assert.Empty(plan.Values);
+        Assert.Contains(plan.Skipped, s => s.Reason.Contains("'Area'"));
+        Assert.Contains(plan.Skipped, s => s.Reason.Contains("element reference"));
+    }
+
+    [Fact]
+    public void RawValuesRoundTrip()
+    {
+        Assert.True(RawParameterValue.TryParse(RawParameterValue.Double(0.1 + 0.2), out var kind, out var text));
+        Assert.Equal('D', kind);
+        Assert.Equal(0.1 + 0.2, double.Parse(text, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.True(RawParameterValue.TryParse(RawParameterValue.String(null), out kind, out text));
+        Assert.Equal(('S', ""), (kind, text));
+        Assert.False(RawParameterValue.TryParse("X:1", out _, out _));
+    }
 
     private static CheckpointDiff DiffFor(Checkpoint cp, Dictionary<long, ElementSnapshot?> now)
         => CheckpointDiffBuilder.Build(cp, SnapshotDiff.CompareAll(cp.Snapshot, id => now.TryGetValue(id, out var s) ? s : null));
@@ -325,6 +363,7 @@ public class RollbackPlannerTests
         var value = Assert.Single(plan.Values);
         Assert.Equal("Mark", value.Parameter);
         Assert.Equal("A", value.Value);
+        Assert.Equal("S:A", value.Raw);
         Assert.False(RollbackOptions.TryParseWhat(new[] { "recreate" }, new RollbackOptions(), out var unknown));
         Assert.Equal("recreate", unknown);
     }
@@ -537,5 +576,63 @@ public class CheckpointStoreTests : IDisposable
         using var store = new CheckpointStore(_folder);
         var cp = New("../evil");
         Assert.Throws<ArgumentException>(() => store.Add(cp));
+    }
+}
+
+public class CheckpointDiffReportTests
+{
+    [Fact]
+    public void SummaryCountsAndRestoredElementsAreNotModified()
+    {
+        var cp = new Checkpoint { Id = "cp-0000aa", ModelId = "m", Title = "Before", CreatedAt = DateTimeOffset.Now.AddMinutes(-5) };
+        cp.Snapshot[1] = new ElementSnapshot { Category = "Electrical Fixtures", Parameters = { ["Mark"] = "A" }, Raw = { ["Mark"] = "S:A" } };
+        cp.Snapshot[2] = new ElementSnapshot { Category = "Electrical Fixtures", Parameters = { ["Mark"] = "B" }, Raw = { ["Mark"] = "S:B" } };
+        cp.Batches.Add(new ChangeBatch { Attribution = "agent:revit_set_parameter", Operation = "TransactionCommitted", TransactionNames = { "Revit MCP - Set Parameter" }, Modified = new[] { 1L, 2L } });
+        cp.Batches.Add(new ChangeBatch { Attribution = "user", Operation = "TransactionCommitted", TransactionNames = { "Text" }, Added = new[] { 9L } });
+        cp.Identities[9] = new ElementIdentity { Category = "Text Notes" };
+        var now = new Dictionary<long, ElementSnapshot>
+        {
+            [1] = new() { Parameters = { ["Mark"] = "A2" } },
+            [2] = new() { Parameters = { ["Mark"] = "B" } }   // set back by hand: touched but unchanged
+        };
+        var diff = CheckpointDiffBuilder.Build(cp, SnapshotDiff.CompareAll(cp.Snapshot, id => now[id]));
+        var warnings = WarningDiff.Compare(Array.Empty<WarningKey>(), new[] { new WarningKey { DefinitionId = "d", Description = "Overlap", Severity = "Error", ElementIds = new[] { 1L } } });
+
+        var report = CheckpointDiffReport.Build(cp, diff, warnings, new DiffReportOptions { Include = "elements" }, DateTimeOffset.Now);
+
+        var counts = (Dictionary<string, object?>)report["counts"]!;
+        Assert.Equal(1, counts["added"]);
+        Assert.Equal(1, counts["modified"]);
+        Assert.Equal(1, counts["touchedButUnchanged"]);
+        var byCategory = (Dictionary<string, int>)counts["byCategory"]!;
+        Assert.Equal(1, byCategory["Text Notes"]);
+        var modified = (List<Dictionary<string, object?>>)report["modified"]!;
+        Assert.Equal(1L, Assert.Single(modified)["id"]);
+        Assert.Equal(1, ((Dictionary<string, object?>)report["warnings"]!)["newErrors"]);
+        var undo = (Dictionary<string, object?>)report["undo"]!;
+        Assert.Equal(new[] { "Revit MCP - Set Parameter", "Text" }, (List<string>)undo["transactionNames"]!);
+        var can = (Dictionary<string, object?>)undo["rollbackCanRestore"]!;
+        Assert.Equal(1, can["restoreValues"]);
+        Assert.Equal(0, can["deleteAdded"]);   // the text note was the user's
+    }
+
+    [Fact]
+    public void AttributionAndCategoryFilters()
+    {
+        var cp = new Checkpoint { Id = "cp-0000ab", ModelId = "m", Title = "t" };
+        cp.Batches.Add(new ChangeBatch { Attribution = "agent:revit_place_tags", Added = new[] { 1L, 2L } });
+        cp.Batches.Add(new ChangeBatch { Attribution = "user", Added = new[] { 3L } });
+        cp.Identities[1] = new ElementIdentity { Category = "Electrical Fixture Tags" };
+        cp.Identities[2] = new ElementIdentity { Category = "Text Notes" };
+        var diff = CheckpointDiffBuilder.Build(cp, new Dictionary<long, ElementDelta>());
+
+        var agentOnly = CheckpointDiffReport.Build(cp, diff, null, new DiffReportOptions { Attribution = "agent" }, DateTimeOffset.Now);
+        var tagsOnly = CheckpointDiffReport.Build(cp, diff, null,
+            new DiffReportOptions { Categories = new HashSet<string> { "Electrical Fixture Tags" } }, DateTimeOffset.Now);
+
+        Assert.Equal(2, ((Dictionary<string, object?>)agentOnly["counts"]!)["added"]);
+        Assert.Single((List<object>)agentOnly["transactions"]!);
+        Assert.Equal(1, ((Dictionary<string, object?>)tagsOnly["counts"]!)["added"]);
+        Assert.False(agentOnly.ContainsKey("added"));
     }
 }

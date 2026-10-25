@@ -61,6 +61,8 @@ public static class ApprovalSummaryBuilder
             "revit_delete_views"                => BuildDeleteViews(request),
             "revit_delete_sheets"               => BuildDeleteSheets(request),
             "revit_delete_elements"             => BuildDeleteElements(request),
+            // Normally built live by CheckpointRollbackTool (IApprovalSummaryTool); this is the fallback.
+            "revit_checkpoint_rollback"         => BuildCheckpointRollback(request),
             // Element alignment and DWG-driven placement
             "revit_align_elements"              => BuildAlignElements(request),
             "revit_align_in_view"               => BuildAlignInView(request),
@@ -860,6 +862,14 @@ public static class ApprovalSummaryBuilder
     {
         var elementCount = ToolArguments.GetLongArray(request.Arguments, "elementIds").Distinct().Count();
         return $"DESTRUCTIVE: Delete {elementCount} element{(elementCount == 1 ? "" : "s")} plus dependent elements. Manual approval required.";
+    }
+
+    private static string BuildCheckpointRollback(McpToolRequest request)
+    {
+        var id = ToolArguments.GetString(request.Arguments, "checkpointId");
+        var force = ToolArguments.GetBool(request.Arguments, "force") ? " including elements the user changed (force)" : string.Empty;
+        return $"DESTRUCTIVE: Rollback to checkpoint {id}{force}: delete elements added since, restore snapshotted values and locations. " +
+               "Deleted elements are NOT restored. Reversible with one Revit undo.";
     }
 
     private static string BuildMemoryRemember(McpToolRequest request)

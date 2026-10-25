@@ -136,12 +136,15 @@ public class ExternalEventHandler : IExternalEventHandler
                 }
                 var disposeAfterExecute = true;
                 _activeTool = new ActiveToolInfo(item.Request.ToolName, DateTime.UtcNow);
+                // Attributes model changes made during this call to the tool (#98 checkpoints).
+                RevitMCP.Addin.Checkpoints.ActiveToolProbe.Begin(item.Request.ToolName, item.Request.ClientName);
                 try
                 {
                     disposeAfterExecute = ExecuteItem(app, item!);
                 }
                 finally
                 {
+                    RevitMCP.Addin.Checkpoints.ActiveToolProbe.End();
                     _activeTool = null;
                     Interlocked.Exchange(ref _lastExecuteTicks, DateTime.UtcNow.Ticks);
                     if (disposeAfterExecute)
@@ -254,7 +257,9 @@ public class ExternalEventHandler : IExternalEventHandler
             && _approvalService != null;
         if (needsApproval)
         {
-            var summary = ApprovalSummaryBuilder.Build(request);
+            string? liveSummary = null;
+            try { liveSummary = (tool as IApprovalSummaryTool)?.BuildApprovalSummary(app, request); } catch { }
+            var summary = liveSummary ?? ApprovalSummaryBuilder.Build(request);
             var approvalDocument = RevitDocumentResolver.ResolveApprovalDocument(app, request);
             if (approvalDocument == null && tool is not IBackgroundMcpTool &&
                 !string.IsNullOrWhiteSpace(ToolArguments.GetString(request.Arguments, RevitDocumentResolver.ArgumentName)))
