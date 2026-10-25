@@ -122,6 +122,13 @@ public static class MoveStatus
     public const string OutOfViewPlane = "OutOfViewPlane";
 
     public const string Moved = "Moved";
+
+    /// <summary>
+    /// A group instance that moved as a whole, its members with it (#108). Set once the transaction has
+    /// committed; counted with <see cref="Moved"/> in the summary.
+    /// </summary>
+    public const string GroupMoved = "GroupMoved";
+
     public const string Failed = "Failed";
 
     /// <summary>Moved during the transaction, then undone because atomic=true and something failed.</summary>
@@ -168,6 +175,9 @@ public sealed class MovePlan
 
     /// <summary>The group the element belongs to, when it is a group member.</summary>
     public long? GroupId { get; set; }
+
+    /// <summary>True when the element is a group instance: the whole group moves (#108).</summary>
+    public bool IsGroupInstance { get; set; }
 
     /// <summary>Insertion point after the move, read back from the model. Point-located elements only.</summary>
     public PointMm? ResultPointMm { get; set; }
@@ -481,11 +491,44 @@ public static class MoveElementsMath
         DistanceMm = plan.DistanceMm,
         Pinned = plan.Pinned,
         StaleDeviationMm = plan.StaleDeviationMm,
+        IsGroupInstance = plan.IsGroupInstance,
         CanMove = false,
         IsFailure = true,
         Status = status,
         Reason = reason
     };
+
+    /// <summary>
+    /// The sentence a group member is reported with by the move, rotate and copy tools (#108): which group, and that
+    /// passing the group id acts on the whole group.
+    /// </summary>
+    public static string GroupMemberReason(long groupId, string? groupName, string verb = "move") =>
+        $"This element is a member of group '{groupName ?? string.Empty}' (id {groupId}). Revit only {verb}s group " +
+        $"members in group edit mode — pass the group id {groupId} to {verb} the whole group, or ungroup first.";
+
+    /// <summary>A group member's plan: blocked as <see cref="MoveStatus.InGroup"/>, with the group id and the hint.</summary>
+    public static MovePlan BlockedAsGroupMember(MovePlan plan, long groupId, string? groupName)
+    {
+        var blocked = Blocked(plan, MoveStatus.InGroup, GroupMemberReason(groupId, groupName));
+        blocked.GroupId = groupId;
+        return blocked;
+    }
+
+    /// <summary>
+    /// After a committed move: every group instance that moved is reported as <see cref="MoveStatus.GroupMoved"/>, so
+    /// the result says the whole group went, not one element. Returns how many were relabelled.
+    /// </summary>
+    public static int MarkGroupMoves(IEnumerable<MovePlan> plans)
+    {
+        var count = 0;
+        foreach (var plan in plans)
+        {
+            if (plan.Status != MoveStatus.Moved || !plan.IsGroupInstance) continue;
+            plan.Status = MoveStatus.GroupMoved;
+            count++;
+        }
+        return count;
+    }
 
     public static MovePlan Missing(long elementId) => new()
     {
@@ -522,6 +565,7 @@ public static class MoveElementsMath
             var bucket = plan.Status switch
             {
                 MoveStatus.Moved => summary.Moved,
+                MoveStatus.GroupMoved => summary.Moved,
                 MoveStatus.Ready => summary.Ready,
                 MoveStatus.AlreadyThere => summary.Skipped,
                 MoveStatus.Stale => summary.Stale,

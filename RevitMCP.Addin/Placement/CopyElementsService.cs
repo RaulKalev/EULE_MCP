@@ -116,8 +116,14 @@ internal static class CopyElementsService
             batch.Items.Add(item);
 
             if (item.Source.GroupId.HasValue)
-                item.Notes.Add($"Member of group {item.Source.GroupId}: only this member is copied, not the group. " +
-                               "Copy the group instance to copy the whole group.");
+                item.Notes.Add($"InGroup: member of group {item.Source.GroupId}. Only this member is copied, not the group — " +
+                               $"pass the group id {item.Source.GroupId} to copy the whole group.");
+            if (element is Group group)
+            {
+                item.IsGroupInstance = true;
+                item.Notes.Add($"Group instance: the whole group is copied (a new instance of group type '{Safe(() => group.GroupType?.Name) ?? string.Empty}' " +
+                               $"with its {MoveElementsService.MemberCount(group)} member(s)); the copied members are listed as dependents.");
+            }
             if (item.Source.Pinned)
                 item.Notes.Add("The source is pinned. Copying does not move or unpin it.");
         }
@@ -307,7 +313,15 @@ internal static class CopyElementsService
         var t = batch.TranslationMm!.Value;
         var transform = Transform.CreateTranslation(new XYZ(
             MoveElementsMath.MmToFt(t.X), MoveElementsMath.MmToFt(t.Y), MoveElementsMath.MmToFt(t.Z)));
+        return CopySet(doc, batch, ids, transform);
+    }
 
+    /// <summary>
+    /// Copies <paramref name="ids"/> with the batch's operation (model or view path) and an explicit transform. Used
+    /// by the array tools (#108), which copy one set once per array step. Must run inside a transaction.
+    /// </summary>
+    public static List<ElementId> CopySet(Document doc, CopyBatch batch, List<ElementId> ids, Transform transform)
+    {
         var options = new CopyPasteOptions();
         options.SetDuplicateTypeNamesHandler(new UseDestinationTypes());
 

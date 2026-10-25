@@ -116,6 +116,9 @@ public sealed class CopyItem
     public ElementSnapshot? Source { get; set; }
     public string? OwnerViewName { get; set; }
 
+    /// <summary>True when the element is a group instance: the whole group is copied (#108).</summary>
+    public bool IsGroupInstance { get; set; }
+
     public string Status { get; set; } = CopyStatus.Ready;
     public string? Reason { get; set; }
     public bool IsFailure { get; set; }

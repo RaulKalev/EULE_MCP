@@ -335,6 +335,7 @@ internal static class CopyElementsExecutor
         ownerViewName = item.OwnerViewName,
         hostId = item.Source?.HostId,
         groupId = item.Source?.GroupId,
+        isGroupInstance = item.IsGroupInstance,
         pinned = item.Source?.Pinned,
         batch = item.BatchIndex >= 0 ? item.BatchIndex : (int?)null,
         status = item.Status,

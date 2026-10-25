@@ -266,4 +266,10 @@
     <Compile Include="..\RevitMCP.Addin\Geometry\LevelResolver.cs" Link="Geometry\LevelResolver.cs" />
     <Compile Include="..\RevitMCP.Addin\Geometry\GeometryArgs.cs" Link="Geometry\GeometryArgs.cs" />
   </ItemGroup>
+  <!-- Issue #108 (transforms and groups): pure mirror, array and group logic. -->
+  <ItemGroup>
+    <Compile Include="..\RevitMCP.Addin\Placement\MirrorMath.cs" Link="Placement\MirrorMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Placement\ArrayMath.cs" Link="Placement\ArrayMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Placement\GroupSupport.cs" Link="Placement\GroupSupport.cs" />
+  </ItemGroup>
 </Project>

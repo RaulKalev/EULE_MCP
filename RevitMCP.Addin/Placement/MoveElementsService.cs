@@ -89,6 +89,16 @@ internal static class MoveElementsService
 
         // Checked after the maths so the response still shows where the element is and how far it
         // was asked to go. A stale, missing or unsupported entry keeps its own, more basic, reason.
+        // A group instance (#108) moves as a whole: its LocationPoint is the group origin, and
+        // ElementTransformUtils moves every member with it. A nested group is still a member of its
+        // parent and is blocked below like any other member.
+        if (element is Group group)
+        {
+            plan.IsGroupInstance = true;
+            if (plan.CanMove && element.GroupId == ElementId.InvalidElementId)
+                plan.Reason = $"Group instance: the whole group moves, with its {MemberCount(group)} member(s).";
+        }
+
         if (plan.CanMove)
             plan = ApplyConstraints(doc, element, plan, ownerView, FrameOf(ownerView));
 
@@ -174,11 +184,7 @@ internal static class MoveElementsService
             try { groupName = doc.GetElement(element.GroupId)?.Name ?? string.Empty; }
             catch { /* the name is a courtesy */ }
 
-            var blocked = MoveElementsMath.Blocked(plan, MoveStatus.InGroup,
-                $"This element is a member of group '{groupName}' (id {element.GroupId.Value}). Revit only moves group " +
-                "members in group edit mode — move the group instance itself, or ungroup first.");
-            blocked.GroupId = element.GroupId.Value;
-            return blocked;
+            return MoveElementsMath.BlockedAsGroupMember(plan, element.GroupId.Value, groupName);
         }
 
         if (ownerView != null && ownerFrame != null && plan.TranslationMm.HasValue)
@@ -263,6 +269,16 @@ internal static class MoveElementsService
               "a host, constraint or work plane held it. Check the result."
             : null;
     }
+
+    /// <summary>How many members a group instance has. 0 when Revit will not say.</summary>
+    public static int MemberCount(Group group)
+    {
+        try { return group.GetMemberIds()?.Count ?? 0; }
+        catch { return 0; }
+    }
+
+    /// <summary>The view that owns a view-specific element, or null for a model element (shared with mirror and array, #108).</summary>
+    public static View? OwnerViewOf(Document doc, Element element) => OwnerView(doc, element);
 
     private static View? OwnerView(Document doc, Element element)
     {
