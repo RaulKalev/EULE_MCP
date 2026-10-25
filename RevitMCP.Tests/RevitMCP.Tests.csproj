@@ -248,4 +248,12 @@
     <!-- Project Village: only the add-in-side graph reader is linked here; the rest of the module comes from the RevitMCP.Village project reference above. -->
     <Compile Include="..\RevitMCP.Addin\Village\VillageGraphReader.cs" Link="Village\VillageGraphReader.cs" />
   </ItemGroup>
+  <!-- #106 MEP routing: run spec parsing, polyline planning, connect geometry and summary grouping (no Revit API) -->
+  <ItemGroup>
+    <Compile Include="..\RevitMCP.Addin\Mep\MepPoint.cs" Link="Mep\MepPoint.cs" />
+    <Compile Include="..\RevitMCP.Addin\Mep\MepRunSpec.cs" Link="Mep\MepRunSpec.cs" />
+    <Compile Include="..\RevitMCP.Addin\Mep\MepRunPlanner.cs" Link="Mep\MepRunPlanner.cs" />
+    <Compile Include="..\RevitMCP.Addin\Mep\MepConnectMath.cs" Link="Mep\MepConnectMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Mep\MepRunSummaryMath.cs" Link="Mep\MepRunSummaryMath.cs" />
+  </ItemGroup>
 </Project>
