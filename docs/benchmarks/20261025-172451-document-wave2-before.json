@@ -1,0 +1,43 @@
+{
+  "Label": "document-wave2-before",
+  "Model": "",
+  "StartedAt": "2026-10-25 17:24:28 \u002B02:00",
+  "BridgePath": "C:\\Users\\mibil\\AppData\\Local\\Temp\\claude\\C--Users-mibil-Documents-AntigravityGit-EULE-MCP--claude-worktrees-open-github-issues-40c955\\ed422e0a-7e5d-46a4-bea0-943bbf53be54\\scratchpad\\basew2\\RevitMCP.Bridge\\bin\\Release\\net8.0\\RevitMCP.Bridge.exe",
+  "Schemas": [
+    {
+      "Profile": "full",
+      "ToolCount": 300,
+      "SchemaBytes": 391304,
+      "SchemaTokens": 97826,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "core",
+      "ToolCount": 21,
+      "SchemaBytes": 25130,
+      "SchemaTokens": 6283,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "query",
+      "ToolCount": 38,
+      "SchemaBytes": 42861,
+      "SchemaTokens": 10716,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "read-only",
+      "ToolCount": 201,
+      "SchemaBytes": 247551,
+      "SchemaTokens": 61888,
+      "InstructionTokens": 696,
+      "Error": null
+    }
+  ],
+  "GraphBuild": null,
+  "GraphIncremental": null,
+  "Scenarios": []
+}

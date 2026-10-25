@@ -76,8 +76,14 @@ document directly) and caps the direct uses left in `RevitMCP.Addin/Tools`, a nu
 | Wave | Tools | State |
 |---|---|---|
 | 1 | `core` and `query` reads: `revit_get_elements_info`, `revit_get_element_parameters`, `revit_count_elements`, `revit_find_elements_by_parameter`, `revit_group_by_parameter`, `revit_group_elements`, `revit_get_available_parameters`, `revit_run_query_preset`, `revit_check_parameter_completeness`, `revit_run_parameter_qa_rule_set`, `revit_export_query_to_excel` | done |
-| 2 | `edit` and `electrical` writes that use no UI | next |
-| 3 | `views`, `tags`, `devices` | later |
+| 2 | `edit` and `electrical` writes and their previews: `revit_(preview_)move_elements`, `revit_(preview_)copy_elements`, `revit_(preview_)align_elements`, `revit_(preview_)place_on_face`, `revit_(preview_)rotate_elements`, `revit_(preview_)set_elevation`, `revit_(preview_)assign_room_to_elements`, `revit_(preview_)edit_family_types`, `revit_set_parameter`, `revit_create_lines`, `revit_place_family_instances`, `revit_add_elements_to_circuit`, `revit_apply_circuit_load_names`, `revit_apply_circuit_numbering`, `revit_(preview_)assign_data_devices_to_patch_panels`, `revit_change_circuit_cable_or_wire_type`, `revit_create_cable_type`, `revit_create_electrical_circuit`, `revit_(preview_)draw_circuit_arcs`, `revit_move_elements_between_circuits`, `revit_reassign_circuit_panel`, `revit_set_circuit_parameter`, `revit_set_circuit_parameters_bulk`, `revit_set_circuit_path_mode` | done |
+| 3 | `views`, `tags`, `devices`, and the combined `revit_delete` / `revit_duplicate` / `revit_rename` / `revit_set_parameters_bulk` (they also route to view and sheet tools) | next |
+
+On a non-active document a view-based tool needs `viewId` (or `searchViewId` for ray casting): there is no active view
+to fall back on. Selection tools (`revit_select_*`) stay active-document only.
+
+A combined bridge tool gets `document` only when every add-in tool it routes to is migrated: a `document` argument a
+tool ignores would bind the approval to one document while the tool acts on another.
 
 Approvals already bind to the target document, so a write with `document=` is approved for that document.
 
