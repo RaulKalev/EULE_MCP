@@ -7,19 +7,23 @@ namespace RevitMCP.Addin.Delivery;
 /// Handles both the full EULE format (with project/stage prefix) and the short discipline-only format.
 ///
 /// Supported formats:
-///   Full:  {projectNumber}_{stage}_{discipline}-{group}-{sequence}   e.g. 1626_TP_EL-5-01
-///   Short: {discipline}-{group}-{sequence}                           e.g. EL-5-01
+///   Full:  {projectNumber}_{stage}_{discipline}-{group}-{sequence}[_{description}]   e.g. 1626_TP_EL-5-01
+///                                                                                  73226_PP_EN-5-10_1k-ATS
+///   Short: {discipline}-{group}-{sequence}[_{description}]                           e.g. EL-5-01
+///
+/// The optional trailing "_{description}" follows the same convention as
+/// <see cref="DeliveryFileNameParser"/>, so a sheet and its exported file resolve to the same core.
 /// </summary>
 public static class RevitSheetNumberParser
 {
-    // Full format: 1626_TP_EL-5-01
+    // Full format: 1626_TP_EL-5-01, 73226_PP_EN-5-10_1k-ATS
     private static readonly Regex _fullPattern = new(
-        @"^(\d{3,8})_([A-Z]{2,4})_(([A-Z]{1,3})-(\d{1,3})-(\d{2,4}))$",
+        @"^(\d{3,8})_([A-Z]{2,4})_(([A-Z]{1,3})-(\d{1,3})-(\d{2,4}))(?:_(.+))?$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-    // Short format: EL-5-01
+    // Short format: EL-5-01, EL-5-01_Plaan
     private static readonly Regex _shortPattern = new(
-        @"^(([A-Z]{1,3})-(\d{1,3})-(\d{2,4}))$",
+        @"^(([A-Z]{1,3})-(\d{1,3})-(\d{2,4}))(?:_(.+))?$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     /// <summary>
@@ -41,7 +45,8 @@ public static class RevitSheetNumberParser
                 SheetNumberCore = full.Groups[3].Value,
                 Discipline    = full.Groups[4].Value,
                 Group         = full.Groups[5].Value,
-                Sequence      = full.Groups[6].Value
+                Sequence      = full.Groups[6].Value,
+                Description   = full.Groups[7].Value
             };
         }
 
@@ -53,7 +58,8 @@ public static class RevitSheetNumberParser
                 SheetNumberCore = shortM.Groups[1].Value,
                 Discipline      = shortM.Groups[2].Value,
                 Group           = shortM.Groups[3].Value,
-                Sequence        = shortM.Groups[4].Value
+                Sequence        = shortM.Groups[4].Value,
+                Description     = shortM.Groups[5].Value
             };
         }
 
@@ -80,4 +86,7 @@ public sealed class ParsedRevitSheetNumber
 
     /// <summary>The discipline-group-sequence core, e.g. "EL-5-01". This is what file names reference.</summary>
     public string SheetNumberCore { get; init; } = string.Empty;
+
+    /// <summary>Free text after the core, e.g. "1k-ATS" for 73226_PP_EN-5-10_1k-ATS. Empty when absent.</summary>
+    public string Description { get; init; } = string.Empty;
 }
