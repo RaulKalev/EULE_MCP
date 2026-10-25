@@ -197,6 +197,22 @@ public class PlanArgumentScopeTests
     }
 
     [Fact]
+    public void ViewScopeDefaultIsNotAViewId()
+    {
+        var plan = PlanFixtures.Active(new PlanEnvelope { Tools = { "revit_set_text_notes" }, ElementIds = { 36262 }, ViewIds = { 36243 } });
+        string? Check(object args, long? activeView)
+            => PlanArgumentScope.Check(plan, "revit_set_text_notes", PlanArgumentScope.Extract(Args(args)), () => Array.Empty<long>(), () => activeView);
+
+        // Live test: the bridge's default viewId=-1 sent next to elementIds made the plan refuse the call.
+        Assert.Null(Check(new { elementIds = new[] { 36262 }, viewId = -1 }, activeView: 2125680));
+        Assert.Null(Check(new { elementIds = new[] { 36262 }, viewId = 0 }, activeView: null));
+        Assert.Null(Check(new { viewId = -1, textFilter = "x" }, activeView: 36243));
+        Assert.Contains("outside the plan's views", Check(new { viewId = -1, textFilter = "x" }, activeView: 2125680));
+        Assert.Contains("active view is not known", Check(new { viewId = 0 }, activeView: null));
+        Assert.Contains("outside the plan's views", Check(new { elementIds = new[] { 36262 }, viewId = 901 }, activeView: 36243));
+    }
+
+    [Fact]
     public void CreatingToolIsRefusedWhenCreatingIsNotAllowed()
     {
         var plan = PlanFixtures.Active(new PlanEnvelope { Tools = { "revit_place_tags" }, AllowCreate = false });

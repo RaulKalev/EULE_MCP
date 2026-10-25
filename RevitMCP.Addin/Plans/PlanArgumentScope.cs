@@ -8,6 +8,8 @@ public sealed class PlanTargets
     /// <summary>Element ids the call acts on (not the views, types or levels it refers to).</summary>
     public HashSet<long> ElementIds { get; } = new();
     public HashSet<long> ViewIds { get; } = new();
+    /// <summary>A view argument held a scope default (0 or -1: the active view, or all views) instead of an id.</summary>
+    public bool DefaultViewScope { get; set; }
     public List<string> Categories { get; } = new();
     public int? Limit { get; set; }
     public bool UseSelection { get; set; }
@@ -65,7 +67,9 @@ public static class PlanArgumentScope
     /// Null when the call may run under the plan, otherwise the reason it waits for approval instead.
     /// </summary>
     /// <param name="selection">The current selection, read only when the call uses it.</param>
-    public static string? Check(Plan plan, string toolName, PlanTargets targets, Func<IReadOnlyCollection<long>> selection)
+    /// <param name="activeViewId">The target document's active view, read only for a view scope default.</param>
+    public static string? Check(Plan plan, string toolName, PlanTargets targets, Func<IReadOnlyCollection<long>> selection,
+        Func<long?>? activeViewId = null)
     {
         var env = plan.Envelope;
         if (!env.Tools.Contains(toolName, StringComparer.OrdinalIgnoreCase))
@@ -84,7 +88,15 @@ public static class PlanArgumentScope
         }
         if (env.ViewIds.Count > 0)
         {
-            var outside = targets.ViewIds.Where(id => !env.ViewIds.Contains(id)).Take(10).ToList();
+            // A scope default (0/-1) only picks the view when the call names no elements: tools that take
+            // elementIds ignore it. Then it stands for the active view; the post-check still verifies owner views.
+            var views = new HashSet<long>(targets.ViewIds);
+            if (targets.DefaultViewScope && ids.Count == 0)
+            {
+                if (activeViewId?.Invoke() is long active) views.Add(active);
+                else return "the call works on the active view or all views, and the active view is not known";
+            }
+            var outside = views.Where(id => !env.ViewIds.Contains(id)).Take(10).ToList();
             if (outside.Count > 0)
                 return $"view id(s) {string.Join(", ", outside)} are outside the plan's views";
         }
@@ -115,7 +127,12 @@ public static class PlanArgumentScope
                     Collect(key, item, targets, depth + 1);
                 break;
             default:
-                if (ViewKeys.Contains(key)) targets.ViewIds.UnionWith(PlanArgs.Longs(token));
+                if (ViewKeys.Contains(key))
+                {
+                    foreach (var id in PlanArgs.Longs(token))
+                        if (id > 0) targets.ViewIds.Add(id);
+                        else targets.DefaultViewScope = true;
+                }
                 else if (IsTargetKey(key)) targets.ElementIds.UnionWith(PlanArgs.Longs(token));
                 break;
         }

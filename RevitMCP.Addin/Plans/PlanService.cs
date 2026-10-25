@@ -162,7 +162,8 @@ public sealed class PlanService
         var refusal = PlanArgumentScope.Check(plan, tool.Name, targets, () =>
             RevitDocumentResolver.IsActive(app, targetDoc)
                 ? app.ActiveUIDocument!.Selection.GetElementIds().Select(id => id.Value).ToList()
-                : (IReadOnlyCollection<long>)Array.Empty<long>());
+                : (IReadOnlyCollection<long>)Array.Empty<long>(),
+            () => RevitDocumentResolver.IsActive(app, targetDoc) ? app.ActiveUIDocument!.ActiveView?.Id.Value : null);
         if (refusal != null)
             return Fallback(request, plan, planId, tool.Name, refusal, out fallbackWarning);
 
