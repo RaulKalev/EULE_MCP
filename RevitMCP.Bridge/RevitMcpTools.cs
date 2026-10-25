@@ -6288,8 +6288,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
 
     [McpServerTool(Name = "ifc_list_links", ReadOnly = true),
      Description(
-         "Lists all Revit link instances in the active document and identifies which are likely " +
-         "derived from an IFC model (based on name/path heuristics). " +
+         "Lists the Revit links that are likely derived from an IFC model (name/path heuristics); includeAllRevitLinks=true " +
+         "lists every link, each still flagged isLikelyIfc. " +
          "Returns linkInstanceId values that can be passed to ifc_preview_spaces. " +
          "Phase 1: read-only.")]
     public async Task<string> IfcListLinks(
@@ -6396,6 +6396,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Highest-priority storey parameter.")] string? storeyParameter = null,
         [Description("Highest-priority validation area parameter.")] string? areaParameter = null,
         [Description("Enable AR_Ruum project defaults. Default true.")] bool enableArRuumDefaults = true,
+        [Description("Footprints smaller than this (m²) are invalid loops. Default 0.1.")] double minimumAreaM2 = 0.1,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -6410,6 +6411,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["horizontalFaceToleranceDegrees"] = horizontalFaceToleranceDegrees,
             ["levelMatchToleranceMm"]         = levelMatchToleranceMm,
             ["maxResults"]                    = maxResults,
+            ["minimumAreaM2"]                 = minimumAreaM2,
             ["roomNameParameter"]             = roomNameParameter,
             ["roomNumberParameter"]           = roomNumberParameter,
             ["storeyParameter"]               = storeyParameter,

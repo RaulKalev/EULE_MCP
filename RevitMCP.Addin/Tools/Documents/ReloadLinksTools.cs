@@ -67,7 +67,7 @@ internal static class ReloadLinksExecutor
             return DocumentToolSupport.Fail(request, "ifcMethod must be auto, update or replace.");
 
         var links = LinkInventory.Collect(doc);
-        var pairs = LinkFileMatcher.Match(links.Select(l => l.ToCandidate()).ToList(), requests);
+        var pairs = LinkFileMatcher.Match(links.Select(l => l.ToCandidate()).ToList(), requests, System.IO.File.Exists);
         var ready = pairs.All(p => p.Status == LinkReloadPair.Matched);
         var plan = pairs.Select(p => DescribePair(p, links, ifcMethod)).ToList();
 

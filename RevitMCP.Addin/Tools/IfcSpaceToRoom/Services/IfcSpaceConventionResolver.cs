@@ -41,6 +41,16 @@ public static class IfcSpaceConventionResolver
             ArRuumProperties.Any(p => HasParameter(parameters, p)))
             return new("Confirmed", "AR_RuumPropertySet");
 
+        // An explicit type that names another IFC entity (IfcFurnishingElement, IfcGeographicElement …) is not a space:
+        // with only a GUID every cupboard and tree used to come back Probable (M15). IfcBuildingElementProxy stays
+        // possible, since some exporters write spaces as proxies.
+        foreach (var name in ExplicitTypeParameters)
+        {
+            var value = Resolve(parameters, [name]).Value;
+            if (OtherIfcEntity(value) is { } entity)
+                return new("Rejected", "ExplicitOtherIfcType:" + entity);
+        }
+
         foreach (var name in IfcPresenceParameters)
         {
             if (!string.IsNullOrWhiteSpace(Resolve(parameters, [name]).Value))
@@ -112,6 +122,18 @@ public static class IfcSpaceConventionResolver
     private static bool Contains(string? value, string fragment) =>
         !string.IsNullOrWhiteSpace(value) &&
         value.IndexOf(fragment, StringComparison.OrdinalIgnoreCase) >= 0;
+
+    /// <summary>The IFC entity a type value names when it is not a space or a proxy ("IfcFurnishingElement.NOTDEFINED" → IfcFurnishingElement).</summary>
+    private static string? OtherIfcEntity(string? value)
+    {
+        var match = Regex.Match(value ?? string.Empty, @"\bIfc[A-Za-z]+");
+        if (!match.Success) return null;
+        var entity = match.Value;
+        if (entity.StartsWith("IfcSpace", StringComparison.OrdinalIgnoreCase) ||
+            entity.StartsWith("IfcBuildingElementProxy", StringComparison.OrdinalIgnoreCase))
+            return null;
+        return entity;
+    }
 }
 
 public sealed record IfcConventionDetection(string Confidence, string Reason);

@@ -225,7 +225,6 @@ public class BridgeArgumentContractTests
         ["revit_get_element_parameters:includeInstanceParameters"] = "M35: batch G",
         ["revit_get_element_parameters:includeTypeParameters"] = "M35: batch G",
         ["revit_get_element_parameters:parameterNames"] = "M35: batch G",
-        ["ifc_preview_space_geometry:minimumAreaM2"] = "M15: batch F (IFC spaces)"
     };
 
     [Fact]

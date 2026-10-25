@@ -11,6 +11,7 @@
     <Compile Include="..\RevitMCP.Addin\Tools\IfcSpaceToRoom\Services\IfcSpaceConventionResolver.cs" Link="IfcSpaceToRoom\IfcSpaceConventionResolver.cs" />
     <Compile Include="..\RevitMCP.Addin\Tools\IfcSpaceToRoom\Services\IfcConversionPolicy.cs" Link="IfcSpaceToRoom\IfcConversionPolicy.cs" />
     <Compile Include="..\RevitMCP.Addin\Tools\IfcSpaceToRoom\Services\RoomNames.cs" Link="IfcSpaceToRoom\RoomNames.cs" />
+    <Compile Include="..\RevitMCP.Addin\Tools\IfcSpaceToRoom\Services\RoomGeometryDeltas.cs" Link="IfcSpaceToRoom\RoomGeometryDeltas.cs" />
     <Compile Include="..\RevitMCP.Addin\Tools\IfcSpaceToRoom\Services\FootprintFaceSelector.cs" Link="IfcSpaceToRoom\FootprintFaceSelector.cs" />
     <Compile Include="..\RevitMCP.Addin\Tools\IfcSpaceToRoom\Services\FootprintCurveChainer.cs" Link="IfcSpaceToRoom\FootprintCurveChainer.cs" />
     <Compile Include="..\RevitMCP.Benchmark\Core\BenchmarkMath.cs" Link="Benchmark\BenchmarkMath.cs" />

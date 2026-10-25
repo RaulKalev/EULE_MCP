@@ -434,6 +434,14 @@ internal static class CadShapePlacementPlanner
             return;
         }
 
+        // M26: as in revit_place_from_cad, say where view-based instances go.
+        if (ToolArguments.GetLong(arguments, "viewId") <= 0)
+            warnings.Add($"View-based (detail/annotation) families go into the active view '{view.Name}' ({view.Id.Value}). " +
+                         "Pass viewId to place them in another view.");
+        if (view.ViewType == ViewType.DraftingView)
+            warnings.Add($"View '{view.Name}' is a drafting view: it has no model coordinates, so the CAD's shapes do not " +
+                         "line up there. Place into the plan view that shows the CAD.");
+
         plan.View = view;
     }
 }

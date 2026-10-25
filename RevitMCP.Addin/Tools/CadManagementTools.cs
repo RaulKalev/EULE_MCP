@@ -227,7 +227,7 @@ internal static class CadSetToolExecutor
                 {
                     requestedViews = views.Count,
                     uniqueSettingsOwners = plan.Select(item => item.SettingsView.Id.Value).Distinct().Count(),
-                    plannedChanges = plan.Select(CadOverrideSupport.ToPlanResult).ToList()
+                    planned = CadOverrideSupport.PreviewPayload(plan, warnings)
                 },
                 Warnings = warnings,
                 DurationMs = sw.ElapsedMilliseconds
@@ -337,7 +337,7 @@ internal static class CadCopyToolExecutor
                     capturedSettings = changes.Count,
                     targetViews = targetViews.Count,
                     uniqueSettingsOwners = plan.Select(item => item.SettingsView.Id.Value).Distinct().Count(),
-                    plannedChanges = plan.Select(CadOverrideSupport.ToPlanResult).ToList()
+                    planned = CadOverrideSupport.PreviewPayload(plan, warnings)
                 },
                 Warnings = warnings,
                 DurationMs = sw.ElapsedMilliseconds

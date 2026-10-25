@@ -17,7 +17,7 @@ namespace RevitMCP.Addin.Tools.IfcSpaceToRoom;
 public class ListIfcLinksTool : IRevitMcpTool
 {
     public string Name        => "ifc_list_links";
-    public string Description => "Lists all Revit link instances in the active document and identifies which are likely IFC-derived models. Use the returned linkInstanceId values with ifc_preview_spaces.";
+    public string Description => "Lists the links likely derived from IFC models (includeAllRevitLinks=true: every link, flagged honestly; includeUnloaded=true: unloaded ones too). Use the returned linkInstanceId values with ifc_preview_spaces.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory   Category   => ToolCategory.Coordination;
 
@@ -36,12 +36,13 @@ public class ListIfcLinksTool : IRevitMcpTool
         var includeAll      = ToolArguments.GetBool(request.Arguments, "includeAllRevitLinks", false);
         var includeUnloaded = ToolArguments.GetBool(request.Arguments, "includeUnloaded",      false);
 
-        var links = _discovery.GetLinks(doc, includeAll, includeUnloaded);
+        var links = _discovery.GetLinks(doc);
 
-        // Filter unloaded from response unless explicitly requested
-        var responseLinks = includeUnloaded
-            ? links
-            : links.Where(l => l.IsLoaded).ToList();
+        // includeAllRevitLinks lists the .rvt links too (still flagged honestly); includeUnloaded lists unloaded ones (M7).
+        var responseLinks = links
+            .Where(l => includeAll || l.IsLikelyIfc)
+            .Where(l => includeUnloaded || l.IsLoaded)
+            .ToList();
 
         var totalLinks    = links.Count;
         var likelyIfc     = links.Count(l => l.IsLikelyIfc);

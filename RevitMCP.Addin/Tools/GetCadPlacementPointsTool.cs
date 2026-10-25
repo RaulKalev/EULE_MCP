@@ -102,7 +102,16 @@ public class GetCadPlacementPointsTool : IRevitMcpTool
                 importInstanceId = import.Id.Value,
                 importName = CadPointExtractor.SafeName(import),
                 layersRequested = layers?.ToList(),
-                layers = layerSummaries.Select(Describe).ToList(),
+                // M33: every layer (124, ~30 KB) came back even when one was asked for. With layers: only those.
+                // Without: the layers that can hold locations in full, the rest by name.
+                layerCount = layerSummaries.Count,
+                layers = (layers == null
+                        ? layerSummaries.Where(l => l.HasPlaceablePoints)
+                        : layerSummaries.Where(l => layers.Contains(l.LayerName, StringComparer.OrdinalIgnoreCase)))
+                    .Select(Describe).ToList(),
+                otherLayers = layers == null
+                    ? layerSummaries.Where(l => !l.HasPlaceablePoints).Select(l => l.LayerName).ToList()
+                    : null,
                 pointCount = merged.Count,
                 returnedCount = returned.Count,
                 elevation = layers == null ? null : DescribeElevation(merged),

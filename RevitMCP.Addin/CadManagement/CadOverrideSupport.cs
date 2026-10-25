@@ -396,6 +396,40 @@ internal static class CadOverrideSupport
             });
     }
 
+    /// <summary>Detail rows a preview lists; the summary covers every planned change.</summary>
+    public const int PreviewRowLimit = 50;
+
+    /// <summary>
+    /// A preview's planned changes: a summary per settings view, the first <see cref="PreviewRowLimit"/> rows and the
+    /// total. M34: copying overrides to a few views listed 188 rows (89 KB) and no summary.
+    /// </summary>
+    public static object PreviewPayload(IReadOnlyList<CadOverridePlanItem> plan, List<string> warnings)
+    {
+        if (plan.Count > PreviewRowLimit)
+            warnings.Add($"Listing the first {PreviewRowLimit} of {plan.Count} planned changes; the summary covers all of them, " +
+                         "and applying changes all of them.");
+        return new
+        {
+            plannedChangesTotal = plan.Count,
+            summary = plan
+                .GroupBy(item => item.SettingsView.Id.Value)
+                .Select(group => new
+                {
+                    settingsViewId = group.Key,
+                    settingsViewName = group.First().SettingsView.Name,
+                    settingsOwner = group.First().SettingsView.IsTemplate ? "ViewTemplate" : "View",
+                    changes = group.Count(),
+                    hide = group.Count(item => item.Change.HasVisible && !item.Change.Visible),
+                    show = group.Count(item => item.Change.HasVisible && item.Change.Visible),
+                    halftone = group.Count(item => item.Change.HasHalftone),
+                    lineGraphics = group.Count(item => item.Change.HasLineColor || item.Change.HasLineWeight ||
+                                                       item.ResolvedLinePatternId != null || item.Change.ClearGraphics)
+                })
+                .ToList(),
+            plannedChanges = plan.Take(PreviewRowLimit).Select(ToPlanResult).ToList()
+        };
+    }
+
     public static object ToPlanResult(CadOverridePlanItem item) => new
     {
         requestedViewId = item.RequestedView.Id.Value,

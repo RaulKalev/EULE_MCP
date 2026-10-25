@@ -82,7 +82,10 @@ public static class LinkFileMatcher
         return source.EndsWith(".dwg", StringComparison.OrdinalIgnoreCase) ? LinkKind.Dwg : LinkKind.OtherCad;
     }
 
-    public static List<LinkReloadPair> Match(IReadOnlyList<LinkCandidate> links, IReadOnlyList<LinkReloadRequest> requests)
+    /// <param name="fileExists">Checks a request's file; a missing file is invalid, not paired (M28: it came back
+    /// "ambiguous" with a proposed link). Null skips the check.</param>
+    public static List<LinkReloadPair> Match(
+        IReadOnlyList<LinkCandidate> links, IReadOnlyList<LinkReloadRequest> requests, Func<string, bool>? fileExists = null)
     {
         var pairs = new LinkReloadPair[requests.Count];
         var claimed = new HashSet<long>();
@@ -95,6 +98,11 @@ public static class LinkFileMatcher
             if (kind == null)
             {
                 pairs[i] = Invalid(i, request, "Unsupported file type. Give a .dwg, .ifc or .rvt file (for IFC the .ifc itself, not the .ifc.RVT cache).");
+                continue;
+            }
+            if (fileExists != null && !fileExists(request.Path.Trim().Trim('"')))
+            {
+                pairs[i] = Invalid(i, request, $"File not found: {request.Path}. Check the path; nothing is paired with a missing file.");
                 continue;
             }
 

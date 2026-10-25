@@ -211,6 +211,9 @@ public class IfcRoomValidationService
                 item.MatchedRoomId     = scoreResult.BestRoomId;
                 item.MatchedRoomNumber = scoreResult.BestRoomNumber;
                 item.MatchedRoomName   = scoreResult.BestRoomName;
+                item.LocationDeltaMm   = scoreResult.LocationDeltaMm;
+                item.AreaDeltaPercent  = scoreResult.AreaDeltaPercent;
+                item.RoomAreaM2        = scoreResult.RoomAreaM2;
             }
 
             AssignStatusAndAction(item, scoreResult, options.LocationToleranceMm, options.AreaTolerancePercent);

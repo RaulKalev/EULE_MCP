@@ -185,6 +185,22 @@ public class MultiDocumentTests
     }
 
     [Fact]
+    public void MissingFile_IsInvalid_NotPaired()
+    {
+        // M28: a file that did not exist came back "ambiguous" with a proposed link.
+        var pairs = LinkFileMatcher.Match(Links,
+        [
+            new LinkReloadRequest { Path = @"C:\new\ARH_2026-10-01.ifc" },
+            new LinkReloadRequest { Path = @"C:\new\KONS_2026-10-01.ifc" }
+        ], path => !path.Contains("KONS"));
+
+        Assert.Equal(LinkReloadPair.Matched, pairs[0].Status);
+        Assert.Equal(LinkReloadPair.Invalid, pairs[1].Status);
+        Assert.Null(pairs[1].Link);
+        Assert.Contains("File not found", pairs[1].Reason);
+    }
+
+    [Fact]
     public void IfcCachePath_IsRejected()
     {
         var pairs = LinkFileMatcher.Match(Links, [new LinkReloadRequest { Path = @"C:\new\ARH.ifc.RVT" }]);

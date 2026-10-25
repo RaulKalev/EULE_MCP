@@ -36,6 +36,25 @@ public class IfcSpaceConventionTests
         Assert.Equal("ProbableIfcOrigin", result.Reason);
     }
 
+    [Theory]
+    [InlineData("IfcExportAs", "IfcFurnishingElement", "IfcFurnishingElement")]
+    [InlineData("IfcEntity", "IfcGeographicElement.NOTDEFINED", "IfcGeographicElement")]
+    public void ExplicitOtherIfcType_IsRejected_EvenWithAGuid(string parameter, string value, string entity)
+    {
+        // M15: cupboards and trees came back Probable (and GeometryReady) because they have an IFC GUID.
+        var result = IfcSpaceConventionResolver.Detect(P(("IfcGUID", "abc123"), (parameter, value)));
+
+        Assert.Equal("Rejected", result.Confidence);
+        Assert.Equal("ExplicitOtherIfcType:" + entity, result.Reason);
+    }
+
+    [Fact]
+    public void Proxy_WithAGuid_RemainsProbable()
+    {
+        var result = IfcSpaceConventionResolver.Detect(P(("IfcGUID", "abc123"), ("IfcExportAs", "IfcBuildingElementProxy")));
+        Assert.Equal("Probable", result.Confidence);
+    }
+
     [Fact]
     public void ArRuumNameAndNumber_TakePrecedence_AndPreserveUnicode()
     {

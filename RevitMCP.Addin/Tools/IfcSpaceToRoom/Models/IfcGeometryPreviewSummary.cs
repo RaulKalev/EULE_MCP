@@ -26,6 +26,9 @@ public class IfcGeometryPreviewSummary
     /// <summary>Candidates that failed due to an unexpected error.</summary>
     public int Failed { get; set; }
 
+    /// <summary>Elements that are not a confirmed IfcSpace (explicitly passed ids).</summary>
+    public int NotIfcSpace { get; set; }
+
     /// <summary>True when the result set was truncated due to MaxResults.</summary>
     public bool Truncated { get; set; }
 }

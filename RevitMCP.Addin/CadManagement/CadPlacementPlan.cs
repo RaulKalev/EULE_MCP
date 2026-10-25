@@ -124,6 +124,14 @@ internal static class CadPlacementPlanner
                 return null;
             }
             view = resolvedView;
+
+            // M26: a view-based family went into the active view without a word, even a drafting view.
+            if (ToolArguments.GetLong(arguments, "viewId") <= 0)
+                warnings.Add($"'{symbol.Family.Name}' is view-based (detail/annotation): its instances go into the active view " +
+                             $"'{view.Name}' ({view.Id.Value}). Pass viewId to place them in another view.");
+            if (view.ViewType == ViewType.DraftingView && import.OwnerViewId != view.Id)
+                warnings.Add($"View '{view.Name}' is a drafting view: it has no model coordinates, so the CAD's points do not " +
+                             "line up there. Place into the plan view that shows the CAD.");
         }
 
         Element? host = null;

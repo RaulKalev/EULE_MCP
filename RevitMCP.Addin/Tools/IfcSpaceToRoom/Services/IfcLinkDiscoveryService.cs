@@ -15,12 +15,11 @@ public class IfcLinkDiscoveryService
     /// in <paramref name="doc"/>.
     /// </summary>
     /// <param name="doc">Active host document.</param>
-    /// <param name="includeAllRevitLinks">
-    /// When true, every link is marked as likely IFC regardless of heuristics.
-    /// All links are always returned so the caller can decide what to surface.
-    /// </param>
-    /// <param name="includeUnloaded">When false (default), unloaded links are still returned but flagged.</param>
-    public List<IfcLinkInfo> GetLinks(Document doc, bool includeAllRevitLinks = false, bool includeUnloaded = false)
+    /// <remarks>
+    /// Every link is returned with its own flags; the caller filters. <see cref="IfcLinkInfo.IsLikelyIfc"/> is always the
+    /// name/path heuristic: includeAllRevitLinks used to set it for every link, so the EL .rvt link was reported as IFC (M7).
+    /// </remarks>
+    public List<IfcLinkInfo> GetLinks(Document doc)
     {
         var result = new List<IfcLinkInfo>();
 
@@ -29,7 +28,10 @@ public class IfcLinkDiscoveryService
                      .Cast<RevitLinkInstance>())
         {
             var linkedDoc = linkInstance.GetLinkDocument();
-            var isLoaded  = linkedDoc != null;
+            // The link type knows whether it is loaded; the document can be missing for other reasons.
+            bool isLoaded;
+            try { isLoaded = RevitLinkType.IsLoaded(doc, linkInstance.GetTypeId()) && linkedDoc != null; }
+            catch { isLoaded = linkedDoc != null; }
 
             var name          = linkInstance.Name ?? string.Empty;
             var documentTitle = linkedDoc?.Title ?? string.Empty;
@@ -37,8 +39,7 @@ public class IfcLinkDiscoveryService
             // Try to get the file path from the link type (best-effort)
             string? filePath = TryGetLinkFilePath(doc, linkInstance);
 
-            bool isLikelyIfc = includeAllRevitLinks
-                || IsLikelyIfcLink(name, documentTitle, filePath);
+            bool isLikelyIfc = IsLikelyIfcLink(name, documentTitle, filePath);
 
             bool transformAvailable = false;
             if (isLoaded)

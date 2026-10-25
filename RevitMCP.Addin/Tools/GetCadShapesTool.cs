@@ -63,6 +63,14 @@ public class GetCadShapesTool : IRevitMcpTool
                 import, null, new HashSet<string>(), cancellationToken);
             warnings.AddRange(inventory.Warnings);
 
+            // M33: the inventory was uncapped. Layers with line work (what this tool reconstructs) in full, largest
+            // first and up to limit; the others by name only.
+            var requestedInventoryLimit = ToolArguments.GetInt(request.Arguments, "limit", DefaultLimit);
+            var inventoryLimit = requestedInventoryLimit <= 0 ? DefaultLimit : Math.Min(requestedInventoryLimit, HardLimit);
+            var withCurves = layerSummaries.Where(l => l.CurveCount > 0).OrderByDescending(l => l.CurveCount).ToList();
+            if (withCurves.Count > inventoryLimit)
+                warnings.Add($"Listing {inventoryLimit} of {withCurves.Count} layers with line work (largest first). Raise limit to see the rest.");
+
             sw.Stop();
             return Task.FromResult(new McpToolResult
             {
@@ -74,7 +82,10 @@ public class GetCadShapesTool : IRevitMcpTool
                 {
                     importInstanceId = import.Id.Value,
                     importName = CadPointExtractor.SafeName(import),
-                    layers = layerSummaries.Select(l => new
+                    layerCount = layerSummaries.Count,
+                    layersWithLineWork = withCurves.Count,
+                    otherLayers = layerSummaries.Where(l => l.CurveCount == 0).Select(l => l.LayerName).ToList(),
+                    layers = withCurves.Take(inventoryLimit).Select(l => new
                     {
                         layerName = l.LayerName,
                         curveCount = l.CurveCount,

@@ -140,6 +140,13 @@ public class GeometryPreviewService
             item.DeclaredAreaM2 = meta.AreaM2;
             item.AreaSource = meta.AreaSource;
 
+            if (detection.Confidence != IfcDetectionConfidence.Confirmed)
+            {
+                item.Status = IfcGeometryStatus.NotIfcSpace;
+                item.Warnings.Add($"Not a confirmed IfcSpace ({detection.Confidence}: {detection.Reason}); no footprint is offered for room creation.");
+                return item;
+            }
+
             // — Level match (using bbox fallback for elevation) ────────────────
             double? bboxZ = TryGetBboxBottomZ(element, linkTransform);
             var levelMatch = _levelMatcher.Match(bboxZ, options.LevelMatchToleranceMm);
@@ -300,6 +307,7 @@ public class GeometryPreviewService
             Failed           = items.Count(i => i.Status is IfcGeometryStatus.Error
                                                            or IfcGeometryStatus.LevelMatchFailed
                                                            or IfcGeometryStatus.PlacementPointFailed),
+            NotIfcSpace      = items.Count(i => i.Status == IfcGeometryStatus.NotIfcSpace),
             Truncated        = truncated
         };
     }

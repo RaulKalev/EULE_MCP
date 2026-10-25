@@ -163,7 +163,10 @@ public class RoomMatchConfidenceService
                 BestRoomId         = best.Room.RoomId,
                 SecondBestRoomId   = scored[1].Room.RoomId,
                 BestRoomNumber     = best.Room.Number,
-                BestRoomName       = best.Room.Name
+                BestRoomName       = best.Room.Name,
+                LocationDeltaMm    = RoomGeometryDeltas.LocationDeltaMm(ifcLocationXFeet, ifcLocationYFeet, best.Room.LocationXFeet, best.Room.LocationYFeet),
+                AreaDeltaPercent   = RoomGeometryDeltas.AreaDeltaPercent(ifcAreaSqFt, best.Room.AreaSqFt),
+                RoomAreaM2         = RoomGeometryDeltas.RoomAreaM2(best.Room.AreaSqFt)
             };
         }
 
@@ -196,7 +199,10 @@ public class RoomMatchConfidenceService
             BestRoomNumber   = best.Room.Number,
             BestRoomName     = best.Room.Name,
             ScoreSubType     = best.SubType,
-            GeometryAnomaly  = geometryAnomaly
+            GeometryAnomaly  = geometryAnomaly,
+            LocationDeltaMm  = RoomGeometryDeltas.LocationDeltaMm(ifcLocationXFeet, ifcLocationYFeet, best.Room.LocationXFeet, best.Room.LocationYFeet),
+            AreaDeltaPercent = RoomGeometryDeltas.AreaDeltaPercent(ifcAreaSqFt, best.Room.AreaSqFt),
+            RoomAreaM2       = RoomGeometryDeltas.RoomAreaM2(best.Room.AreaSqFt)
         };
     }
 
@@ -240,5 +246,9 @@ public class RoomMatchConfidenceService
         public string? BestRoomName     { get; init; }
         public string? ScoreSubType     { get; init; }
         public bool    GeometryAnomaly  { get; init; }
+        /// <summary>Best room vs the IFC space (M14: computed for the tolerance checks but never reported).</summary>
+        public double? LocationDeltaMm  { get; init; }
+        public double? AreaDeltaPercent { get; init; }
+        public double? RoomAreaM2       { get; init; }
     }
 }

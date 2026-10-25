@@ -6,6 +6,12 @@ namespace RevitMCP.Addin.Tools.IfcSpaceToRoom.Models;
 /// </summary>
 public static class IfcGeometryStatus
 {
+    /// <summary>
+    /// Not a confirmed IfcSpace (a cupboard, a tree, or only IFC-origin markers): the same status ifc_preview_spaces
+    /// gives. Before M15 an explicitly passed element got GeometryReady from its footprint alone.
+    /// </summary>
+    public const string NotIfcSpace = "NotIfcSpace";
+
     /// <summary>A valid, closed footprint loop was extracted and is ready for Phase 3 room creation.</summary>
     public const string GeometryReady = "GeometryReady";
 
