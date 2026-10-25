@@ -519,6 +519,126 @@
                     </DockPanel>
                 </TabItem>
 
+                <!-- ═══════════════════  JOBS TAB (#100)  ═══════════════════ -->
+                <TabItem Header="{Binding JobsTabHeader}" Style="{StaticResource McpTabItemStyle}">
+                    <Grid Margin="12,10,12,12">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding Jobs}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border CornerRadius="6"
+                                                Padding="10,8"
+                                                Margin="0,0,0,6"
+                                                BorderThickness="1">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="{DynamicResource SecondaryBackgroundBrush}" />
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                                                            <Setter Property="BorderBrush" Value="{DynamicResource StatusRunningBrush}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsBad}" Value="True">
+                                                            <Setter Property="BorderBrush" Value="{DynamicResource StatusStoppedBrush}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <StackPanel>
+                                                <DockPanel>
+                                                    <TextBlock DockPanel.Dock="Right"
+                                                               Text="{Binding Progress}"
+                                                               Foreground="{DynamicResource IconForegroundBrush}"
+                                                               FontSize="10"
+                                                               VerticalAlignment="Center" />
+                                                    <TextBlock DockPanel.Dock="Left"
+                                                               Text="{Binding StateLabel}"
+                                                               FontSize="10"
+                                                               FontWeight="SemiBold"
+                                                               Margin="0,0,8,0"
+                                                               VerticalAlignment="Center">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Foreground" Value="{DynamicResource IconForegroundBrush}" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                                                                        <Setter Property="Foreground" Value="{DynamicResource StatusRunningBrush}" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding IsBad}" Value="True">
+                                                                        <Setter Property="Foreground" Value="{DynamicResource StatusStoppedBrush}" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                    <TextBlock Text="{Binding Title}"
+                                                               ToolTip="{Binding JobId}"
+                                                               Foreground="{DynamicResource ForegroundBrush}"
+                                                               FontSize="11"
+                                                               FontWeight="SemiBold"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               VerticalAlignment="Center" />
+                                                </DockPanel>
+                                                <TextBlock Text="{Binding StopReason}"
+                                                           Foreground="{DynamicResource ForegroundBrush}"
+                                                           FontSize="10"
+                                                           TextWrapping="Wrap"
+                                                           Margin="0,3,0,0"
+                                                           Visibility="{Binding HasStopReason, Converter={StaticResource BoolToVisibility}}" />
+                                                <TextBlock Foreground="{DynamicResource IconForegroundBrush}"
+                                                           FontSize="10"
+                                                           Margin="0,2,0,6">
+                                                    <TextBlock.Text>
+                                                        <MultiBinding StringFormat="From: {0} · Model: {1}">
+                                                            <Binding Path="Client" />
+                                                            <Binding Path="Document" />
+                                                        </MultiBinding>
+                                                    </TextBlock.Text>
+                                                </TextBlock>
+                                                <UniformGrid Columns="4">
+                                                    <Button Content="Pause"
+                                                            Command="{Binding DataContext.PauseJobCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding JobId}"
+                                                            IsEnabled="{Binding CanPause}"
+                                                            Style="{StaticResource ActionButtonStyle}"
+                                                            Margin="0,0,3,0" />
+                                                    <Button Content="Resume"
+                                                            Command="{Binding DataContext.ResumeJobCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding JobId}"
+                                                            IsEnabled="{Binding CanResume}"
+                                                            Style="{StaticResource ApproveButtonStyle}"
+                                                            Margin="3,0,3,0" />
+                                                    <Button Content="Cancel"
+                                                            Command="{Binding DataContext.CancelJobCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding JobId}"
+                                                            IsEnabled="{Binding CanCancel}"
+                                                            Style="{StaticResource DangerButtonStyle}"
+                                                            Margin="3,0,3,0" />
+                                                    <Button Content="Open report"
+                                                            Command="{Binding DataContext.OpenJobReportCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding JobId}"
+                                                            IsEnabled="{Binding HasReport}"
+                                                            Style="{StaticResource ActionButtonStyle}"
+                                                            Margin="3,0,0,0" />
+                                                </UniformGrid>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                        <TextBlock Text="No jobs yet — a job the agent submits with revit_job_submit runs here by itself."
+                                   Foreground="{DynamicResource IconForegroundBrush}"
+                                   FontSize="11"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   TextAlignment="Center"
+                                   Margin="20,0"
+                                   Visibility="{Binding HasNoJobs, Converter={StaticResource BoolToVisibility}}" />
+                    </Grid>
+                </TabItem>
+
                 <!-- ═══════════════════  ACTIVITY TAB  ═══════════════════ -->
                 <TabItem Header="ACTIVITY" Style="{StaticResource McpTabItemStyle}">
                     <DockPanel Margin="12,10,12,12">

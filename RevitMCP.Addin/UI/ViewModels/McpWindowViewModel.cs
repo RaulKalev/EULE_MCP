@@ -62,6 +62,11 @@ public class McpWindowViewModel : BaseViewModel
             OnPropertyChanged(nameof(HasPlans));
             UpdatePendingTabHeader();
         };
+        if (RevitMCP.Addin.Jobs.JobService.Current is { } jobService)
+        {
+            jobService.JobsChanged += () => RunOnUi(RefreshJobs);
+            RunOnUi(RefreshJobs);   // journaled jobs of earlier sessions
+        }
         if (RevitMCP.Addin.Plans.PlanService.Current is { } planService)
         {
             planService.Registry.Changed += () => RunOnUi(RefreshPlans);
@@ -70,6 +75,7 @@ public class McpWindowViewModel : BaseViewModel
             {
                 planService.ExpireDue();
                 RefreshPlans();
+                RefreshJobs();   // elapsed time of running jobs
             }, _dispatcher);
             _planTimer.Start();
         }
@@ -93,6 +99,10 @@ public class McpWindowViewModel : BaseViewModel
         RejectCommand = new RelayCommand(id => RejectItem(id as string));
         RejectAllCommand = new RelayCommand(_ => _approvalService?.RejectAll(), _ => PendingApprovals.Count > 0);
         RevokePlanCommand = new RelayCommand(id => RevokePlan(id as string));
+        PauseJobCommand = new RelayCommand(id => RevitMCP.Addin.Jobs.JobService.Current?.Pause(id as string ?? string.Empty));
+        CancelJobCommand = new RelayCommand(id => RevitMCP.Addin.Jobs.JobService.Current?.Cancel(id as string ?? string.Empty, "cancelled in the MCP window"));
+        ResumeJobCommand = new RelayCommand(id => SendJobRequest("revit_job_resume", id as string, approved: true), _ => DispatchInternal != null);
+        OpenJobReportCommand = new RelayCommand(id => OpenJobReport(id as string), _ => DispatchInternal != null);
         ShowPlanChangesCommand = new RelayCommand(id => ShowPlanChanges(id as string), _ => DispatchInternal != null);
         ToggleDirectEditCommand = new RelayCommand(_ => ToggleDirectEdit());
         MakeActiveCommand = new RelayCommand(_ => MakeActive(), _ => !_isActiveInstance);
@@ -124,6 +134,12 @@ public class McpWindowViewModel : BaseViewModel
     private const int RecentOutcomeCount = 10;
     public string PendingTabHeader { get => _pendingTabHeader; private set => SetProperty(ref _pendingTabHeader, value); }
 
+    /// <summary>Jobs (#100): this session's and journaled ones, newest first.</summary>
+    public ObservableCollection<JobItem> Jobs { get; } = [];
+    public bool HasNoJobs => Jobs.Count == 0;
+    private string _jobsTabHeader = "JOBS";
+    public string JobsTabHeader { get => _jobsTabHeader; private set => SetProperty(ref _jobsTabHeader, value); }
+
     /// <summary>Plans of this session (#99), newest first; active and exhausted ones can be revoked.</summary>
     public ObservableCollection<PlanItem> Plans { get; } = [];
     public bool HasPlans => Plans.Count > 0;
@@ -151,6 +167,10 @@ public class McpWindowViewModel : BaseViewModel
     public ICommand RejectCommand { get; }
     public ICommand RejectAllCommand { get; }
     public ICommand RevokePlanCommand { get; }
+    public ICommand PauseJobCommand { get; }
+    public ICommand CancelJobCommand { get; }
+    public ICommand ResumeJobCommand { get; }
+    public ICommand OpenJobReportCommand { get; }
     public ICommand ShowPlanChangesCommand { get; }
     public ICommand ToggleDirectEditCommand { get; }
     public ICommand MakeActiveCommand { get; }
@@ -213,7 +233,7 @@ public class McpWindowViewModel : BaseViewModel
                     Time = p.CreatedAt.ToString("HH:mm:ss"),
                     Tool = p.ToolName,
                     Summary = p.Summary,
-                    Client = p.ClientName,
+                    Client = ClientLabel(p.ClientName),
                     Model = p.IsDocumentBound
                         ? p.OriginDocumentTitle + (p.IsSelectionBound ? $" ({p.OriginSelectionIds.Count} selected)" : string.Empty)
                         : "Not document-bound"
@@ -302,6 +322,85 @@ public class McpWindowViewModel : BaseViewModel
             });
         }
         CommandManager.InvalidateRequerySuggested();
+    }
+
+    // ── Jobs (#100) ──────────────────────────────────────────────────────────
+    /// <summary>Rebuilds the JOBS tab from the job service. Must run on the UI thread.</summary>
+    private void RefreshJobs()
+    {
+        var service = RevitMCP.Addin.Jobs.JobService.Current;
+        Jobs.Clear();
+        if (service == null) return;
+        var now = DateTimeOffset.Now;
+        foreach (var job in service.All().Take(30))
+        {
+            var elapsed = job.ElapsedMs + (job.SegmentStartedAt is { } since ? (long)(now - since).TotalMilliseconds : 0);
+            Jobs.Add(new JobItem
+            {
+                JobId = job.Id,
+                Title = job.Title,
+                Client = job.ClientName,
+                Document = job.DocumentTitle,
+                StateLabel = job.State == RevitMCP.Addin.Jobs.JobState.WaitingApproval ? "WAITING" : job.State.ToString().ToUpperInvariant(),
+                IsRunning = job.State is RevitMCP.Addin.Jobs.JobState.Running or RevitMCP.Addin.Jobs.JobState.WaitingApproval,
+                IsBad = job.State is RevitMCP.Addin.Jobs.JobState.Failed or RevitMCP.Addin.Jobs.JobState.Suspended,
+                Progress = $"{job.DoneCount} / {job.Steps.Count} · {Math.Round(elapsed / 60000.0, 1)} min",
+                StopReason = job.StopReason ?? string.Empty,
+                CanPause = job.State is RevitMCP.Addin.Jobs.JobState.Running or RevitMCP.Addin.Jobs.JobState.WaitingApproval,
+                CanResume = job.IsResumable,
+                CanCancel = !job.IsTerminal,
+                HasReport = job.ReportUrl != null || job.CheckpointId != null
+            });
+        }
+        var running = Jobs.Count(j => j.IsRunning);
+        JobsTabHeader = running > 0 ? $"JOBS ({running})" : "JOBS";
+        OnPropertyChanged(nameof(HasNoJobs));
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    /// <summary>
+    /// Sends a job request to the Revit API thread. A resume from this window is the user's own decision, so it
+    /// goes in approved.
+    /// </summary>
+    private async void SendJobRequest(string tool, string? jobId, bool approved, bool open = false)
+    {
+        if (jobId == null || DispatchInternal == null) return;
+        try
+        {
+            var arguments = new Dictionary<string, object?> { ["jobId"] = jobId };
+            if (open) arguments["open"] = true;
+            await DispatchInternal(new RevitMCP.Core.Models.McpToolRequest
+            {
+                ToolName = tool,
+                ClientName = "MCP window",
+                IsApproved = approved,
+                Arguments = arguments
+            });
+        }
+        catch
+        {
+            // A busy Revit answers later or not at all; the job list shows the outcome.
+        }
+    }
+
+    private void OpenJobReport(string? jobId)
+    {
+        var url = RevitMCP.Addin.Jobs.JobService.Current?.Get(jobId)?.ReportUrl;
+        if (url != null)
+        {
+            try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); return; }
+            catch { }
+        }
+        // No report yet (or it moved): publish it now and open it.
+        SendJobRequest(RevitMCP.Addin.Jobs.JobService.ReportTool, jobId, approved: false, open: true);
+    }
+
+    /// <summary>"Job 'Tag sockets' (job-3fa9c1)" for a job step's approval, the client name otherwise.</summary>
+    private static string ClientLabel(string client)
+    {
+        var jobId = RevitMCP.Addin.Jobs.JobIds.JobIdOfClient(client);
+        var job = jobId == null ? null : RevitMCP.Addin.Jobs.JobService.Current?.Get(jobId);
+        return job == null ? client : $"Job '{job.Title}' ({job.Id})";
     }
 
     private void RevokePlan(string? planId)
