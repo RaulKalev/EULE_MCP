@@ -281,4 +281,11 @@
     <Compile Include="..\RevitMCP.Addin\Parameters\ParameterSpecMap.cs" Link="Parameters\ParameterSpecMap.cs" />
     <Compile Include="..\RevitMCP.Addin\Parameters\ParameterCreatePlanner.cs" Link="Parameters\ParameterCreatePlanner.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- #104 view creation: spec parsing, planning (fan-out, names, callout rules), section box and extent math (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\Documentation\Views\ViewCreateSpec.cs" Link="Documentation\Views\ViewCreateSpec.cs" />
+    <Compile Include="..\RevitMCP.Addin\Documentation\Views\ViewCreatePlanner.cs" Link="Documentation\Views\ViewCreatePlanner.cs" />
+    <Compile Include="..\RevitMCP.Addin\Documentation\Views\SectionBoxMath.cs" Link="Documentation\Views\SectionBoxMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Documentation\Views\ViewExtentMath.cs" Link="Documentation\Views\ViewExtentMath.cs" />
+  </ItemGroup>
 </Project>

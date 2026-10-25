@@ -40,6 +40,7 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | [Checkpoints and change review](docs/checkpoints.md) | 6 | Revit model warnings, checkpoints before a batch of writes, what changed since (by tool or user, before/now values, moves, new warnings), compensating rollback with manual approval |
 | [MEP routing: cable trays and conduits](docs/mep-routing.md) | 5 | Tray and conduit runs along a polyline with elbows at bends and joins to existing open ends, connecting two runs, lengths per type/size/level/workset and open-end lists |
 | [Transforms and groups](docs/transforms-and-groups.md) | 11 | Mirror across a line drawn in a view, linear and radial arrays as copies or Revit arrays, list/create/ungroup/place groups; move, rotate and copy act on whole groups |
+| [View creation](docs/view-creation.md) | 5 | Floor, ceiling, structural and area plans per level from one spec (template, scope box, view range, sheet placement, company names), sections from two plan points, callouts, 3D views with a section box around elements or a room, drafting views, legends by duplication; crop region / section box of existing views |
 | [Model graph (routing layer)](docs/model-graph.md) | 4 | Per-model SQLite graph of element ids and relationships: build, freshness status, structured queries (neighbors/find/path/subtree), summary |
 | [Geometry queries](docs/geometry-queries.md) | 6 | Element geometry in mm, elements in a box or within a radius, nearest wall/ceiling/floor/roof, line of sight, clearance around a device — host and links |
 
@@ -139,6 +140,7 @@ Important repository references:
 - [`docs/tool-consolidation.md`](docs/tool-consolidation.md) — discriminator-based tools and the old → new name mapping
 - [`docs/usage-reporting.md`](docs/usage-reporting.md) — per-user usage collection (opt-in, after telling staff), monthly HTML/Excel reports, credit cost join and estimated time saved
 - [`docs/view-alignment.md`](docs/view-alignment.md) — lining up and distributing tags, text, and elements within a view
+- [`docs/view-creation.md`](docs/view-creation.md) — creating plans per level, sections, callouts, 3D views, drafting views and legends from specs, and setting view extents
 
 ## License
 
