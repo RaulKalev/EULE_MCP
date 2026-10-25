@@ -173,6 +173,8 @@ public sealed class GraphSummaryResult
     public List<GraphCount> ElementsByCategory { get; set; } = new();
     public List<GraphCount> ElementsByLevel { get; set; } = new();
     public List<GraphCount> ElementsByWorkset { get; set; } = new();
+    /// <summary>Element counts per created phase (#109, the <c>phase</c> hint in extra).</summary>
+    public List<GraphCount> ElementsByPhase { get; set; } = new();
     public List<GraphPanelSummary> Panels { get; set; } = new();
 
     public long CircuitsWithoutPanelCount { get; set; }

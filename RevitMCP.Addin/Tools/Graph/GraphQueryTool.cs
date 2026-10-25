@@ -28,8 +28,8 @@ public class GraphQueryTool : IRevitMcpTool
     public string Description =>
         "Structured queries against the model graph (build it first with revit_graph_build). operation: " +
         "neighbors (id, rel?, direction? in|out|both, limit?, link?) | " +
-        "find (kind?, category?, level?, workset?, nameContains?, link?, param?, paramValue?, paramContains?, page?, pageSize?) " +
-        "→ ids + names, paginated; param filters match allowlisted routing parameters (graph.routingParameters), case-insensitive; " +
+        "find (kind?, category?, level?, workset?, nameContains?, link?, param?, paramValue?, paramContains?, phase?, option?, page?, pageSize?) " +
+        "→ ids + names, paginated; phase/option match the created-phase and design-option hints (none = without one); param filters match allowlisted routing parameters (graph.routingParameters), case-insensitive; " +
         "link = host | links | <linkInstanceId> | <part of the link name> | " +
         "path (fromId, toId, maxHops?) → shortest undirected path | " +
         "subtree (id, rel, depth?, direction? in|out, maxNodes?) e.g. everything fed_by a panel. " +
@@ -129,12 +129,17 @@ public class GraphQueryTool : IRevitMcpTool
                     var param = ToolArguments.GetString(args, "param");
                     var paramValue = ToolArguments.GetString(args, "paramValue");
                     var paramContains = ToolArguments.GetString(args, "paramContains");
+                    var phase = ToolArguments.GetString(args, "phase");
+                    var option = ToolArguments.GetString(args, "option");
                     var page = Math.Max(0, ToolArguments.GetInt(args, "page", 0));
                     var pageSize = QueryGuard.NormalizePageSize(ToolArguments.GetInt(args, "pageSize", 0));
 
                     var result = opened.Database.Find(
                         NullIfEmpty(kind), NullIfEmpty(category), NullIfEmpty(level), NullIfEmpty(workset), NullIfEmpty(nameContains),
-                        page, pageSize, NullIfEmpty(link), NullIfEmpty(param), NullIfEmpty(paramValue), NullIfEmpty(paramContains));
+                        page, pageSize, NullIfEmpty(link), NullIfEmpty(param), NullIfEmpty(paramValue), NullIfEmpty(paramContains),
+                        NullIfEmpty(phase), NullIfEmpty(option));
+                    if ((NullIfEmpty(phase) ?? NullIfEmpty(option)) != null && (opened.Meta.SchemaVersion ?? 0) < 3)
+                        warnings.Add("This graph was built before phase/option hints existed (schema < 3): rebuild it with revit_graph_build.");
                     var paramFilter = NullIfEmpty(param) ?? NullIfEmpty(paramValue) ?? NullIfEmpty(paramContains);
                     var hasParamTable = opened.Database.HasRoutingParameters();
                     var routingParams = hasParamTable

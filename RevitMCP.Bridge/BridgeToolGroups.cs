@@ -18,8 +18,8 @@ public static class BridgeToolGroups
         [Core] = "Connection, instance routing, selection, live reads by element id, memory recall and remember",
         [Discovery] = "Search, describe, load and call any connector tool",
         [Graph] = "Model graph: build, status, summary, query, route (cheap id-first discovery)",
-        ["query"] = "Broad element queries, parameter filters, grouping, query presets, parameter QA; geometry, boxes, ray casts",
-        ["edit"] = "Generic model edits: parameters, move/align/rotate/elevation, mirror/array, groups (list, create, ungroup, place), delete/duplicate/rename, family types, placement, families (list, load, reload, purge unused), project and shared parameters (list, create, bind categories)",
+        ["query"] = "Broad element queries, parameter filters, grouping, query presets, parameter QA, phases, design options, model health audit; geometry, boxes, ray casts",
+        ["edit"] = "Generic model edits: parameters, move/align/rotate/elevation, mirror/array, groups (list, create, ungroup, place), delete/duplicate/rename, family types, placement, families (list, load, reload, purge unused), project and shared parameters (list, create, bind categories), element and view phases",
         ["devices"] = "Room geometry, device codes, room-based device placement and device/fire-alarm audits",
         ["electrical"] = "Circuits, panels, wires/cables, voltage drop, fire alarm circuits, patch panels, cable tray and conduit runs (containment)",
         ["panelschematics"] = "PanelSchematics plugin (Kilbiskeemid): panel tables, empty rows, circuit row parameters, its Extensible Storage data",
@@ -69,7 +69,9 @@ public static class BridgeToolGroups
             // Families and parameters (#102)
             "revit_list_families", "revit_preview_load_family", "revit_load_family", "revit_reload_family",
             "revit_preview_purge_unused", "revit_purge_unused", "revit_list_project_parameters", "revit_list_shared_parameters",
-            "revit_preview_create_parameters", "revit_create_parameters", "revit_bind_parameter_categories"
+            "revit_preview_create_parameters", "revit_create_parameters", "revit_bind_parameter_categories",
+            // Model state (#109)
+            "revit_preview_set_phase", "revit_set_phase", "revit_set_view_phase"
         }),
         ("query", new[]
         {
@@ -77,8 +79,11 @@ public static class BridgeToolGroups
             "revit_list_query_presets", "revit_run_query_preset", "revit_select_elements", "revit_select_elements_by_query",
             "revit_check_parameter_completeness", "revit_list_parameter_qa_rule_sets", "revit_run_parameter_qa_rule_set",
             "revit_export_query_to_excel", "revit_export_list_to_excel",
+            // Geometry queries (#107)
             "revit_get_element_geometry", "revit_find_elements_in_box", "revit_find_elements_near", "revit_find_nearest_surface",
-            "revit_check_line_of_sight", "revit_measure_clearance"
+            "revit_check_line_of_sight", "revit_measure_clearance",
+            // Model state (#109)
+            "revit_list_phases", "revit_list_design_options", "revit_audit_model"
         }),
         ("tags", new[] { "revit_create_text_notes", "revit_get_text_notes", "revit_preview_set_text_notes", "revit_set_text_notes", "revit_annotate_detail_lines", "revit_preview_align_in_view", "revit_align_in_view" }),
         ("ifc", new[] { "revit_query_linked_elements", "revit_select_linked_elements" }),

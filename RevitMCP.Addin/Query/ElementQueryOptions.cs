@@ -33,5 +33,11 @@ public class ElementQueryOptions
 
     // Opt-in identity/value projection; the full DTO remains the default contract.
     public bool CompactResponse { get; set; } = false;
+
+    // #109: add phase created/demolished, design option and workset names to each returned element.
+    public bool IncludeModelState { get; set; } = false;
+
+    // #109: add who has each returned element checked out (WorksharingUtils.GetCheckoutStatus; slower, separate flag).
+    public bool IncludeOwnership { get; set; } = false;
 }
 

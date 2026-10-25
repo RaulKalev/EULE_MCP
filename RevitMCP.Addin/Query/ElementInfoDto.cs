@@ -16,6 +16,19 @@ public class ElementInfoDto
     [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
     public string? LineStyle { get; set; }
 
+    // Model state (#109): filled only with includeModelState=true (OwnedBy with includeOwnership=true); null fields are
+    // left out, so default payloads stay as they were. Empty string = none (main model, not demolished, not workshared).
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public string? PhaseCreated { get; set; }
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public string? PhaseDemolished { get; set; }
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public string? DesignOption { get; set; }
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public string? Workset { get; set; }
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public string? OwnedBy { get; set; }
+
     public Dictionary<string, ParameterValueDto> Parameters { get; set; } = new();
 
     // Populated only when the query sets IncludeTags; empty list = queried, no tags attached.

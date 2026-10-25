@@ -22,6 +22,12 @@ public static class ElementQueryResponseFormatter
             Type = NullIfEmpty(element.Type),
             Name = NullIfEmpty(element.Name),
             Level = NullIfEmpty(element.Level),
+            // #109: kept as given (empty = none) so a requested model state is visible in compact mode too.
+            PhaseCreated = element.PhaseCreated,
+            PhaseDemolished = element.PhaseDemolished,
+            DesignOption = element.DesignOption,
+            Workset = element.Workset,
+            OwnedBy = element.OwnedBy,
             Parameters = element.Parameters.Count == 0
                 ? null
                 // X3: a measured value shows its unit here ("3200 mm"); the full DTO keeps Value and Unit apart.
@@ -56,6 +62,21 @@ public sealed class CompactElementInfoDto
 
     [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
     public string? Level { get; set; }
+
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public string? PhaseCreated { get; set; }
+
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public string? PhaseDemolished { get; set; }
+
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public string? DesignOption { get; set; }
+
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public string? Workset { get; set; }
+
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public string? OwnedBy { get; set; }
 
     [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
     public Dictionary<string, string>? Parameters { get; set; }

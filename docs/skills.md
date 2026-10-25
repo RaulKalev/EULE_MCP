@@ -40,9 +40,25 @@ Built-in default skill files are written here automatically when the skill loade
 | `company.delivery.check` | Delivery Check | Compare delivery folder vs Revit sheets |
 | `company.parameter.qa` | Parameter QA | Required parameter completeness |
 | `company.coordination.qa` | Coordination QA | Clash detection and reporting |
-| `company.project.pre-delivery` | Pre-Delivery Combined Check | All checks in one run |
+| `company.project.pre-delivery` | Pre-Delivery Combined Check | All checks in one run, including the model health audit (`audit.model`) |
 | `company.lehed.nimetamine` | Lehtede Nimetamine | Auto-apply sheet numbers from naming mapping |
 | `company.security.valve-labipaas-spec-check` | Valve/Läbipääs Spec Check | Audit EN spec section 4 (Valve/Läbipääs) against the model |
+
+### Task `audit.model` (model health audit, #109)
+
+Runs the same audit as `revit_audit_model` ([model-state.md](model-state.md#model-health-audit)) and adds one issue
+per figure with a warn or bad badge — plus one per section whose collector failed — to `SharedData["issueDtos"]`
+(appended after any issues an earlier task put there), so `common.merge.issues` and the Excel / HTML export tasks
+include them. Issue categories are `ModelAudit.<section>`; bad is severity Error, warn is Warning. It never changes
+the model (`ChangesModel=false`). The thresholds come from `audit.thresholds` in the config, as for the tool.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `sections` | all | Section names to run (`warnings`, `views`, `rooms`, …) |
+| `publish` | `false` | Also publish the audit page (same link as the tool's) |
+
+`company.project.pre-delivery` runs it after the clash task (which replaces `issueDtos`) and before the merge. Disable
+it per project with `"taskOverrides": { "audit.model": { "enabled": false } }`.
 
 ---
 

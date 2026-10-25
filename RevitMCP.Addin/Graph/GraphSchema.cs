@@ -9,7 +9,12 @@ public static class GraphSchema
 {
     /// <summary>Bump when the table layout or node/edge vocabulary changes incompatibly.</summary>
     /// <summary>2 = edge ownership (edge_owners) for incremental updates (#61). Version 1 graphs stay readable.</summary>
-    public const int SchemaVersion = 2;
+    /// <summary>3 = phase / design option routing hints in <c>extra</c> (#109): older graphs report stale and rebuild.</summary>
+    public const int SchemaVersion = 3;
+
+    /// <summary>Keys of the model-state routing hints in a node's <c>extra</c> JSON (#109).</summary>
+    public const string ExtraPhase = "phase";
+    public const string ExtraOption = "option";
 
     /// <summary>File name suffix of a graph database, e.g. <c>Project.graph.db</c>.</summary>
     public const string FileExtension = ".graph.db";

@@ -423,6 +423,8 @@ public class SkillLoader
             new() { Id = "delivery.compare.revit-sheets",   Enabled = true,  Settings = new() { ["requiredExtensions"] = "pdf,dwg" } },
             new() { Id = "parameterqa.run.rule-set",        Enabled = false, Settings = new() { ["ruleSetName"] = "" } },
             new() { Id = "coordination.run.clash-preset",   Enabled = false, Settings = new() { ["presetName"] = "" } },
+            // #109: model health audit findings (after the clash task, which replaces issueDtos).
+            new() { Id = "audit.model",                     Enabled = true,  Settings = new() { ["publish"] = false } },
             new() { Id = "common.merge.issues",             Enabled = true,  Settings = new() },
             new() { Id = "common.export.excel-report",      Enabled = true,  Settings = new() { ["reportTitle"] = "Pre-Delivery Combined Report" } },
             new() { Id = "common.export.html-dashboard",    Enabled = true,  Settings = new() { ["reportTitle"] = "Pre-Delivery Dashboard" } },

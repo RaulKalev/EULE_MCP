@@ -165,4 +165,105 @@ public class ParameterFilterEvaluatorTests
     {
         Assert.Equal(expected, ParameterFilterEvaluator.EvaluateOperator(value, op, filterValue));
     }
+
+    // ── #109: model-state pseudo-parameters ─────────────────────────────────────────────
+
+    private static readonly ElementIdentity InOptionDemolished = new()
+    {
+        FamilyName = "EN_SIDE_Pistik",
+        TypeName = "2 x RJ45",
+        ModelState = new ElementModelState
+        {
+            PhaseCreated = "Olemasolev",
+            PhaseDemolished = "Uus",
+            DesignOption = "Variant A",
+            Workset = "EN_Nõrkvool"
+        }
+    };
+
+    private static readonly ElementIdentity MainModelNew = new()
+    {
+        ModelState = new ElementModelState { PhaseCreated = "Uus", Workset = "EN_Nõrkvool" }
+    };
+
+    [Theory]
+    [InlineData("Phase Created", true)]
+    [InlineData("phase created", true)]
+    [InlineData("Phase_Demolished", true)]
+    [InlineData("Design Option", true)]
+    [InlineData("Workset", true)]
+    [InlineData("Phase", false)]
+    [InlineData("Workset Name", false)]
+    [InlineData("Design Option Set", false)]
+    public void IsModelStateName_MatchesWholeNamesOnly(string name, bool expected)
+    {
+        Assert.Equal(expected, ModelStateParameters.IsModelStateName(name));
+        Assert.False(ElementIdentityParameters.IsIdentityName(name)); // grouping by these names is unchanged
+    }
+
+    [Fact]
+    public void ModelStateFilters_AreAnsweredFromTheModelState()
+    {
+        Assert.True(ParameterFilterEvaluator.Passes(Array.Empty<ParameterValueDto>(), [Filter("Phase Created", "equals", "uus")], MainModelNew));
+        Assert.False(ParameterFilterEvaluator.Passes(Array.Empty<ParameterValueDto>(), [Filter("Phase Created", "equals", "Uus")], InOptionDemolished));
+        Assert.True(ParameterFilterEvaluator.Passes(Array.Empty<ParameterValueDto>(), [Filter("Phase Demolished", "equals", "Uus")], InOptionDemolished));
+        Assert.True(ParameterFilterEvaluator.Passes(Array.Empty<ParameterValueDto>(), [Filter("Workset", "contains", "nõrk")], MainModelNew));
+    }
+
+    [Fact]
+    public void DesignOption_EmptyMeansMainModel()
+    {
+        var inAnOption = Filter("Design Option", "notEquals", "");
+        Assert.True(ParameterFilterEvaluator.Passes(Array.Empty<ParameterValueDto>(), [inAnOption], InOptionDemolished));
+        Assert.False(ParameterFilterEvaluator.Passes(Array.Empty<ParameterValueDto>(), [inAnOption], MainModelNew));
+        Assert.True(ParameterFilterEvaluator.Passes(Array.Empty<ParameterValueDto>(), [Filter("Design Option", "isEmpty")], MainModelNew));
+        Assert.True(ParameterFilterEvaluator.Passes(Array.Empty<ParameterValueDto>(), [Filter("Phase Demolished", "isEmpty")], MainModelNew));
+    }
+
+    [Fact]
+    public void ModelStateFilters_CombineWithIdentityAndParameterFilters()
+    {
+        var filters = new List<ParameterFilterDto>
+        {
+            Filter("Phase Created", "equals", "Olemasolev"),
+            Filter("Type", "contains", "RJ45"),
+            Filter("Comments", "contains", "Room")
+        };
+        Assert.True(ParameterFilterEvaluator.Passes(DataDeviceParams, filters, InOptionDemolished));
+        Assert.True(ParameterFilterEvaluator.NeedsIdentity(filters));
+        Assert.True(ParameterFilterEvaluator.NeedsModelState(filters));
+    }
+
+    [Fact]
+    public void WithoutAModelState_TheFiltersFallBackToRevitParameters()
+    {
+        // Callers that do not read the model state (the uncircuited-element tools, set_parameter) keep matching Revit's
+        // own "Workset" / "Phase Created" parameters, as before #109.
+        var parameters = new List<ParameterValueDto>
+        {
+            new() { Name = "Workset", Value = "EN_Nõrkvool", Scope = "Instance", StorageType = "Integer" },
+            new() { Name = "Phase Created", Value = "Uus", RawValue = 123L, Scope = "Instance", StorageType = "ElementId" }
+        };
+        var identityOnly = new ElementIdentity { FamilyName = "F", TypeName = "T" };
+        Assert.True(ParameterFilterEvaluator.Passes(parameters, [Filter("Workset", "equals", "EN_Nõrkvool", "Exact")], identityOnly));
+        Assert.True(ParameterFilterEvaluator.Passes(parameters, [Filter("Phase Created", "equals", "123", "Exact")], null));
+        Assert.False(ParameterFilterEvaluator.Passes(parameters, [Filter("Phase Created", "equals", "Olemasolev", "Exact")], identityOnly));
+    }
+
+    [Fact]
+    public void ParameterBackedFilters_DropModelStateFiltersOnlyWhenResolved()
+    {
+        var filters = new List<ParameterFilterDto>
+        {
+            Filter("Design Option", "notEquals", ""),
+            Filter("Workset", "equals", "A"),
+            Filter("Family", "equals", "F"),
+            Filter("Comments", "contains", "x")
+        };
+        Assert.Equal(new[] { "Design Option", "Workset", "Comments" },
+            ParameterFilterEvaluator.ParameterBackedFilters(filters).Select(f => f.ParameterName));
+        Assert.Equal(new[] { "Comments" },
+            ParameterFilterEvaluator.ParameterBackedFilters(filters, modelStateResolved: true).Select(f => f.ParameterName));
+        Assert.False(ParameterFilterEvaluator.NeedsModelState([Filter("Family", "equals", "F")]));
+    }
 }

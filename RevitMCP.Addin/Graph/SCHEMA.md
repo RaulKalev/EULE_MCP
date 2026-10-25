@@ -2,7 +2,8 @@
 
 One SQLite file per Revit model: `<root>\<project>\<model-name>.graph.db`
 (`root` = `graph.sharedFolder` from the user or company config, else
-`%LOCALAPPDATA%\RKTools\RevitMCP\Graph`). Schema version **2** (2 added `edge_owners` for incremental updates, #61).
+`%LOCALAPPDATA%\RKTools\RevitMCP\Graph`). Schema version **3** (2 added `edge_owners` for incremental updates, #61;
+3 added the `phase` / `option` hints of elements and panels, #109 — older graphs report `stale` and are rebuilt).
 
 The graph is a **routing layer**. It stores ids, names and relationships so an agent can find
 the right element ids cheaply. It never stores parameter values and must never be quoted as a
@@ -26,15 +27,21 @@ source of truth — fetch live values by id with the regular `revit_*` tools.
 
 | Kind | Keys |
 |---|---|
-| `element` | `family`, `type` (family instances) or `type` (system families) |
+| `element` | `family`, `type` (family instances) or `type` (system families); `phase` (created phase name), `option` (design option name; absent = main model) |
 | `type` | `family`, `type` |
-| `panel` | `family`, `type`, `panelName` (RBS_ELEC_PANEL_NAME). Panel nodes are electrical equipment referenced by `ElectricalSystem.BaseEquipment`; other electrical equipment remains `element`. |
+| `panel` | `family`, `type`, `panelName` (RBS_ELEC_PANEL_NAME), `phase`, `option`. Panel nodes are electrical equipment referenced by `ElectricalSystem.BaseEquipment`; other electrical equipment remains `element`. |
 | `circuit` | `circuitNumber`, `loadName`, `panel`, `panelId`, `systemType` |
 | `space` | `number`, `name`, `spatialType` (`Room` or `Space`) |
 | `level` | `elevationMm` |
 | `workset` | `owner`, `isOpen` |
 | `sheet` | `sheetNumber`, `sheetName` |
 | `view` | `viewType`, `isSchedule` |
+
+The `phase` and `option` hints (#109) are matched by `revit_graph_query operation=find phase=<name>` /
+`option=<name>` with SQLite `json_extract(extra, '$.phase')`, exact and case-insensitive; `none` (or `-`) matches
+nodes without the hint (no phase, or the main model). `revit_graph_summary` counts `elementsByPhase` the same way.
+They are routing hints captured at build time like every other `extra` value: read `Phase Created` / `Design Option`
+live (`revit_get_elements_info includeModelState=true`) before reporting or writing.
 | `link` | `document`, `path`, `loaded` (a Revit/IFC link instance; its id is the host element id) |
 | linked nodes | the keys of their kind plus `linkName`, `linkDocument` |
 
@@ -102,7 +109,7 @@ none is configured. Values are routing hints captured at `built_at`, never autho
 | `built_at` | UTC ISO-8601 timestamp of the build |
 | `central_version` | Version signal captured at build time (see below) |
 | `element_count` | `FilteredElementCollector.WhereElementIsNotElementType().GetElementCount()` at build time |
-| `schema_version` | `2` |
+| `schema_version` | `3` |
 | `built_by` | Revit username |
 | `version_source` | Which API signal produced `central_version` |
 | `is_workshared` | `true` / `false` |

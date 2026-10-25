@@ -53,6 +53,9 @@ public class SkillTaskRegistry
 
             // Security tasks
             new AuditValveLabipaasSpecTask(),
+
+            // Model health audit (#109)
+            new RevitMCP.Addin.Skills.Tasks.Audit.AuditModelTask(),
         };
 
         _tasks = list.ToDictionary(t => t.Id, t => t, StringComparer.OrdinalIgnoreCase);

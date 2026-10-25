@@ -334,6 +334,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Only these parameters (partial name match). Empty = all.")] string[]? parameterNames = null,
         [Description("Include type parameters (repeated for every element of a type). Default true.")] bool includeTypeParameters = true,
         [Description("Include instance parameters. Default true.")] bool includeInstanceParameters = true,
+        [Description(IncludeModelStateDescription)] bool includeModelState = false,
+        [Description(IncludeOwnershipDescription)] bool includeOwnership = false,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -343,7 +345,9 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["useSelection"] = useSelection,
             ["parameterNames"] = parameterNames ?? [],
             ["includeTypeParameters"] = includeTypeParameters,
-            ["includeInstanceParameters"] = includeInstanceParameters
+            ["includeInstanceParameters"] = includeInstanceParameters,
+            ["includeModelState"] = includeModelState,
+            ["includeOwnership"] = includeOwnership
         };
         args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_get_element_parameters", args, cancellationToken);
@@ -724,6 +728,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("If true, return identity fields and parameter name/value pairs only, omitting verbose parameter metadata. Default false preserves the full response.")] bool compact = false,
         [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
         [Description("Default true: a whole-category read (no elementIds, selection or filters) of 200+ elements is not run when the model graph is fresh; the result has status graph_first with the calls to make instead. False reads the whole category live.")] bool graphFirst = true,
+        [Description(IncludeModelStateDescription)] bool includeModelState = false,
+        [Description(IncludeOwnershipDescription)] bool includeOwnership = false,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -746,7 +752,9 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["truncateStringLength"] = truncateStringLength,
             ["summaryOnly"] = summaryOnly,
             ["includeTags"] = includeTags,
-            ["compact"] = compact
+            ["compact"] = compact,
+            ["includeModelState"] = includeModelState,
+            ["includeOwnership"] = includeOwnership
         };
         args["graphHint"] = graphHint;
         args["graphFirst"] = graphFirst;
@@ -775,6 +783,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("If true, return identity fields and parameter name/value pairs only, omitting verbose parameter metadata. Default false preserves the full response.")] bool compact = false,
         [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
         [Description("Default true: a whole-category read (no elementIds, selection or filters) of 200+ elements is not run when the model graph is fresh; the result has status graph_first with the calls to make instead. False reads the whole category live.")] bool graphFirst = true,
+        [Description(IncludeModelStateDescription)] bool includeModelState = false,
+        [Description(IncludeOwnershipDescription)] bool includeOwnership = false,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -797,7 +807,9 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["truncateStringLength"] = truncateStringLength,
             ["summaryOnly"] = summaryOnly,
             ["includeTags"] = includeTags,
-            ["compact"] = compact
+            ["compact"] = compact,
+            ["includeModelState"] = includeModelState,
+            ["includeOwnership"] = includeOwnership
         };
         args["graphHint"] = graphHint;
         args["graphFirst"] = graphFirst;
@@ -6681,7 +6693,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
 
     [McpServerTool(Name = "revit_graph_query", ReadOnly = true),
      Description("Structured queries against the model graph (no SQL). operation=neighbors (id, rel?, direction? in|out|both, limit?) | " +
-                 "find (kind?, category?, level?, workset?, nameContains?, page?, pageSize?) → ids + names, paginated, hard-capped | " +
+                 "find (kind?, category?, level?, workset?, nameContains?, phase?, option?, page?, pageSize?) → ids + names, paginated, hard-capped | " +
                  "path (fromId, toId, maxHops?) → shortest undirected path | " +
                  "subtree (id, rel, depth?, direction? in|out, maxNodes?) e.g. everything fed_by a panel. " +
                  "Kinds: element, type, panel, circuit, space, level, workset, sheet, view. " +
@@ -6702,6 +6714,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("find only: routing parameter name (allowlisted in graph.routingParameters). Alone: nodes that have a value for it.")] string? param = null,
         [Description("find only: exact routing parameter value (case-insensitive); with param, of that parameter.")] string? paramValue = null,
         [Description("find only: substring of a routing parameter value (case-insensitive).")] string? paramContains = null,
+        [Description("find only: created phase name (exact, case-insensitive); none = no phase.")] string? phase = null,
+        [Description("find only: design option name (exact, case-insensitive); none = main model.")] string? option = null,
         [Description("find only: zero-based page index. Default 0.")] int page = 0,
         [Description("find only: page size (default 100, max 500).")] int pageSize = 100,
         [Description("path only: start node id.")] string? fromId = null,
@@ -6729,6 +6743,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["param"]        = param ?? string.Empty,
             ["paramValue"]   = paramValue ?? string.Empty,
             ["paramContains"] = paramContains ?? string.Empty,
+            ["phase"]        = phase ?? string.Empty,
+            ["option"]       = option ?? string.Empty,
             ["page"]         = page,
             ["pageSize"]     = pageSize,
             ["fromId"]       = fromId ?? string.Empty,
