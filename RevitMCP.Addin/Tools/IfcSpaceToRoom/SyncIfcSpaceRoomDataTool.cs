@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Autodesk.Revit.UI;
 using Newtonsoft.Json.Linq;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Tools;                                           // ToolArguments
 using RevitMCP.Addin.Tools.IfcSpaceToRoom.Models;
@@ -51,8 +52,9 @@ public class SyncIfcSpaceRoomDataTool : IRevitMcpTool
         CancellationToken cancellationToken)
     {
         var sw  = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null) return Task.FromResult(Fail(request, "No active Revit document."));
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
 
         // ── Parse arguments ────────────────────────────────────────────────────
         var linkInstanceId = ToolArguments.GetLong(request.Arguments, "linkInstanceId", 0L);

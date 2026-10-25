@@ -5,13 +5,13 @@ namespace RevitMCP.Tests;
 
 /// <summary>
 /// #101: every tool finds its document through ToolDocument, so <c>document="&lt;title&gt;"</c> works outside the
-/// documents group. After wave 3 the tools that still read the active document directly are listed here with the reason;
+/// documents group. The tools that still read the active document directly do so on purpose and are listed here with the reason;
 /// any other tool doing so fails the test, and the number of direct uses may only go down.
 /// </summary>
 public class ToolDocumentMigrationTests
 {
-    /// <summary>Uses of ActiveUIDocument left in RevitMCP.Addin/Tools after wave 3.</summary>
-    private const int MaxRemainingUses = 56;
+    /// <summary>Uses of ActiveUIDocument left in RevitMCP.Addin/Tools: only the exceptions on purpose remain.</summary>
+    private const int MaxRemainingUses = 28;
 
     /// <summary>Files (under RevitMCP.Addin/Tools) allowed to read the active document directly, by reason.</summary>
     private static readonly string[] AllowedActiveDocument =
@@ -28,17 +28,7 @@ public class ToolDocumentMigrationTests
         Path.Combine("ModelPages", "ModelPageTools.cs"), Path.Combine("ModelPages", "PageSetValuesTool.cs"),
         Path.Combine("Memory", "MemoryReviewTools.cs"), Path.Combine("Memory", "MemoryTools.cs"), Path.Combine("Plans", "PlanTools.cs"),
         // Documents group: the active document is the subject (activate, open-transaction check).
-        Path.Combine("Documents", "DocumentTools.cs"),
-        // Not migrated yet: links, CAD, clash, IFC, delivery, extensible storage, PanelSchematics.
-        "QueryLinkedElementsTool.cs", "CadManagementTools.cs", "GetCadPlacementPointsTool.cs", "GetCadShapesTool.cs",
-        "PlaceFromCadShapesTool.cs", "PlaceFromCadTool.cs", "PreviewPlaceFromCadShapesTool.cs", "PreviewPlaceFromCadTool.cs",
-        "CreateClashReviewViewTool.cs", "DetectClearanceClashesTool.cs", "DetectHardClashesTool.cs", "GetClashCandidatesTool.cs",
-        "ListClashableCategoriesTool.cs", "ListClashableLinksTool.cs", "RunClashPresetTool.cs",
-        Path.Combine("IfcSpaceToRoom", "ConvertIfcSpacesToRoomsTool.cs"), Path.Combine("IfcSpaceToRoom", "ListIfcLinksTool.cs"),
-        Path.Combine("IfcSpaceToRoom", "PreviewIfcSpaceGeometryTool.cs"), Path.Combine("IfcSpaceToRoom", "PreviewIfcSpacesTool.cs"),
-        Path.Combine("IfcSpaceToRoom", "SyncIfcSpaceRoomDataTool.cs"), Path.Combine("IfcSpaceToRoom", "ValidateIfcSpaceRoomConversionTool.cs"),
-        Path.Combine("Delivery", "DeliveryCheckAgainstRevitSheetsTool.cs"), Path.Combine("Delivery", "DeliveryRunFullCheckTool.cs"),
-        "ExtensibleStorageTools.cs", Path.Combine("PanelSchematics", "PanelSchematicsToolSupport.cs")
+        Path.Combine("Documents", "DocumentTools.cs")
     };
 
     private static string ToolsFolder()
@@ -89,10 +79,11 @@ public class ToolDocumentMigrationTests
         var resolving = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (_, source) in ToolSources())
         {
-            var ok = Regex.IsMatch(source, @"ToolDocument\.|WorksharingSupport\.Workshared\(|RevitDocumentResolver\.Resolve|DocumentToolSupport\.Resolve|CheckpointSupport\.Resolve|SaveSupport\.Resolve")
+            // PanelSchematicsToolSupport.ActiveDocument (called as Support.ActiveDocument) resolves through ToolDocument.
+            var ok = Regex.IsMatch(source, @"ToolDocument\.|WorksharingSupport\.Workshared\(|Support\.ActiveDocument\(|RevitDocumentResolver\.Resolve|DocumentToolSupport\.Resolve|CheckpointSupport\.Resolve|SaveSupport\.Resolve")
                      && !source.Contains("ActiveUIDocument");
             if (!ok) continue;
-            foreach (Match m in Regex.Matches(source, @"(?:Name\s*=>\s*|ToolName\s*=\s*)""(revit_[a-z0-9_]+)"""))
+            foreach (Match m in Regex.Matches(source, @"(?:Name\s*=>\s*|ToolName\s*=\s*)""([a-z][a-z0-9_]+)"""))
                 resolving.Add(m.Groups[1].Value);
         }
 
@@ -104,7 +95,7 @@ public class ToolDocumentMigrationTests
             var end = i + 1 < starts.Count ? starts[i + 1].Index : bridge.Length;
             var block = bridge.Substring(starts[i].Index, end - starts[i].Index);
             if (!Regex.IsMatch(block, @"\bstring\??\s+document\b")) continue;
-            var targets = Regex.Matches(block, @"(?:SendAsync|Send\w+)\(\s*""(revit_[a-z0-9_]+)""").Select(m => m.Groups[1].Value).Distinct();
+            var targets = Regex.Matches(block, @"(?:SendAsync|Send\w+)\(\s*""([a-z][a-z0-9_]+)""").Select(m => m.Groups[1].Value).Distinct();
             offenders.AddRange(targets.Where(t => !resolving.Contains(t) && !resolveItThemselves.Contains(t))
                 .Select(t => $"{starts[i].Groups[1].Value} -> {t}"));
         }

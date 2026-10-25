@@ -31,8 +31,8 @@ public class PreviewPlaceFromCadShapesTool : IRevitMcpTool
         CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        if (uiapp.ActiveUIDocument?.Document == null)
-            return Task.FromResult(Fail(request, "No active document."));
+        if (RevitMCP.Addin.Documents.ToolDocument.Resolve(uiapp, request, out var documentFailure) == null)
+            return Task.FromResult(documentFailure!);
 
         var warnings = new List<string>();
         var plan = CadShapePlacementPlanner.Build(uiapp, request, warnings, out var error, cancellationToken);

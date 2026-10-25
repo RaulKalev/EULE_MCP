@@ -4,6 +4,7 @@ using Autodesk.Revit.UI;
 using Newtonsoft.Json.Linq;
 using RevitMCP.Addin.Coordination.Clash.Review;
 using RevitMCP.Addin.Coordination.Clash.Services;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Tools;
 using RevitMCP.Core.Models;
@@ -23,9 +24,12 @@ public class CreateClashReviewViewTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        if (uidoc?.Document == null) return Task.FromResult(Fail(request, "No active document."));
-        var doc = uidoc.Document;
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
+        var uidoc = ToolDocument.UiDocumentOf(uiapp, documentTarget);
+        if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+            return Task.FromResult(ToolDocument.ActiveRequired(request, "useSelection", documentTarget.Document.Title));
 
         var args = request.Arguments;
         var clashId = ToolArguments.GetString(args, "clashId", "");
@@ -52,7 +56,9 @@ public class CreateClashReviewViewTool : IRevitMcpTool
 
         RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(t);
 
-        uidoc.ActiveView = view;
+        // Only the active document's view can be switched; another document (#101) gets the view without opening it.
+        if (uidoc != null) uidoc.ActiveView = view;
+        else warnings.Add($"'{doc.Title}' is not the active document: the view was created but not opened. Activate the document to see it.");
 
         sw.Stop();
         var msg = string.IsNullOrWhiteSpace(clashId)

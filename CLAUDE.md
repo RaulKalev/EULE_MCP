@@ -63,12 +63,11 @@ reviews — point them to it instead of repeating it.
 `revit_list_open_documents` lists the open project documents and their DWG/IFC/RVT links. The `documents` group
 (`revit_reload_links_from`, `revit_remove_links`, `revit_set_link_visibility`, `revit_save_document`,
 `revit_sync_with_central`, each with a preview where it changes the model) takes `document` (title or path) and works
-on non-active documents; approvals bind to that target document. So do most other tools — every tool that lists a
-`document` parameter (reads and writes in `core`, `query`, `edit`, `electrical`, `views`, `tags`, `devices`; see
-[`docs/worker-document.md`](docs/worker-document.md)). Tools without it (selection, graph, pages, memory, plans, CAD,
-clash, IFC, PanelSchematics) act on the active document — switch with `revit_activate_document` when needed. A UI-bound
-call (`useSelection`) on a non-active document returns `active_document_required`, and a view-based one needs `viewId`
-there.
+on non-active documents; approvals bind to that target document. So does every other tool that lists a `document`
+parameter — nearly all model tools (see [`docs/worker-document.md`](docs/worker-document.md)). Only selection, the
+model graph, model pages, memory and plans act on the active document by design — switch with `revit_activate_document`
+when needed. A UI-bound call (`useSelection`) on a non-active document returns `active_document_required`, and a
+view-based one needs `viewId` there.
 
 To work beside the user instead of in their document, open your own local: `revit_open_document path=<central>`
 (a background `<central>_<user>_mcp.rvt`, never activated), then pass `document=<its title>` on every call, check out

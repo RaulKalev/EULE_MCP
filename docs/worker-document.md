@@ -84,9 +84,13 @@ to fall back on. Deleting views of a non-active document closes their open tabs 
 
 Still active-document only, on purpose: the selection tools (`revit_select_*`, `revit_get_selected_elements`,
 `revit_inspect_selected_elements`, the selected-tag-template tools, `revit_focus_clash`), the model graph, model pages,
-memory and plans (they bind to the active model by design). Not migrated yet: linked-model queries, CAD, clash, IFC
-Space-to-Room, delivery checks, Extensible Storage and PanelSchematics. `ToolDocumentMigrationTests` lists them; any
-other tool reading the active document directly fails it.
+memory and plans (they bind to the active model by design). `ToolDocumentMigrationTests` lists them; any other tool
+reading the active document directly fails it.
+
+After wave 3 the remaining groups followed: linked-model queries, CAD (imports, overrides, placement from CAD), clash
+detection and review views, IFC Space-to-Room, delivery checks against Revit sheets, Extensible Storage and
+PanelSchematics. On a non-active document the CAD override tools need `viewId`, and `revit_create_clash_review_view`
+creates the view without opening it (only the active document's view can be switched).
 
 A bridge tool offers `document` only when every add-in tool it sends to resolves it — a `document` argument a tool
 ignored would bind the approval to one document while the tool acts on another. `ToolDocumentMigrationTests` checks this
