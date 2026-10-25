@@ -89,6 +89,7 @@
     <Compile Include="..\RevitMCP.Addin\Services\LongRunningTools.cs" Link="Services\LongRunningTools.cs" />
     <Compile Include="..\RevitMCP.Addin\Approval\DirectEditDefault.cs" Link="Approval\DirectEditDefault.cs" />
     <Compile Include="..\RevitMCP.Bridge\ToolSearchIndex.cs" Link="Bridge\ToolSearchIndex.cs" />
+    <Compile Include="..\RevitMCP.Bridge\ToolArgumentCoercion.cs" Link="Bridge\ToolArgumentCoercion.cs" />
     <Compile Include="..\RevitMCP.Benchmark\Core\BenchmarkReport.cs" Link="Benchmark\BenchmarkReport.cs" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
@@ -103,6 +104,8 @@
          winsqlite3 bundle so the linked Graph sources run on Linux/CI as well as Windows. -->
     <PackageReference Include="Microsoft.Data.Sqlite.Core" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
+    <!-- The MCP SDK, to check ToolArgumentCoercion against the schemas and argument binding the bridge really uses. -->
+    <PackageReference Include="ModelContextProtocol" />
   </ItemGroup>
 
   <!-- RevitMCP.Core and RevitMCP.Village have no Revit dependency — safe to reference directly -->
