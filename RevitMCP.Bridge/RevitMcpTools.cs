@@ -3470,7 +3470,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Optional panel name filter (partial match)")] string? panelName = null,
         [Description("Optional circuit number filter (partial match)")] string? circuitNumber = null,
         [Description("Optional system type filter (e.g. PowerCircuit, Data, FireAlarm)")] string? systemType = null,
-        [Description("Include connected elements per circuit. Heavy on large models; opt-in. Default false.")] bool includeElements = false,
+        [Description("Include connected elements per circuit. Heavy on large models; opt-in. Default false: elementCount is then null (not counted).")] bool includeElements = false,
         [Description("Include circuit parameters in response")] bool includeParameters = false,
         [Description("Max circuits to return (default 500)")] int limit = 500,
         [Description(DocumentArgDescription)] string? document = null,
@@ -3494,7 +3494,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
      Description("Returns detailed information for one electrical circuit by element ID.")]
     public async Task<string> GetCircuitInfo(
         [Description("Element ID of the circuit")] long circuitId,
-        [Description("Include connected elements")] bool includeElements = true,
+        [Description("Include connected elements (default true; false leaves elementCount null)")] bool includeElements = true,
         [Description("Include circuit parameters")] bool includeCircuitParameters = true,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
@@ -3929,11 +3929,11 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_check_circuit_health", ReadOnly = true),
-     Description("Central circuit QA tool. Configurable checks: MissingPanel, EmptyCircuitNumber, DuplicateCircuitNumbers, MissingCableType, MissingWireType, MissingLoadName, NoConnectedElements. Filter by panelName or systemType. Returns issue details with circuit IDs.")]
+     Description("Central circuit QA tool. Configurable checks: MissingPanel, EmptyCircuitNumber, DuplicateCircuitNumbers, MissingCableType (no cable or wire type resolves; MissingWireType is the same check), MissingLoadName, NoConnectedElements. Filter by panelName or systemType. Returns issue details with circuit IDs.")]
     public async Task<string> CheckCircuitHealth(
         [Description("Optional panel name filter (partial match)")] string? panelName = null,
         [Description("Optional system type filter (e.g. PowerCircuit, Data, FireAlarm)")] string? systemType = null,
-        [Description("Checks to run — default all: MissingPanel, EmptyCircuitNumber, DuplicateCircuitNumbers, MissingCableType, MissingWireType, MissingLoadName, NoConnectedElements")] string[]? checks = null,
+        [Description("Checks to run — default all: MissingPanel, EmptyCircuitNumber, DuplicateCircuitNumbers, MissingCableType, MissingLoadName, NoConnectedElements")] string[]? checks = null,
         [Description("Include connected elements for circuits with issues")] bool includeElements = true,
         [Description("Max circuits to check (default 5000)")] int limit = 5000,
         [Description(DocumentArgDescription)] string? document = null,
@@ -4279,7 +4279,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     public async Task<string> PreviewCircuitLoadNames(
         [Description("Optional panel name filter")] string? panelName = null,
         [Description("Template string with {ParameterName} placeholders, e.g. '{Room Number} {Category}'")] string? template = null,
-        [Description("Parameter source: ConnectedElements (default) or CircuitParameters")] string source = "ConnectedElements",
+        [Description("Where placeholders are read: ConnectedElements (default: the first connected element, then the circuit; {Category}, {Family}, {Type} name the element) or CircuitParameters")] string source = "ConnectedElements",
         [Description("Optional system type filter")] string? systemType = null,
         [Description("Max circuits (default 500)")] int limit = 500,
         [Description(DocumentArgDescription)] string? document = null,

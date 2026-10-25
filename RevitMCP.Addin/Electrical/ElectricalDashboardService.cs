@@ -75,8 +75,8 @@ public static class ElectricalDashboardService
         var issueTotals = new Dictionary<string, int>
         {
             ["MissingPanel"] = 0, ["EmptyCircuitNumber"] = 0,
-            ["DuplicateCircuitNumbers"] = 0, ["MissingCableType"] = 0,
-            ["MissingWireType"] = 0, ["MissingLoadName"] = 0, ["NoConnectedElements"] = 0
+            ["DuplicateCircuitNumbers"] = 0, [CircuitCableCheck.Issue] = 0,
+            ["MissingLoadName"] = 0, ["NoConnectedElements"] = 0
         };
 
         var panelMap = new Dictionary<string, PanelData>();
@@ -84,7 +84,7 @@ public static class ElectricalDashboardService
         var systemTypeIssues = new Dictionary<string, int>();
 
         int circuitsWithIssues = 0, circuitsMissingPanel = 0;
-        int circuitsMissingCableType = 0, circuitsMissingWireType = 0, circuitsMissingLoadName = 0;
+        int circuitsMissingCableType = 0, circuitsMissingLoadName = 0;
         int circuitsWithoutConnectedElements = 0;
 
         foreach (var c in circuits)
@@ -96,15 +96,6 @@ public static class ElectricalDashboardService
             var pId = panel?.Id?.Value ?? 0L;
             var circNum = c.CircuitNumber ?? "";
             var wt = CircuitDtoBuilder.GetWireTypeName(doc, c);
-            bool hasCableType = false;
-#if !REVIT2024
-            try
-            {
-                var cableId = c.CableType;
-                hasCableType = cableId != null && cableId != ElementId.InvalidElementId;
-            }
-            catch { }
-#endif
             string loadName = "";
             try { loadName = c.LookupParameter("Load Name")?.AsString() ?? ""; } catch { }
             var stName = c.SystemType.ToString();
@@ -129,8 +120,7 @@ public static class ElectricalDashboardService
                 if (circNumMap.TryGetValue(key, out var dups) && dups.Count > 1)
                     circIssues.Add("DuplicateCircuitNumbers");
             }
-            if (!hasCableType) { circIssues.Add("MissingCableType"); circuitsMissingCableType++; }
-            if (string.IsNullOrEmpty(wt)) { circIssues.Add("MissingWireType"); circuitsMissingWireType++; }
+            if (CircuitCableCheck.IsMissing(wt)) { circIssues.Add(CircuitCableCheck.Issue); circuitsMissingCableType++; }
             if (string.IsNullOrWhiteSpace(loadName)) { circIssues.Add("MissingLoadName"); circuitsMissingLoadName++; }
 
             int elemSize = 0;
@@ -211,7 +201,6 @@ public static class ElectricalDashboardService
             totalIssueCount = issueTotals.Values.Sum(),
             circuitsMissingPanel,
             circuitsMissingCableType,
-            circuitsMissingWireType,
             circuitsMissingLoadName,
             duplicateCircuitNumberGroups,
             circuitsWithoutConnectedElements
@@ -310,10 +299,6 @@ public static class ElectricalDashboardService
             var pId = panel?.Id?.Value ?? 0L;
             var circNum = c.CircuitNumber ?? "";
             var wt = CircuitDtoBuilder.GetWireTypeName(doc, c);
-            bool hasCableType = false;
-#if !REVIT2024
-            try { var id = c.CableType; hasCableType = id != null && id != ElementId.InvalidElementId; } catch { }
-#endif
             string ln = ""; try { ln = c.LookupParameter("Load Name")?.AsString() ?? ""; } catch { }
 
             if (!panelMap.ContainsKey(pName))
@@ -334,9 +319,10 @@ public static class ElectricalDashboardService
                 if (circNumMap.TryGetValue(key, out var dups) && dups.Count > 1)
                 { circIssues.Add("DuplicateCircuitNumbers"); pd.IssueCounts["DuplicateCircuitNumbers"] = pd.IssueCounts.TryGetValue("DuplicateCircuitNumbers", out int v2) ? v2 + 1 : 1; }
             }
-            if (!hasCableType) { circIssues.Add("MissingCableType"); pd.IssueCounts["MissingCableType"] = pd.IssueCounts.TryGetValue("MissingCableType", out int v3) ? v3 + 1 : 1; }
+            if (CircuitCableCheck.IsMissing(wt)) { circIssues.Add(CircuitCableCheck.Issue); pd.IssueCounts[CircuitCableCheck.Issue] = pd.IssueCounts.TryGetValue(CircuitCableCheck.Issue, out int v3) ? v3 + 1 : 1; }
             if (string.IsNullOrWhiteSpace(ln)) { circIssues.Add("MissingLoadName"); pd.IssueCounts["MissingLoadName"] = pd.IssueCounts.TryGetValue("MissingLoadName", out int v4) ? v4 + 1 : 1; }
-            if (circIssues.Count > 0) pd.IssueCount++;
+            // Issues, not circuits with issues: the same count as the dashboard's per-panel issueCount (M11).
+            pd.IssueCount += circIssues.Count;
 
             if (includeCircuitDetails)
                 panelCircuits[pName].Add(new

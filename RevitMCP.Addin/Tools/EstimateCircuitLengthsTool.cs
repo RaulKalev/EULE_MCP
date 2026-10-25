@@ -26,7 +26,9 @@ public class EstimateCircuitLengthsTool : IRevitMcpTool
         var panelName = ToolArguments.GetString(request.Arguments, "panelName");
         var systemType = ToolArguments.GetString(request.Arguments, "systemType");
         var circuitIds = ToolArguments.GetLongArray(request.Arguments, "circuitIds");
-        var method = ToolArguments.GetString(request.Arguments, "method", "ManhattanMax");
+        var requestedMethod = ToolArguments.GetString(request.Arguments, "method", CircuitLengthEstimator.DefaultMethod);
+        if (!CircuitLengthEstimator.TryNormalizeMethod(requestedMethod, out var method))
+            return Task.FromResult(Fail(request, CircuitLengthEstimator.UnknownMethodMessage(requestedMethod)));
         var multiplier = GetDouble(request.Arguments, "routingMultiplier", 1.25);
         var limit = ToolArguments.GetInt(request.Arguments, "limit", 1000);
 

@@ -128,6 +128,8 @@
     <Compile Include="..\RevitMCP.Addin\Electrical\FireAlarmLoopClassifier.cs" Link="Electrical\FireAlarmLoopClassifier.cs" />
     <Compile Include="..\RevitMCP.Addin\Electrical\FireAlarmVoltageDropEvaluator.cs" Link="Electrical\FireAlarmVoltageDropEvaluator.cs" />
     <Compile Include="..\RevitMCP.Addin\Electrical\CircuitNumberComparer.cs" Link="Electrical\CircuitNumberComparer.cs" />
+    <Compile Include="..\RevitMCP.Addin\Electrical\CircuitCableCheck.cs" Link="Electrical\CircuitCableCheck.cs" />
+    <Compile Include="..\RevitMCP.Addin\Electrical\LoadNameTemplateRules.cs" Link="Electrical\LoadNameTemplateRules.cs" />
     <!-- Query response/projection logic (pure DTO shaping; no Revit API dependency) -->
     <Compile Include="..\RevitMCP.Addin\Query\ElementInfoDto.cs" Link="Query\ElementInfoDto.cs" />
     <Compile Include="..\RevitMCP.Addin\Query\ElementQueryResponseFormatter.cs" Link="Query\ElementQueryResponseFormatter.cs" />

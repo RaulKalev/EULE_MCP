@@ -45,6 +45,7 @@ public class GetFireAlarmVoltageDropSummaryTool : IRevitMcpTool
         var profileCollection = CableResistanceProfileService.Load();
 
         var loopResults = new List<object>();
+        var unmatchedCableTypes = new List<string>();
 
         foreach (var loop in presetResult.Loops)
         {
@@ -55,6 +56,7 @@ public class GetFireAlarmVoltageDropSummaryTool : IRevitMcpTool
             double? lengthMeters = loop.CircuitInfo?.CircuitLengthMeters;
             var profile = CableResistanceProfileService.FindMatch(cableType, profileCollection);
             double resistanceOhmPerMeter = profile?.RoundTripOhmPerMeter ?? fallbackResOhm;
+            if (profile == null) unmatchedCableTypes.Add(cableType);
 
             if (loop.LoopKind == "AddressableLoop" || loop.LoopKind == "ModuleLoop")
             {
@@ -128,7 +130,9 @@ public class GetFireAlarmVoltageDropSummaryTool : IRevitMcpTool
             Success    = true,
             Message    = $"Fire alarm voltage-drop/resistance summary for {loopResults.Count} loop(s).",
             Data = new { panelName, loops = loopResults },
-            Warnings   = [Warning, .. presetResult.Warnings],
+            Warnings   = CableResistanceProfileService.FallbackWarning(unmatchedCableTypes, fallbackResOhm) is { } fallbackWarning
+                ? [Warning, fallbackWarning, .. presetResult.Warnings]
+                : [Warning, .. presetResult.Warnings],
             DurationMs = sw.ElapsedMilliseconds
         });
     }

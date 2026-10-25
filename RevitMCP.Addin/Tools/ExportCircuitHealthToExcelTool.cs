@@ -66,7 +66,7 @@ public class ExportCircuitHealthToExcelTool : IRevitMcpTool
                 if (circNumMap.TryGetValue(key, out var dups) && dups.Count > 1)
                     issues.Add((pName, c.Id.Value, cn, "DuplicateCircuitNumbers"));
             }
-            if (string.IsNullOrEmpty(wt)) issues.Add((pName, c.Id.Value, cn, "MissingCableType"));
+            if (CircuitCableCheck.IsMissing(wt)) issues.Add((pName, c.Id.Value, cn, CircuitCableCheck.Issue));
             if (string.IsNullOrWhiteSpace(ln)) issues.Add((pName, c.Id.Value, cn, "MissingLoadName"));
         }
 

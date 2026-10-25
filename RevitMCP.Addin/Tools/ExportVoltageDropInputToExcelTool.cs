@@ -32,7 +32,9 @@ public class ExportVoltageDropInputToExcelTool : IRevitMcpTool
 
         var panelName = ToolArguments.GetString(request.Arguments, "panelName");
         var systemType = ToolArguments.GetString(request.Arguments, "systemType");
-        var method = ToolArguments.GetString(request.Arguments, "method", "ManhattanMax");
+        var requestedMethod = ToolArguments.GetString(request.Arguments, "method", CircuitLengthEstimator.DefaultMethod);
+        if (!CircuitLengthEstimator.TryNormalizeMethod(requestedMethod, out var method))
+            return Task.FromResult(Fail(request, CircuitLengthEstimator.UnknownMethodMessage(requestedMethod)));
         var multiplier = GetDouble(request.Arguments, "routingMultiplier", 1.25);
         var fileName = ToolArguments.GetString(request.Arguments, "fileName", "Voltage_Drop_Input.xlsx");
         var limit = ToolArguments.GetInt(request.Arguments, "limit", 1000);
@@ -105,7 +107,9 @@ public class ExportVoltageDropInputToExcelTool : IRevitMcpTool
             catch { }
 
             int missingLoc = elements.Count(e => !e.Loc.HasValue);
-            var (rawFeet, _) = CircuitLengthEstimator.Estimate(panelPt, elements.Select(e => (e.Id, e.Loc)).ToList(), method);
+            var located = elements.Select(e => (e.Id, e.Loc)).ToList();
+            var (rawFeet, _) = CircuitLengthEstimator.Estimate(panelPt, located, method);
+            var distanceById = CircuitLengthEstimator.ElementDistances(panelPt, located, method).ToDictionary(d => d.Id, d => d.Distance);
             double rawMeters = LengthUnitHelper.RoundMeters(LengthUnitHelper.ToMeters(rawFeet));
             double estimatedMeters = LengthUnitHelper.RoundMeters(rawMeters * multiplier);
 
@@ -130,9 +134,9 @@ public class ExportVoltageDropInputToExcelTool : IRevitMcpTool
                 var typeId = elem.GetTypeId();
                 var typeElem = typeId != null && typeId != ElementId.InvalidElementId ? doc.GetElement(typeId) : null;
                 string locSource = loc.HasValue ? (CircuitLocationResolver.Resolve(elem)?.Source ?? "") : "Unavailable";
-                double distM = loc.HasValue
-                    ? LengthUnitHelper.RoundMeters(LengthUnitHelper.ToMeters(
-                        CircuitLengthEstimator.Manhattan(panelPt.X, panelPt.Y, panelPt.Z, loc.Value.X, loc.Value.Y, loc.Value.Z)))
+                // Under the chosen method, like the circuit row's length (M6).
+                double distM = distanceById.TryGetValue(elemId, out var distFt)
+                    ? LengthUnitHelper.RoundMeters(LengthUnitHelper.ToMeters(distFt))
                     : 0;
 
                 string levelName = "";

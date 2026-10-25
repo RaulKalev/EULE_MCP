@@ -85,16 +85,36 @@ public static class CableResistanceProfileService
     }
 
     /// <summary>
-    /// Returns the first profile whose MatchNameContains is found (case-insensitive) in cableTypeName,
-    /// or null when no profile matches.
+    /// Returns the first profile whose MatchNameContains is found in cableTypeName, or null when no profile matches.
+    /// Both are compared as <see cref="NormalizeName"/> writes them, so "2x2x0,8" matches "2×2×0.8" (M31).
     /// </summary>
     public static CableResistanceProfile? FindMatch(string cableTypeName, CableResistanceProfileCollection? collection = null)
     {
         if (string.IsNullOrWhiteSpace(cableTypeName)) return null;
         collection ??= Load();
+        var name = NormalizeName(cableTypeName);
         return collection.Profiles
-            .FirstOrDefault(p => !string.IsNullOrEmpty(p.MatchNameContains)
-                                  && cableTypeName.Contains(p.MatchNameContains, StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(p => !string.IsNullOrWhiteSpace(p.MatchNameContains)
+                                  && name.Contains(NormalizeName(p.MatchNameContains), StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A cable name for matching: lower case, decimal comma as point, the multiplication sign as x, no spaces.
+    /// Estonian cable types write "2x2x0,8"; the profiles write "2×2×0.8" or "2x0.8 CCA".
+    /// </summary>
+    public static string NormalizeName(string name)
+        => new string(name.ToLowerInvariant().Replace(',', '.').Replace('×', 'x').Where(c => !char.IsWhiteSpace(c)).ToArray());
+
+    /// <summary>
+    /// The warning for cable types no profile matched, or null: their resistance silently became the fallback (M31).
+    /// </summary>
+    public static string? FallbackWarning(IEnumerable<string> unmatchedCableTypes, double fallbackOhmPerMeter)
+    {
+        var names = unmatchedCableTypes.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+        if (names.Count == 0) return null;
+        return $"No resistance profile matches cable type(s) {string.Join(", ", names.Select(n => "'" + n + "'"))}; " +
+               $"the fallback {fallbackOhmPerMeter.ToString(System.Globalization.CultureInfo.InvariantCulture)} Ω/m was used. " +
+               $"Add a profile to {ConfigPath} (revit_list_cable_resistance_profiles shows the current ones).";
     }
 
     /// <summary>Config file path (informational).</summary>

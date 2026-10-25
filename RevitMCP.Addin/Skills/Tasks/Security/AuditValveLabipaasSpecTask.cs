@@ -395,6 +395,12 @@ internal sealed class AuditValveLabipaasSpecTask : ISkillTask
         Document doc, string estimationMethod, List<string> warnings)
     {
         var totals  = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        if (!CircuitLengthEstimator.TryNormalizeMethod(estimationMethod, out var method))
+        {
+            warnings.Add(CircuitLengthEstimator.UnknownMethodMessage(estimationMethod) + " NearestNeighborPath was used.");
+            method = "NearestNeighborPath";
+        }
+        estimationMethod = method;
         var circuits = CircuitQueryService.GetAll(doc);
 
         foreach (var circuit in circuits)

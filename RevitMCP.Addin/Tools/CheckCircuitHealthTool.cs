@@ -13,14 +13,14 @@ namespace RevitMCP.Addin.Tools;
 public class CheckCircuitHealthTool : IRevitMcpTool
 {
     public string Name => "revit_check_circuit_health";
-    public string Description => "Central circuit QA tool. Runs configurable checks: MissingPanel, EmptyCircuitNumber, DuplicateCircuitNumbers, MissingCableType (strict: Revit 2026 CableType not set), MissingWireType (lenient: neither CableType nor legacy WireType resolves to a name), MissingLoadName, NoConnectedElements. Returns circuit IDs and details for each issue found.";
+    public string Description => "Central circuit QA tool. Runs configurable checks: MissingPanel, EmptyCircuitNumber, DuplicateCircuitNumbers, MissingCableType (neither the CableType nor the legacy WireType resolves to a name; MissingWireType is accepted as the same check), MissingLoadName, NoConnectedElements. Returns circuit IDs and details for each issue found.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Electrical;
 
     private static readonly string[] AllChecks =
     [
         "MissingPanel", "EmptyCircuitNumber", "DuplicateCircuitNumbers",
-        "MissingCableType", "MissingWireType", "MissingLoadName", "NoConnectedElements"
+        "MissingCableType", "MissingLoadName", "NoConnectedElements"
     ];
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
@@ -38,7 +38,7 @@ public class CheckCircuitHealthTool : IRevitMcpTool
         var returnIssueReport = ToolArguments.GetBool(request.Arguments, "returnIssueReport", false);
 
         var activeChecks = requestedChecks.Length > 0
-            ? new HashSet<string>(requestedChecks, StringComparer.OrdinalIgnoreCase)
+            ? new HashSet<string>(requestedChecks.Select(CircuitCableCheck.NormalizeCheckName), StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(AllChecks, StringComparer.OrdinalIgnoreCase);
 
         var circuits = CircuitQueryService.GetAll(doc);
@@ -72,22 +72,11 @@ public class CheckCircuitHealthTool : IRevitMcpTool
             var panel = CircuitDtoBuilder.TryGetPanel(circuit);
             var circNum = circuit.CircuitNumber ?? "";
 
-            // CableType (Revit 2025+ API)
-            bool hasCableType = false;
-#if !REVIT2024
-            try
-            {
-                var id = circuit.CableType;
-                hasCableType = id != null && id != ElementId.InvalidElementId;
-            }
-            catch { }
-#endif
-
             // WireType: use the same resolver as the DTO builder (CableType first, deprecated WireType as fallback)
             // This prevents false positives when CableType is set but the deprecated WireType is null.
             // Cached so the resolved name can be included in the output for inline cross-checking.
             string resolvedWireType = CircuitDtoBuilder.GetWireTypeName(doc, circuit);
-            bool hasWireType = !string.IsNullOrEmpty(resolvedWireType);
+            bool missingCable = CircuitCableCheck.IsMissing(resolvedWireType);
 
             string loadName = "";
             try { loadName = circuit.LookupParameter("Load Name")?.AsString() ?? ""; } catch { }
@@ -107,11 +96,8 @@ public class CheckCircuitHealthTool : IRevitMcpTool
                 { circIssues.Add("DuplicateCircuitNumbers"); counts["DuplicateCircuitNumbers"]++; }
             }
 
-            if (activeChecks.Contains("MissingCableType") && !hasCableType)
-            { circIssues.Add("MissingCableType"); counts["MissingCableType"]++; }
-
-            if (activeChecks.Contains("MissingWireType") && !hasWireType)
-            { circIssues.Add("MissingWireType"); counts["MissingWireType"]++; }
+            if (activeChecks.Contains(CircuitCableCheck.Issue) && missingCable)
+            { circIssues.Add(CircuitCableCheck.Issue); counts[CircuitCableCheck.Issue]++; }
 
             if (activeChecks.Contains("MissingLoadName") && string.IsNullOrWhiteSpace(loadName))
             { circIssues.Add("MissingLoadName"); counts["MissingLoadName"]++; }
@@ -167,12 +153,8 @@ public class CheckCircuitHealthTool : IRevitMcpTool
             {
                 var panel = CircuitDtoBuilder.TryGetPanel(circuit);
                 var circNum = circuit.CircuitNumber ?? "";
-                bool hasCableType2 = false;
-#if !REVIT2024
-                try { var id = circuit.CableType; hasCableType2 = id != null && id != ElementId.InvalidElementId; } catch { }
-#endif
                 string resolvedWireType2 = CircuitDtoBuilder.GetWireTypeName(doc, circuit);
-                bool hasWireType2 = !string.IsNullOrEmpty(resolvedWireType2);
+                bool missingCable2 = CircuitCableCheck.IsMissing(resolvedWireType2);
                 string loadName2 = "";
                 try { loadName2 = circuit.LookupParameter("Load Name")?.AsString() ?? ""; } catch { }
 
@@ -184,8 +166,7 @@ public class CheckCircuitHealthTool : IRevitMcpTool
                         "EmptyCircuitNumber" => string.IsNullOrWhiteSpace(circNum),
                         "DuplicateCircuitNumbers" => !string.IsNullOrWhiteSpace(circNum) &&
                             circuitNumMap.TryGetValue($"{panel?.Id?.Value ?? 0}|{circNum}", out var dups2) && dups2.Count > 1,
-                        "MissingCableType" => !hasCableType2,
-                        "MissingWireType" => !hasWireType2,
+                        CircuitCableCheck.Issue => missingCable2,
                         "MissingLoadName" => string.IsNullOrWhiteSpace(loadName2),
                         "NoConnectedElements" => false, // expensive, skip second pass
                         _ => false

@@ -462,7 +462,7 @@ Verify:
 - `panelName` filter narrows results.
 - `systemType` filter narrows results.
 - `checks` parameter allows requesting specific checks only.
-- `MissingPanel`, `EmptyCircuitNumber`, `DuplicateCircuitNumbers`, `MissingCableType`, `MissingWireType`, `MissingLoadName`, `NoConnectedElements` are detected.
+- `MissingPanel`, `EmptyCircuitNumber`, `DuplicateCircuitNumbers`, `MissingCableType` (one issue per circuit with no cable or wire type; `MissingWireType` is accepted as the same check), `MissingLoadName`, `NoConnectedElements` are detected.
 - `circuitId` is returned for each issue so it can be used in follow-up tools.
 - No Revit transaction is created.
 

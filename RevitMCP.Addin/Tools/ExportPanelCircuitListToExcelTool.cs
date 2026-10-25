@@ -198,7 +198,7 @@ public class ExportPanelCircuitListToExcelTool : IRevitMcpTool
                 if (circNumMap.TryGetValue(key, out var dups) && dups.Count > 1)
                     issues.Add((pName, circuit.Id.Value, cn, "DuplicateCircuitNumbers"));
             }
-            if (string.IsNullOrEmpty(wireType)) issues.Add((pName, circuit.Id.Value, cn, "MissingCableType"));
+            if (CircuitCableCheck.IsMissing(wireType)) issues.Add((pName, circuit.Id.Value, cn, CircuitCableCheck.Issue));
             try
             {
                 if (circuit.Elements == null || circuit.Elements.IsEmpty)

@@ -84,33 +84,47 @@ public class PreviewCircuitLoadNamesTool : IRevitMcpTool
 
     private static string GetParamValue(Document doc, ElectricalSystem circuit, string paramName, string source)
     {
+        foreach (var origin in LoadNameTemplateRules.ReadOrder(source))
+        {
+            var value = origin == LoadNameValueSource.Circuit
+                ? ReadCircuitValue(circuit, paramName)
+                : ReadFirstElementValue(doc, circuit, paramName);
+            if (!string.IsNullOrWhiteSpace(value)) return value;
+        }
+        return "";
+    }
+
+    private static string ReadCircuitValue(ElectricalSystem circuit, string paramName)
+    {
         try
         {
             var p = circuit.LookupParameter(paramName);
-            if (p != null)
-            {
-                var v = p.AsString() ?? p.AsValueString() ?? "";
-                if (!string.IsNullOrWhiteSpace(v)) return v;
-            }
+            if (p != null) return p.AsString() ?? p.AsValueString() ?? "";
         }
         catch { }
+        return "";
+    }
 
-        if (!source.Equals("ConnectedElements", StringComparison.OrdinalIgnoreCase)) return "";
-
+    private static string ReadFirstElementValue(Document doc, ElectricalSystem circuit, string paramName)
+    {
         try
         {
-            if (circuit.Elements != null)
+            if (circuit.Elements == null) return "";
+            foreach (Element e in circuit.Elements)
             {
-                foreach (Element e in circuit.Elements)
+                switch (LoadNameTemplateRules.PseudoField(paramName))
                 {
-                    foreach (Parameter p in e.Parameters)
-                    {
-                        if (!ParameterMatcher.Matches(p.Definition?.Name ?? "", paramName, "ContainsNormalized")) continue;
-                        var v = p.AsString() ?? p.AsValueString() ?? "";
-                        if (!string.IsNullOrWhiteSpace(v)) return v;
-                    }
-                    break; // use first element only
+                    case "Category": return e.Category?.Name ?? "";
+                    case "Family": return (e as FamilyInstance)?.Symbol?.Family?.Name ?? "";
+                    case "Type": return doc.GetElement(e.GetTypeId())?.Name ?? e.Name;
                 }
+                foreach (Parameter p in e.Parameters)
+                {
+                    if (!ParameterMatcher.Matches(p.Definition?.Name ?? "", paramName, "ContainsNormalized")) continue;
+                    var v = p.AsString() ?? p.AsValueString() ?? "";
+                    if (!string.IsNullOrWhiteSpace(v)) return v;
+                }
+                break; // use first element only
             }
         }
         catch { }

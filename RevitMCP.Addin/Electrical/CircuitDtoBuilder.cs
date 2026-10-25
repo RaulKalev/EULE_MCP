@@ -16,7 +16,8 @@ public static class CircuitDtoBuilder
 
         string wireTypeName = GetWireTypeName(doc, circuit);
 
-        int elementCount = 0;
+        // Null when includeElements is false: reading circuit.Elements only to count them can hang Revit (M10).
+        int? elementCount = null;
         List<object>? elements = null;
         // Only access circuit.Elements when needed — this property can hang the Revit UI thread
         // for circuits with large or complex element sets, causing all subsequent ExternalEvent

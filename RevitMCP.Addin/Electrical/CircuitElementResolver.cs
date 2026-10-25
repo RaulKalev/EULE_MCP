@@ -132,6 +132,14 @@ public class CircuitElementResolver
             }
             catch { }
 
+            // The panel that feeds the target circuit cannot also be one of its loads (M13).
+            if (targetCircuit != null && CircuitDtoBuilder.TryGetPanel(targetCircuit)?.Id == element.Id)
+            {
+                results.Add(new CompatibilityResult(eid.Value, category, family, type, false,
+                    "Element is the panel the target circuit is fed from.", currentCircuitIds));
+                continue;
+            }
+
             // If checking against a target circuit, reject duplicates
             if (targetCircuit != null && currentCircuitIds.Contains(targetCircuit.Id.Value))
             {

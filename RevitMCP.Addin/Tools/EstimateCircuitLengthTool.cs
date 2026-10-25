@@ -36,7 +36,9 @@ public class EstimateCircuitLengthTool : IRevitMcpTool
         var circuitId = ToolArguments.GetLong(request.Arguments, "circuitId");
         if (circuitId == 0) return Task.FromResult(Fail(request, "circuitId is required."));
 
-        var method = ToolArguments.GetString(request.Arguments, "method", "ManhattanMax");
+        var requestedMethod = ToolArguments.GetString(request.Arguments, "method", CircuitLengthEstimator.DefaultMethod);
+        if (!CircuitLengthEstimator.TryNormalizeMethod(requestedMethod, out var method))
+            return Task.FromResult(Fail(request, CircuitLengthEstimator.UnknownMethodMessage(requestedMethod)));
         var multiplier = GetDouble(request.Arguments, "routingMultiplier", 1.25);
         var breakdown = ToolArguments.GetBool(request.Arguments, "includeElementBreakdown", true);
 
@@ -79,17 +81,12 @@ public class EstimateCircuitLengthTool : IRevitMcpTool
         object? breakdownData = null;
         if (breakdown)
         {
-            breakdownData = elements
-                .Where(e => e.Loc.HasValue)
-                .Select(e =>
+            // Distances under the chosen method, so the largest (or, for *Sum, the total) matches rawLengthMeters (M6).
+            breakdownData = CircuitLengthEstimator.ElementDistances(panelPt, elements, method)
+                .Select(d => new
                 {
-                    var loc = e.Loc!.Value;
-                    double distFt = CircuitLengthEstimator.Manhattan(panelPt.X, panelPt.Y, panelPt.Z, loc.X, loc.Y, loc.Z);
-                    return new
-                    {
-                        elementId = e.Id,
-                        distanceFromPanelMeters = LengthUnitHelper.RoundMeters(LengthUnitHelper.ToMeters(distFt))
-                    };
+                    elementId = d.Id,
+                    distanceFromPanelMeters = LengthUnitHelper.RoundMeters(LengthUnitHelper.ToMeters(d.Distance))
                 })
                 .OrderByDescending(x => x.distanceFromPanelMeters)
                 .ToList<object>();

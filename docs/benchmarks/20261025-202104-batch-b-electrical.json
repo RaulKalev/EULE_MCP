@@ -1,0 +1,43 @@
+{
+  "Label": "batch-b-electrical",
+  "Model": "",
+  "StartedAt": "2026-10-25 20:20:42 \u002B02:00",
+  "BridgePath": "C:\\Users\\mibil\\Documents\\AntigravityGit\\EULE_MCP\\.claude\\worktrees\\magical-lederberg-eb0e4c\\RevitMCP.Bridge\\bin\\Release\\net8.0\\RevitMCP.Bridge.exe",
+  "Schemas": [
+    {
+      "Profile": "full",
+      "ToolCount": 303,
+      "SchemaBytes": 415546,
+      "SchemaTokens": 103887,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "core",
+      "ToolCount": 21,
+      "SchemaBytes": 24974,
+      "SchemaTokens": 6244,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "query",
+      "ToolCount": 38,
+      "SchemaBytes": 44666,
+      "SchemaTokens": 11167,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "read-only",
+      "ToolCount": 193,
+      "SchemaBytes": 255729,
+      "SchemaTokens": 63933,
+      "InstructionTokens": 696,
+      "Error": null
+    }
+  ],
+  "GraphBuild": null,
+  "GraphIncremental": null,
+  "Scenarios": []
+}

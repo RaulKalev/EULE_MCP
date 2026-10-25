@@ -49,6 +49,9 @@ public class ExportFireAlarmCircuitPresetToExcelTool : IRevitMcpTool
         var filePath = _pathService.ResolveFilePath(fileName);
         string modelTitle = doc.Title ?? "";
 
+        var warnings = new List<string>(presetResult.Warnings);
+        var unmatchedCableTypes = new List<string>();
+
         using (var wb = new XLWorkbook())
         {
             // ── Summary sheet ──────────────────────────────────────────────
@@ -131,6 +134,7 @@ public class ExportFireAlarmCircuitPresetToExcelTool : IRevitMcpTool
                     double? lengthM = l.CircuitInfo?.CircuitLengthMeters;
                     var profile = CableResistanceProfileService.FindMatch(cableType, profileCollection);
                     double res = profile?.RoundTripOhmPerMeter ?? fallbackRes;
+                    if (profile == null) unmatchedCableTypes.Add(cableType);
                     bool isSounderLine = l.LoopKind == "ConventionalSounderLine";
                     bool isLoop = l.LoopKind == "AddressableLoop" || l.LoopKind == "ModuleLoop";
 
@@ -170,11 +174,13 @@ public class ExportFireAlarmCircuitPresetToExcelTool : IRevitMcpTool
             }
 
             // ── Warnings ───────────────────────────────────────────────────
+            if (CableResistanceProfileService.FallbackWarning(unmatchedCableTypes, fallbackRes) is { } fallbackWarning)
+                warnings.Add(fallbackWarning);
             var wsW = wb.Worksheets.Add("Warnings");
             wsW.Cell(1, 1).Value = "Warning"; wsW.Cell(1, 1).Style.Font.Bold = true;
             wsW.Cell(2, 1).Value = Disclaimer;
-            for (int i = 0; i < presetResult.Warnings.Count; i++)
-                wsW.Cell(i + 3, 1).Value = presetResult.Warnings[i];
+            for (int i = 0; i < warnings.Count; i++)
+                wsW.Cell(i + 3, 1).Value = warnings[i];
             wsW.Column(1).Width = 80;
 
             wb.SaveAs(filePath);
@@ -187,7 +193,7 @@ public class ExportFireAlarmCircuitPresetToExcelTool : IRevitMcpTool
             Success    = true,
             Message    = $"Fire alarm circuit preset exported to {filePath}",
             Data       = new { filePath, loopCount = presetResult.LoopCount, deviceCount = presetResult.DeviceCount },
-            Warnings   = [Disclaimer, .. presetResult.Warnings],
+            Warnings   = [Disclaimer, .. warnings],
             DurationMs = sw.ElapsedMilliseconds
         });
     }
