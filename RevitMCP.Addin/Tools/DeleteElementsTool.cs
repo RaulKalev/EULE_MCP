@@ -20,8 +20,8 @@ public class DeleteElementsTool : IRevitMcpTool
         "Always requires manual approval — cannot be bypassed. " +
         "Required: elementIds (long array). " +
         "Optional: skipPinned (bool, default true — skips pinned elements). " +
-        "Views and sheets are skipped — use revit_delete_views / revit_delete_sheets. " +
-        "Always run revit_preview_delete_elements first.";
+        "Views and sheets are skipped — use revit_delete target=views / revit_delete target=sheets. " +
+        "Always run revit_preview_delete target=elements first.";
     public ToolPermission Permission => ToolPermission.DestructiveRequiresManualApproval;
     public ToolCategory Category => ToolCategory.Elements;
 

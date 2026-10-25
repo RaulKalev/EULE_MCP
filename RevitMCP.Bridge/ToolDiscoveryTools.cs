@@ -157,9 +157,17 @@ internal sealed class ToolDiscoveryTools(ToolCatalogRegistry registry)
         {
             Services = server.Services
         };
+        var unknown = ToolArgumentCoercion.UnknownNames(dict.Keys, tool.ProtocolTool.InputSchema);
         try
         {
-            return await tool.InvokeAsync(context, cancellationToken);
+            var result = await tool.InvokeAsync(context, cancellationToken);
+            if (unknown.Count > 0)
+                result.Content.Add(new TextContentBlock
+                {
+                    Text = $"Warning: {name} has no argument(s) {string.Join(", ", unknown)}; they were ignored. " +
+                           "revit_tools_describe shows its arguments."
+                });
+            return result;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

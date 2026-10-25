@@ -18,7 +18,7 @@ public class DuplicateViewsTool : IRevitMcpTool
         "fallbackToDuplicate (default true), nameSuffix (default ' - Copy'; supports {index}), " +
         "namePrefix (default ''), copyParameters (default true), and parameterOverrides (name-to-value object). " +
         "Revit duplication carries native view parameters; copyParameters controls whether explicit overrides are applied. " +
-        "Use revit_preview_duplicate_views first.";
+        "Use revit_preview_duplicate entity=views first.";
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Documentation;
 

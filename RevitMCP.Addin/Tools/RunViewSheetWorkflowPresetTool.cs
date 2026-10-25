@@ -19,7 +19,7 @@ public class RunViewSheetWorkflowPresetTool : IRevitMcpTool
         "Accepts: presetName (string). " +
         "Returns: workflowType, stepCount, steps, notes. " +
         "This tool is READ-ONLY: it does not modify the Revit model. " +
-        "Use revit_duplicate_sheets, revit_place_views_on_sheets, etc. to execute the actual workflow steps.";
+        "Use revit_duplicate entity=sheets, revit_place_views_on_sheets, etc. to execute the actual workflow steps.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Documentation;
 
@@ -58,7 +58,7 @@ public class RunViewSheetWorkflowPresetTool : IRevitMcpTool
         var notes         = new List<string>
         {
             "This tool only previews the workflow. No changes have been made to the model.",
-            "Execute workflow steps using the appropriate write tools (revit_duplicate_sheets, revit_place_views_on_sheets, etc.)."
+            "Execute workflow steps using the appropriate write tools (revit_duplicate entity=sheets, revit_place_views_on_sheets, etc.)."
         };
         if (errors.Count > 0)
             notes.Add($"Validation warnings detected: {string.Join("; ", errors)}");
@@ -93,7 +93,7 @@ public class RunViewSheetWorkflowPresetTool : IRevitMcpTool
         {
             case "DuplicateSheets":
                 steps.Add(new { stepNumber = 2, action = "IdentifySourceSheets", description = "Identify source sheets to duplicate from preset." });
-                steps.Add(new { stepNumber = 3, action = "DuplicateSheets", description = "Call revit_duplicate_sheets with parameters from preset. (Not executed here.)" });
+                steps.Add(new { stepNumber = 3, action = "DuplicateSheets", description = "Call revit_duplicate entity=sheets with parameters from preset. (Not executed here.)" });
                 break;
             case "CreateSheets":
                 steps.Add(new { stepNumber = 2, action = "PrepareSheetData", description = "Extract sheet rows/data from preset." });
@@ -105,11 +105,11 @@ public class RunViewSheetWorkflowPresetTool : IRevitMcpTool
                 break;
             case "RenameWorkflow":
                 steps.Add(new { stepNumber = 2, action = "ResolveTargets", description = "Resolve sheets or views to rename." });
-                steps.Add(new { stepNumber = 3, action = "RenameElements", description = "Call revit_rename_views or revit_rename_sheets. (Not executed here.)" });
+                steps.Add(new { stepNumber = 3, action = "RenameElements", description = "Call revit_rename entity=views or revit_rename entity=sheets. (Not executed here.)" });
                 break;
             case "ParameterMapping":
                 steps.Add(new { stepNumber = 2, action = "ResolveParameters", description = "Identify parameter mapping rules in preset." });
-                steps.Add(new { stepNumber = 3, action = "SetParameters", description = "Call revit_set_sheet_parameters_bulk or revit_set_view_parameters_bulk. (Not executed here.)" });
+                steps.Add(new { stepNumber = 3, action = "SetParameters", description = "Call revit_set_parameters_bulk entity=sheets or revit_set_parameters_bulk entity=views. (Not executed here.)" });
                 break;
             default:
                 steps.Add(new { stepNumber = 2, action = "ReviewPreset", description = $"Preset type '{workflowType}' not automatically mapped to workflow steps. Review preset JSON fields: {string.Join(", ", keys.Take(10))}." });

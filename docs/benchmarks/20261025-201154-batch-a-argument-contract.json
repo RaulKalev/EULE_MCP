@@ -1,0 +1,43 @@
+{
+  "Label": "batch-a-argument-contract",
+  "Model": "",
+  "StartedAt": "2026-10-25 20:11:31 \u002B02:00",
+  "BridgePath": "C:\\Users\\mibil\\Documents\\AntigravityGit\\EULE_MCP\\.claude\\worktrees\\eule-mcp-revit-testing-93f21d\\RevitMCP.Bridge\\bin\\Release\\net8.0\\RevitMCP.Bridge.exe",
+  "Schemas": [
+    {
+      "Profile": "full",
+      "ToolCount": 303,
+      "SchemaBytes": 415319,
+      "SchemaTokens": 103830,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "core",
+      "ToolCount": 21,
+      "SchemaBytes": 24974,
+      "SchemaTokens": 6244,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "query",
+      "ToolCount": 38,
+      "SchemaBytes": 44578,
+      "SchemaTokens": 11145,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "read-only",
+      "ToolCount": 193,
+      "SchemaBytes": 255502,
+      "SchemaTokens": 63876,
+      "InstructionTokens": 696,
+      "Error": null
+    }
+  ],
+  "GraphBuild": null,
+  "GraphIncremental": null,
+  "Scenarios": []
+}

@@ -19,7 +19,7 @@ public class DeleteViewsTool : IRevitMcpTool
         "Required: viewIds (long array). " +
         "Optional: skipPlacedOnSheets (bool, default true — skips views that are on sheets). " +
         "If a target view is open or active it is closed / switched away from automatically. " +
-        "Always run revit_preview_delete_views first.";
+        "Always run revit_preview_delete target=views first.";
     public ToolPermission Permission => ToolPermission.DestructiveRequiresManualApproval;
     public ToolCategory Category => ToolCategory.Documentation;
 
@@ -55,12 +55,12 @@ public class DeleteViewsTool : IRevitMcpTool
             else if (el is ViewSheet)
             {
                 skippedSheets++;
-                warnings.Add($"Element {id} is a sheet — use revit_delete_sheets instead — skipped.");
+                warnings.Add($"Element {id} is a sheet — use revit_delete target=sheets instead — skipped.");
             }
             else if (el is not View)
             {
                 skippedNonViews++;
-                warnings.Add($"Element {id} ('{el.Name}') is not a view — use revit_delete_elements instead — skipped.");
+                warnings.Add($"Element {id} ('{el.Name}') is not a view — use revit_delete target=elements instead — skipped.");
             }
             else
             {

@@ -64,7 +64,7 @@ public class PreviewDeleteSheetsTool : IRevitMcpTool
 
         var warnings = new List<string>();
         if (wouldDelete > 0)
-            warnings.Add($"WARNING: {wouldDelete} sheet(s) will be permanently deleted. Use revit_delete_sheets to confirm.");
+            warnings.Add($"WARNING: {wouldDelete} sheet(s) will be permanently deleted. Use revit_delete target=sheets to confirm.");
 
         sw.Stop();
         return Task.FromResult(new McpToolResult

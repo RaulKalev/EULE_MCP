@@ -14,7 +14,7 @@ public class PreviewDeleteElementsTool : IRevitMcpTool
         "Previews which model elements would be deleted WITHOUT making any changes. " +
         "Required: elementIds (long array). " +
         "Optional: skipPinned (bool, default true — protect pinned elements). " +
-        "Views and sheets are excluded — use revit_preview_delete_views / revit_preview_delete_sheets. " +
+        "Views and sheets are excluded — use revit_preview_delete target=views / revit_preview_delete target=sheets. " +
         "Returns proposals: elementId, name, category, typeName, level, isPinned, groupName, wouldDelete, reason. " +
         "Deleting an element also deletes its dependents (tags, dimensions, hosted elements).";
     public ToolPermission Permission => ToolPermission.ReadOnly;
@@ -97,7 +97,7 @@ public class PreviewDeleteElementsTool : IRevitMcpTool
         }
 
         if (wouldDelete > 0)
-            warnings.Add($"WARNING: {wouldDelete} element(s) will be permanently deleted, together with their dependent elements. Use revit_delete_elements to confirm.");
+            warnings.Add($"WARNING: {wouldDelete} element(s) will be permanently deleted, together with their dependent elements. Use revit_delete target=elements to confirm.");
 
         sw.Stop();
         return Task.FromResult(new McpToolResult

@@ -80,7 +80,7 @@ public class PreviewDeleteViewsTool : IRevitMcpTool
 
         var warnings = new List<string>();
         if (wouldDelete > 0)
-            warnings.Add($"WARNING: {wouldDelete} view(s) will be permanently deleted. Use revit_delete_views to confirm.");
+            warnings.Add($"WARNING: {wouldDelete} view(s) will be permanently deleted. Use revit_delete target=views to confirm.");
 
         sw.Stop();
         return Task.FromResult(new McpToolResult

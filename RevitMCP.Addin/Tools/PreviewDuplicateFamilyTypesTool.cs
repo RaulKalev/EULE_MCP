@@ -13,7 +13,7 @@ public class PreviewDuplicateFamilyTypesTool : IRevitMcpTool
 
     public string Description =>
         "Previews family type duplication without changing the model. Takes the same arguments as " +
-        "revit_duplicate_family_types: typeIds (or familyName/typeName), numberOfCopies, namePrefix, " +
+        "revit_duplicate entity=familyTypes: typeIds (or familyName/typeName), numberOfCopies, namePrefix, " +
         "nameSuffix, newTypeNames, variants, parameterOverrides. Returns the resolved name of every " +
         "planned copy plus, per parameter, whether it exists, is writable, and can take the value.";
 

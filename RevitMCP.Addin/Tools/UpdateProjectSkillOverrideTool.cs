@@ -30,7 +30,7 @@ public class UpdateProjectSkillOverrideTool : IRevitMcpTool
 
         var existing = SkillRunner.OverrideService.Load(skillId, projectId);
         if (existing is null)
-            return Task.FromResult(Fail(request, $"No override found for skill '{skillId}' / project '{projectId}'. Use revit_create_project_skill_override first."));
+            return Task.FromResult(Fail(request, $"No override found for skill '{skillId}' / project '{projectId}'. Use revit_manage_project_skill_override action=create first."));
 
         if (!string.IsNullOrWhiteSpace(changesJson))
         {

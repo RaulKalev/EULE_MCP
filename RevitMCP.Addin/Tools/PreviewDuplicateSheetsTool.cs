@@ -13,7 +13,7 @@ public class PreviewDuplicateSheetsTool : IRevitMcpTool
     public string Name => "revit_preview_duplicate_sheets";
     public string Description =>
         "Previews SheetManager-compatible sheet duplication without changes. " +
-        "Accepts the same arguments as revit_duplicate_sheets, including numberOfCopies, " +
+        "Accepts the same arguments as revit_duplicate entity=sheets, including numberOfCopies, " +
         "duplicateMode (EmptySheet|WithSheetDetailing|WithViews), keepLegends, keepSchedules, " +
         "copyRevisions, copyParameters, copyTitleBlockParameters, and viewDuplicateOption. " +
         "Reports source content counts and the content that each proposed duplicate will copy.";

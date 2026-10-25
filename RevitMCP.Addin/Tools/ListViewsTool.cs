@@ -13,7 +13,7 @@ public class ListViewsTool : IRevitMcpTool
     public string Name => "revit_list_views";
     public string Description =>
         "Lists views in the active Revit document. Supports filters: viewTypes (string array, e.g. [\"FloorPlan\",\"Section\"]), includeTemplates (bool, default false), " +
-        "nameFilter (string, substring match on view name), includePlacedStatus (bool, default true), returnParameters (string array of extra parameter names), limit (int, default 0=all). " +
+        "nameFilter (string, substring match on view name), includePlacedStatus (bool, default true; false skips the sheet scan and the placement fields), returnParameters (string array of extra parameter names), limit (int, default 0=all). " +
         "Returns: elementId, uniqueId, name, viewType, isTemplate, isPlacedOnSheet, sheetId/sheetNumber/sheetName (when placed), viewTemplateId, viewTemplateName, scale, discipline, plus any requested parameters.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Views;
@@ -36,10 +36,11 @@ public class ListViewsTool : IRevitMcpTool
         var nameFilter       = ToolArguments.GetString(request.Arguments, "nameFilter");
         var returnParams     = ToolArguments.GetStringArray(request.Arguments, "returnParameters");
         var limit            = ToolArguments.GetInt(request.Arguments, "limit", 0);
+        var includePlaced    = ToolArguments.GetBool(request.Arguments, "includePlacedStatus", true);
 
-        // Build sheet→view mapping for placed status + sheet info
+        // Build sheet→view mapping for placed status + sheet info (skipped when includePlacedStatus=false)
         var viewToSheet = new Dictionary<ElementId, (long sheetId, string sheetNumber, string sheetName)>();
-        foreach (var sheet in new FilteredElementCollector(doc).OfClass(typeof(ViewSheet)).Cast<ViewSheet>())
+        foreach (var sheet in includePlaced ? new FilteredElementCollector(doc).OfClass(typeof(ViewSheet)).Cast<ViewSheet>() : Enumerable.Empty<ViewSheet>())
         {
             foreach (var vid in sheet.GetAllPlacedViews())
                 viewToSheet[vid] = (sheet.Id.Value, sheet.SheetNumber, sheet.Name);
@@ -96,15 +97,19 @@ public class ListViewsTool : IRevitMcpTool
                 ["name"]            = v.Name,
                 ["viewType"]        = v.ViewType.ToString(),
                 ["isTemplate"]      = v.IsTemplate,
-                ["isPlacedOnSheet"] = viewToSheet.ContainsKey(v.Id),
-                ["sheetId"]         = viewToSheet.ContainsKey(v.Id) ? sheetInfo.sheetId : (object?)null,
-                ["sheetNumber"]     = viewToSheet.ContainsKey(v.Id) ? sheetInfo.sheetNumber : null,
-                ["sheetName"]       = viewToSheet.ContainsKey(v.Id) ? sheetInfo.sheetName : null,
                 ["viewTemplateId"]  = v.ViewTemplateId != ElementId.InvalidElementId ? v.ViewTemplateId.Value : (object?)null,
                 ["viewTemplateName"]= templateName,
                 ["scale"]           = v.Scale > 0 ? $"1:{v.Scale}" : "N/A",
                 ["discipline"]      = TryGetDiscipline(v)
             };
+            if (includePlaced)
+            {
+                var placed = viewToSheet.ContainsKey(v.Id);
+                entry["isPlacedOnSheet"] = placed;
+                entry["sheetId"]         = placed ? sheetInfo.sheetId : (object?)null;
+                entry["sheetNumber"]     = placed ? sheetInfo.sheetNumber : null;
+                entry["sheetName"]       = placed ? sheetInfo.sheetName : null;
+            }
             if (extraParams != null)
                 entry["parameters"] = extraParams;
 

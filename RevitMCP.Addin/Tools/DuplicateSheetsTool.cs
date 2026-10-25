@@ -22,7 +22,7 @@ public class DuplicateSheetsTool : IRevitMcpTool
         "keepSchedules (default false), copyRevisions (default false), " +
         "viewDuplicateOption (Duplicate|DuplicateWithDetailing|AsDependent, default DuplicateWithDetailing). " +
         "Viewports, legends, and schedules retain their source sheet positions. " +
-        "Use revit_preview_duplicate_sheets first.";
+        "Use revit_preview_duplicate entity=sheets first.";
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Documentation;
 

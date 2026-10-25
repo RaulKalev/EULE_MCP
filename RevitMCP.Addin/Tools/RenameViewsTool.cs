@@ -14,7 +14,7 @@ public class RenameViewsTool : IRevitMcpTool
     public string Name => "revit_rename_views";
     public string Description =>
         "Applies ViewManager-style transforms to view names or writable view parameters. Requires approval. " +
-        "Arguments match revit_preview_rename_views: selector, mode, target (Name|Parameter), parameterName, " +
+        "Arguments match revit_preview_rename entity=views: selector, mode, target (Name|Parameter), parameterName, " +
         "find, replace, prefix, suffix, and template. View-name swaps are handled atomically. Run preview first.";
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Documentation;

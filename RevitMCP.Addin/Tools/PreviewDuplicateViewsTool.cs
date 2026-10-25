@@ -12,7 +12,7 @@ public class PreviewDuplicateViewsTool : IRevitMcpTool
     public string Name => "revit_preview_duplicate_views";
     public string Description =>
         "Previews ViewManager-compatible view duplication without changes. Accepts the same arguments as " +
-        "revit_duplicate_views, including numberOfCopies, fallbackToDuplicate, copyParameters, and parameterOverrides. " +
+        "revit_duplicate entity=views, including numberOfCopies, fallbackToDuplicate, copyParameters, and parameterOverrides. " +
         "Returns one proposal per copy with requested/actual duplicate option and resolved unique name.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Documentation;

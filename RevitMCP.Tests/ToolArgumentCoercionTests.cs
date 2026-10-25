@@ -97,4 +97,13 @@ public class ToolArgumentCoercionTests
         Assert.Equal(JsonValueKind.Number, coerced["c"].ValueKind);   // integer allowed: unchanged
         Assert.Equal("3.5", coerced["d"].GetString());               // not an integer: the string branch takes it
     }
+
+    [Fact]
+    public void UnknownNames_ListsArgumentsTheSchemaDoesNotDeclare()
+    {
+        // M1: revit_tools_call passed outputFolder to a tool without it and the binder dropped it silently.
+        var unknown = ToolArgumentCoercion.UnknownNames(new[] { "id", "PageSize", "outputFolder", "elementIds" }, Schema());
+        Assert.Equal(new[] { "outputFolder", "elementIds" }, unknown);
+        Assert.Empty(ToolArgumentCoercion.UnknownNames(new[] { "x" }, JsonDocument.Parse("{}").RootElement));
+    }
 }

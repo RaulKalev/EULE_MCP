@@ -37,7 +37,7 @@ namespace RevitMCP.Addin.Tools
                 "tagCategoryId");
             var symbols = TagTypeResolverService.GetAllTagTypes(doc)
                 .Where(symbol =>
-                    categoryIdValue <= 0 ||
+                    categoryIdValue == 0 ||   // built-in tag categories have negative ids (M5)
                     (symbol.Category != null &&
                      symbol.Category.Id.Value == categoryIdValue))
                 .Select(symbol => new
@@ -59,7 +59,7 @@ namespace RevitMCP.Addin.Tools
             var keyword = ToolArguments.GetString(
                 request.Arguments,
                 "directionKeyword");
-            if (categoryIdValue > 0 && !string.IsNullOrWhiteSpace(keyword))
+            if (categoryIdValue != 0 && !string.IsNullOrWhiteSpace(keyword))
             {
                 var matches = TagTypeResolverService.FindDirectionTypes(
                     doc,

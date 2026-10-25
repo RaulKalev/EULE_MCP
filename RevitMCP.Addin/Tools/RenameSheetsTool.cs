@@ -18,7 +18,7 @@ public class RenameSheetsTool : IRevitMcpTool
         "mode (FindReplace|PrefixSuffix|Template|RegexFindReplace), " +
         "target (Name|Number|Both|Parameter, default Name); parameterName is required for target=Parameter. " +
         "Mode params: find, replace, prefix, suffix, template with {Name} or {Number}. " +
-        "Use revit_preview_rename_sheets first to verify.";
+        "Use revit_preview_rename entity=sheets first to verify.";
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Documentation;
 

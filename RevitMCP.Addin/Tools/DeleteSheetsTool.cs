@@ -19,7 +19,7 @@ public class DeleteSheetsTool : IRevitMcpTool
         "Required: sheetIds (long array) OR sheetNumbers (string array). " +
         "Optional: skipSheetsWithViews (bool, default true — skips sheets that have placed views). " +
         "If a target sheet is open or active it is closed / switched away from automatically. " +
-        "Always run revit_preview_delete_sheets first.";
+        "Always run revit_preview_delete target=sheets first.";
     public ToolPermission Permission => ToolPermission.DestructiveRequiresManualApproval;
     public ToolCategory Category => ToolCategory.Documentation;
 

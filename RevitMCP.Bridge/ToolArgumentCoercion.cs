@@ -36,6 +36,19 @@ public static class ToolArgumentCoercion
         return result ?? arguments;
     }
 
+    /// <summary>
+    /// Argument names the schema does not declare (case-insensitive, like the binder). The binder drops them without a
+    /// word, so <c>revit_tools_call</c> reports them (M1). Empty when the schema lists no properties.
+    /// </summary>
+    public static List<string> UnknownNames(IEnumerable<string> names, JsonElement inputSchema)
+    {
+        if (inputSchema.ValueKind != JsonValueKind.Object ||
+            !inputSchema.TryGetProperty("properties", out var properties) || properties.ValueKind != JsonValueKind.Object)
+            return new List<string>();
+        var known = new HashSet<string>(properties.EnumerateObject().Select(p => p.Name), StringComparer.OrdinalIgnoreCase);
+        return names.Where(n => !known.Contains(n)).ToList();
+    }
+
     private static bool TryCoerce(JsonElement value, JsonElement schema, out JsonElement coerced)
     {
         coerced = value;

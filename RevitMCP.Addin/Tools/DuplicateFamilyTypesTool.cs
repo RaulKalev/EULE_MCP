@@ -21,7 +21,7 @@ public class DuplicateFamilyTypesTool : IRevitMcpTool
         "([{name, parameters}], one copy per entry, single source type) for differing values per copy. " +
         "Numeric values are written in project display units ('200' or '200 mm'). " +
         "Optional: requireAllParameters (default false) rolls a copy back if any of its parameters " +
-        "cannot be set. Run revit_preview_duplicate_family_types first.";
+        "cannot be set. Run revit_preview_duplicate entity=familyTypes first.";
 
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Elements;

@@ -587,7 +587,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     [McpServerTool(Name = "revit_query_linked_elements", ReadOnly = true),
      Description("Queries elements INSIDE a linked model (Revit link or IFC converted to a Revit link). " +
                  "Required: linkInstanceId (from revit_list_clashable_links or ifc_list_links) plus category and/or nameFilter. " +
-                 "Returned elementIds belong to the LINKED document — select them with revit_select_linked_elements.")]
+                 "The returned element ids belong to the LINKED document — select them with revit_select_linked_elements.")]
     public async Task<string> QueryLinkedElements(
         [Description("Revit link instance element ID in the host model")] long linkInstanceId,
         [Description("Category name inside the link, e.g. 'Walls'")] string? category = null,
@@ -803,6 +803,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Optional category name to restrict search")] string? category = null,
         [Description(FiltersDescription)] string? filters = null,
         [Description("If true, include element IDs in each group")] bool includeElements = false,
+        [Description("Group only the selected elements")] bool useSelection = false,
+        [Description("Group only these element ids")] long[]? elementIds = null,
         [Description("Max elements to scan (default 5000)")] int limit = 5000,
         [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
         [Description(DocumentArgDescription)] string? document = null,
@@ -820,6 +822,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["category"] = category ?? string.Empty,
             ["filters"] = parsedFilters,
             ["includeElements"] = includeElements,
+            ["useSelection"] = useSelection,
+            ["elementIds"] = elementIds ?? [],
             ["limit"] = limit
         };
         args["graphHint"] = graphHint;
@@ -837,6 +841,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Parameter names to include as columns")] string[]? parameters = null,
         [Description("What to export: Elements, Groups, or Both")] string outputMode = "Both",
         [Description("Output file name (default RevitMCP_Export.xlsx)")] string fileName = "RevitMCP_Export.xlsx",
+        [Description("Export only the selected elements")] bool useSelection = false,
+        [Description("Export only these element ids")] long[]? elementIds = null,
         [Description("Max elements (default 5000)")] int limit = 5000,
         [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
         [Description(DocumentArgDescription)] string? document = null,
@@ -856,6 +862,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["parameters"] = parameters ?? [],
             ["outputMode"] = outputMode,
             ["fileName"] = fileName,
+            ["useSelection"] = useSelection,
+            ["elementIds"] = elementIds ?? [],
             ["limit"] = limit
         };
         args["graphHint"] = graphHint;
@@ -3043,6 +3051,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Link instance id (for cropToRoom)")] long linkInstanceId = 0,
         [Description("Level name (for cropToRoom)")] string? levelName = null,
         [Description("Return the image inline (default true); false returns only the path")] bool returnImage = true,
+        [Description("Folder for the PNG (default %TEMP%\\RevitMCP\\images)")] string? outputFolder = null,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -3053,6 +3062,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         args["marginMm"] = marginMm;
         args["pixelSize"] = pixelSize;
         args["highlightElementIds"] = highlightElementIds ?? [];
+        args["outputFolder"] = outputFolder ?? string.Empty;
 
         args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_export_view_image", args, cancellationToken);
@@ -4008,7 +4018,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["elementId"] = elementId,
             ["circuitId"] = circuitId,
             ["useSelection"] = useSelection,
-            ["includeConnectedElements"] = includeConnectedElements
+            // The add-in reads includeElements; the public name stays for existing callers (M4).
+            ["includeElements"] = includeConnectedElements
         };
         args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_trace_circuit", args, cancellationToken);
@@ -4768,33 +4779,32 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("sheets only: suffix for new sheet number (default _COPY)")] string newNumberSuffix = "_COPY",
         [Description("sheets only: suffix for new sheet name (default ' - Copy')")] string newNameSuffix = " - Copy",
         [Description("sheets only: keep same title block (default true)")] bool keepTitleBlock = true,
-        [Description("sheets only: copy instance parameters (default true)")] bool copyParameters = true,
+        [Description("sheets/views only: copy instance parameters (default true)")] bool copyParameters = true,
+        [Description("sheets only: EmptySheet (default) | WithSheetDetailing | WithViews")] string duplicateMode = "EmptySheet",
+        [Description("sheets only: keep legends on the copies (default false)")] bool keepLegends = false,
+        [Description("sheets only: keep schedules on the copies (default false)")] bool keepSchedules = false,
+        [Description("sheets only: copy revisions (default false)")] bool copyRevisions = false,
+        [Description("sheets only: copy title block parameters (default: copyParameters)")] bool? copyTitleBlockParameters = null,
         [Description("views only: view element IDs to duplicate")] long[]? viewIds = null,
-        [Description("views only: Duplicate|DuplicateWithDetailing|AsDependent")] string duplicateOption = "DuplicateWithDetailing",
+        [Description("views, and the views of sheets with duplicateMode=WithViews: Duplicate|DuplicateWithDetailing|AsDependent")] string duplicateOption = "DuplicateWithDetailing",
         [Description("views/familyTypes only: suffix for the new name (default ' - Copy'); supports {index}")] string nameSuffix = " - Copy",
         [Description("views/familyTypes only: prefix for the new name; supports {index}")] string namePrefix = "",
         [Description("familyTypes only: source type element IDs (see revit_list_family_types)")] long[]? typeIds = null,
         [Description("familyTypes only: family name when typeIds is omitted")] string? familyName = null,
         [Description("familyTypes only: type name when typeIds is omitted")] string? typeName = null,
-        [Description("views/familyTypes only: copies per source (1-50, default 1)")] int numberOfCopies = 1,
+        [Description("copies per source (1-50, default 1)")] int numberOfCopies = 1,
         [Description("familyTypes only: one explicit name per source type")] string[]? newTypeNames = null,
         [Description("familyTypes only: [{name, parameters}] — one copy per entry, single source type")] object[]? variants = null,
-        [Description("familyTypes only: type parameter name-to-value object applied to every copy; numbers in project units")] object? parameterOverrides = null,
+        [Description("views/familyTypes only: parameter name-to-value object applied to every copy; numbers in project units")] object? parameterOverrides = null,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var e = entity?.Trim().ToLowerInvariant();
         if (e == "sheets")
         {
-            var sheetArgs = new Dictionary<string, object?>
-            {
-                ["sourceSheetIds"] = sourceSheetIds ?? [],
-                ["sourceSheetNumbers"] = sourceSheetNumbers ?? [],
-                ["newNumberSuffix"] = newNumberSuffix,
-                ["newNameSuffix"] = newNameSuffix,
-                ["keepTitleBlock"] = keepTitleBlock,
-                ["copyParameters"] = copyParameters
-            };
+            var sheetArgs = BuildSheetDuplicateArgs(
+                sourceSheetIds, sourceSheetNumbers, newNumberSuffix, newNameSuffix, keepTitleBlock, copyParameters,
+                numberOfCopies, duplicateMode, duplicateOption, keepLegends, keepSchedules, copyRevisions, copyTitleBlockParameters);
             sheetArgs["document"] = document ?? string.Empty;
             return FormatResult(await pipeClient.SendAsync("revit_preview_duplicate_sheets", sheetArgs, cancellationToken));
         }
@@ -4808,7 +4818,9 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
                 ["numberOfCopies"] = numberOfCopies,
                 ["duplicateOption"] = duplicateOption,
                 ["nameSuffix"] = nameSuffix,
-                ["namePrefix"] = namePrefix
+                ["namePrefix"] = namePrefix,
+                ["copyParameters"] = copyParameters,
+                ["parameterOverrides"] = ToJToken(parameterOverrides)
             };
             viewArgs["document"] = document ?? string.Empty;
             return FormatResult(await pipeClient.SendAsync("revit_preview_duplicate_views", viewArgs, cancellationToken));
@@ -4840,14 +4852,15 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_preview_rename", ReadOnly = true),
-     Description("Previews view/sheet renames WITHOUT changes. mode=FindReplace|PrefixSuffix|Template|RegexFindReplace (params: find/replace, prefix/suffix, template with {Name}). entity=views: viewIds/viewTypes/nameFilter. entity=sheets: sheetIds/nameFilter/numberFilter + target (Name|Number|Both).")]
+     Description("Previews view/sheet renames WITHOUT changes. mode=FindReplace|PrefixSuffix|Template|RegexFindReplace (params: find/replace, prefix/suffix, template with {Name}). entity=views: viewIds/viewTypes/nameFilter. entity=sheets: sheetIds/nameFilter/numberFilter + target (Name|Number|Both). target=Parameter with parameterName renames a parameter value instead (views and sheets).")]
     public async Task<string> PreviewRename(
         [Description("What to rename: views | sheets")] string entity,
         [Description("Rename mode: FindReplace|PrefixSuffix|Template|RegexFindReplace")] string mode,
         [Description("views only: view element IDs")] long[]? viewIds = null,
         [Description("views only: filter by view types")] string[]? viewTypes = null,
         [Description("sheets only: sheet element IDs")] long[]? sheetIds = null,
-        [Description("sheets only: target field Name|Number|Both (default Name)")] string target = "Name",
+        [Description("Field to change: Name (default), Number or Both (sheets), or Parameter (views and sheets, with parameterName)")] string target = "Name",
+        [Description("target=Parameter: the writable text parameter to rename")] string? parameterName = null,
         [Description("sheets only: filter by number substring")] string? numberFilter = null,
         [Description("Filter by name substring")] string? nameFilter = null,
         [Description("Text to find (FindReplace/Regex modes)")] string? find = null,
@@ -4863,7 +4876,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         {
             var viewArgs = new Dictionary<string, object?>
             {
-                ["mode"] = mode, ["viewIds"] = viewIds ?? [], ["viewTypes"] = viewTypes ?? [],
+                ["mode"] = mode, ["target"] = target, ["parameterName"] = parameterName ?? "",
+                ["viewIds"] = viewIds ?? [], ["viewTypes"] = viewTypes ?? [],
                 ["nameFilter"] = nameFilter ?? "", ["find"] = find ?? "", ["replace"] = replace ?? "",
                 ["prefix"] = prefix ?? "", ["suffix"] = suffix ?? "", ["template"] = template ?? ""
             };
@@ -4874,7 +4888,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         {
             var sheetArgs = new Dictionary<string, object?>
             {
-                ["mode"] = mode, ["target"] = target, ["sheetIds"] = sheetIds ?? [],
+                ["mode"] = mode, ["target"] = target, ["parameterName"] = parameterName ?? "", ["sheetIds"] = sheetIds ?? [],
                 ["nameFilter"] = nameFilter ?? "", ["numberFilter"] = numberFilter ?? "",
                 ["find"] = find ?? "", ["replace"] = replace ?? "",
                 ["prefix"] = prefix ?? "", ["suffix"] = suffix ?? "", ["template"] = template ?? ""
@@ -4924,18 +4938,23 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("sheets only: suffix for new sheet number (default _COPY)")] string newNumberSuffix = "_COPY",
         [Description("sheets only: suffix for new sheet name (default ' - Copy')")] string newNameSuffix = " - Copy",
         [Description("sheets only: keep same title block (default true)")] bool keepTitleBlock = true,
-        [Description("sheets only: copy instance parameters (default true)")] bool copyParameters = true,
+        [Description("sheets/views only: copy instance parameters (default true)")] bool copyParameters = true,
+        [Description("sheets only: EmptySheet (default) | WithSheetDetailing | WithViews")] string duplicateMode = "EmptySheet",
+        [Description("sheets only: keep legends on the copies (default false)")] bool keepLegends = false,
+        [Description("sheets only: keep schedules on the copies (default false)")] bool keepSchedules = false,
+        [Description("sheets only: copy revisions (default false)")] bool copyRevisions = false,
+        [Description("sheets only: copy title block parameters (default: copyParameters)")] bool? copyTitleBlockParameters = null,
         [Description("views only: view element IDs to duplicate")] long[]? viewIds = null,
-        [Description("views only: Duplicate|DuplicateWithDetailing|AsDependent")] string duplicateOption = "DuplicateWithDetailing",
+        [Description("views, and the views of sheets with duplicateMode=WithViews: Duplicate|DuplicateWithDetailing|AsDependent")] string duplicateOption = "DuplicateWithDetailing",
         [Description("views/familyTypes only: suffix for the new name (default ' - Copy'); supports {index}")] string nameSuffix = " - Copy",
         [Description("views/familyTypes only: prefix for the new name; supports {index}")] string namePrefix = "",
         [Description("familyTypes only: source type element IDs (see revit_list_family_types)")] long[]? typeIds = null,
         [Description("familyTypes only: family name when typeIds is omitted")] string? familyName = null,
         [Description("familyTypes only: type name when typeIds is omitted")] string? typeName = null,
-        [Description("views/familyTypes only: copies per source (1-50, default 1)")] int numberOfCopies = 1,
+        [Description("copies per source (1-50, default 1)")] int numberOfCopies = 1,
         [Description("familyTypes only: one explicit name per source type")] string[]? newTypeNames = null,
         [Description("familyTypes only: [{name, parameters}] — one copy per entry, single source type")] object[]? variants = null,
-        [Description("familyTypes only: type parameter name-to-value object applied to every copy; numbers in project units")] object? parameterOverrides = null,
+        [Description("views/familyTypes only: parameter name-to-value object applied to every copy; numbers in project units")] object? parameterOverrides = null,
         [Description("familyTypes only: roll a copy back if any of its parameters cannot be set (default false)")] bool requireAllParameters = false,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
@@ -4943,12 +4962,9 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         var e = entity?.Trim().ToLowerInvariant();
         if (e == "sheets")
         {
-            var sheetArgs = new Dictionary<string, object?>
-            {
-                ["sourceSheetIds"] = sourceSheetIds ?? [], ["sourceSheetNumbers"] = sourceSheetNumbers ?? [],
-                ["newNumberSuffix"] = newNumberSuffix, ["newNameSuffix"] = newNameSuffix,
-                ["keepTitleBlock"] = keepTitleBlock, ["copyParameters"] = copyParameters
-            };
+            var sheetArgs = BuildSheetDuplicateArgs(
+                sourceSheetIds, sourceSheetNumbers, newNumberSuffix, newNameSuffix, keepTitleBlock, copyParameters,
+                numberOfCopies, duplicateMode, duplicateOption, keepLegends, keepSchedules, copyRevisions, copyTitleBlockParameters);
             sheetArgs["document"] = document ?? string.Empty;
             return FormatResult(await pipeClient.SendAsync("revit_duplicate_sheets", sheetArgs, cancellationToken));
         }
@@ -4960,7 +4976,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             {
                 ["viewIds"] = viewIds, ["numberOfCopies"] = numberOfCopies,
                 ["duplicateOption"] = duplicateOption,
-                ["nameSuffix"] = nameSuffix, ["namePrefix"] = namePrefix
+                ["nameSuffix"] = nameSuffix, ["namePrefix"] = namePrefix,
+                ["copyParameters"] = copyParameters, ["parameterOverrides"] = ToJToken(parameterOverrides)
             };
             viewArgs["document"] = document ?? string.Empty;
             return FormatResult(await pipeClient.SendAsync("revit_duplicate_views", viewArgs, cancellationToken));
@@ -4976,6 +4993,41 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
                 "revit_duplicate_family_types", familyTypeArgs, cancellationToken));
         }
         return FormatBridgeError($"Invalid entity '{entity}'. Expected: views, sheets or familyTypes.");
+    }
+
+    private static Dictionary<string, object?> BuildSheetDuplicateArgs(
+        long[]? sourceSheetIds,
+        string[]? sourceSheetNumbers,
+        string newNumberSuffix,
+        string newNameSuffix,
+        bool keepTitleBlock,
+        bool copyParameters,
+        int numberOfCopies,
+        string duplicateMode,
+        string viewDuplicateOption,
+        bool keepLegends,
+        bool keepSchedules,
+        bool copyRevisions,
+        bool? copyTitleBlockParameters)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["sourceSheetIds"] = sourceSheetIds ?? [],
+            ["sourceSheetNumbers"] = sourceSheetNumbers ?? [],
+            ["newNumberSuffix"] = newNumberSuffix,
+            ["newNameSuffix"] = newNameSuffix,
+            ["keepTitleBlock"] = keepTitleBlock,
+            ["copyParameters"] = copyParameters,
+            ["numberOfCopies"] = numberOfCopies,
+            ["duplicateMode"] = duplicateMode,
+            ["viewDuplicateOption"] = viewDuplicateOption,
+            ["keepLegends"] = keepLegends,
+            ["keepSchedules"] = keepSchedules,
+            ["copyRevisions"] = copyRevisions
+        };
+        // Absent means "same as copyParameters" in the add-in, so it is only sent when given.
+        if (copyTitleBlockParameters is bool copyTitleBlock) args["copyTitleBlockParameters"] = copyTitleBlock;
+        return args;
     }
 
     private static Dictionary<string, object?> BuildFamilyTypeDuplicateArgs(
@@ -5077,14 +5129,15 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_rename"),
-     Description("Renames views/sheets. Requires approval. Run revit_preview_rename first. mode=FindReplace|PrefixSuffix|Template|RegexFindReplace. entity=views: viewIds or viewTypes+nameFilter. entity=sheets: target (Name|Number|Both), sheetIds/nameFilter/numberFilter.")]
+     Description("Renames views/sheets. Requires approval. Run revit_preview_rename first. mode=FindReplace|PrefixSuffix|Template|RegexFindReplace. entity=views: viewIds or viewTypes+nameFilter. entity=sheets: target (Name|Number|Both), sheetIds/nameFilter/numberFilter. target=Parameter with parameterName renames a parameter value instead (views and sheets).")]
     public async Task<string> Rename(
         [Description("What to rename: views | sheets")] string entity,
         [Description("Rename mode")] string mode,
         [Description("views only: view element IDs")] long[]? viewIds = null,
         [Description("views only: filter by view types")] string[]? viewTypes = null,
         [Description("sheets only: sheet element IDs")] long[]? sheetIds = null,
-        [Description("sheets only: target field Name|Number|Both (default Name)")] string target = "Name",
+        [Description("Field to change: Name (default), Number or Both (sheets), or Parameter (views and sheets, with parameterName)")] string target = "Name",
+        [Description("target=Parameter: the writable text parameter to rename")] string? parameterName = null,
         [Description("sheets only: filter by number substring")] string? numberFilter = null,
         [Description("Filter by name substring")] string? nameFilter = null,
         [Description("Find text (FindReplace/Regex)")] string? find = null,
@@ -5100,7 +5153,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         {
             var viewArgs = new Dictionary<string, object?>
             {
-                ["mode"] = mode, ["viewIds"] = viewIds ?? [], ["viewTypes"] = viewTypes ?? [],
+                ["mode"] = mode, ["target"] = target, ["parameterName"] = parameterName ?? "",
+                ["viewIds"] = viewIds ?? [], ["viewTypes"] = viewTypes ?? [],
                 ["nameFilter"] = nameFilter ?? "", ["find"] = find ?? "", ["replace"] = replace ?? "",
                 ["prefix"] = prefix ?? "", ["suffix"] = suffix ?? "", ["template"] = template ?? ""
             };
@@ -5111,7 +5165,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         {
             var sheetArgs = new Dictionary<string, object?>
             {
-                ["mode"] = mode, ["target"] = target, ["sheetIds"] = sheetIds ?? [],
+                ["mode"] = mode, ["target"] = target, ["parameterName"] = parameterName ?? "", ["sheetIds"] = sheetIds ?? [],
                 ["nameFilter"] = nameFilter ?? "", ["numberFilter"] = numberFilter ?? "",
                 ["find"] = find ?? "", ["replace"] = replace ?? "",
                 ["prefix"] = prefix ?? "", ["suffix"] = suffix ?? "", ["template"] = template ?? ""
@@ -5308,7 +5362,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_run_view_sheet_workflow_preset", ReadOnly = true),
-     Description("Plans a view/sheet workflow from a preset — returns a structured preview of what the workflow would do without modifying the model. Returns: workflowType, stepCount, steps[], notes[]. Execute steps with revit_duplicate_sheets, revit_place_views_on_sheets, etc.")]
+     Description("Plans a view/sheet workflow from a preset — returns a structured preview of what the workflow would do without modifying the model. Returns: workflowType, stepCount, steps[], notes[]. Execute steps with revit_duplicate entity=sheets, revit_place_views_on_sheets, etc.")]
     public async Task<string> RunViewSheetWorkflowPreset(
         [Description("Preset filename (with or without .json extension)")] string presetName = "",
         [Description("Override the default preset folder path (optional)")] string? overrideFolderPath = null,
