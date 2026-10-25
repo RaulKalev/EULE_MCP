@@ -111,8 +111,64 @@ public class RevitSheetNumberParserTests
         => Assert.Null(RevitSheetNumberParser.Parse("1626_TP_EL"));
 
     [Fact]
-    public void Parse_ExtraUnderscoreSegment_ReturnsNull()
-        => Assert.Null(RevitSheetNumberParser.Parse("1626_TP_EL-5-01_extra_segment"));
+    public void Parse_MalformedCoreWithSuffix_ReturnsNull()
+        => Assert.Null(RevitSheetNumberParser.Parse("1626_TP_EL-5_extra"));
+
+    // ── Trailing description (same convention as DeliveryFileNameParser) ─────
+
+    [Fact]
+    public void Parse_ExtraUnderscoreSegment_IsDescription()
+    {
+        var result = RevitSheetNumberParser.Parse("1626_TP_EL-5-01_extra_segment");
+
+        Assert.NotNull(result);
+        Assert.Equal("EL-5-01", result.SheetNumberCore);
+        Assert.Equal("extra_segment", result.Description);
+    }
+
+    [Theory]
+    [InlineData("73226_PP_EN-5-10_1k-ATS", "EN-5-10", "10", "1k-ATS")]
+    [InlineData("73226_PP_EN-5-20_1k-Side", "EN-5-20", "20", "1k-Side")]
+    public void Parse_RealProjectSheetNumbers_ReturnsAllParts(string number, string core, string sequence, string description)
+    {
+        var result = RevitSheetNumberParser.Parse(number);
+
+        Assert.NotNull(result);
+        Assert.Equal("73226", result.ProjectNumber);
+        Assert.Equal("PP", result.Stage);
+        Assert.Equal("EN", result.Discipline);
+        Assert.Equal("5", result.Group);
+        Assert.Equal(sequence, result.Sequence);
+        Assert.Equal(core, result.SheetNumberCore);
+        Assert.Equal(description, result.Description);
+    }
+
+    [Fact]
+    public void Parse_RealProjectSheetNumber_CoreMatchesExportedFileName()
+    {
+        var revit = RevitSheetNumberParser.Parse("73226_PP_EN-5-10_1k-ATS");
+        var delivery = DeliveryFileNameParser.Parse("73226_PP_EN-5-10_1k-ATS.pdf");
+
+        Assert.NotNull(revit);
+        Assert.NotNull(delivery);
+        Assert.Equal(delivery.SheetNumber, revit.SheetNumberCore);
+        Assert.Equal(delivery.Description, revit.Description);
+    }
+
+    [Fact]
+    public void Parse_ShortFormatWithDescription_ReturnsCoreParts()
+    {
+        var result = RevitSheetNumberParser.Parse("EL-5-01_Plaan");
+
+        Assert.NotNull(result);
+        Assert.Null(result.ProjectNumber);
+        Assert.Equal("EL-5-01", result.SheetNumberCore);
+        Assert.Equal("Plaan", result.Description);
+    }
+
+    [Fact]
+    public void Parse_NoSuffix_DescriptionIsEmpty()
+        => Assert.Equal(string.Empty, RevitSheetNumberParser.Parse("1626_TP_EL-5-01")?.Description);
 
     // ── Discipline filter now works correctly ──────────────────────────────────
 

@@ -54,33 +54,25 @@ internal sealed class CompareDeliveryRevitSheetsTask : ISkillTask
                 .OfClass(typeof(ViewSheet))
                 .Cast<ViewSheet>()
                 .Where(s => !s.IsPlaceholder)
-                .Select(s =>
-                {
-                    var parsed = RevitSheetNumberParser.Parse(s.SheetNumber);
-                    return new RevitSheetDescriptor
-                    {
-                        SheetNumber   = parsed?.SheetNumberCore ?? s.SheetNumber,
-                        SheetName     = s.Name,
-                        Discipline    = parsed?.Discipline,
-                        Stage         = parsed?.Stage,
-                        ProjectNumber = parsed?.ProjectNumber
-                    };
-                })
+                .Select(s => RevitSheetDescriptor.FromSheet(s.SheetNumber, s.Name))
                 .ToList();
 
-            var issues = DeliveryRevitSheetComparer.Compare(
+            var comparison = DeliveryRevitSheetComparer.CompareSheets(
                 scan, revitSheets, requiredExtensions, stageFilter, disciplineFilter, ctx.RunId);
+            var issues = comparison.Issues;
 
             // Store issues — both as IssueDto list and as SkillIssue list
             ctx.SharedData["issueDtos"] = issues;
 
             var warnings = new List<string>(scan.Warnings);
+            if (comparison.UnparsedSheetNumbers.Count > 0)
+                warnings.Add($"{comparison.UnparsedSheetNumbers.Count} sheet(s) skipped by disciplineFilter: sheet number not recognised.");
             var criticals = issues.Count(i => i.Severity == IssueSeverity.Critical);
 
             return new SkillTaskResult
             {
                 TaskId     = Id, TaskName = Name, Success = true,
-                Message    = $"Compared {revitSheets.Count} sheet(s). Found {issues.Count} issue(s) ({criticals} critical).",
+                Message    = $"Compared {comparison.ComparedSheetCount} of {revitSheets.Count} sheet(s). Found {issues.Count} issue(s) ({criticals} critical).",
                 IssueCount = issues.Count, Warnings = warnings, DurationMs = sw.ElapsedMilliseconds
             };
         }

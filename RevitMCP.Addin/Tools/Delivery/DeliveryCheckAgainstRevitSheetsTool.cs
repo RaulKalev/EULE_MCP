@@ -54,24 +54,17 @@ public class DeliveryCheckAgainstRevitSheetsTool : IRevitMcpTool
             .OfClass(typeof(ViewSheet))
             .Cast<ViewSheet>()
             .Where(s => !s.IsPlaceholder)
-            .Select(s =>
-            {
-                var parsed = RevitSheetNumberParser.Parse(s.SheetNumber);
-                return new RevitSheetDescriptor
-                {
-                    SheetNumber   = parsed?.SheetNumberCore ?? s.SheetNumber,
-                    SheetName     = s.Name,
-                    Discipline    = parsed?.Discipline,
-                    Stage         = parsed?.Stage,
-                    ProjectNumber = parsed?.ProjectNumber
-                };
-            })
+            .Select(s => RevitSheetDescriptor.FromSheet(s.SheetNumber, s.Name))
             .Where(s => string.IsNullOrWhiteSpace(sheetNumberFilter) ||
                         s.SheetNumber.Contains(sheetNumberFilter, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         var runId = Guid.NewGuid().ToString("N")[..8].ToUpper();
-        var issues = DeliveryRevitSheetComparer.Compare(scan, sheets, requiredExtensions, stageFilter, disciplineFilter, runId);
+        var comparison = DeliveryRevitSheetComparer.CompareSheets(scan, sheets, requiredExtensions, stageFilter, disciplineFilter, runId);
+        var issues = comparison.Issues;
+        var warnings = new List<string>(scan.Warnings);
+        if (comparison.UnparsedSheetNumbers.Count > 0)
+            warnings.Add($"{comparison.UnparsedSheetNumbers.Count} sheet(s) skipped by disciplineFilter: sheet number not recognised.");
 
         var report = DeliveryIssueBuilder.BuildReport(runId,
             $"Delivery vs Revit Sheets — {System.IO.Path.GetFileName(folderPath)}",
@@ -82,13 +75,16 @@ public class DeliveryCheckAgainstRevitSheetsTool : IRevitMcpTool
         {
             RequestId = request.RequestId,
             Success = true,
-            Message = $"Delivery check complete. {issues.Count} issue(s) found. Checked {scan.Files.Count} file(s) against {sheets.Count} Revit sheet(s).",
+            Message = $"Delivery check complete. {issues.Count} issue(s) found. " +
+                      DeliveryRevitSheetComparer.DescribeSheetCounts(scan.Files.Count, sheets.Count, comparison),
             Data = new
             {
                 summary = new
                 {
                     totalFiles = scan.Files.Count,
                     totalSheets = sheets.Count,
+                    comparedSheets = comparison.ComparedSheetCount,
+                    unparsedSheets = comparison.UnparsedSheetNumbers.Count,
                     totalIssues = report.TotalCount,
                     criticalIssues = report.CriticalCount,
                     errorIssues = report.ErrorCount,
@@ -97,7 +93,7 @@ public class DeliveryCheckAgainstRevitSheetsTool : IRevitMcpTool
                 },
                 issueReport = report
             },
-            Warnings = scan.Warnings,
+            Warnings = warnings,
             DurationMs = sw.ElapsedMilliseconds
         });
     }
