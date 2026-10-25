@@ -482,6 +482,7 @@ public class App : IExternalApplication
             var connector = new ConnectorService(pipeServer, eventService, approvalService, registration);
             _connector = connector;
             _viewModel = new McpWindowViewModel(connector, logger, approvalService);
+            _viewModel.DispatchInternal = request => eventService.DispatchAsync(request);
             if (DirectEditDefault.Read())
             {
                 // Opt-in per user so unattended batches survive add-in reloads and Revit restarts (#90).

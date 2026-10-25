@@ -333,6 +333,98 @@
                             </ScrollViewer>
                         </StackPanel>
 
+                        <!-- Plans (#99): one approval per plan; revoke ends it, show changes selects what it touched -->
+                        <StackPanel DockPanel.Dock="Top"
+                                    Margin="0,0,0,6"
+                                    Visibility="{Binding HasPlans, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="PLANS" Style="{StaticResource SectionHeaderStyle}" />
+                            <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding Plans}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border CornerRadius="6"
+                                                    Padding="10,6"
+                                                    Margin="0,0,0,4"
+                                                    BorderThickness="1">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Background" Value="{DynamicResource SecondaryBackgroundBrush}" />
+                                                        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                <Setter Property="BorderBrush" Value="{DynamicResource StatusRunningBrush}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <StackPanel>
+                                                    <DockPanel>
+                                                        <TextBlock DockPanel.Dock="Left"
+                                                                   Text="{Binding StateLabel}"
+                                                                   FontSize="10"
+                                                                   FontWeight="SemiBold"
+                                                                   Margin="0,0,8,0"
+                                                                   VerticalAlignment="Center">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource IconForegroundBrush}" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                            <Setter Property="Foreground" Value="{DynamicResource StatusRunningBrush}" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                        <TextBlock Text="{Binding Title}"
+                                                                   ToolTip="{Binding PlanId}"
+                                                                   Foreground="{DynamicResource ForegroundBrush}"
+                                                                   FontSize="11"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   VerticalAlignment="Center" />
+                                                    </DockPanel>
+                                                    <TextBlock Text="{Binding Progress}"
+                                                               Foreground="{DynamicResource IconForegroundBrush}"
+                                                               FontSize="10"
+                                                               TextWrapping="Wrap"
+                                                               Margin="0,2,0,0" />
+                                                    <TextBlock Text="{Binding StateReason}"
+                                                               Foreground="{DynamicResource IconForegroundBrush}"
+                                                               FontSize="10"
+                                                               TextWrapping="Wrap"
+                                                               Margin="0,2,0,0"
+                                                               Visibility="{Binding HasStateReason, Converter={StaticResource BoolToVisibility}}" />
+                                                    <TextBlock Foreground="{DynamicResource IconForegroundBrush}"
+                                                               FontSize="10"
+                                                               Margin="0,2,0,4">
+                                                        <TextBlock.Text>
+                                                            <MultiBinding StringFormat="From: {0} · Model: {1}">
+                                                                <Binding Path="Client" />
+                                                                <Binding Path="Document" />
+                                                            </MultiBinding>
+                                                        </TextBlock.Text>
+                                                    </TextBlock>
+                                                    <UniformGrid Columns="2">
+                                                        <Button Content="Show changes"
+                                                                Command="{Binding DataContext.ShowPlanChangesCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                CommandParameter="{Binding PlanId}"
+                                                                Style="{StaticResource ActionButtonStyle}"
+                                                                Margin="0,0,3,0" />
+                                                        <Button Content="Revoke"
+                                                                Command="{Binding DataContext.RevokePlanCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                CommandParameter="{Binding PlanId}"
+                                                                IsEnabled="{Binding CanRevoke}"
+                                                                Style="{StaticResource DangerButtonStyle}"
+                                                                Margin="3,0,0,0" />
+                                                    </UniformGrid>
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </StackPanel>
+
                         <!-- Pending items list -->
                         <Grid MinHeight="180">
                             <ItemsControl ItemsSource="{Binding PendingApprovals}">
@@ -359,11 +451,14 @@
                                                                TextTrimming="CharacterEllipsis" />
                                                 </DockPanel>
 
-                                                <!-- Summary -->
+                                                <!-- Summary (a plan's runs over several lines: capped, full text in the tooltip) -->
                                                 <TextBlock Text="{Binding Summary}"
+                                                           ToolTip="{Binding Summary}"
                                                            Foreground="{DynamicResource ForegroundBrush}"
                                                            FontSize="11"
                                                            TextWrapping="Wrap"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           MaxHeight="180"
                                                            Margin="0,0,0,2" />
 
                                                 <!-- Client -->
