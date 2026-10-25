@@ -261,11 +261,12 @@ internal static class PanelSchematicsStorage
         try
         {
             if (!doc.IsWorkshared) return null;
-            var status = WorksharingUtils.GetCheckoutStatus(doc, element.Id, out var owner);
-            if (status == CheckoutStatus.OwnedByOtherUser)
-                return $"{Describe(element)} is owned by {owner}.";
-            var updates = WorksharingUtils.GetModelUpdatesStatus(doc, element.Id);
-            if (updates == ModelUpdatesStatus.UpdatedInCentral || updates == ModelUpdatesStatus.DeletedInCentral)
+            var info = RevitMCP.Addin.Documents.OwnershipReader.Read(doc, element.Id);
+            if (info.Checkout == "unknown")
+                return $"The worksharing state of {Describe(element)} could not be read.";
+            if (info.OwnedByOther)
+                return $"{Describe(element)} is owned by {info.Owner}.";
+            if (info.UpdatedInCentral)
                 return $"{Describe(element)} was changed in the central model; synchronise first.";
             return null;
         }

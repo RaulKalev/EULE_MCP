@@ -39,7 +39,9 @@ public class ToolDocumentMigrationTests
         {
             var source = File.ReadAllText(Path.Combine(ToolsFolder(), relative));
             Assert.True(!source.Contains("ActiveUIDocument"), $"{relative} reads the active document directly; use ToolDocument.Resolve / UiDocumentOf.");
-            Assert.True(source.Contains("ToolDocument."), $"{relative} does not resolve its document through ToolDocument.");
+            // WorksharingSupport.Workshared resolves through ToolDocument too.
+            Assert.True(source.Contains("ToolDocument.") || source.Contains("WorksharingSupport.Workshared("),
+                $"{relative} does not resolve its document through ToolDocument.");
         }
     }
 

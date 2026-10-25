@@ -19,7 +19,13 @@ public static class LongRunningTools
         "revit_remove_links",
         "revit_save_document",
         "revit_sync_with_central",
-        "revit_activate_document"
+        "revit_activate_document",
+        // Worker document (#101): open, close and the calls that talk to central
+        "revit_open_document",
+        "revit_close_document",
+        "revit_reload_latest",
+        "revit_relinquish",
+        "revit_checkout_elements"
     };
 
     public static bool IsLongRunning(string? toolName) => toolName != null && Names.Contains(toolName);

@@ -76,6 +76,16 @@ public class App : IExternalApplication
             handler.RegisterTool(new SetLinkVisibilityTool());
             handler.RegisterTool(new SaveDocumentTool());
             handler.RegisterTool(new SyncWithCentralTool());
+            // Worker document (#101): the agent's own local, worksets, ownership
+            handler.RegisterTool(new OpenDocumentTool());
+            handler.RegisterTool(new CloseDocumentTool());
+            handler.RegisterTool(new ListWorksetsTool());
+            handler.RegisterTool(new PreviewSetWorksetTool());
+            handler.RegisterTool(new SetWorksetTool());
+            handler.RegisterTool(new GetOwnershipTool());
+            handler.RegisterTool(new CheckoutElementsTool());
+            handler.RegisterTool(new RelinquishTool());
+            handler.RegisterTool(new ReloadLatestTool());
             // PanelSchematics plugin data: rows, empty rows and its Extensible Storage stores
             handler.RegisterTool(new PanelSchematicsGuideTool());
             handler.RegisterTool(new PanelSchematicsGetPanelTableTool());
