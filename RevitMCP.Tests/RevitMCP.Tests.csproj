@@ -184,6 +184,8 @@
     <Compile Include="..\RevitMCP.Addin\Tagging\TagCollisionMath.cs" Link="Tagging\TagCollisionMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Tagging\TagTemplateMath.cs" Link="Tagging\TagTemplateMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Tagging\TagTargetVisibilityMath.cs" Link="Tagging\TagTargetVisibilityMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Tagging\RetagDecision.cs" Link="Tagging\RetagDecision.cs" />
+    <Compile Include="..\RevitMCP.Bridge\TagToolArgs.cs" Link="Bridge\TagToolArgs.cs" />
     <Compile Include="..\RevitMCP.Addin\Documentation\Placement\PlaceViewsNameMatcher.cs" Link="Documentation\Placement\PlaceViewsNameMatcher.cs" />
     <Compile Include="..\RevitMCP.Addin\Families\FamilyTypeNamePlanner.cs" Link="Families\FamilyTypeNamePlanner.cs" />
     <Compile Include="..\RevitMCP.Addin\Electrical\CableTypeCreationPlanner.cs" Link="Electrical\CableTypeCreationPlanner.cs" />

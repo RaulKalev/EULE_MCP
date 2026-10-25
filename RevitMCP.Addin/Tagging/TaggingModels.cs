@@ -30,6 +30,8 @@ namespace RevitMCP.Addin.Tagging
     public sealed class SmartTagOptions
     {
         public TagPlacementDirection Direction { get; set; } = TagPlacementDirection.Right;
+        /// <summary>True when the caller passed direction (retag then honours it over the current head).</summary>
+        public bool DirectionSpecified { get; set; }
         public TagAnchorPoint AnchorPoint { get; set; } = TagAnchorPoint.Center;
         public bool HasLeader { get; set; }
         public bool HasLeaderSpecified { get; set; }

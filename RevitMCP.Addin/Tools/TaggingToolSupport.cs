@@ -168,6 +168,17 @@ namespace RevitMCP.Addin.Tools
             return result;
         }
 
+        /// <summary>The argument's string, or the default when it is missing, null or blank.</summary>
+        private static string GivenString(
+            Dictionary<string, object> arguments,
+            string key,
+            string defaultValue)
+        {
+            return RetagDecision.IsArgumentGiven(arguments, key)
+                ? ToolArguments.GetString(arguments, key, defaultValue)
+                : defaultValue;
+        }
+
         public static SmartTagOptions ParseOptions(
             Dictionary<string, object> arguments,
             out string error)
@@ -175,7 +186,7 @@ namespace RevitMCP.Addin.Tools
             error = null;
             TagPlacementDirection direction;
             if (!Enum.TryParse(
-                    ToolArguments.GetString(arguments, "direction", "Right"),
+                    GivenString(arguments, "direction", "Right"),
                     true,
                     out direction))
             {
@@ -197,7 +208,7 @@ namespace RevitMCP.Addin.Tools
 
             TagOrientation orientation;
             if (!Enum.TryParse(
-                    ToolArguments.GetString(arguments, "orientation", "Horizontal"),
+                    GivenString(arguments, "orientation", "Horizontal"),
                     true,
                     out orientation))
             {
@@ -207,7 +218,7 @@ namespace RevitMCP.Addin.Tools
 
             LeaderEndCondition leaderEndCondition;
             if (!Enum.TryParse(
-                    ToolArguments.GetString(
+                    GivenString(
                         arguments,
                         "leaderEndCondition",
                         "Attached"),
@@ -221,9 +232,10 @@ namespace RevitMCP.Addin.Tools
             return new SmartTagOptions
             {
                 Direction = direction,
+                DirectionSpecified = RetagDecision.IsArgumentGiven(arguments, "direction"),
                 AnchorPoint = anchorPoint,
                 HasLeader = ToolArguments.GetBool(arguments, "addLeader"),
-                HasLeaderSpecified = arguments.ContainsKey("addLeader"),
+                HasLeaderSpecified = RetagDecision.IsArgumentGiven(arguments, "addLeader"),
                 AttachedLengthMillimeters = Math.Max(
                     0.0,
                     ToolArguments.GetDouble(arguments, "attachedLengthMm")),
@@ -231,7 +243,7 @@ namespace RevitMCP.Addin.Tools
                     0.0,
                     ToolArguments.GetDouble(arguments, "freeLengthMm")),
                 Orientation = orientation,
-                OrientationSpecified = arguments.ContainsKey("orientation"),
+                OrientationSpecified = RetagDecision.IsArgumentGiven(arguments, "orientation"),
                 RotationRadians = ToolArguments.GetDouble(
                     arguments,
                     "rotationDegrees") * Math.PI / 180.0,
@@ -250,7 +262,7 @@ namespace RevitMCP.Addin.Tools
                     ToolArguments.GetDouble(arguments, "minimumOffsetMm", 300.0)),
                 LeaderEndCondition = leaderEndCondition,
                 LeaderEndConditionSpecified =
-                    arguments.ContainsKey("leaderEndCondition"),
+                    RetagDecision.IsArgumentGiven(arguments, "leaderEndCondition"),
                 SkipAlreadyTagged = ToolArguments.GetBool(
                     arguments,
                     "skipAlreadyTagged",
