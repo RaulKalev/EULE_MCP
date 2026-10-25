@@ -11,7 +11,7 @@ namespace RevitMCP.Addin.Tools;
 public class ListClashableCategoriesTool : IRevitMcpTool
 {
     public string Name => "revit_list_clashable_categories";
-    public string Description => "Lists all element categories available for clash detection in the active document and (optionally) loaded links, together with element counts. Use this before running detect or candidate tools.";
+    public string Description => "Lists every model category with solid geometry in the active document and (optionally) loaded links, together with element counts. Pass these names to the detect or candidate tools.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Coordination;
 

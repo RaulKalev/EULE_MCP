@@ -144,6 +144,7 @@
     <Compile Include="..\RevitMCP.Addin\Coordination\Clash\Services\ClashSummaryService.cs" Link="Coordination\Clash\Services\ClashSummaryService.cs" />
     <Compile Include="..\RevitMCP.Addin\Coordination\Clash\Services\ClashPresetService.cs" Link="Coordination\Clash\Services\ClashPresetService.cs" />
     <Compile Include="..\RevitMCP.Addin\Coordination\Clash\Services\ClashRunCacheService.cs" Link="Coordination\Clash\Services\ClashRunCacheService.cs" />
+    <Compile Include="..\RevitMCP.Addin\Coordination\Clash\Services\ClashCategoryRules.cs" Link="Coordination\Clash\Services\ClashCategoryRules.cs" />
     <!-- FileSystem pure-logic files -->
     <Compile Include="..\RevitMCP.Addin\FileSystem\FilePathPolicy.cs" Link="FileSystem\FilePathPolicy.cs" />
     <Compile Include="..\RevitMCP.Addin\FileSystem\FileSystemService.cs" Link="FileSystem\FileSystemService.cs" />
