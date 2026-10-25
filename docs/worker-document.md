@@ -77,13 +77,20 @@ document directly) and caps the direct uses left in `RevitMCP.Addin/Tools`, a nu
 |---|---|---|
 | 1 | `core` and `query` reads: `revit_get_elements_info`, `revit_get_element_parameters`, `revit_count_elements`, `revit_find_elements_by_parameter`, `revit_group_by_parameter`, `revit_group_elements`, `revit_get_available_parameters`, `revit_run_query_preset`, `revit_check_parameter_completeness`, `revit_run_parameter_qa_rule_set`, `revit_export_query_to_excel` | done |
 | 2 | `edit` and `electrical` writes and their previews: `revit_(preview_)move_elements`, `revit_(preview_)copy_elements`, `revit_(preview_)align_elements`, `revit_(preview_)place_on_face`, `revit_(preview_)rotate_elements`, `revit_(preview_)set_elevation`, `revit_(preview_)assign_room_to_elements`, `revit_(preview_)edit_family_types`, `revit_set_parameter`, `revit_create_lines`, `revit_place_family_instances`, `revit_add_elements_to_circuit`, `revit_apply_circuit_load_names`, `revit_apply_circuit_numbering`, `revit_(preview_)assign_data_devices_to_patch_panels`, `revit_change_circuit_cable_or_wire_type`, `revit_create_cable_type`, `revit_create_electrical_circuit`, `revit_(preview_)draw_circuit_arcs`, `revit_move_elements_between_circuits`, `revit_reassign_circuit_panel`, `revit_set_circuit_parameter`, `revit_set_circuit_parameters_bulk`, `revit_set_circuit_path_mode` | done |
-| 3 | `views`, `tags`, `devices`, and the combined `revit_delete` / `revit_duplicate` / `revit_rename` / `revit_set_parameters_bulk` (they also route to view and sheet tools) | next |
+| 3 | `views` (views, sheets, schedules, title blocks, revisions, view templates, list exports), `tags` (tags, dimensions, text notes, detail lines, view alignment), `devices` (room geometry, device codes and placement, audits, element rooms, view images), the `electrical` reads (circuit info, panels, health, voltage drop, fire alarm, length estimates, exports), the combined `revit_delete` / `revit_duplicate` / `revit_rename` / `revit_set_parameters_bulk`, and the previews of wave-2 writes that were left out | done |
 
 On a non-active document a view-based tool needs `viewId` (or `searchViewId` for ray casting): there is no active view
-to fall back on. Selection tools (`revit_select_*`) stay active-document only.
+to fall back on. Deleting views of a non-active document closes their open tabs but cannot switch its active view.
 
-A combined bridge tool gets `document` only when every add-in tool it routes to is migrated: a `document` argument a
-tool ignores would bind the approval to one document while the tool acts on another.
+Still active-document only, on purpose: the selection tools (`revit_select_*`, `revit_get_selected_elements`,
+`revit_inspect_selected_elements`, the selected-tag-template tools, `revit_focus_clash`), the model graph, model pages,
+memory and plans (they bind to the active model by design). Not migrated yet: linked-model queries, CAD, clash, IFC
+Space-to-Room, delivery checks, Extensible Storage and PanelSchematics. `ToolDocumentMigrationTests` lists them; any
+other tool reading the active document directly fails it.
+
+A bridge tool offers `document` only when every add-in tool it sends to resolves it — a `document` argument a tool
+ignored would bind the approval to one document while the tool acts on another. `ToolDocumentMigrationTests` checks this
+for every bridge method.
 
 Approvals already bind to the target document, so a write with `document=` is approved for that document.
 
