@@ -54,7 +54,7 @@ public class OpenMcpWindowCommand : IExternalCommand
 
         if (_window == null)
         {
-            _window = new McpWindow(vm);
+            _window = new McpWindow(vm, UIThemeManager.CurrentTheme == UITheme.Dark);
             _window.SetRevitOwner(uiapp.MainWindowHandle);
             _window.Closed += (_, _) => _window = null;
         }

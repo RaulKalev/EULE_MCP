@@ -136,9 +136,10 @@ Rows select their elements in Revit. Tables are capped at 2 000 rows with a note
 
 ## In the MCP window
 
-A **JOBS** tab lists the session's and journaled jobs with state, progress `7 / 14 · 3.2 min`, stop reason, and
-**Pause**, **Resume** (the user's click is the approval), **Cancel** and **Open report**. The header reads `JOBS (1)`
-while a job runs.
+The **Jobs** page lists the session's and journaled jobs with state, a progress bar and `7 / 14 · 3.2 min`, stop reason,
+and the actions that apply now: **Pause**, **Resume** (the user's click is the approval), **Cancel** and **Open report**.
+The page switcher shows the number of running jobs. With **Technical details** on, each job also shows its client and
+model.
 
 ## Activity log
 

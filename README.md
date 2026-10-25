@@ -70,6 +70,23 @@ Then:
 
 See [Getting Started](https://github.com/RaulKalev/EULE_MCP/wiki/Getting-Started) for exact paths and [Installation and Deployment](https://github.com/RaulKalev/EULE_MCP/wiki/Installation-and-Deployment) for team packaging.
 
+## Connector window
+
+**RK Tools → MCP Connector** opens a compact window on the RK Tools design system (dark and light, follows Revit's
+theme until you pick one, honours Windows high contrast, transparency and animation settings).
+
+- **Status**: whether the connector runs (Start / Stop), the model, and the **Direct Edit** switch (available to every
+  user, with a confirmation; the card turns red while it is on).
+- **Pending**: changes waiting for approval (Approve / Reject, Reject all), active plans (Show changes / Revoke) and
+  recent decisions. The window switches here when a new request arrives; the switcher shows the count.
+- **Jobs**: unattended jobs with progress and the actions that apply (Pause, Resume, Cancel, Open report).
+- **Emergency stop** (pinned at the bottom) rejects everything pending and disconnects all agents.
+- **Technical details** (checkbox on the Status page, Ctrl+Shift+D, remembered) adds the view, selection,
+  worksharing, pipe name, agent routing (*Use this Revit*), Project Village, plan limits, tool names, and the
+  **Activity** page with the usage report and log folder.
+
+Ctrl+1…4 switch pages. Window bounds, appearance and the detail level are kept in `%LOCALAPPDATA%\RevitMCP\window-state.json`.
+
 ## Safety model
 
 - Revit API work is dispatched through `ExternalEvent`.
@@ -78,7 +95,7 @@ See [Getting Started](https://github.com/RaulKalev/EULE_MCP/wiki/Getting-Started
 - Pending requests are bound to the captured document, change stamp, and selection context.
 - Destructive operations remain explicitly approval-gated.
 - A [plan](docs/plans.md) replaces per-call approvals with one approval for an envelope of tools, elements and limits; calls inside it run in a transaction group that is rolled back when Revit's changes leave the envelope, and plans never cover deletes.
-- A [job](docs/jobs.md) runs its steps through the same dispatcher as any client, one step per dispatch, under its plan; steps outside it wait in the Pending tab, and Panic Stop cancels every job.
+- A [job](docs/jobs.md) runs its steps through the same dispatcher as any client, one step per dispatch, under its plan; steps outside it wait in the Pending tab, and Emergency stop (formerly Panic Stop) cancels every job.
 - Background file, Excel, report, standards, and configuration work uses a separate serialized lane.
 
 Read [Safety and Approvals](https://github.com/RaulKalev/EULE_MCP/wiki/Safety-and-Approvals) before enabling Direct Edit or adding write tools.

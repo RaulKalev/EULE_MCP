@@ -95,11 +95,11 @@ Out-of-range numbers are clamped with a warning.
 - Exceed its counters: a call that would is rolled back whole.
 - Survive a Revit restart: plans live in memory; the checkpoint survives.
 
-## In the Pending tab
+## On the Pending page
 
-A **Plans** section lists the session's plans with state, calls and elements used, calls not covered and time left,
-and two buttons: **Show changes** (selects the elements the plan changed) and **Revoke**. The tab header counts
-active plans: `PENDING (2) · PLANS (1)`.
+A **Plans** section lists the session's plans with state and two buttons: **Show changes** (selects the elements the
+plan changed) and **Revoke**. With **Technical details** on (Status page), each plan also shows calls and elements used,
+calls not covered and time left.
 
 ## Activity log
 

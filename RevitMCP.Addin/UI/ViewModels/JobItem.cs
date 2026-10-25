@@ -15,6 +15,10 @@ public class JobItem
 
     /// <summary>"7 / 14 · 3.2 min".</summary>
     public string Progress { get; init; } = string.Empty;
+
+    /// <summary>Steps done and total, for the progress meter.</summary>
+    public int Done { get; init; }
+    public int Total { get; init; }
     public string StopReason { get; init; } = string.Empty;
     public bool HasStopReason => StopReason.Length > 0;
 

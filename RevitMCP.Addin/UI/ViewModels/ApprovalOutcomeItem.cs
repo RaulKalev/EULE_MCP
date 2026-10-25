@@ -21,4 +21,7 @@ public class ApprovalOutcomeItem
     public bool IsSucceeded { get; init; }
     public bool IsFailed { get; init; }
     public bool HasMessage => !string.IsNullOrWhiteSpace(Message);
+
+    /// <summary>The state in sentence case for the caption line ("Done").</summary>
+    public string StateWord => StateLabel.Length == 0 ? string.Empty : StateLabel.Substring(0, 1) + StateLabel.Substring(1).ToLowerInvariant();
 }
