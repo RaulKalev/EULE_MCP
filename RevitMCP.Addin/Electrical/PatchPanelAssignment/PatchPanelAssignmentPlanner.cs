@@ -79,8 +79,9 @@ public static class PatchPanelAssignmentPlanner
                 continue;
             }
 
-            var circuitedCount = connectors.Count(c => c.IsCircuited);
             var free = connectors.Where(c => !c.IsCircuited).ToList();
+            var existing = CountExistingCircuits(device);
+            var circuitedCount = existing.Count;
 
             int needed;
             var matched = compiledRules.FirstOrDefault(r => r.Regex.IsMatch(device.TypeName));
@@ -95,11 +96,34 @@ public static class PatchPanelAssignmentPlanner
                     warnings.Add($"Type '{device.TypeName}' matches no connectorRule — using all of its usable connectors.");
             }
 
-            // Idempotency: connectors that already carry a circuit satisfy part of
-            // the quota, so a rerun plans nothing new for a completed device.
+            // Idempotency: circuits the device already has satisfy part of the
+            // quota, so a rerun plans nothing new for a completed device. Circuits
+            // are counted, not connectors: one connector on two circuits fills a
+            // two-port quota.
             var toCreate = options.SkipAlreadyCircuitedConnectors
                 ? Math.Max(0, needed - circuitedCount)
                 : needed;
+
+            // The device is on circuit(s) none of its connectors reports, so a
+            // connector that looks free may already be in use: never plan on it.
+            if (existing.Unattributed.Count > 0)
+            {
+                var ids = string.Join(", ", existing.Unattributed.Select(id => $"ID:{id}"));
+                warnings.Add($"Device {device.ElementId} ('{device.TypeName}') is on circuit(s) {ids} of this system " +
+                             "type that none of its connectors reports" +
+                             (toCreate > 0 ? " — skipped so no duplicate circuit is planned." : " (counted as existing).") +
+                             " Check its connectors in Revit.");
+                if (toCreate > 0)
+                {
+                    skipped.Add(new SkippedDevice
+                    {
+                        ElementId = device.ElementId,
+                        TypeName = device.TypeName,
+                        Reason = $"Already on circuit(s) {ids} that no connector reports; free connectors cannot be trusted."
+                    });
+                    continue;
+                }
+            }
 
             if (toCreate > free.Count)
             {
@@ -115,11 +139,16 @@ public static class PatchPanelAssignmentPlanner
                     ElementId = device.ElementId,
                     TypeName = device.TypeName,
                     Reason = circuitedCount > 0
-                        ? $"Already circuited ({circuitedCount} connector(s) on existing circuits)."
+                        ? $"Already circuited ({circuitedCount} existing circuit(s) on its connectors)."
                         : "Connector rule requests 0 circuits."
                 });
                 continue;
             }
+
+            if (circuitedCount > 0)
+                warnings.Add($"Device {device.ElementId} ('{device.TypeName}') already has {circuitedCount} circuit(s) " +
+                             $"of this system type ({string.Join(", ", existing.All.Select(id => $"ID:{id}"))}); " +
+                             $"planning {toCreate} more on its free connector(s).");
 
             var chosen = free.Take(toCreate).Select(c => c.ConnectorId).ToList();
             deviceChoices.Add((device, sortIndex, chosen));
@@ -257,6 +286,49 @@ public static class PatchPanelAssignmentPlanner
             Panels = BuildUtilization(panels, capacities, plannedNew),
             Warnings = warnings,
             Errors = errors
+        };
+    }
+
+    /// <summary>Existing circuits of a device, merged from its connectors and its device-level list.</summary>
+    public sealed class ExistingCircuits
+    {
+        /// <summary>Distinct circuit ids, ascending.</summary>
+        public List<long> All { get; init; } = new();
+
+        /// <summary>Device-level circuits that no connector reports, ascending.</summary>
+        public List<long> Unattributed { get; init; } = new();
+
+        /// <summary>
+        /// Number of existing circuits counted against the quota: the distinct circuit ids, and at
+        /// least the number of connectors flagged as circuited (a flag without an id still counts).
+        /// </summary>
+        public int Count { get; init; }
+    }
+
+    /// <summary>
+    /// Merges what the connectors report (<see cref="DeviceConnectorInput.ExistingCircuitId"/>,
+    /// <see cref="DeviceConnectorInput.ExistingCircuitIds"/>) with the device-level
+    /// <see cref="DeviceInput.DeviceCircuitIds"/>. A device-level circuit no connector reports is
+    /// unattributed: the planner then cannot tell which connector is really free.
+    /// </summary>
+    public static ExistingCircuits CountExistingCircuits(DeviceInput device)
+    {
+        var byConnector = new SortedSet<long>();
+        foreach (var connector in device.Connectors)
+        {
+            if (connector.ExistingCircuitId is long id) byConnector.Add(id);
+            foreach (var other in connector.ExistingCircuitIds) byConnector.Add(other);
+        }
+
+        var unattributed = new SortedSet<long>(device.DeviceCircuitIds.Where(id => !byConnector.Contains(id)));
+        var all = new SortedSet<long>(byConnector);
+        all.UnionWith(unattributed);
+
+        return new ExistingCircuits
+        {
+            All = all.ToList(),
+            Unattributed = unattributed.ToList(),
+            Count = Math.Max(all.Count, device.Connectors.Count(c => c.IsCircuited))
         };
     }
 
