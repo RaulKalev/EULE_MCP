@@ -248,4 +248,13 @@
     <!-- Project Village: only the add-in-side graph reader is linked here; the rest of the module comes from the RevitMCP.Village project reference above. -->
     <Compile Include="..\RevitMCP.Addin\Village\VillageGraphReader.cs" Link="Village\VillageGraphReader.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Geometry queries (#107): shared DTOs, box and clearance maths, surface classification, level fallback, argument parsing (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\Geometry\GeometryDto.cs" Link="Geometry\GeometryDto.cs" />
+    <Compile Include="..\RevitMCP.Addin\Geometry\BoxMath.cs" Link="Geometry\BoxMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Geometry\ClearanceMath.cs" Link="Geometry\ClearanceMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Geometry\SurfaceClassifier.cs" Link="Geometry\SurfaceClassifier.cs" />
+    <Compile Include="..\RevitMCP.Addin\Geometry\LevelResolver.cs" Link="Geometry\LevelResolver.cs" />
+    <Compile Include="..\RevitMCP.Addin\Geometry\GeometryArgs.cs" Link="Geometry\GeometryArgs.cs" />
+  </ItemGroup>
 </Project>

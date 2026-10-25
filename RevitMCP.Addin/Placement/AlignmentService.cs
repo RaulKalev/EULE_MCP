@@ -1,17 +1,18 @@
 using Autodesk.Revit.DB;
+using RevitMCP.Addin.Geometry;
 
 namespace RevitMCP.Addin.Placement;
 
 /// <summary>
 /// Resolves, per element, the surface it should be moved against and how far it has to travel.
-/// Surfaces are found by ray casting through <see cref="ReferenceIntersector"/>, which sees both
-/// the host model and loaded links, so IFC links converted to Revit links work the same as
-/// native geometry. What the ray hits is classified by face orientation rather than category.
+/// Surfaces are found by ray casting through the shared <see cref="RayCaster"/> (a ReferenceIntersector
+/// that sees both the host model and loaded links), so IFC links converted to Revit links work the same
+/// as native geometry. What the ray hits is classified by face orientation rather than category.
 /// </summary>
 internal sealed class AlignmentService
 {
     /// <summary>Offset used by the probe rays that estimate the hit face's plane, in feet.</summary>
-    private const double ProbeOffsetFt = 0.25;
+    private const double ProbeOffsetFt = RayCaster.DefaultProbeOffsetFt;
 
     /// <summary>
     /// How many candidates get their surface measured before the search falls back to the cheaper
@@ -22,21 +23,18 @@ internal sealed class AlignmentService
     /// <summary>Hits closer than this sit on the ray origin itself and are ignored, in feet (~3 mm).</summary>
     private const double MinHitDistanceFt = 0.01;
 
-    private readonly Document _doc;
     private readonly AlignmentOptions _options;
-    private readonly ReferenceIntersector _intersector;
+    private readonly RayCaster _caster;
 
     public AlignmentService(Document doc, View3D view, AlignmentOptions options)
     {
-        _doc = doc;
         _options = options;
 
-        // No ElementFilter is passed on purpose. ReferenceIntersector applies its filter to the
-        // RevitLinkInstance rather than the elements inside the link, so a category filter here
-        // would discard every linked hit — exactly the geometry this tool exists to find.
-        // Category filtering happens after the hit, where the linked element is resolvable.
-        _intersector = new ReferenceIntersector(view) { TargetType = FindReferenceTarget.Face };
-        _intersector.FindReferencesInRevitLinks = options.IncludeLinks;
+        // No ElementFilter is passed on purpose (see RayCaster): ReferenceIntersector applies its filter
+        // to the RevitLinkInstance rather than the elements inside the link, so a category filter would
+        // discard every linked hit — exactly the geometry this tool exists to find. Category filtering
+        // happens after the hit, in IsExcluded, where the linked element is resolvable.
+        _caster = new RayCaster(doc, view, options.IncludeLinks);
     }
 
     /// <summary>
@@ -194,21 +192,9 @@ internal sealed class AlignmentService
     /// misses, lands on a different element, or the three points turn out collinear — all of which
     /// mean the face is curved, fragmented, or narrower than the probe offset.
     /// </summary>
-    private Vec3? EstimatePlaneNormal(XYZ origin, XYZ rayDirection, AlignmentCandidate candidate)
-    {
-        var (u, v) = PerpendicularAxes(rayDirection);
-
-        var firstOrigin = origin + u * ProbeOffsetFt;
-        var secondOrigin = origin + v * ProbeOffsetFt;
-
-        var firstPoint = ProbePointOn(firstOrigin, rayDirection, candidate);
-        var secondPoint = ProbePointOn(secondOrigin, rayDirection, candidate);
-        if (firstPoint == null || secondPoint == null)
-            return null;
-
-        return AlignmentMath.PlaneNormal(
-            ToVec(candidate.HitPoint), ToVec(firstPoint), ToVec(secondPoint), ToVec(rayDirection.Negate()));
-    }
+    private Vec3? EstimatePlaneNormal(XYZ origin, XYZ rayDirection, AlignmentCandidate candidate) =>
+        RayCaster.MeasurePlane(origin, rayDirection, candidate.HitPoint,
+            probeOrigin => ProbePointOn(probeOrigin, rayDirection, candidate), ProbeOffsetFt);
 
     /// <summary>
     /// Casts a probe ray and returns where it landed, but only if it hit the same element as the
@@ -229,32 +215,16 @@ internal sealed class AlignmentService
         return origin + rayDirection * hit.Proximity;
     }
 
-    private ReferenceWithContext? NearestHit(XYZ origin, XYZ direction)
-    {
-        IList<ReferenceWithContext> hits;
-        try { hits = _intersector.Find(origin, direction); }
-        catch { return null; }
-
-        if (hits == null || hits.Count == 0)
-            return null;
-
-        ReferenceWithContext? best = null;
-        foreach (var hit in hits)
-        {
-            // Ignore faces sitting on the ray origin and anything past the search radius.
-            if (hit.Proximity <= MinHitDistanceFt || hit.Proximity > _options.SearchRadiusFt)
-                continue;
-            if (best != null && hit.Proximity >= best.Proximity)
-                continue;
-            if (IsExcluded(ResolveTarget(hit.GetReference())))
-                continue;
-            best = hit;
-        }
-        return best;
-    }
+    /// <summary>
+    /// The nearest hit that is not excluded. Faces sitting on the ray origin (within MinHitDistanceFt)
+    /// and anything past the search radius are ignored.
+    /// </summary>
+    private ReferenceWithContext? NearestHit(XYZ origin, XYZ direction) =>
+        _caster.NearestHit(origin, direction, _options.SearchRadiusFt,
+            reference => IsExcluded(ResolveTarget(reference)), MinHitDistanceFt);
 
     /// <summary>Skips the elements being moved, links the caller ruled out, and unwanted categories.</summary>
-    private bool IsExcluded(AlignmentTarget target)
+    private bool IsExcluded(RayTarget target)
     {
         if (target.LinkInstanceId.HasValue)
         {
@@ -275,37 +245,7 @@ internal sealed class AlignmentService
     }
 
     /// <summary>Resolves what a hit reference actually points at, in the host model or inside a link.</summary>
-    private AlignmentTarget ResolveTarget(Reference reference)
-    {
-        var target = new AlignmentTarget();
-        try
-        {
-            if (reference.LinkedElementId != ElementId.InvalidElementId)
-            {
-                target.LinkInstanceId = reference.ElementId.Value;
-                var link = _doc.GetElement(reference.ElementId) as RevitLinkInstance;
-                target.LinkName = link?.Name ?? string.Empty;
-                target.ElementId = reference.LinkedElementId.Value;
-
-                var linked = link?.GetLinkDocument()?.GetElement(reference.LinkedElementId);
-                target.Category = linked?.Category?.Name ?? string.Empty;
-                target.Name = linked != null ? SafeName(linked) : string.Empty;
-                target.Model = target.LinkName.Length > 0 ? target.LinkName : "Link";
-                return target;
-            }
-
-            target.ElementId = reference.ElementId.Value;
-            var element = _doc.GetElement(reference.ElementId);
-            target.Category = element?.Category?.Name ?? string.Empty;
-            target.Name = element != null ? SafeName(element) : string.Empty;
-            target.Model = "Host";
-        }
-        catch
-        {
-            target.Model = "Unknown";
-        }
-        return target;
-    }
+    private RayTarget ResolveTarget(Reference reference) => _caster.ResolveTarget(reference);
 
     /// <summary>The facing direction of a family instance, used to look behind wall-mounted devices first.</summary>
     private static Vec3? TryGetFacing(Element element)
@@ -323,26 +263,11 @@ internal sealed class AlignmentService
         return null;
     }
 
-    /// <summary>Two unit vectors perpendicular to <paramref name="direction"/> and to each other.</summary>
-    private static (XYZ U, XYZ V) PerpendicularAxes(XYZ direction)
-    {
-        var seed = Math.Abs(direction.Z) > 0.9 ? XYZ.BasisX : XYZ.BasisZ;
-        var u = direction.CrossProduct(seed);
-        if (u.IsZeroLength())
-            u = direction.CrossProduct(XYZ.BasisY);
-        u = u.Normalize();
-        return (u, direction.CrossProduct(u).Normalize());
-    }
+    public static XYZ ToXyz(Vec3 v) => GeometryConvert.ToXyz(v);
 
-    public static XYZ ToXyz(Vec3 v) => new(v.X, v.Y, v.Z);
+    public static Vec3 ToVec(XYZ p) => GeometryConvert.ToVec(p);
 
-    public static Vec3 ToVec(XYZ p) => new(p.X, p.Y, p.Z);
-
-    public static string SafeName(Element element)
-    {
-        try { return element.Name ?? string.Empty; }
-        catch { return string.Empty; }
-    }
+    public static string SafeName(Element element) => GeometryConvert.SafeName(element);
 }
 
 internal sealed class AlignmentOptions
@@ -358,17 +283,6 @@ internal sealed class AlignmentOptions
     public HashSet<long> LinkInstanceIds { get; set; } = new();
     public HashSet<long> ExcludedElementIds { get; set; } = new();
     public HashSet<string> TargetCategories { get; set; } = new(StringComparer.OrdinalIgnoreCase);
-}
-
-/// <summary>What a ray hit, resolved through the link instance when the hit is inside a link.</summary>
-internal sealed class AlignmentTarget
-{
-    public long ElementId { get; set; }
-    public string Category { get; set; } = string.Empty;
-    public string Name { get; set; } = string.Empty;
-    public string Model { get; set; } = string.Empty;
-    public long? LinkInstanceId { get; set; }
-    public string LinkName { get; set; } = string.Empty;
 }
 
 internal sealed class AlignmentCandidate

@@ -1,4 +1,5 @@
 using Autodesk.Revit.DB;
+using RevitMCP.Addin.Geometry;
 
 namespace RevitMCP.Addin.Placement;
 
@@ -83,7 +84,7 @@ internal sealed class FacePlacementPlan
 internal sealed class FacePlacementService
 {
     /// <summary>Offset of the two extra rays that measure the hit face's plane, in feet (~76 mm).</summary>
-    private const double ProbeOffsetFt = 0.25;
+    private const double ProbeOffsetFt = RayCaster.DefaultProbeOffsetFt;
 
     /// <summary>Candidates whose plane gets measured, nearest first. Each costs two more rays.</summary>
     private const int MaxMeasuredCandidates = 8;
@@ -93,18 +94,17 @@ internal sealed class FacePlacementService
 
     private readonly Document _doc;
     private readonly FacePlacementOptions _options;
-    private readonly ReferenceIntersector _intersector;
+    private readonly RayCaster _caster;
 
     public FacePlacementService(Document doc, View3D view, FacePlacementOptions options)
     {
         _doc = doc;
         _options = options;
 
-        // No ElementFilter: ReferenceIntersector applies its filter to the RevitLinkInstance rather
-        // than to the elements inside the link, so a category filter here would drop every linked
+        // No ElementFilter (see RayCaster): ReferenceIntersector applies its filter to the RevitLinkInstance
+        // rather than to the elements inside the link, so a category filter here would drop every linked
         // hit. Categories are checked after the hit, where the linked element can be resolved.
-        _intersector = new ReferenceIntersector(view) { TargetType = FindReferenceTarget.Face };
-        _intersector.FindReferencesInRevitLinks = options.IncludeLinks;
+        _caster = new RayCaster(doc, view, options.IncludeLinks);
     }
 
     /// <summary>Works out which face each placement would use, touching nothing.</summary>
@@ -238,20 +238,9 @@ internal sealed class FacePlacementService
     }
 
     /// <summary>Three points on a planar face define its plane: two more rays alongside the first.</summary>
-    private Vec3? MeasurePlane(XYZ origin, XYZ rayDirection, FaceTarget target)
-    {
-        var seed = Math.Abs(rayDirection.Z) > 0.9 ? XYZ.BasisX : XYZ.BasisZ;
-        var u = rayDirection.CrossProduct(seed).Normalize();
-        var v = rayDirection.CrossProduct(u).Normalize();
-
-        var first = PointOnSameFace(origin + u * ProbeOffsetFt, rayDirection, target);
-        var second = PointOnSameFace(origin + v * ProbeOffsetFt, rayDirection, target);
-        if (first == null || second == null) return null;
-
-        return AlignmentMath.PlaneNormal(
-            AlignmentService.ToVec(target.Location), AlignmentService.ToVec(first), AlignmentService.ToVec(second),
-            AlignmentService.ToVec(rayDirection.Negate()));
-    }
+    private Vec3? MeasurePlane(XYZ origin, XYZ rayDirection, FaceTarget target) =>
+        RayCaster.MeasurePlane(origin, rayDirection, target.Location,
+            probeOrigin => PointOnSameFace(probeOrigin, rayDirection, target), ProbeOffsetFt);
 
     private XYZ? PointOnSameFace(XYZ origin, XYZ direction, FaceTarget target)
     {
@@ -264,59 +253,15 @@ internal sealed class FacePlacementService
     /// <summary>The face's own normal at the hit point, in model coordinates, or null when the face cannot be read.</summary>
     private Vec3? GeometricNormal(FaceTarget target)
     {
-        try
-        {
-            var reference = target.Reference;
-            Face? face;
-            var toModel = Transform.Identity;
-
-            if (target.LinkInstanceId.HasValue)
-            {
-                if (_doc.GetElement(reference.ElementId) is not RevitLinkInstance link) return null;
-                var linked = link.GetLinkDocument()?.GetElement(reference.LinkedElementId);
-                if (linked == null) return null;
-                face = linked.GetGeometryObjectFromReference(reference.CreateReferenceInLink()) as Face;
-                toModel = link.GetTotalTransform();
-                if (face?.Reference != null)
-                    target.GeometryReference = face.Reference.CreateLinkReference(link);
-            }
-            else
-            {
-                face = _doc.GetElement(reference.ElementId)?.GetGeometryObjectFromReference(reference) as Face;
-            }
-
-            if (face == null) return null;
-
-            var local = toModel.Inverse.OfPoint(target.Location);
-            var projection = face.Project(local);
-            if (projection == null) return null;
-
-            var normal = toModel.OfVector(face.ComputeNormal(projection.UVPoint));
-            return normal.IsZeroLength() ? null : AlignmentService.ToVec(normal.Normalize());
-        }
-        catch
-        {
-            return null;
-        }
+        var normal = _caster.FaceNormal(target.Reference, target.Location, out var geometryReference);
+        if (target.LinkInstanceId.HasValue && geometryReference != null)
+            target.GeometryReference = geometryReference;
+        return normal;
     }
 
-    private ReferenceWithContext? NearestHit(XYZ origin, XYZ direction, double maxDistanceFt)
-    {
-        IList<ReferenceWithContext> hits;
-        try { hits = _intersector.Find(origin, direction); }
-        catch { return null; }
-        if (hits == null) return null;
-
-        ReferenceWithContext? best = null;
-        foreach (var hit in hits)
-        {
-            if (hit.Proximity < 0 || hit.Proximity > maxDistanceFt) continue;
-            if (best != null && hit.Proximity >= best.Proximity) continue;
-            if (IsExcluded(hit.GetReference())) continue;
-            best = hit;
-        }
-        return best;
-    }
+    /// <summary>The nearest hit at or past the ray origin within <paramref name="maxDistanceFt"/> that is not excluded.</summary>
+    private ReferenceWithContext? NearestHit(XYZ origin, XYZ direction, double maxDistanceFt) =>
+        _caster.NearestHit(origin, direction, maxDistanceFt, IsExcluded);
 
     private bool IsExcluded(Reference reference)
     {
@@ -332,56 +277,28 @@ internal sealed class FacePlacementService
         }
 
         if (_options.HostCategories.Count == 0) return false;
-        return !_options.HostCategories.Contains(Resolve(reference).HostCategory);
+        return !_options.HostCategories.Contains(_caster.ResolveTarget(reference).Category);
     }
 
     /// <summary>Resolves what a hit reference points at, in the host model or inside a link.</summary>
     private FaceTarget Resolve(Reference reference)
     {
+        var resolved = _caster.ResolveTarget(reference);
         var target = new FaceTarget { Reference = reference, FaceKey = FaceKeyOf(reference) };
-        try
+        target.HostElementId = resolved.ElementId;
+        target.HostCategory = resolved.Category;
+        target.HostName = resolved.Name;
+        if (resolved.LinkInstanceId.HasValue)
         {
-            if (reference.LinkedElementId != ElementId.InvalidElementId)
-            {
-                var link = _doc.GetElement(reference.ElementId) as RevitLinkInstance;
-                var linked = link?.GetLinkDocument()?.GetElement(reference.LinkedElementId);
-                target.LinkInstanceId = reference.ElementId.Value;
-                target.LinkName = link?.Name ?? string.Empty;
-                target.Model = string.IsNullOrEmpty(target.LinkName) ? "Link" : target.LinkName;
-                target.HostElementId = reference.LinkedElementId.Value;
-                target.HostCategory = linked?.Category?.Name ?? string.Empty;
-                target.HostName = linked != null ? AlignmentService.SafeName(linked) : string.Empty;
-                return target;
-            }
-
-            var element = _doc.GetElement(reference.ElementId);
-            target.HostElementId = reference.ElementId.Value;
-            target.HostCategory = element?.Category?.Name ?? string.Empty;
-            target.HostName = element != null ? AlignmentService.SafeName(element) : string.Empty;
+            target.LinkInstanceId = resolved.LinkInstanceId;
+            target.LinkName = resolved.LinkName;
         }
-        catch
-        {
-            target.Model = "Unknown";
-        }
+        target.Model = resolved.Model.Length > 0 ? resolved.Model : "Host";
         return target;
     }
 
     /// <summary>Identifies a face: two references to the same face give the same key.</summary>
-    private string FaceKeyOf(Reference reference)
-    {
-        try
-        {
-            // The stable representation ends with the hit's UV for point-on-face references; the part
-            // before it names the element and the face.
-            var stable = reference.ConvertToStableRepresentation(_doc);
-            var uv = stable.LastIndexOf("/", StringComparison.Ordinal);
-            return uv > 0 && stable.IndexOf(":", uv, StringComparison.Ordinal) < 0 ? stable.Substring(0, uv) : stable;
-        }
-        catch
-        {
-            return $"{reference.ElementId.Value}|{reference.LinkedElementId.Value}";
-        }
-    }
+    private string FaceKeyOf(Reference reference) => _caster.FaceKeyOf(reference);
 
     // ── Placing ──────────────────────────────────────────────────────────────
 
