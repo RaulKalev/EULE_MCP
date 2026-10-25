@@ -31,6 +31,24 @@ public static class ClashBoundingBoxMath
         return Math.Sqrt(dx * dx + dy * dy + dz * dz);
     }
 
+    /// <summary>
+    /// Distance from a point to the nearest point of a box (#107); 0 when the point is inside or on the box.
+    /// The box corners may be given in any order.
+    /// </summary>
+    public static double DistancePointToBox(
+        double px, double py, double pz,
+        double minX, double minY, double minZ,
+        double maxX, double maxY, double maxZ)
+    {
+        var dx = AxisGap(px, Math.Min(minX, maxX), Math.Max(minX, maxX));
+        var dy = AxisGap(py, Math.Min(minY, maxY), Math.Max(minY, maxY));
+        var dz = AxisGap(pz, Math.Min(minZ, maxZ), Math.Max(minZ, maxZ));
+        return Math.Sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    private static double AxisGap(double value, double min, double max) =>
+        value < min ? min - value : value > max ? value - max : 0;
+
     /// <summary>Expands min/max coords by pad on all sides. Returns (minX,minY,minZ,maxX,maxY,maxZ).</summary>
     public static (double mnX, double mnY, double mnZ, double mxX, double mxY, double mxZ) Expand(
         double minX, double minY, double minZ,

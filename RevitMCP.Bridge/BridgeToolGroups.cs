@@ -18,7 +18,7 @@ public static class BridgeToolGroups
         [Core] = "Connection, instance routing, selection, live reads by element id, memory recall and remember",
         [Discovery] = "Search, describe, load and call any connector tool",
         [Graph] = "Model graph: build, status, summary, query, route (cheap id-first discovery)",
-        ["query"] = "Broad element queries, parameter filters, grouping, query presets, parameter QA",
+        ["query"] = "Broad element queries, parameter filters, grouping, query presets, parameter QA; geometry, boxes, ray casts",
         ["edit"] = "Generic model edits: parameters, move/align/rotate/elevation, delete/duplicate/rename, family types, placement",
         ["devices"] = "Room geometry, device codes, room-based device placement and device/fire-alarm audits",
         ["electrical"] = "Circuits, panels, wires/cables, voltage drop, fire alarm circuits, patch panels, cable tray and conduit runs (containment)",
@@ -68,7 +68,9 @@ public static class BridgeToolGroups
             "revit_find_elements_by_parameter", "revit_group_by_parameter", "revit_group_elements", "revit_get_available_parameters",
             "revit_list_query_presets", "revit_run_query_preset", "revit_select_elements", "revit_select_elements_by_query",
             "revit_check_parameter_completeness", "revit_list_parameter_qa_rule_sets", "revit_run_parameter_qa_rule_set",
-            "revit_export_query_to_excel", "revit_export_list_to_excel"
+            "revit_export_query_to_excel", "revit_export_list_to_excel",
+            "revit_get_element_geometry", "revit_find_elements_in_box", "revit_find_elements_near", "revit_find_nearest_surface",
+            "revit_check_line_of_sight", "revit_measure_clearance"
         }),
         ("tags", new[] { "revit_create_text_notes", "revit_get_text_notes", "revit_preview_set_text_notes", "revit_set_text_notes", "revit_annotate_detail_lines", "revit_preview_align_in_view", "revit_align_in_view" }),
         ("ifc", new[] { "revit_query_linked_elements", "revit_select_linked_elements" }),

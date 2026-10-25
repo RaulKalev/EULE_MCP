@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RevitMCP.Addin.Documents;
+using RevitMCP.Addin.Geometry;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.RoomDevices;
 using RevitMCP.Core.Models;
@@ -16,7 +17,7 @@ public sealed class GetLinkedElementsInRoomTool : IRevitMcpTool
     public string Description =>
         "Lists elements of the given categories (e.g. Lighting Fixtures, Air Terminals, Ceilings, Furniture) that stand " +
         "in a room, in host internal mm: id, model, category, typeName, location {x,y,z} (when the element has a point) " +
-        "and bbox. Rooms come from source/linkInstanceId (roomNumber or roomNumbers, levelName); elements from " +
+        "and bbox {min, max, sizeMm, centerMm} (plus the older flat minX … maxZ while legacy=true, the default). Rooms come from source/linkInstanceId (roomNumber or roomNumbers, levelName); elements from " +
         "elementLinkInstanceIds[] (other links, e.g. EK/KVJ) and/or includeHost — default: the room source model. " +
         "An element is in the room when its point (or plan centre) is inside the footprint and it spans the room's storey.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
@@ -55,6 +56,7 @@ public sealed class GetLinkedElementsInRoomTool : IRevitMcpTool
         if (sources.Count == 0) sources.Add(roomService);
 
         var limit = Math.Max(1, ToolArguments.GetInt(args, "limitPerRoom", 500));
+        var legacy = GeometryArgs.Legacy(args);
         var payload = new List<object>();
         var total = 0;
         foreach (var room in rooms)
@@ -75,12 +77,10 @@ public sealed class GetLinkedElementsInRoomTool : IRevitMcpTool
                         linkInstanceId = source.Source.Link?.Id.Value,
                         category = e.Category,
                         typeName = e.TypeName,
-                        location = e.Location is { } l ? new { x = Math.Round(l.X, 1), y = Math.Round(l.Y, 1), z = Math.Round(e.LocationZ ?? 0, 1) } : null,
-                        bbox = new
-                        {
-                            minX = Math.Round(e.Plan.MinX, 1), minY = Math.Round(e.Plan.MinY, 1), minZ = Math.Round(e.MinZ, 1),
-                            maxX = Math.Round(e.Plan.MaxX, 1), maxY = Math.Round(e.Plan.MaxY, 1), maxZ = Math.Round(e.MaxZ, 1)
-                        }
+                        // Shared geometry DTOs (#107): location {x,y,z}; bbox {min, max, sizeMm, centerMm}, with the
+                        // flat minX … maxZ of the old payload kept while legacy=true (the default, for one release).
+                        location = e.Location is { } l ? PointMmDto.FromMm(l.X, l.Y, e.LocationZ ?? 0) : null,
+                        bbox = legacy ? Box(e).WithLegacyFields() : Box(e)
                     });
                 }
             }
@@ -94,6 +94,10 @@ public sealed class GetLinkedElementsInRoomTool : IRevitMcpTool
         return Task.FromResult(RoomToolSupport.Ok(request, sw,
             $"{total} element(s) in {rooms.Count} room(s).", new { rooms = payload }, warnings.Distinct().ToList()));
     }
+
+    private static BoxMmDto Box(LinkedElementInRoom e) => BoxMmDto.FromMm(
+        new Placement.Vec3(e.Plan.MinX, e.Plan.MinY, e.MinZ),
+        new Placement.Vec3(e.Plan.MaxX, e.Plan.MaxY, e.MaxZ));
 }
 
 // ── Shared audit setup ──────────────────────────────────────────────────────────

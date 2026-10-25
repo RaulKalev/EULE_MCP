@@ -17,7 +17,8 @@ internal sealed class DeviceRecord
     public double LevelElevationMm => Level != null ? RoomUnits.FtToMm(Level.ProjectElevation) : 0;
     public int RoomIndex { get; set; } = -1;
 
-    public object PointPayload() => new { x = Math.Round(Point.X, 1), y = Math.Round(Point.Y, 1), z = Math.Round(ZMm, 1) };
+    /// <summary>The device point as the shared geometry DTO (#107): <c>{x, y, z}</c> in host mm, 0.1 mm.</summary>
+    public object PointPayload() => Geometry.PointMmDto.FromMm(Point.X, Point.Y, ZMm);
 }
 
 /// <summary>All rooms of a source, indexed for point lookup.</summary>

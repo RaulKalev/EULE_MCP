@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Geometry;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Core.Models;
 
@@ -13,7 +14,9 @@ namespace RevitMCP.Addin.Tools;
 public class InspectSelectedElementsTool : IRevitMcpTool
 {
     public string Name => "revit_inspect_selected_elements";
-    public string Description => "Returns detailed geometry, bounding box (mm), location (mm), and parameter preview for the selected Revit elements. All coordinates in millimetres.";
+    public string Description => "Returns detailed geometry, bounding box (mm), location (mm), and parameter preview for the selected Revit elements. " +
+                                 "All coordinates in millimetres (0.1 mm). The bounding box is bbox {min, max, sizeMm, centerMm}; the older " +
+                                 "boundingBoxMm {min, max, size, center} is kept alongside it while legacy=true (the default, for one release).";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Selection;
 
@@ -47,6 +50,7 @@ public class InspectSelectedElementsTool : IRevitMcpTool
 
         var includeParameters    = ToolArguments.GetBool(request.Arguments, "includeParameters", true);
         var includeGeomSummary   = ToolArguments.GetBool(request.Arguments, "includeGeometrySummary", true);
+        var legacy               = GeometryArgs.Legacy(request.Arguments);
         var limit                = ToolArguments.GetInt(request.Arguments, "limit", DefaultLimit);
         var parameterNamesRaw    = ToolArguments.GetStringArray(request.Arguments, "parameterNames");
         var paramNames           = new HashSet<string>(parameterNamesRaw ?? Array.Empty<string>(),
@@ -70,7 +74,7 @@ public class InspectSelectedElementsTool : IRevitMcpTool
             var elem = doc.GetElement(id);
             if (elem == null) continue;
 
-            elements.Add(BuildDetail(doc, elem, includeParameters, paramNames, includeGeomSummary));
+            elements.Add(BuildDetail(doc, elem, includeParameters, paramNames, includeGeomSummary, legacy));
             processed++;
         }
 
@@ -88,20 +92,24 @@ public class InspectSelectedElementsTool : IRevitMcpTool
 
     // ── Conversion helpers ────────────────────────────────────────────────────
 
-    private static double ToMm(double internalFeet) =>
-        UnitUtils.ConvertFromInternalUnits(internalFeet, UnitTypeId.Millimeters);
+    // Coordinates use the shared geometry DTOs (#107): mm, 0.1 mm rounding, same {x,y,z} field names as before.
+    private static double ToMm(double internalFeet) => GeometryUnits.FtToMm(internalFeet);
 
-    private static object PtToMm(XYZ p) =>
-        new { x = Math.Round(ToMm(p.X), 2), y = Math.Round(ToMm(p.Y), 2), z = Math.Round(ToMm(p.Z), 2) };
+    private static PointMmDto PtToMm(XYZ p) => GeometryConvert.Point(p);
 
     // ── Main builder ──────────────────────────────────────────────────────────
 
+    /// <param name="legacy">
+    /// Also emit the pre-#107 <c>boundingBoxMm {min, max, size, center}</c> next to <c>bbox</c> (BoxMmDto). On by
+    /// default for one release (argument <c>legacy</c>, docs/geometry-queries.md).
+    /// </param>
     private static object BuildDetail(
         Document doc,
         Element elem,
         bool includeParameters,
         HashSet<string> paramNames,
-        bool includeGeomSummary)
+        bool includeGeomSummary,
+        bool legacy)
     {
         // ── Identity ──────────────────────────────────────────────────────────
         var categoryName = elem.Category?.Name ?? string.Empty;
@@ -137,7 +145,7 @@ public class InspectSelectedElementsTool : IRevitMcpTool
         {
             var start = lc.Curve.GetEndPoint(0);
             var end   = lc.Curve.GetEndPoint(1);
-            var len   = Math.Round(ToMm(lc.Curve.Length), 2);
+            var len   = GeometryUnits.RoundMm(ToMm(lc.Curve.Length));
             location = new
             {
                 kind          = "curve",
@@ -148,26 +156,16 @@ public class InspectSelectedElementsTool : IRevitMcpTool
         }
 
         // ── Bounding box (mm) ─────────────────────────────────────────────────
+        BoxMmDto? bbox = null;
         object? boundingBoxMm = null;
         try
         {
             var bb = elem.get_BoundingBox(null);
             if (bb != null)
             {
-                var minX = ToMm(bb.Min.X); var minY = ToMm(bb.Min.Y); var minZ = ToMm(bb.Min.Z);
-                var maxX = ToMm(bb.Max.X); var maxY = ToMm(bb.Max.Y); var maxZ = ToMm(bb.Max.Z);
-                boundingBoxMm = new
-                {
-                    min    = new { x = Math.Round(minX, 2), y = Math.Round(minY, 2), z = Math.Round(minZ, 2) },
-                    max    = new { x = Math.Round(maxX, 2), y = Math.Round(maxY, 2), z = Math.Round(maxZ, 2) },
-                    size   = new { x = Math.Round(maxX - minX, 2), y = Math.Round(maxY - minY, 2), z = Math.Round(maxZ - minZ, 2) },
-                    center = new
-                    {
-                        x = Math.Round((minX + maxX) / 2.0, 2),
-                        y = Math.Round((minY + maxY) / 2.0, 2),
-                        z = Math.Round((minZ + maxZ) / 2.0, 2)
-                    }
-                };
+                bbox = GeometryConvert.Box(bb);
+                if (legacy)
+                    boundingBoxMm = new { min = bbox.Min, max = bbox.Max, size = bbox.SizeMm, center = bbox.CenterMm };
             }
         }
         catch { }
@@ -211,6 +209,7 @@ public class InspectSelectedElementsTool : IRevitMcpTool
             name              = elem.Name,
             level             = levelName,
             location,
+            bbox,
             boundingBoxMm,
             parametersPreview,
             geometrySummary

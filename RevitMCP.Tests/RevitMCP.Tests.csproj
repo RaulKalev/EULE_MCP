@@ -257,4 +257,13 @@
     <Compile Include="..\RevitMCP.Addin\Mep\MepRunSummaryMath.cs" Link="Mep\MepRunSummaryMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Mep\MepApprovalText.cs" Link="Mep\MepApprovalText.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Geometry queries (#107): shared DTOs, box and clearance maths, surface classification, level fallback, argument parsing (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\Geometry\GeometryDto.cs" Link="Geometry\GeometryDto.cs" />
+    <Compile Include="..\RevitMCP.Addin\Geometry\BoxMath.cs" Link="Geometry\BoxMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Geometry\ClearanceMath.cs" Link="Geometry\ClearanceMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Geometry\SurfaceClassifier.cs" Link="Geometry\SurfaceClassifier.cs" />
+    <Compile Include="..\RevitMCP.Addin\Geometry\LevelResolver.cs" Link="Geometry\LevelResolver.cs" />
+    <Compile Include="..\RevitMCP.Addin\Geometry\GeometryArgs.cs" Link="Geometry\GeometryArgs.cs" />
+  </ItemGroup>
 </Project>
