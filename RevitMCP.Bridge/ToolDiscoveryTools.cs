@@ -76,11 +76,14 @@ internal sealed class ToolDiscoveryTools(ToolCatalogRegistry registry)
         }
 
         var matches = ToolSearchIndex.Search(registry.Entries, query, group, limit);
+        var totalMatches = ToolSearchIndex.Count(registry.Entries, query, group);
         return JsonSerializer.Serialize(new
         {
             success = true,
             query,
             group,
+            totalMatches,
+            truncated = totalMatches > matches.Count,
             results = matches.Select(m => new
             {
                 name = m.Name,

@@ -298,9 +298,9 @@ namespace RevitMCP.Addin.Tagging
         {
             if (head == null)
                 return;
-            item.HeadX = head.X;
-            item.HeadY = head.Y;
-            item.HeadZ = head.Z;
+            item.HeadXMm = Math.Round(head.X * 304.8, 1);
+            item.HeadYMm = Math.Round(head.Y * 304.8, 1);
+            item.HeadZMm = Math.Round(head.Z * 304.8, 1);
         }
     }
 }

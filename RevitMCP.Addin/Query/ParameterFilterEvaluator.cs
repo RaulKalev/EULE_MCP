@@ -120,7 +120,10 @@ public static class ParameterFilterEvaluator
                     continue;
 
                 anyCandidate = true;
-                if (EvaluateOperator(p.Value, filter.Operator, filter.Value))
+                // An element id parameter shows a name (X3); a filter on the id still matches.
+                if (EvaluateOperator(p.Value, filter.Operator, filter.Value) ||
+                    (p.RawValue is long id && p.StorageType == "ElementId" &&
+                     EvaluateOperator(id.ToString(System.Globalization.CultureInfo.InvariantCulture), filter.Operator, filter.Value)))
                 {
                     matched = true;
                     break;

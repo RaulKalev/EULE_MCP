@@ -164,18 +164,18 @@ public class GraphDatabaseTests
         Assert.False(lighting.HasMore);
 
         var page0 = db.Find("element", null, null, null, null, 0, 2);
-        Assert.Equal(5, page0.TotalAvailable);
+        Assert.Equal(6, page0.TotalAvailable);   // 5 elements and panel P1 (N4: a panel is an element of its category)
         Assert.Equal(2, page0.ItemsReturned);
         Assert.True(page0.HasMore);
         Assert.Equal("1", page0.NextPageToken);
 
         var page2 = db.Find("element", null, null, null, null, 2, 2);
-        Assert.Equal(1, page2.ItemsReturned);
+        Assert.Equal(2, page2.ItemsReturned);
         Assert.False(page2.HasMore);
 
         var all = page0.Items.Concat(db.Find("element", null, null, null, null, 1, 2).Items).Concat(page2.Items)
             .Select(n => n.Id).ToList();
-        Assert.Equal(5, all.Distinct().Count());
+        Assert.Equal(6, all.Distinct().Count());
     }
 
     [Fact]
@@ -197,7 +197,7 @@ public class GraphDatabaseTests
     {
         using var db = BuildSample();
         Assert.Equal(1, db.Find("element", null, "l2", null, null, 0, 10).TotalAvailable);
-        Assert.Equal(3, db.Find("element", null, null, "electrical", null, 0, 10).TotalAvailable);
+        Assert.Equal(4, db.Find("element", null, null, "electrical", null, 0, 10).TotalAvailable);   // includes panel P1 (N4)
         Assert.Equal(1, db.Find("PANEL", null, null, null, null, 0, 10).TotalAvailable);
     }
 
@@ -293,7 +293,7 @@ public class GraphDatabaseTests
         Assert.Equal(5, s.EdgesByRel.First(c => c.Key == "fed_by").Count);
 
         Assert.Equal(2, s.ElementsByCategory.First(c => c.Key == "Lighting Fixtures").Count);
-        Assert.Equal(4, s.ElementsByLevel.First(c => c.Key == "L1").Count);
+        Assert.Equal(5, s.ElementsByLevel.First(c => c.Key == "L1").Count);   // includes panel P1 (N4)
         Assert.Contains(s.ElementsByWorkset, c => c.Key == string.Empty && c.Count == 1); // E4 has no workset
 
         var panel = Assert.Single(s.Panels);

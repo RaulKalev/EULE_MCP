@@ -25,6 +25,36 @@ public class GraphRoutingTests
     public void Classify_UsesEnglishAndEstonianKeywords(string intent, string expected) =>
         Assert.Equal(expected, GraphRouting.Classify(intent));
 
+    [Theory]
+    [InlineData("mida paneel FD1-01 toidab", "panel")]
+    [InlineData("jaotuskilbi ahelas olevad seadmed", "panel")]
+    public void Classify_KnowsEstonianPanelWords(string intent, string expected) =>
+        Assert.Equal(expected, GraphRouting.Classify(intent));   // M32
+
+    [Theory]
+    [InlineData("suitsuandurid teisel korrusel", "Fire Alarm Devices")]
+    [InlineData("kõik valgustid", "Lighting Fixtures")]
+    [InlineData("fire alarm devices", "Fire Alarm Devices")]
+    public void MatchCategory_KnowsEstonianStems(string intent, string expected) =>
+        Assert.Equal(expected, GraphRouting.MatchCategory(intent, Fresh().Categories));   // M32
+
+    [Fact]
+    public void MatchCategory_IgnoresStemsWhoseCategoryTheGraphLacks()
+    {
+        Assert.Null(GraphRouting.MatchCategory("andmesidepesad", Fresh().Categories));   // no Data Devices in this graph
+    }
+
+    [Fact]
+    public void RoomPlan_UsesTheDetectedCategory()
+    {
+        // M32: "andurid ruumis 13" detected the category but the room route ignored it.
+        var plan = GraphRouting.Plan("andurid ruumis 13", Fresh());
+        Assert.Equal("room", plan.Route);
+        Assert.Equal("Fire Alarm Devices", plan.Category);
+        Assert.Contains("Fire Alarm Devices", plan.Summary);
+        Assert.Contains("Fire Alarm Devices", plan.Steps.Last().Why);
+    }
+
     [Fact]
     public void RoomPlan_FindsSpace_ThenLocatedIn_ThenLiveRead()
     {

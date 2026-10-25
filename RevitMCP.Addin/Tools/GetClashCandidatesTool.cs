@@ -42,16 +42,26 @@ public class GetClashCandidatesTool : IRevitMcpTool
         var allWarnings = srcWarnings.Concat(tgtWarnings).Distinct().ToList();
         long maxPairs = (long)sources.Count * targets.Count;
 
+        // X4: a set cut at limit looked complete. The collector stops at limit, so reaching it means "maybe more".
+        var sourceTruncated = limit > 0 && sources.Count >= limit;
+        var targetTruncated = limit > 0 && targets.Count >= limit;
+        if (sourceTruncated || targetTruncated)
+            allWarnings.Add($"The {(sourceTruncated && targetTruncated ? "source and target sets" : sourceTruncated ? "source set" : "target set")} " +
+                            $"reached limit {limit}; there may be more candidates. Raise limit (0 = unlimited) for the full count.");
+
         sw.Stop();
         return Task.FromResult(new McpToolResult
         {
             RequestId = request.RequestId,
             Success = true,
-            Message = $"Source: {sources.Count} elements, Target: {targets.Count} elements. Max pairs: {maxPairs:N0}.",
+            Message = string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "Source: {0} elements, Target: {1} elements. Max pairs: {2:N0}.", sources.Count, targets.Count, maxPairs),
             Data = new
             {
                 sourceCount = sources.Count,
                 targetCount = targets.Count,
+                sourceTruncated,
+                targetTruncated,
                 maxPairs,
                 sourceBreakdown = sources.GroupBy(c => $"{c.Category} ({c.Model})").ToDictionary(g => g.Key, g => g.Count()),
                 targetBreakdown = targets.GroupBy(c => $"{c.Category} ({c.Model})").ToDictionary(g => g.Key, g => g.Count()),

@@ -151,12 +151,13 @@ public class GetSelectedElementsTool : IRevitMcpTool
         if (elem.LevelId != ElementId.InvalidElementId)
             levelName = (doc.GetElement(elem.LevelId) as Level)?.Name ?? string.Empty;
 
-        // Location
+        // Location in mm (X2: these were feet with no unit)
+        const double mm = 304.8;
         var locationSummary = elem.Location switch
         {
-            LocationPoint lp => $"Point ({lp.Point.X:F2}, {lp.Point.Y:F2}, {lp.Point.Z:F2})",
-            LocationCurve lc => $"Curve from ({lc.Curve.GetEndPoint(0).X:F2}, {lc.Curve.GetEndPoint(0).Y:F2}) " +
-                                $"to ({lc.Curve.GetEndPoint(1).X:F2}, {lc.Curve.GetEndPoint(1).Y:F2})",
+            LocationPoint lp => $"Point ({lp.Point.X * mm:F0}, {lp.Point.Y * mm:F0}, {lp.Point.Z * mm:F0}) mm",
+            LocationCurve lc => $"Curve from ({lc.Curve.GetEndPoint(0).X * mm:F0}, {lc.Curve.GetEndPoint(0).Y * mm:F0}) " +
+                                $"to ({lc.Curve.GetEndPoint(1).X * mm:F0}, {lc.Curve.GetEndPoint(1).Y * mm:F0}) mm",
             _ => string.Empty
         };
 
@@ -166,7 +167,7 @@ public class GetSelectedElementsTool : IRevitMcpTool
         {
             var bb = elem.get_BoundingBox(null);
             if (bb != null)
-                bbSummary = $"({bb.Min.X:F2}, {bb.Min.Y:F2}, {bb.Min.Z:F2}) → ({bb.Max.X:F2}, {bb.Max.Y:F2}, {bb.Max.Z:F2})";
+                bbSummary = $"({bb.Min.X * mm:F0}, {bb.Min.Y * mm:F0}, {bb.Min.Z * mm:F0}) → ({bb.Max.X * mm:F0}, {bb.Max.Y * mm:F0}, {bb.Max.Z * mm:F0}) mm";
         }
         catch { }
 

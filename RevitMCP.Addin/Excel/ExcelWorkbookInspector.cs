@@ -80,9 +80,23 @@ public static class ExcelWorkbookInspector
             if (!wb.TryGetWorksheet(worksheetName, out var ws))
                 return (null, $"Worksheet '{worksheetName}' not found.");
 
-            IXLRange range;
+            IXLRange? range;
             try { range = ws.Range(rangeAddress); }
-            catch { return (null, $"Invalid range address '{rangeAddress}'."); }
+            catch { range = null; }
+            // M29: "A1:ZZ" is not an A1 address; ClosedXML returned null and Rows() threw a NullReferenceException.
+            if (range == null)
+                return (null, $"Invalid range address '{rangeAddress}'. Use a cell range such as A1:D20, or whole columns such as A:D.");
+
+            // Whole columns or rows reach a million cells: read only the part that holds data.
+            var lastUsedRow = ws.LastRowUsed()?.RowNumber() ?? 0;
+            var lastUsedColumn = ws.LastColumnUsed()?.ColumnNumber() ?? 0;
+            var firstRow = range.FirstRow().RowNumber();
+            var firstColumn = range.FirstColumn().ColumnNumber();
+            var lastRow = Math.Min(range.LastRow().RowNumber(), lastUsedRow);
+            var lastColumn = Math.Min(range.LastColumn().ColumnNumber(), lastUsedColumn);
+            if (lastRow < firstRow || lastColumn < firstColumn)
+                return (new { worksheetName, rangeAddress, rowCount = 0, rows = new List<object>() }, null);
+            range = ws.Range(firstRow, firstColumn, lastRow, lastColumn);
 
             var rows = new List<object>();
             foreach (var row in range.Rows())

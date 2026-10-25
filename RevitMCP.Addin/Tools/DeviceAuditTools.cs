@@ -61,11 +61,13 @@ public sealed class GetLinkedElementsInRoomTool : IRevitMcpTool
         {
             cancellationToken.ThrowIfCancellationRequested();
             var elements = new List<object>();
+            var inRoom = 0;   // X4: all of them, also past limitPerRoom
             foreach (var source in sources)
             {
                 foreach (var e in source.ElementsInRoom(room, categories, warnings))
                 {
-                    if (elements.Count >= limit) break;
+                    inRoom++;
+                    if (elements.Count >= limit) continue;
                     elements.Add(new
                     {
                         id = e.Element.Id.Value,
@@ -82,8 +84,10 @@ public sealed class GetLinkedElementsInRoomTool : IRevitMcpTool
                     });
                 }
             }
-            total += elements.Count;
-            payload.Add(new { room = RoomAnalysis.RoomSummary(room), count = elements.Count, elements });
+            total += inRoom;
+            if (inRoom > elements.Count)
+                warnings.Add("Room " + room.Number + ": listing " + elements.Count + " of " + inRoom + " element(s) (limitPerRoom).");
+            payload.Add(new { room = RoomAnalysis.RoomSummary(room), count = inRoom, listed = elements.Count, truncated = inRoom > elements.Count, elements });
         }
 
         sw.Stop();

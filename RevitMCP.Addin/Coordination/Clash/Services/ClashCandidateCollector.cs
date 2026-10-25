@@ -103,6 +103,10 @@ public class ClashCandidateCollector
             }
         }
 
+        // A category that resolved but has no element anywhere was silent (Communication Devices in the 2026-10-25 check).
+        foreach (var catName in resolvedCats.Keys.Where(c => !result.Any(r => string.Equals(r.Category, c, StringComparison.OrdinalIgnoreCase))))
+            warnings.Add($"'{catName}' has no elements in the host model{(includeLinks ? " or the loaded links" : string.Empty)}.");
+
         return (result, warnings);
     }
 

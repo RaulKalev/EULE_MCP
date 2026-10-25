@@ -126,8 +126,8 @@ public class VillageGraphReaderTests : IDisposable
         Assert.Equal(1, s.Health.CircuitsWithoutPanel);
         Assert.Equal(1, s.Health.CircuitsWithoutElements);
         Assert.Equal(8, s.Health.ElementsWithoutLocation);
-        Assert.Contains(s.Categories, c => c.Name == "Fire Alarm Devices" && c.Count == 6);
-        Assert.Contains(s.Levels, l => l.Name == "1. korrus" && l.Count == 8);
+        Assert.Contains(s.Categories, c => c.Name == "Fire Alarm Devices" && c.Count == 7);   // includes panel ATS-KP (N4)
+        Assert.Contains(s.Levels, l => l.Name == "1. korrus" && l.Count == 9);
         Assert.Equal("unknown", s.Freshness.Status);
         Assert.Equal(7200, s.Freshness.AgeSeconds);
 
@@ -135,7 +135,7 @@ public class VillageGraphReaderTests : IDisposable
         // Six category-classified fire devices are below the 20-element minimum: neutral, but the evidence is reported.
         Assert.Equal("neutral", result.Theme!.Theme);
         var fire = result.Theme.Scores.Single(x => x.System == "fire_alarm");
-        Assert.Equal(6, fire.CategoryScore);
+        Assert.Equal(7, fire.CategoryScore);      // the fire alarm panel counts too (N4)
         Assert.Equal(6, fire.NameScore);          // the type name matched "ATS" with 6 instances
         Assert.Equal(1, fire.MatchedTypes);
     }

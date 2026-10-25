@@ -92,6 +92,7 @@ public class ParameterReader
         var name = p.Definition?.Name ?? string.Empty;
 
         string value;
+        string? unit = null;
         object? rawValue = null;
         switch (p.StorageType)
         {
@@ -106,11 +107,16 @@ public class ParameterReader
             case StorageType.Double:
                 rawValue = p.AsDouble();
                 value = p.AsValueString() is { Length: > 0 } vs2 ? vs2 : p.AsDouble().ToString("F4");
+                // X3: lengths had no unit. Value stays the plain number (filters compare it); Unit carries the symbol.
+                unit = UnitOf(p, value);
                 break;
             case StorageType.ElementId:
-                var eid = p.AsElementId()?.Value;
+                // X3: the value was the raw id ("Level": "2123366"). It is the name now; the id stays in RawValue,
+                // and filters still match either.
+                var elementId = p.AsElementId();
+                var eid = elementId?.Value;
                 rawValue = eid;
-                value = eid?.ToString() ?? string.Empty;
+                value = ElementIdText(p, elementId);
                 break;
             default:
                 value = string.Empty;
@@ -131,6 +137,7 @@ public class ParameterReader
             NormalizedName = ParameterMatcher.Normalize(name),
             Value = value,
             RawValue = rawValue,
+            Unit = unit,
             StorageType = p.StorageType.ToString(),
             Scope = scope,
             IsReadOnly = p.IsReadOnly,
@@ -140,6 +147,46 @@ public class ParameterReader
             BuiltInParameterName = builtInName,
             TypeElementId = typeElementId
         };
+    }
+
+    /// <summary>
+    /// The unit symbol of a measured value in the project's units ("mm" for "3200"): Revit formats it once with the
+    /// symbol, and the symbol is what follows the plain text. Null when the value is not measurable or has no symbol.
+    /// </summary>
+    private static string? UnitOf(Parameter p, string plain)
+    {
+        try
+        {
+            var spec = p.Definition?.GetDataType();
+            if (spec == null || !UnitUtils.IsMeasurableSpec(spec)) return null;
+            var withSymbol = UnitFormatUtils.Format(p.Element.Document.GetUnits(), spec, p.AsDouble(), false,
+                new FormatValueOptions { AppendUnitSymbol = true });
+            if (string.IsNullOrWhiteSpace(withSymbol) || !withSymbol.StartsWith(plain, StringComparison.Ordinal)) return null;
+            var symbol = withSymbol.Substring(plain.Length).Trim();
+            return symbol.Length > 0 ? symbol : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The name an element id stands for: Revit's display text, the element's or category's name, else the id.</summary>
+    private static string ElementIdText(Parameter p, ElementId? id)
+    {
+        if (id == null || id == ElementId.InvalidElementId) return string.Empty;
+        try
+        {
+            if (p.AsValueString() is { Length: > 0 } shown && shown != id.Value.ToString()) return shown;
+            var doc = p.Element.Document;
+            if (doc.GetElement(id) is { } element && !string.IsNullOrEmpty(element.Name)) return element.Name;
+            if (id.Value < 0 && Category.GetCategory(doc, id) is { } category) return category.Name;
+        }
+        catch
+        {
+            // fall through to the id
+        }
+        return id.Value.ToString();
     }
 
     /// <summary>

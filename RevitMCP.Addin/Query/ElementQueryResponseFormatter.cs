@@ -24,7 +24,10 @@ public static class ElementQueryResponseFormatter
             Level = NullIfEmpty(element.Level),
             Parameters = element.Parameters.Count == 0
                 ? null
-                : element.Parameters.ToDictionary(pair => pair.Key, pair => pair.Value.Value),
+                // X3: a measured value shows its unit here ("3200 mm"); the full DTO keeps Value and Unit apart.
+                : element.Parameters.ToDictionary(pair => pair.Key, pair => string.IsNullOrEmpty(pair.Value.Unit) || pair.Value.Value.Length == 0
+                    ? pair.Value.Value
+                    : pair.Value.Value + " " + pair.Value.Unit),
             Tags = element.Tags
         }).ToList();
     }

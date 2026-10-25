@@ -325,17 +325,23 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_get_element_parameters", ReadOnly = true),
-     Description("Returns all parameters for specified elements or the current selection. Provide elementIds (list of integers) or set useSelection to true.")]
+     Description("Returns all parameters for specified elements or the current selection. Provide elementIds (list of integers) or set useSelection to true. parameterNames or includeTypeParameters=false keep the answer short.")]
     public async Task<string> GetElementParameters(
         [Description("List of element IDs to get parameters for (integers)")] long[]? elementIds = null,
         [Description("If true, read parameters from the current Revit selection instead of elementIds")] bool useSelection = false,
+        [Description("Only these parameters (partial name match). Empty = all.")] string[]? parameterNames = null,
+        [Description("Include type parameters (repeated for every element of a type). Default true.")] bool includeTypeParameters = true,
+        [Description("Include instance parameters. Default true.")] bool includeInstanceParameters = true,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
         {
             ["elementIds"] = elementIds ?? [],
-            ["useSelection"] = useSelection
+            ["useSelection"] = useSelection,
+            ["parameterNames"] = parameterNames ?? [],
+            ["includeTypeParameters"] = includeTypeParameters,
+            ["includeInstanceParameters"] = includeInstanceParameters
         };
         args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_get_element_parameters", args, cancellationToken);
@@ -479,7 +485,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     public async Task<string> RunQueryPreset(
         [Description("Name of the preset to run")] string presetName,
         [Description("If true, export results to Excel")] bool exportToExcel = false,
-        [Description("Output file name for Excel export")] string? fileName = null,
+        [Description("Output file name for Excel export, or a full path to choose the folder")] string? fileName = null,
         [Description("Max elements (default 5000)")] int limit = 5000,
         [Description("Page size of the JSON element list. Defaults to 100, max 500.")] int pageSize = -1,
         [Description("Zero-based page of the JSON element list.")] int page = 0,
@@ -542,7 +548,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("views only: include views not placed on sheets. Default true.")] bool includeUnplacedViews = true,
         [Description("sheets only: include placed views per sheet. Default true.")] bool includePlacedViews = true,
         [Description("schedules only: include field names. Default true.")] bool includeFields = true,
-        [Description("Output file name. Empty = default per kind.")] string? fileName = null,
+        [Description("Output file name, or a full path to choose the folder. Empty = default per kind.")] string? fileName = null,
         CancellationToken cancellationToken = default)
     {
         var (toolName, defaultFile, args) = (kind?.Trim().ToLowerInvariant()) switch
@@ -569,9 +575,9 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_select_elements"),
-     Description("Selects elements in the active Revit UI by explicit element IDs. Does not modify model data.")]
+     Description("Selects elements in the active Revit UI by explicit element IDs. An empty list clears the selection. Does not modify model data.")]
     public async Task<string> SelectElements(
-        [Description("List of element IDs to select")] long[] elementIds,
+        [Description("List of element IDs to select; [] clears the selection")] long[] elementIds,
         [Description("Replace current selection (true) or add to it (false)")] bool replaceSelection = true,
         [Description("Zoom to selected elements")] bool zoomToSelection = false,
         CancellationToken cancellationToken = default)
@@ -842,7 +848,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("JSON array of groupBy keys")] string? groupBy = null,
         [Description("Parameter names to include as columns")] string[]? parameters = null,
         [Description("What to export: Elements, Groups, or Both")] string outputMode = "Both",
-        [Description("Output file name (default RevitMCP_Export.xlsx)")] string fileName = "RevitMCP_Export.xlsx",
+        [Description("Output file name (default RevitMCP_Export.xlsx), or a full path to choose the folder")] string fileName = "RevitMCP_Export.xlsx",
         [Description("Export only the selected elements")] bool useSelection = false,
         [Description("Export only these element ids")] long[]? elementIds = null,
         [Description("Max elements (default 5000)")] int limit = 5000,
@@ -3963,7 +3969,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Optional system type filter")] string? systemType = null,
         [Description("Include Circuit Elements sheet (can be slow for large models)")] bool includeElements = true,
         [Description("Include Health Issues sheet")] bool includeHealthCheck = true,
-        [Description("Output file name (default Panel_Circuit_List.xlsx)")] string fileName = "Panel_Circuit_List.xlsx",
+        [Description("Output file name (default Panel_Circuit_List.xlsx), or a full path to choose the folder")] string fileName = "Panel_Circuit_List.xlsx",
         [Description("Max circuits to export (default 5000)")] int limit = 5000,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
@@ -4123,7 +4129,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     public async Task<string> ExportCircuitHealthToExcel(
         [Description("Optional panel name filter")] string? panelName = null,
         [Description("Optional system type filter")] string? systemType = null,
-        [Description("Output file name (default: Circuit_Health_Report.xlsx)")] string fileName = "Circuit_Health_Report.xlsx",
+        [Description("Output file name (default Circuit_Health_Report.xlsx), or a full path to choose the folder")] string fileName = "Circuit_Health_Report.xlsx",
         [Description("Max circuits to check (default 5000)")] int limit = 5000,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
@@ -4146,7 +4152,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Categories to search (default: all electrical categories)")] string[]? categories = null,
         [Description(FiltersDescription)] string? filters = null,
         [Description("Additional parameters to include as columns")] string[]? returnParameters = null,
-        [Description("Output file name (default: Uncircuited_Elements.xlsx)")] string fileName = "Uncircuited_Elements.xlsx",
+        [Description("Output file name (default Uncircuited_Elements.xlsx), or a full path to choose the folder")] string fileName = "Uncircuited_Elements.xlsx",
         [Description("Max elements to export (default 2000)")] int limit = 2000,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
@@ -4390,7 +4396,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     [McpServerTool(Name = "revit_export_electrical_dashboard_to_excel", ReadOnly = true),
      Description("Exports the electrical dashboard summary to an .xlsx file (sheets: Summary, Issue Breakdown, Panel Summary, System Type Summary). Accepts: fileName, includePanelSummary (bool), includeIssueDetails (bool), includeSystemTypeSummary (bool), limit (int).")]
     public async Task<string> ExportElectricalDashboardToExcel(
-        [Description("Output file name (default Electrical_Dashboard_Summary.xlsx)")] string fileName = "Electrical_Dashboard_Summary.xlsx",
+        [Description("Output file name (default Electrical_Dashboard_Summary.xlsx), or a full path to choose the folder")] string fileName = "Electrical_Dashboard_Summary.xlsx",
         [Description("Include panel summary sheet (default true)")] bool includePanelSummary = true,
         [Description("Include issue details sheet (default true)")] bool includeIssueDetails = true,
         [Description("Include system type summary sheet (default true)")] bool includeSystemTypeSummary = true,
@@ -4480,7 +4486,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Optional system type filter (used when circuitIds is empty)")] string? systemType = null,
         [Description("Length method (default ManhattanMax)")] string method = "ManhattanMax",
         [Description("Routing multiplier (default 1.25)")] double routingMultiplier = 1.25,
-        [Description("Output file name (default Voltage_Drop_Input.xlsx)")] string fileName = "Voltage_Drop_Input.xlsx",
+        [Description("Output file name (default Voltage_Drop_Input.xlsx), or a full path to choose the folder")] string fileName = "Voltage_Drop_Input.xlsx",
         [Description("Max circuits (default 1000)")] int limit = 1000,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
@@ -4569,7 +4575,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Include voltage drop input sheet (default true)")] bool includeVoltageDropInput = true,
         [Description("Sounder current per device in mA (default 50)")] double sounderCurrentMilliAmps = 50.0,
         [Description("Fallback resistance Ω/m if no profile matches (default 0.035)")] double fallbackResistanceOhmPerMeter = 0.035,
-        [Description("Output file name (default FireAlarm_Circuit_Preset.xlsx)")] string fileName = "FireAlarm_Circuit_Preset.xlsx",
+        [Description("Output file name (default FireAlarm_Circuit_Preset.xlsx), or a full path to choose the folder")] string fileName = "FireAlarm_Circuit_Preset.xlsx",
         [Description("Max devices (default 5000)")] int limit = 5000,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
@@ -5578,7 +5584,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     public async Task<string> ExportClashReportToExcel(
         [Description("Use last detection run (default true)")] bool useLastRun = true,
         [Description("Raw ClashRunResultDto JSON (when useLastRun=false)")] string clashesJson = "",
-        [Description("Output filename (default Clash_Report.xlsx)")] string fileName = "Clash_Report.xlsx",
+        [Description("Output file name (default Clash_Report.xlsx), or a full path to choose the folder")] string fileName = "Clash_Report.xlsx",
         [Description("Include summary sheet (default true)")] bool includeSummary = true,
         [Description("Include 'By Rule' sheet (default true)")] bool includeByRule = true,
         [Description("Include 'By Level' sheet (default true)")] bool includeByLevel = true,

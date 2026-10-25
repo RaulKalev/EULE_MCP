@@ -72,6 +72,18 @@ internal static class PanelSchematicsToolSupport
     }
 
     /// <summary>
+    /// One warning per (target, parameter) for mirror targets that do not have the parameter, so a preview says what
+    /// will not be mirrored instead of dropping it (M30).
+    /// </summary>
+    public static void AddMirrorWarnings(IEnumerable<PanelSchematicsModel.ParameterWrite> writes, List<string> warnings)
+    {
+        foreach (var group in writes.Where(w => w.Status == PanelSchematicsModel.NotOnElement)
+                     .GroupBy(w => (w.Target, w.Parameter)))
+            warnings.Add($"{group.Select(w => w.ElementId).Distinct().Count()} {group.Key.Target}(s) have no '{group.Key.Parameter}' " +
+                         "parameter; the value is not mirrored to them.");
+    }
+
+    /// <summary>
     /// Warns about symbol names that are not in the team's symbol file: the plugin could not draw such a row.
     /// A warning, not an error, because the file may be out of reach on this machine.
     /// </summary>

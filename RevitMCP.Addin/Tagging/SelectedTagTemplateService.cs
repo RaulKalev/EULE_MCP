@@ -250,7 +250,11 @@ namespace RevitMCP.Addin.Tagging
             tagType = null;
             error = null;
 
-            var selection = selectedIds == null
+            // M9: with sourceTagId and a family/category scope nothing comes from the selection, so whatever the
+            // user has selected in Revit must not make the call fail as "ambiguous" or "does not match".
+            var selectionIrrelevant = options.SourceTagId > 0 &&
+                                      options.ScopeMode != TagTemplateScopeMode.Selection;
+            var selection = selectedIds == null || selectionIrrelevant
                 ? new List<ElementId>()
                 : selectedIds.Where(id =>
                         id != null && id != ElementId.InvalidElementId)

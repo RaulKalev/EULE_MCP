@@ -154,7 +154,7 @@ namespace RevitMCP.Addin.Tools
                     orientation = tag.TagOrientation.ToString(),
                     head = head == null
                         ? null
-                        : new { x = head.X, y = head.Y, z = head.Z },
+                        : new { xMm = Math.Round(head.X * 304.8, 1), yMm = Math.Round(head.Y * 304.8, 1), zMm = Math.Round(head.Z * 304.8, 1) },   // X2: was feet
                     pluginName = metadata?.PluginName,
                     pluginVersion = metadata?.PluginVersion,
                     creationTimestamp = metadata?.CreationTimestamp

@@ -651,7 +651,12 @@ public sealed class GraphDatabase : IDisposable
             parameters.Add(($"${column}", value!.Trim()));
         }
 
-        AddEquals("kind", kind?.ToLowerInvariant());
+        // N4: panels are their own node kind but still elements of their category (Electrical Equipment); kind=element
+        // found 32 of 58, and the graph-first gate counted the same 32.
+        if (string.Equals(kind?.Trim(), GraphSchema.Kinds.Element, StringComparison.OrdinalIgnoreCase))
+            clauses.Add("kind IN " + ElementKinds);
+        else
+            AddEquals("kind", kind?.ToLowerInvariant());
         AddEquals("category", category);
         AddEquals("level", level);
         AddEquals("workset", workset);
@@ -912,7 +917,7 @@ public sealed class GraphDatabase : IDisposable
             using var cmd = _connection.CreateCommand();
             cmd.CommandText =
                 $"SELECT category, COUNT(*), SUM({LinkedCase}) FROM nodes " +
-                "WHERE kind = 'element' AND category = $c COLLATE NOCASE GROUP BY category";
+                "WHERE kind IN " + ElementKinds + " AND category = $c COLLATE NOCASE GROUP BY category";
             cmd.Parameters.AddWithValue("$c", category!.Trim());
             AddGroupRows(cmd, s.ElementsByCategory);
             return s;
@@ -924,12 +929,15 @@ public sealed class GraphDatabase : IDisposable
         return s;
     }
 
+    /// <summary>Node kinds that are model elements of a category: panels are Electrical Equipment instances (N4).</summary>
+    private const string ElementKinds = "('element', 'panel')";
+
     /// <summary>1 for a linked-model node, 0 for a host node (range on the primary key, as in <see cref="LinkClause"/>).</summary>
     private const string LinkedCase = "CASE WHEN id >= '" + GraphSchema.LinkIdPrefix + "' AND id < 'link;' THEN 1 ELSE 0 END";
 
     /// <summary>Element counts grouped by one column, largest first, with the linked share in the third column.</summary>
     private static string ElementGroupSql(string column) =>
-        $"SELECT COALESCE({column}, ''), COUNT(*), SUM({LinkedCase}) FROM nodes WHERE kind = 'element' GROUP BY {column} ORDER BY 2 DESC, 1";
+        $"SELECT COALESCE({column}, ''), COUNT(*), SUM({LinkedCase}) FROM nodes WHERE kind IN {ElementKinds} GROUP BY {column} ORDER BY 2 DESC, 1";
 
     /// <summary>
     /// Element counts per category, type, level and workset for the given categories (matched

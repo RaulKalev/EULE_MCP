@@ -67,8 +67,9 @@ public class GetSheetViewportsTool : IRevitMcpTool
                         viewId          = vp.ViewId.Value,
                         viewName        = linkedView?.Name,
                         viewType        = linkedView?.ViewType.ToString(),
-                        sheetPositionU  = Math.Round(center.X, 6),
-                        sheetPositionV  = Math.Round(center.Y, 6),
+                        // X2: paper mm (these were feet, unlabelled)
+                        sheetPositionUMm = Math.Round(center.X * 304.8, 1),
+                        sheetPositionVMm = Math.Round(center.Y * 304.8, 1),
                         detailNumber    = TryGet(vp, BuiltInParameter.VIEWPORT_DETAIL_NUMBER),
                         referenceLabel  = TryGetStr(vp, "Reference Label")
                     });

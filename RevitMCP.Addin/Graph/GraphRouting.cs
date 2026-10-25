@@ -90,7 +90,9 @@ public static class GraphRouting
         ("linked", new[] { "linked", "link", "links", "lingitud", "lingis", "lingist", "ifc" }),
         ("selection", new[] { "selected", "selection", "valitud", "valik", "valiku" }),
         ("panel", new[] { "panel", "panels", "circuit", "circuits", "fed", "feeds", "feeder", "loop", "loops", "board",
-                          "kilp", "kilbi", "kilbist", "ahel", "ahela", "ahelad", "toide", "silmus", "silmuse" }),
+                          "kilp", "kilbi", "kilbist", "kilbiga", "jaotuskilp", "jaotuskilbi", "paneel", "paneeli", "paneelist",
+                          "paneeliga", "ahel", "ahela", "ahelad", "ahelas", "ahelast", "ahelasse", "toide", "toidab", "toidavad",
+                          "toidetud", "toitekilp", "silmus", "silmuse" }),
         ("room", new[] { "room", "rooms", "space", "spaces", "ruum", "ruumi", "ruumis", "ruumid", "ruumide" }),
         ("level", new[] { "level", "levels", "floor", "storey", "story", "korrus", "korruse", "korrusel" })
     };
@@ -111,7 +113,7 @@ public static class GraphRouting
         {
             Route = Classify(text),
             GraphUsable = state.Usable,
-            Category = category ?? MatchName(text, state.Categories),
+            Category = category ?? MatchCategory(text, state.Categories),
             Level = level ?? MatchName(text, state.Levels),
             NameHint = name ?? ExtractNameHint(text)
         };
@@ -143,12 +145,17 @@ public static class GraphRouting
         switch (plan.Route)
         {
             case "room":
-                plan.Summary = "Room/space → devices in it: find the space node, follow located_in edges, read the devices live by id.";
+                plan.Summary = plan.Category == null
+                    ? "Room/space → devices in it: find the space node, follow located_in edges, read the devices live by id."
+                    : $"Room/space → its '{plan.Category}': find the space node, follow located_in edges, keep the '{plan.Category}' " +
+                      "neighbours, read those live by id.";
                 plan.Steps.Add(Step("revit_graph_query", "Find the room/space id.",
                     Args(("operation", "find"), ("kind", "space"), ("nameContains", plan.NameHint), ("level", plan.Level), ("pageSize", 20))));
                 plan.Steps.Add(Step("revit_graph_query", "Everything located in it.",
                     Args(("operation", "neighbors"), ("id", "<space id>"), ("rel", "located_in"), ("direction", "in"), ("link", "host"))));
-                plan.Steps.Add(LiveRead("Read live values only for those ids.", plan.Category));
+                plan.Steps.Add(LiveRead(plan.Category == null
+                    ? "Read live values only for those ids."
+                    : $"Read live values only for the '{plan.Category}' ids among them (each neighbour carries its category).", plan.Category));
                 plan.Notes.Add("Linked-model elements in the room: the same neighbors call with link=links; their ids (link:<instance>:<id>) " +
                                "are read with revit_query_linked_elements, not the host tools.");
                 break;
@@ -318,6 +325,43 @@ public static class GraphRouting
 
     private static HashSet<string> Words(string? text) =>
         new(Regex.Split((text ?? string.Empty).ToLowerInvariant(), @"[^\p{L}\p{N}]+").Where(w => w.Length > 0));
+
+    /// <summary>
+    /// Estonian word stems for the categories an EN model is about (M32: only English category names were found). A
+    /// word starting with a stem points at the category, whatever its case ending (andur, anduri, andurid …).
+    /// </summary>
+    private static readonly (string Stem, string Category)[] CategoryStems =
+    {
+        ("suitsuandur", "Fire Alarm Devices"), ("soojusandur", "Fire Alarm Devices"), ("temperatuuriandur", "Fire Alarm Devices"),
+        ("andur", "Fire Alarm Devices"), ("sireen", "Fire Alarm Devices"), ("häireseade", "Fire Alarm Devices"),
+        ("käsiteadusti", "Fire Alarm Devices"), ("tulekahju", "Fire Alarm Devices"),
+        ("andmesidepesa", "Data Devices"), ("andmeside", "Data Devices"), ("võrgupesa", "Data Devices"),
+        ("kaamera", "Security Devices"), ("videovalve", "Security Devices"), ("kaardilugeja", "Security Devices"),
+        ("valvesüsteem", "Security Devices"), ("liikumisandur", "Security Devices"), ("uksemagnet", "Security Devices"),
+        ("valgusti", "Lighting Fixtures"), ("valgustus", "Lighting Fixtures"),
+        ("lüliti", "Lighting Devices"),
+        ("pistikupesa", "Electrical Fixtures"), ("pistik", "Electrical Fixtures"),
+        ("räkk", "Electrical Equipment"), ("jaotuskapp", "Electrical Equipment"),
+        ("kaabliredel", "Cable Trays"), ("kaablirenn", "Cable Trays"),
+        ("uks", "Doors"), ("ukse", "Doors"), ("sein", "Walls"), ("aken", "Windows"), ("akna", "Windows"),
+        ("lagi", "Ceilings"), ("lae", "Ceilings")
+    };
+
+    /// <summary>
+    /// The category an intent names: an English category name the graph has, else an Estonian stem whose category
+    /// the graph has. Longer stems win (liikumisandur over andur).
+    /// </summary>
+    public static string? MatchCategory(string? text, IReadOnlyCollection<string> categories)
+    {
+        if (MatchName(text, categories) is { } english) return english;
+        var words = Words(text);
+        return CategoryStems
+            .Where(s => categories.Contains(s.Category, StringComparer.OrdinalIgnoreCase))
+            .Where(s => words.Any(w => w.StartsWith(s.Stem, StringComparison.Ordinal)))
+            .OrderByDescending(s => s.Stem.Length)
+            .Select(s => categories.First(c => string.Equals(c, s.Category, StringComparison.OrdinalIgnoreCase)))
+            .FirstOrDefault();
+    }
 
     /// <summary>The longest known name (category or level) that appears in the text, case-insensitively.</summary>
     public static string? MatchName(string? text, IEnumerable<string> names)

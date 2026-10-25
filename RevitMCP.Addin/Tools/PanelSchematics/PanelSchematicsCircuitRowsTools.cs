@@ -136,6 +136,7 @@ internal static class CircuitRowsExecutor
         var planned = Run(write: false, warnings);
         foreach (var problem in planned.Where(w => w.Target == "circuit" && w.Status is "missing" or "readOnly" or "invalid"))
             warnings.Add($"Circuit {problem.ElementId}: '{problem.Parameter}' ({problem.Field}) is {problem.Status}; it will not be written.");
+        Support.AddMirrorWarnings(planned, warnings);
         foreach (var edit in edits.Where(e => PanelSchematicsModel.RowIdOf(e.Circuit).Length == 0 && options.DetailItems))
             warnings.Add($"Circuit {edit.Circuit.Id.Value} has no 'id' value yet, so it has no detail items to update (the plugin assigns it when the row is drawn).");
 
@@ -158,7 +159,8 @@ internal static class CircuitRowsExecutor
             {
                 set = writes.Count(w => w.Status == "set"),
                 unchanged = writes.Count(w => w.Status == "unchanged"),
-                notWritable = writes.Count(w => w.Status is "missing" or "readOnly" or "invalid")
+                notWritable = writes.Count(w => w.Status is "missing" or "readOnly" or "invalid"),
+                notOnElement = writes.Count(w => w.Status == PanelSchematicsModel.NotOnElement)
             },
             stateToken = token
         };

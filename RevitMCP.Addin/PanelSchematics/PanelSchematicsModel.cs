@@ -168,6 +168,9 @@ internal static class PanelSchematicsModel
     // ------------------------------------------------------------------ writing a circuit row
 
     /// <summary>One parameter a row write sets (or would set), for previews and results.</summary>
+    /// <summary>A mirror target (connected element or detail item) that has no such parameter: listed, not written.</summary>
+    public const string NotOnElement = "notOnElement";
+
     public sealed class ParameterWrite
     {
         public long ElementId { get; set; }
@@ -177,7 +180,7 @@ internal static class PanelSchematicsModel
         public string Parameter { get; set; } = string.Empty;
         public string? Before { get; set; }
         public string? After { get; set; }
-        /// <summary>set, unchanged, missing (no such parameter), readOnly or invalid (value does not fit the parameter).</summary>
+        /// <summary>set, unchanged, missing (no such parameter), notOnElement (a mirror target without it), readOnly or invalid (value does not fit the parameter).</summary>
         public string Status { get; set; } = string.Empty;
     }
 
@@ -388,7 +391,15 @@ internal static class PanelSchematicsModel
         List<ParameterWrite> writes, bool skipMissing = false)
     {
         var parameter = element.LookupParameter(parameterName);
-        if (parameter == null && skipMissing) return;
+        if (parameter == null && skipMissing)
+        {
+            // M30: a mirror target without the parameter was dropped silently; it is listed (and does not block).
+            writes.Add(new ParameterWrite
+            {
+                ElementId = element.Id.Value, Target = target, Field = field.Name, Parameter = parameterName, Status = NotOnElement
+            });
+            return;
+        }
 
         var write = new ParameterWrite { ElementId = element.Id.Value, Target = target, Field = field.Name, Parameter = parameterName };
         writes.Add(write);

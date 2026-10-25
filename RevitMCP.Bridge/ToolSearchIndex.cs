@@ -95,7 +95,13 @@ public static class ToolSearchIndex
     }
 
     /// <summary>Top matches for a query, optionally limited to one group. Empty query returns nothing.</summary>
-    public static List<ToolEntry> Search(IEnumerable<ToolEntry> tools, string? query, string? group = null, int limit = 10)
+    public static List<ToolEntry> Search(IEnumerable<ToolEntry> tools, string? query, string? group = null, int limit = 10) =>
+        Ranked(tools, query, group).Take(Math.Max(1, Math.Min(50, limit))).ToList();
+
+    /// <summary>How many tools match before the limit, so a cut list says so (X4: group=electrical gave 50 of 52 silently).</summary>
+    public static int Count(IEnumerable<ToolEntry> tools, string? query, string? group = null) => Ranked(tools, query, group).Count();
+
+    private static IEnumerable<ToolEntry> Ranked(IEnumerable<ToolEntry> tools, string? query, string? group)
     {
         var terms = QueryTerms(query);
         return tools
@@ -104,8 +110,6 @@ public static class ToolSearchIndex
             .Where(x => x.Score > 0.1 || (terms.Count == 0 && !string.IsNullOrWhiteSpace(group)))
             .OrderByDescending(x => x.Score)
             .ThenBy(x => x.Tool.Name, StringComparer.Ordinal)
-            .Take(Math.Max(1, Math.Min(50, limit)))
-            .Select(x => x.Tool)
-            .ToList();
+            .Select(x => x.Tool);
     }
 }

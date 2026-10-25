@@ -115,6 +115,8 @@ public class ClashCategoryRulesTests
     [InlineData(" Structural Foundations ", "OST_StructuralFoundation")]
     [InlineData("OST_Doors", "OST_Doors")]
     [InlineData("ost_CommunicationDevices", "OST_CommunicationDevices")]
+    [InlineData("Uksed", "OST_Doors")]          // Estonian: an English Revit has no such name
+    [InlineData("valgustid", "OST_LightingFixtures")]
     public void TryResolveAlias_MapsAliasesAndBuiltInNames(string input, string expected)
     {
         Assert.Equal(expected, ClashCategoryRules.TryResolveAlias(input));
@@ -122,7 +124,6 @@ public class ClashCategoryRulesTests
 
     [Theory]
     [InlineData("Communication Devices")]
-    [InlineData("Uksed")]
     [InlineData("")]
     public void TryResolveAlias_LeavesDocumentNamesToTheDocument(string input)
     {

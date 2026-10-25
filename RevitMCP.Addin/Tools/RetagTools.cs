@@ -253,7 +253,7 @@ namespace RevitMCP.Addin.Tools
         {
             return point == null
                 ? null
-                : new { x = point.X, y = point.Y, z = point.Z };
+                : new { xMm = Math.Round(point.X * 304.8, 1), yMm = Math.Round(point.Y * 304.8, 1), zMm = Math.Round(point.Z * 304.8, 1) };   // X2: was feet, unlabelled
         }
     }
 }

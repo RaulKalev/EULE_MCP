@@ -288,6 +288,27 @@ public class ExcelWorkbookModifierTests
     }
 
     [Fact]
+    public void ReadRange_InvalidAddress_IsAnError_AndWholeColumnsReadOnlyTheData()
+    {
+        // M29: "A1:ZZ" threw a NullReferenceException.
+        var path = CreateTempWorkbook("Data", new string[,] { { "H1", "H2" }, { "a", "b" } });
+        try
+        {
+            var (bad, error) = ExcelWorkbookInspector.ReadRange(path, "Data", "A1:ZZ", false);
+            Assert.Null(bad);
+            Assert.Contains("Invalid range address", error);
+
+            var (columns, columnsError) = ExcelWorkbookInspector.ReadRange(path, "Data", "A:ZZ", false);
+            Assert.Null(columnsError);
+            Assert.Contains("rowCount = 2", columns!.ToString());
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void InspectWorkbook_FileNotFound_ReturnsError()
     {
         var (dto, error) = ExcelWorkbookInspector.Inspect(@"C:\missing.xlsx", false, 0);

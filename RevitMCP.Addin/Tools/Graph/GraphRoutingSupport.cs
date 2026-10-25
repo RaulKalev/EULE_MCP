@@ -55,6 +55,21 @@ internal static class GraphRoutingSupport
 
             var data = result.Data as JObject ?? JObject.FromObject(result.Data);
             var matched = (long?)data["totalMatched"] ?? (long?)data["returned"] ?? (data["elements"] as JArray)?.Count ?? 0;
+
+            // N3: Lighting Fixtures came back with 0 elements and no word that the IFC link holds 701 of them.
+            var askedCategory = NullIfEmpty(ToolArguments.GetString(request.Arguments, "category"));
+            if (matched == 0 && askedCategory != null)
+            {
+                var linked = ReadState(uiapp, request.Arguments, askedCategory).LinkedCount(askedCategory);
+                if (linked > 0)
+                {
+                    data["routingHint"] = $"No '{askedCategory}' in the host model, but the graph has {linked} in linked models. " +
+                                          "Host tools cannot read them: find them with revit_graph_query operation=find " +
+                                          $"category=\"{askedCategory}\" link=links, read them with revit_query_linked_elements.";
+                    result.Data = data;
+                }
+                return;
+            }
             if (matched < GraphRouting.BroadQueryThreshold) return;
 
             var state = ReadState(uiapp, request.Arguments, NullIfEmpty(ToolArguments.GetString(request.Arguments, "category")));

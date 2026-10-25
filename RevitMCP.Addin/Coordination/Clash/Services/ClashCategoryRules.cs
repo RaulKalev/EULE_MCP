@@ -61,6 +61,22 @@ public static class ClashCategoryRules
     ];
 
     /// <summary>
+    /// Estonian names of the common clash categories: an English Revit has no Estonian category names, so "Uksed"
+    /// was unknown with no suggestion (found in the 2026-10-25 Revit check of #126).
+    /// </summary>
+    private static readonly (string BuiltInName, string Alias)[] _estonian =
+    [
+        ("OST_Doors", "Uksed"), ("OST_Doors", "Uks"), ("OST_Walls", "Seinad"), ("OST_Walls", "Sein"),
+        ("OST_Windows", "Aknad"), ("OST_Windows", "Aken"), ("OST_Ceilings", "Laed"), ("OST_Floors", "Põrandad"),
+        ("OST_Roofs", "Katused"), ("OST_StructuralFraming", "Talad"), ("OST_StructuralColumns", "Postid"),
+        ("OST_CableTray", "Kaabliredelid"), ("OST_Conduit", "Kaitsetorud"), ("OST_PipeCurves", "Torud"),
+        ("OST_DuctCurves", "Kanalid"), ("OST_DuctTerminal", "Õhujaoturid"), ("OST_LightingFixtures", "Valgustid"),
+        ("OST_ElectricalEquipment", "Kilbid"), ("OST_ElectricalFixtures", "Pistikupesad"),
+        ("OST_FireAlarmDevices", "Tulekahjuandurid"), ("OST_DataDevices", "Andmesidepesad"),
+        ("OST_SecurityDevices", "Valveseadmed"), ("OST_GenericModel", "Üldmudelid")
+    ];
+
+    /// <summary>
     /// Model categories with no physical body of their own: spatial elements, systems and circuits, groups and
     /// assemblies (their members are collected in their own categories), lines, view-owned detail items, points.
     /// </summary>
@@ -110,6 +126,8 @@ public static class ClashCategoryRules
         if (string.IsNullOrWhiteSpace(name)) return null;
         var trimmed = name.Trim();
         foreach (var (bic, alias) in _preferred)
+            if (string.Equals(alias, trimmed, StringComparison.OrdinalIgnoreCase)) return bic;
+        foreach (var (bic, alias) in _estonian)
             if (string.Equals(alias, trimmed, StringComparison.OrdinalIgnoreCase)) return bic;
         if (trimmed.StartsWith("OST_", StringComparison.OrdinalIgnoreCase))
             return "OST_" + trimmed.Substring(4);

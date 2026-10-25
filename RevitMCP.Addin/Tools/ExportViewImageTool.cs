@@ -177,11 +177,12 @@ public sealed class ExportViewImageTool : IRevitMcpTool
 
     private static void ApplyHighlight(Document doc, View view, long[] ids, List<string> warnings)
     {
+        // Weight 10 smeared small symbols into red blobs at 1:100 (2026-10-25 check); 5 keeps them readable.
         var settings = new OverrideGraphicSettings()
             .SetProjectionLineColor(new Color(255, 0, 0))
-            .SetProjectionLineWeight(10)
+            .SetProjectionLineWeight(5)
             .SetCutLineColor(new Color(255, 0, 0))
-            .SetCutLineWeight(10);
+            .SetCutLineWeight(5);
 
         foreach (var id in ids)
         {

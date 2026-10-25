@@ -3,6 +3,10 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using RevitMCP.Bridge;
 
+// X1: the bridge only talks to agents; its numbers read the same on every machine ("45.21", not "45,21").
+System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+
 var clientName = GetArg(args, "--client");
 var pipeName = GetArg(args, "--pipe");
 var toolProfile = GetArg(args, "--tool-profile");

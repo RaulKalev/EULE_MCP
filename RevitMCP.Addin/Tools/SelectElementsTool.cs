@@ -25,7 +25,21 @@ public class SelectElementsTool : IRevitMcpTool
         var zoomToSelection = ToolArguments.GetBool(request.Arguments, "zoomToSelection");
 
         if (elementIds.Length == 0)
-            return Task.FromResult(Fail(request, "elementIds is required."));
+        {
+            // X7: there was no way to clear the selection. An empty list replacing the selection clears it.
+            if (!replaceSelection)
+                return Task.FromResult(Fail(request, "elementIds is required to add to the selection (an empty list with replaceSelection=true clears it)."));
+            uidoc.Selection.SetElementIds(new List<ElementId>());
+            sw.Stop();
+            return Task.FromResult(new McpToolResult
+            {
+                RequestId = request.RequestId,
+                Success = true,
+                Message = "Selection cleared.",
+                Data = new { selectedCount = 0, selectedElementIds = new List<long>() },
+                DurationMs = sw.ElapsedMilliseconds
+            });
+        }
 
         var doc = uidoc.Document;
         var validIds = new List<ElementId>();

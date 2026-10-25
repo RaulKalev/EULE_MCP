@@ -332,3 +332,21 @@ public class PanelSchematicsPayloadTests
         Assert.Null(bad.Json);
     }
 }
+
+public class PanelSchematicsPhaseTests
+{
+    [Theory]
+    [InlineData("1", true)]
+    [InlineData("3", true)]
+    [InlineData("", true)]
+    [InlineData("2", false)]
+    [InlineData("4", false)]
+    public void CircuitPhase_IsSingleOrThreePhase(string phase, bool accepted)
+    {
+        // M30: phase "2" was accepted.
+        var field = PanelSchematicsContract.FindRowField("CircuitPhase")!;
+        var ok = EmptyRowsEditor.TryCoerce(field, JsonValue.Create(phase), out _, out var error);
+        Assert.Equal(accepted, ok);
+        if (!accepted) Assert.Contains("\"1\" or \"3\"", error);
+    }
+}

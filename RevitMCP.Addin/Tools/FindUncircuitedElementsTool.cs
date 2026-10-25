@@ -87,9 +87,11 @@ public class FindUncircuitedElementsTool : IRevitMcpTool
             candidates = allElements;
         }
 
+        // X4: the loop stopped at limit and the answer did not say there were more. It counts them all now and
+        // builds rows only up to limit.
+        var totalUncircuited = 0;
         foreach (var element in candidates)
         {
-            if (uncircuited.Count >= limit) break;
             if (cancellationToken.IsCancellationRequested) break;
             if (element == null) continue;
 
@@ -109,8 +111,12 @@ public class FindUncircuitedElementsTool : IRevitMcpTool
                 if (!PassesFilters(doc, element, allParams, filtersParsed.Items)) continue;
             }
 
-            uncircuited.Add(BuildDto(doc, element, returnParams));
+            totalUncircuited++;
+            if (uncircuited.Count < limit)
+                uncircuited.Add(BuildDto(doc, element, returnParams));
         }
+        if (totalUncircuited > uncircuited.Count)
+            warnings.Add("Listing " + uncircuited.Count + " of " + totalUncircuited + " uncircuited element(s) (limit).");
 
         if (skippedNoMep > 0)
             warnings.Add($"{skippedNoMep} element(s) skipped — not a FamilyInstance or no MEP model.");
@@ -120,10 +126,12 @@ public class FindUncircuitedElementsTool : IRevitMcpTool
         {
             RequestId = request.RequestId,
             Success = true,
-            Message = $"Found {uncircuited.Count} uncircuited element(s).",
+            Message = $"Found {totalUncircuited} uncircuited element(s)" + (totalUncircuited > uncircuited.Count ? $"; listing {uncircuited.Count}." : "."),
             Data = new
             {
                 uncircuitedCount = uncircuited.Count,
+                totalUncircuited,
+                truncated = totalUncircuited > uncircuited.Count,
                 categoriesChecked = useSelection ? new[] { "(selection)" } : categories,
                 elements = uncircuited
             },

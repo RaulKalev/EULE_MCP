@@ -101,9 +101,10 @@ namespace RevitMCP.Addin.Tagging
         public string CategoryName { get; set; } = string.Empty;
         public bool WouldPlace { get; set; }
         public bool CollisionFree { get; set; }
-        public double HeadX { get; set; }
-        public double HeadY { get; set; }
-        public double HeadZ { get; set; }
+        /// <summary>Proposed tag head in model mm (X2: these were feet, unlabelled).</summary>
+        public double HeadXMm { get; set; }
+        public double HeadYMm { get; set; }
+        public double HeadZMm { get; set; }
         public string Reason { get; set; } = string.Empty;
     }
 

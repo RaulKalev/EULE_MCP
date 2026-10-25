@@ -5,6 +5,8 @@ public class ParameterValueDto
     public string Name { get; set; } = string.Empty;
     public string NormalizedName { get; set; } = string.Empty;
     public string Value { get; set; } = string.Empty;
+    /// <summary>Unit symbol of a measured value in the project's units ("mm"); null when it has none (X3).</summary>
+    public string? Unit { get; set; }
     public object? RawValue { get; set; }
     public string StorageType { get; set; } = string.Empty;
     public string Scope { get; set; } = string.Empty; // Instance / Type

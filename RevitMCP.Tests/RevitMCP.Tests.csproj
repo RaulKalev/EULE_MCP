@@ -190,6 +190,7 @@
     <!-- Issue report pure-logic files (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Reports\IssueReportService.cs" Link="Reports\IssueReportService.cs" />
     <Compile Include="..\RevitMCP.Addin\Export\ExportPathService.cs" Link="Export\ExportPathService.cs" />
+    <Compile Include="..\RevitMCP.Addin\Services\InvariantCultureScope.cs" Link="Services\InvariantCultureScope.cs" />
     <!-- Drawing Naming pure-logic files (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Skills\Tasks\DrawingNaming\Models\NamingMappingToken.cs" Link="DrawingNaming\Models\NamingMappingToken.cs" />
     <Compile Include="..\RevitMCP.Addin\Skills\Tasks\DrawingNaming\NamingMappingEngine.cs" Link="DrawingNaming\NamingMappingEngine.cs" />
@@ -200,6 +201,7 @@
     <!-- Transaction safety core and patch-panel assignment planner (no Autodesk dependency) -->
     <Compile Include="..\RevitMCP.Addin\Transactions\TransactionSafetyCore.cs" Link="Transactions\TransactionSafetyCore.cs" />
     <Compile Include="..\RevitMCP.Addin\Tagging\TagCollisionMath.cs" Link="Tagging\TagCollisionMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Tagging\TagDirectionNames.cs" Link="Tagging\TagDirectionNames.cs" />
     <Compile Include="..\RevitMCP.Addin\Tagging\TagTemplateMath.cs" Link="Tagging\TagTemplateMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Tagging\TagTargetVisibilityMath.cs" Link="Tagging\TagTargetVisibilityMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Tagging\RetagDecision.cs" Link="Tagging\RetagDecision.cs" />

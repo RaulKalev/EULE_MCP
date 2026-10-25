@@ -90,7 +90,10 @@ public class GetAvailableParametersTool : IRevitMcpTool
 
             foreach (var p in allParams)
             {
-                var key = $"{p.Name}|{p.Scope}";
+                // M19: same-name parameters (two built-in "Category"s, a built-in and a project "Sheet Number") were
+                // merged under one name, so one element counted twice. Each parameter is its own row now.
+                var identity = p.BuiltInParameterName ?? p.Guid ?? p.ParameterId?.ToString() ?? string.Empty;
+                var key = $"{p.Name}|{p.Scope}|{identity}";
 
                 if (!paramStats.TryGetValue(key, out var stats))
                 {

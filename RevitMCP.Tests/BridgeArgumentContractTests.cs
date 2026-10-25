@@ -222,9 +222,6 @@ public class BridgeArgumentContractTests
         ["revit_duplicate_views:fallbackToDuplicate"] = "the add-in default (true) is the only useful value",
         ["revit_preview_duplicate_views:fallbackToDuplicate"] = "the add-in default (true) is the only useful value",
         ["revit_detect_clearance_clashes:distanceMode"] = "its only alternative is a bounding-box-centre approximation",
-        ["revit_get_element_parameters:includeInstanceParameters"] = "M35: batch G",
-        ["revit_get_element_parameters:includeTypeParameters"] = "M35: batch G",
-        ["revit_get_element_parameters:parameterNames"] = "M35: batch G",
     };
 
     [Fact]

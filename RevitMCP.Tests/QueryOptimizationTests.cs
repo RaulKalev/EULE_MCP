@@ -60,6 +60,27 @@ public class QueryOptimizationTests
         Assert.True(compactJson.Length < fullJson.Length / 2);
     }
 
+    [Fact]
+    public void Compact_ShowsTheUnitOfMeasuredValues()
+    {
+        // X3: "Offset from Host": "3200" had no unit.
+        var elements = new List<ElementInfoDto>
+        {
+            new()
+            {
+                ElementId = 7,
+                Parameters = new()
+                {
+                    ["Offset from Host"] = new ParameterValueDto { Name = "Offset from Host", Value = "3200", Unit = "mm" },
+                    ["Comments"] = new ParameterValueDto { Name = "Comments", Value = "" }
+                }
+            }
+        };
+        var json = JsonConvert.SerializeObject(ElementQueryResponseFormatter.FormatElements(elements, compact: true));
+        Assert.Contains("\"Offset from Host\":\"3200 mm\"", json);
+        Assert.Contains("\"Comments\":\"\"", json);
+    }
+
     [Theory]
     [InlineData("Fire Rating", "Instance", "FireRating", "ExactNormalized", "Instance", true)]
     [InlineData("Fire Rating", "Type", "Fire", "Contains", "InstanceAndType", true)]

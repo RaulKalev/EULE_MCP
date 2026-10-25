@@ -131,24 +131,8 @@ namespace RevitMCP.Addin.Tagging
             string keyword,
             string direction)
         {
-            var normalizedKeyword = Normalize(keyword);
-            var normalizedDirection = Normalize(direction);
-            var match = symbols.FirstOrDefault(symbol =>
-            {
-                var name = Normalize(symbol.Name);
-                return name.Contains(normalizedDirection) ||
-                       name.Contains(normalizedKeyword + normalizedDirection);
-            });
+            var match = symbols.FirstOrDefault(symbol => TagDirectionNames.Matches(symbol.Name, keyword, direction));
             return match == null ? ElementId.InvalidElementId : match.Id;
-        }
-
-        private static string Normalize(string value)
-        {
-            return (value ?? string.Empty)
-                .Replace("-", string.Empty)
-                .Replace("_", string.Empty)
-                .Replace(" ", string.Empty)
-                .ToLowerInvariant();
         }
 
         private static bool IsTagSymbol(FamilySymbol symbol)

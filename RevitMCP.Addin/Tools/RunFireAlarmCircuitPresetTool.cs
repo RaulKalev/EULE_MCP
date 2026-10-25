@@ -80,6 +80,8 @@ public class RunFireAlarmCircuitPresetTool : IRevitMcpTool
             {
                 panelName   = result.PanelName,
                 deviceCount = result.DeviceCount,
+                totalDevices = result.TotalDevices,
+                truncated = result.Truncated,
                 loopCount   = result.LoopCount,
                 loops
             },

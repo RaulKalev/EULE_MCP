@@ -29,6 +29,19 @@ public class ParameterFilterEvaluatorTests
         new() { ParameterName = name, Operator = op, Value = value, MatchMode = matchMode };
 
     [Fact]
+    public void ElementIdParameter_MatchesItsNameAndItsId()
+    {
+        // X3: id parameters show a name now; a filter written against the id keeps working.
+        var level = new List<ParameterValueDto>
+        {
+            new() { Name = "Level", Value = "Esimene korrus", RawValue = 2123366L, Scope = "Instance", StorageType = "ElementId" }
+        };
+        Assert.True(ParameterFilterEvaluator.Passes(level, [Filter("Level", "equals", "Esimene korrus", "Exact")]));
+        Assert.True(ParameterFilterEvaluator.Passes(level, [Filter("Level", "equals", "2123366", "Exact")]));
+        Assert.False(ParameterFilterEvaluator.Passes(level, [Filter("Level", "equals", "Teine korrus", "Exact")]));
+    }
+
+    [Fact]
     public void TypeContains_MatchesTypeName_NotTheElementIdValue()
     {
         // Issue #88: this returned 0 elements because only numeric ids were compared.

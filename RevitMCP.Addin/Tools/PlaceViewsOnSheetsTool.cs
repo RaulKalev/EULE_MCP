@@ -275,7 +275,7 @@ public class PlaceViewsOnSheetsTool : IRevitMcpTool
                     viewportId = viewport.Id.Value,
                     matchScore = proposal.Score,
                     exactMatch = proposal.IsExact,
-                    placementPoint = new { x = center.X, y = center.Y, z = center.Z }
+                    placementPointMm = new { x = Math.Round(center.X * 304.8, 1), y = Math.Round(center.Y * 304.8, 1) }   // X2: paper mm, was feet
                 });
             }
             catch (Exception ex)

@@ -17,6 +17,9 @@ public static class FireAlarmCircuitPresetService
     {
         public string PanelName { get; set; } = "";
         public int DeviceCount { get; set; }
+        /// <summary>Fire alarm devices in the model (before limit and the panel filter); X4.</summary>
+        public int TotalDevices { get; set; }
+        public bool Truncated { get; set; }
         public int LoopCount { get; set; }
         public List<LoopData> Loops { get; set; } = [];
         public List<string> Warnings { get; set; } = [];
@@ -79,12 +82,15 @@ public static class FireAlarmCircuitPresetService
         var warnings = new List<string>();
 
         // ── Step 1: collect fire alarm devices ────────────────────────────────
-        var devices = new FilteredElementCollector(doc)
+        var allDevices = new FilteredElementCollector(doc)
             .OfCategory(BuiltInCategory.OST_FireAlarmDevices)
             .WhereElementIsNotElementType()
             .Cast<Element>()
-            .Take(limit)
             .ToList();
+        // X4: the limit cut the device list (200 of 253) without saying so.
+        var devices = allDevices.Take(limit).ToList();
+        if (devices.Count < allDevices.Count)
+            warnings.Add("Processed " + devices.Count + " of " + allDevices.Count + " fire alarm devices (limit). Raise limit to include the rest; the loops below are incomplete.");
 
         if (devices.Count == 0)
             warnings.Add("No Fire Alarm Devices found in the active document.");
@@ -243,6 +249,8 @@ public static class FireAlarmCircuitPresetService
         {
             PanelName = panelNameFilter,
             DeviceCount = deviceRows.Count,
+            TotalDevices = allDevices.Count,
+            Truncated = devices.Count < allDevices.Count,
             LoopCount = loops.Count,
             Loops = loops,
             Warnings = warnings

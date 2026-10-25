@@ -419,6 +419,7 @@ public class ExternalEventHandler : IExternalEventHandler
     private static McpToolResult RunTool(UIApplication app, IRevitMcpTool tool, McpToolRequest request, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        using var culture = new InvariantCultureScope();   // X1: "45.21 m" on every machine
 
         // Graph-first (#96): keep the graph built and fresh for the calls that use it, and answer an
         // unnarrowed read of a large category with the graph route instead of running it.
@@ -455,7 +456,12 @@ public class ExternalEventHandler : IExternalEventHandler
             item.CancellationToken.ThrowIfCancellationRequested();
 
             // Marker contract: background tools must not access the UIApplication.
-            var result = await tool.ExecuteAsync(app, request, item.CancellationToken).ConfigureAwait(false);
+            // X1: the tool starts inside the scope, so its awaits capture the invariant culture; the scope ends
+            // before this method awaits, so the calling (possibly Revit) thread gets its culture back at once.
+            Task<McpToolResult> execution;
+            using (new InvariantCultureScope())
+                execution = tool.ExecuteAsync(app, request, item.CancellationToken);
+            var result = await execution.ConfigureAwait(false);
             item.Completion.TrySetResult(result);
             if (request.IsApproved)
                 await (_activityLogger?.WriteAsync(request, result, _lastContext) ?? Task.CompletedTask).ConfigureAwait(false);

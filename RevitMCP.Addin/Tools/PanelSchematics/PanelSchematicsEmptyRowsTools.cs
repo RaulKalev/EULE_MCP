@@ -112,6 +112,7 @@ internal static class EmptyRowsExecutor
             if (table.DetailItems.TryGetValue(removed.UniqueId, out var orphans))
                 warnings.Add($"Row {removed.ReaNr} has {orphans.Count} detail item(s) on the schematic; they are not deleted here. Redraw in the plugin (Kirjuta + Joonista).");
         Support.AddSymbolWarnings(edit.Changes.SelectMany(c => c.Fields).Where(f => f.Field == "Symbol").Select(f => f.After), warnings);
+        Support.AddMirrorWarnings(planned, warnings);
         if (edit.Changes.Any(c => c.Action == EmptyRowsEditor.Add))
             warnings.Add("New rows are not drawn by the connector. The user draws them in the plugin (Kirjuta + Joonista).");
 

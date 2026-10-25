@@ -193,6 +193,31 @@ public class IssueReportDtoTests
     }
 
     [Fact]
+    public void ResolveFilePath_FullPath_ChoosesTheFolder_AndNeverOverwrites()
+    {
+        // X5: a path became one long name in the default folder; two exports in one minute overwrote each other.
+        var folder = Path.Combine(Path.GetTempPath(), "rmcp-export-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var svc = new ExportPathService { Now = () => new DateTime(2026, 10, 25, 21, 5, 7) };
+            var first = svc.ResolveFilePath(Path.Combine(folder, "Report.xlsx"));
+            Assert.Equal(Path.Combine(folder, "Report.xlsx"), first);
+            File.WriteAllText(first, "x");
+
+            var second = svc.ResolveFilePath(Path.Combine(folder, "Report.xlsx"));
+            Assert.Equal(Path.Combine(folder, "Report_2026-10-25_210507.xlsx"), second);
+            File.WriteAllText(second, "x");
+
+            var third = svc.ResolveFilePath(Path.Combine(folder, "Report.xlsx"));
+            Assert.Equal(Path.Combine(folder, "Report_2026-10-25_210507_2.xlsx"), third);
+        }
+        finally
+        {
+            try { Directory.Delete(folder, true); } catch { }
+        }
+    }
+
+    [Fact]
     public void ResolveFilePath_AlreadyHasXlsx_DoesNotDoubleExtension()
     {
         var svc = new ExportPathService();

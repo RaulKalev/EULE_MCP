@@ -515,6 +515,13 @@ public static class EmptyRowsEditor
         }
         text = text.Trim();
 
+        // M30: phase "2" was accepted; the plugin and Revit's hot conductors know single- and three-phase only.
+        if (field.Name == "CircuitPhase" && text.Length > 0 && text != "1" && text != "3")
+        {
+            error = $"must be \"1\" or \"3\" (single- or three-phase), got '{text}'.";
+            return false;
+        }
+
         switch (field.Type)
         {
             case PanelSchematicsContract.FieldType.Whole:
