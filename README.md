@@ -37,6 +37,7 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | [Jobs: unattended work](docs/jobs.md) | 6 | Submit a whole job of tool calls with result binding; one approval, the connector runs it step by step between your own work, stops on failures or new Revit errors, survives a restart and publishes a report page |
 | [Plans: one approval per job](docs/plans.md) | 4 | Submit a plan (tools, element ids, categories, limits), approve once, then write calls inside it run without prompts; status, close, per-session plan id |
 | [Checkpoints and change review](docs/checkpoints.md) | 6 | Revit model warnings, checkpoints before a batch of writes, what changed since (by tool or user, before/now values, moves, new warnings), compensating rollback with manual approval |
+| [View creation](docs/view-creation.md) | 5 | Floor, ceiling, structural and area plans per level from one spec (template, scope box, view range, sheet placement, company names), sections from two plan points, callouts, 3D views with a section box around elements or a room, drafting views, legends by duplication; crop region / section box of existing views |
 | [Model graph (routing layer)](docs/model-graph.md) | 4 | Per-model SQLite graph of element ids and relationships: build, freshness status, structured queries (neighbors/find/path/subtree), summary |
 
 ## Supported environment
@@ -131,6 +132,7 @@ Important repository references:
 - [`docs/tool-consolidation.md`](docs/tool-consolidation.md) — discriminator-based tools and the old → new name mapping
 - [`docs/usage-reporting.md`](docs/usage-reporting.md) — per-user usage collection (opt-in, after telling staff), monthly HTML/Excel reports, credit cost join and estimated time saved
 - [`docs/view-alignment.md`](docs/view-alignment.md) — lining up and distributing tags, text, and elements within a view
+- [`docs/view-creation.md`](docs/view-creation.md) — creating plans per level, sections, callouts, 3D views, drafting views and legends from specs, and setting view extents
 
 ## License
 
