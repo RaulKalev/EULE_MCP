@@ -158,6 +158,7 @@ internal static class RollbackSupport
     {
         var element = doc.GetElement(new ElementId(value.Id));
         if (element == null) return "the element no longer exists";
+        if (TextNoteSnapshot.IsPseudoParameter(value.Parameter)) return RestoreTextNote(element, value);
         var parameter = element.GetOrderedParameters()
             .FirstOrDefault(p => string.Equals(p.Definition?.Name, value.Parameter, StringComparison.OrdinalIgnoreCase));
         if (parameter == null) return "the parameter no longer exists";
@@ -177,6 +178,24 @@ internal static class RollbackSupport
                 default:
                     return $"the parameter now stores {parameter.StorageType}, not the type it had at checkpoint time";
             }
+        }
+        catch (Exception ex)
+        {
+            return ex.Message;
+        }
+    }
+
+    /// <summary>Sets a text note's text or width back (the "(Text)" / "(Width)" pseudo-parameters); returns why not, or null.</summary>
+    private static string? RestoreTextNote(Element element, RollbackValue value)
+    {
+        if (element is not TextNote note) return "the element is no text note now";
+        if (!TextNoteSnapshot.TryParseRestore(value.Parameter, value.Raw, out var field, out var text, out var widthFeet, out var error))
+            return error ?? "no stored value";
+        try
+        {
+            if (field == TextNoteField.Text) note.Text = text;
+            else note.Width = widthFeet;
+            return null;
         }
         catch (Exception ex)
         {

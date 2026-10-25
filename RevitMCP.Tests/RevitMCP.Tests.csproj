@@ -37,6 +37,7 @@
     <Compile Include="..\RevitMCP.Addin\Checkpoints\RollbackPlanner.cs" Link="Checkpoints\RollbackPlanner.cs" />
     <Compile Include="..\RevitMCP.Addin\Checkpoints\CheckpointDiffReport.cs" Link="Checkpoints\CheckpointDiffReport.cs" />
     <Compile Include="..\RevitMCP.Addin\Checkpoints\SnapshotParameterSelection.cs" Link="Checkpoints\SnapshotParameterSelection.cs" />
+    <Compile Include="..\RevitMCP.Addin\Checkpoints\TextNoteSnapshot.cs" Link="Checkpoints\TextNoteSnapshot.cs" />
     <!-- Plans (#99): envelope parsing, argument scope, post-check, classification, registry, summary (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Plans\PlanModels.cs" Link="Plans\PlanModels.cs" />
     <Compile Include="..\RevitMCP.Addin\Plans\PlanArgs.cs" Link="Plans\PlanArgs.cs" />
@@ -46,6 +47,7 @@
     <Compile Include="..\RevitMCP.Addin\Plans\PlanToolClassification.cs" Link="Plans\PlanToolClassification.cs" />
     <Compile Include="..\RevitMCP.Addin\Plans\PlanRegistry.cs" Link="Plans\PlanRegistry.cs" />
     <Compile Include="..\RevitMCP.Addin\Plans\PlanSummary.cs" Link="Plans\PlanSummary.cs" />
+    <Compile Include="..\RevitMCP.Addin\Plans\BridgeToolRoutes.cs" Link="Plans\BridgeToolRoutes.cs" />
     <!-- Jobs (#100): definition parsing, JSON path, state machine, journal, report page, summary (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Jobs\JobModels.cs" Link="Jobs\JobModels.cs" />
     <Compile Include="..\RevitMCP.Addin\Jobs\JobJsonPath.cs" Link="Jobs\JobJsonPath.cs" />
@@ -53,6 +55,7 @@
     <Compile Include="..\RevitMCP.Addin\Jobs\JobStateMachine.cs" Link="Jobs\JobStateMachine.cs" />
     <Compile Include="..\RevitMCP.Addin\Jobs\JobJournalStore.cs" Link="Jobs\JobJournalStore.cs" />
     <Compile Include="..\RevitMCP.Addin\Jobs\JobReportHtml.cs" Link="Jobs\JobReportHtml.cs" />
+    <Compile Include="..\RevitMCP.Addin\Jobs\JobChangeScope.cs" Link="Jobs\JobChangeScope.cs" />
     <Compile Include="..\RevitMCP.Addin\Jobs\JobSummary.cs" Link="Jobs\JobSummary.cs" />
     <Compile Include="..\RevitMCP.Addin\Jobs\JobService.cs" Link="Jobs\JobService.cs" />
     <!-- Usage reporting: shared copy, aggregation, time saved, costs, report files (no Revit API) -->
