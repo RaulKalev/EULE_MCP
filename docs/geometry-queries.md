@@ -97,7 +97,8 @@ box search on the cube of side 2·r around the point, then keeps elements whose 
 The three ray tools cast through Revit's `ReferenceIntersector` (faces) in a 3D view — the same code the
 alignment and face placement tools use (`Geometry/RayCaster.cs`). Consequences:
 
-- **The view.** `searchViewId`, else the active 3D view, else the first non-template 3D view. The result's
+- **The view.** `searchViewId`, else the active 3D view, else the least clipped 3D view (isometric without a
+  section box first, perspective last). The result's
   `view {id, name, sectionBoxActive}` says which one was used. Only what is visible in it can be hit: hidden
   categories, hidden links and a section box hide geometry from the rays, and a section box is warned about.
   Without any 3D view the status is **`no_3d_view_for_raycast`** — create a 3D view first.

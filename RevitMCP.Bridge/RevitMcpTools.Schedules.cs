@@ -50,6 +50,7 @@ internal sealed partial class RevitMcpTools
         [Description("An existing schedule (name or id) whose catalogue to list instead of a category's.")] string? schedule = null,
         [Description("Only fields whose name contains this (spaces, '-' and '_' ignored).")] string? nameFilter = null,
         [Description("Only fields of this type: instance, type, count, room, fromRoom, toRoom, space, projectInfo, material, …")] string? fieldType = null,
+        [Description("Maximum fields returned (default 150, max 1000). A category can offer several hundred; narrow with nameFilter or fieldType.")] int limit = 150,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -59,7 +60,8 @@ internal sealed partial class RevitMcpTools
             ["multiCategory"] = multiCategory,
             ["schedule"] = schedule ?? string.Empty,
             ["nameFilter"] = nameFilter ?? string.Empty,
-            ["fieldType"] = fieldType ?? string.Empty
+            ["fieldType"] = fieldType ?? string.Empty,
+            ["limit"] = limit
         };
         args["document"] = document ?? string.Empty;
         return FormatResult(await pipeClient.SendAsync("revit_list_schedulable_fields", args, cancellationToken));

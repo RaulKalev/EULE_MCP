@@ -112,6 +112,7 @@ internal sealed partial class RevitMcpTools
         [Description("Sections to run (default all): summary, warnings, types, views, sheets, rooms, imports, families, groups, phases, designOptions, worksets, links, graph.")] string[]? sections = null,
         [Description("Publish the report as a model page (same link per model). Default true.")] bool publish = true,
         [Description("Open the page in the browser. Default false.")] bool open = false,
+        [Description("List rows per section in the JSON (default 20, max 200). The page always lists every row.")] int itemsPerSection = 20,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -120,6 +121,7 @@ internal sealed partial class RevitMcpTools
             ["sections"] = sections ?? [],
             ["publish"] = publish,
             ["open"] = open,
+            ["itemsPerSection"] = itemsPerSection,
             ["document"] = document ?? string.Empty
         };
         return FormatResult(await pipeClient.SendAsync("revit_audit_model", args, cancellationToken));

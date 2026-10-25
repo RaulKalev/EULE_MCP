@@ -71,7 +71,8 @@ public sealed class AuditModelTool : IRevitMcpTool
             Message = $"Audit of '{doc.Title}': {AuditReportHtml.StatusText(report.Status)} — {report.Sections.Count} section(s), " +
                       $"{flagged} need attention" + (failedSections > 0 ? $", {failedSections} failed" : string.Empty) +
                       (url != null ? $". Page: {url}" + (opened ? " (opened)." : ".") : "."),
-            Data = AuditJson.Describe(report, url, pageId),
+            Data = AuditJson.Describe(report, url, pageId,
+                ToolArguments.GetInt(request.Arguments, "itemsPerSection", AuditJson.DefaultItemsPerSection)),
             Warnings = warnings,
             DurationMs = sw.ElapsedMilliseconds
         });

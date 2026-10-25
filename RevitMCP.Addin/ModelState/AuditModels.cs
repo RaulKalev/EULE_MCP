@@ -197,7 +197,13 @@ public static class AuditJson
 {
     public const int MaxItemsPerSection = 200;
 
-    public static object Describe(AuditReport report, string? pageUrl, string? pageId) => new
+    /// <summary>Items per section in the JSON by default: the page lists every row, so the agent needs only a sample.</summary>
+    public const int DefaultItemsPerSection = 20;
+
+    /// <summary>itemsPerSection clamped to 0..<see cref="MaxItemsPerSection"/>.</summary>
+    public static int ClampItems(int itemsPerSection) => Math.Max(0, Math.Min(MaxItemsPerSection, itemsPerSection));
+
+    public static object Describe(AuditReport report, string? pageUrl, string? pageId, int itemsPerSection = MaxItemsPerSection) => new
     {
         document = report.DocumentTitle,
         status = report.Status,
@@ -206,11 +212,15 @@ public static class AuditJson
         pageUrl,
         pageId,
         thresholds = report.ThresholdSources,
-        sections = report.Sections.Select(DescribeSection).ToList()
+        itemsPerSection = ClampItems(itemsPerSection),
+        sections = report.Sections.Select(section => DescribeSection(section, itemsPerSection)).ToList()
     };
 
-    public static object DescribeSection(AuditSection section)
+    public static object DescribeSection(AuditSection section) => DescribeSection(section, MaxItemsPerSection);
+
+    public static object DescribeSection(AuditSection section, int itemsPerSection)
     {
+        var maxItems = ClampItems(itemsPerSection);
         var items = new List<Dictionary<string, object?>>();
         var total = 0;
         foreach (var table in section.Tables)
@@ -218,7 +228,7 @@ public static class AuditJson
             total += Math.Max(table.Total, table.Rows.Count);
             foreach (var row in table.Rows)
             {
-                if (items.Count >= MaxItemsPerSection) break;
+                if (items.Count >= maxItems) break;
                 var item = new Dictionary<string, object?> { ["list"] = table.Key };
                 if (row.ElementId != null) item["id"] = row.ElementId;
                 for (var i = 0; i < table.Columns.Count && i < row.Cells.Count; i++)

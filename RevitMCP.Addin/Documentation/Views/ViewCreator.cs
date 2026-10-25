@@ -98,8 +98,8 @@ public static class ViewCreator
         };
         var section = ViewSection.CreateSection(doc, view.Type!.Id, sectionBox);
 
-        // Self-check of the documented convention: the section's ViewDirection should be BasisZ and its cut plane
-        // should run through the drawn line.
+        // Self-check of the documented convention: Revit reports ViewDirection = −BasisZ (towards the viewer, who
+        // looks along BasisZ) and the cut plane should run through the drawn line.
         try
         {
             var direction = ViewExtentService.ToUnit(section.ViewDirection);
@@ -111,9 +111,9 @@ public static class ViewCreator
                 lookDirection = direction.Negated().ToUnit(),
                 cutPlaneOffsetFromLineMm = Math.Round(cutOffset, 1)
             };
-            if (direction.Dot(box.BasisZ) < 0.999)
-                view.Warnings.Add($"Revit gave the section the view direction {direction.ToUnit()} instead of BasisZ {box.BasisZ.ToUnit()}: " +
-                                  "check which way it looks and use flip if needed.");
+            if (direction.Dot(box.ExpectedViewDirection) < 0.999)
+                view.Warnings.Add($"Revit gave the section the view direction {direction.ToUnit()} instead of {box.ExpectedViewDirection.ToUnit()} " +
+                                  $"(looking {box.LookDirection.ToUnit()}): check which way it looks and use flip if needed.");
             if (Math.Abs(cutOffset) > 1.0)
                 view.Warnings.Add($"The section's cut plane lies {Math.Round(cutOffset, 1)} mm from the drawn line (expected 0): check its far clip and position.");
         }

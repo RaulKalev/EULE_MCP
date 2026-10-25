@@ -92,7 +92,8 @@ would discard every linked hit.
 ## The search view matters
 
 Ray casting only sees geometry visible in a 3D view. The tool uses the active 3D view,
-falls back to the first non-template one, and reports which it used as `searchViewName`.
+falls back to the least clipped one (isometric without a section box first, perspective last), and reports which
+it used as `searchViewName`, warning about a section box, a perspective view and linked models hidden in it.
 
 If targets go missing, the view is the first thing to check:
 

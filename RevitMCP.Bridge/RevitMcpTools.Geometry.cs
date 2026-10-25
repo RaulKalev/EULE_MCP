@@ -16,7 +16,7 @@ internal sealed partial class RevitMcpTools
         "labels like \"+x,up\" or \"front\", or vectors [{\"x\":1,\"y\":0,\"z\":0}] (max 32).";
 
     private const string GeometryViewDescription =
-        "3D view the rays are cast in (only what is visible in it is found). Default: the active 3D view, else the first 3D view; the result names the view used.";
+        "3D view the rays are cast in (only what is visible in it is found). Default: the active 3D view, else the least clipped 3D view (isometric without a section box first); the result names the view used and any linked models hidden in it.";
 
     [McpServerTool(Name = "revit_get_element_geometry", ReadOnly = true),
      Description("Geometry of up to 100 elements by id, host mm (0.1 mm): location (point + rotationDeg, or curve start/end/length), bbox {min, max, sizeMm, centerMm} (owner view box for view-specific elements), facing/hand orientation with mirrored and flipped flags, host {id, category} (a face host in a link resolves to the linked element), level, room (last phase), ownerViewId, isPinned, groupId. linkInstanceId reads ids inside that link, transformed to host coordinates. includeSolidsSummary adds volume (mm³) and face count. Without elementIds the call is refused (geometry_query_too_broad).")]

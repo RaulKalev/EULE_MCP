@@ -279,7 +279,7 @@ internal sealed class RayCaster
 
     /// <summary>
     /// The 3D view for ray casting, chosen like the align tools (<see cref="AlignmentRequest.ResolveSearchView"/>):
-    /// <c>searchViewId</c>, else the active 3D view, else the first non-template 3D view. A missing view is answered
+    /// <c>searchViewId</c>, else the active 3D view, else the least clipped 3D view (isometric without a section box, then with one, then perspective). A missing view is answered
     /// with status <see cref="GeometryStatus.No3DView"/>; a fallback view and an active section box are warned about.
     /// </summary>
     public static View3D? ResolveView(
@@ -291,8 +291,8 @@ internal sealed class RayCaster
         {
             var explicitView = ToolArguments.GetLong(request.Arguments, "searchViewId") > 0;
             if (!explicitView && !(uidoc?.ActiveView is View3D active && active.Id == view.Id))
-                warnings.Add($"No 3D view is active; the rays use 3D view '{view.Name}' ({view.Id.Value}), the first one found. " +
-                             "Only what is visible in it can be hit — pass searchViewId to choose another.");
+                warnings.Add($"No 3D view is active; the rays use 3D view '{view.Name}' ({view.Id.Value}), the least clipped one " +
+                             "(isometric without a section box first). Only what is visible in it can be hit — pass searchViewId to choose another.");
             return view;
         }
 

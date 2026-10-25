@@ -81,7 +81,7 @@ in reach, so "there is a wall 2100 mm away" is distinguishable from "there is no
 ### The 3D view
 
 Ray casting only sees what is visible in the 3D view it runs in. By default that is the active
-view if it is a 3D view, otherwise the first 3D view in the model; `searchViewId` names one. A
+view if it is a 3D view, otherwise the least clipped 3D view (isometric without a section box first); `searchViewId` names one. A
 face goes unfound when its link is unloaded or hidden in that view, when the view has a section
 box that cuts it off (the response warns), or when its category or workset is turned off there.
 

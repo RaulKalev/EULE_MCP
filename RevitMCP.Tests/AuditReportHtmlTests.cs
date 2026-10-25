@@ -113,6 +113,21 @@ public class AuditReportHtmlTests
     }
 
     [Fact]
+    public void Json_ListsOnlyTheRequestedItemsPerSection_ThePageKeepsEveryRow()
+    {
+        var report = Sample(unplacedViews: 250);
+        var json = JObject.FromObject(AuditJson.Describe(report, null, null, AuditJson.DefaultItemsPerSection));
+        Assert.Equal(AuditJson.DefaultItemsPerSection, (int)json["itemsPerSection"]!);
+        var views = ((JArray)json["sections"]!).Single(s => (string?)s["name"] == "views");
+        Assert.Equal(AuditJson.DefaultItemsPerSection, ((JArray)views["items"]!).Count);
+        Assert.True((bool?)views["itemsTruncated"]);
+        Assert.Equal(250, (int)views["itemsTotal"]!);
+
+        Assert.Equal(0, AuditJson.ClampItems(-5));
+        Assert.Equal(AuditJson.MaxItemsPerSection, AuditJson.ClampItems(5000));
+    }
+
+    [Fact]
     public void Json_MirrorsThePage()
     {
         var report = Sample(unplacedViews: 250);

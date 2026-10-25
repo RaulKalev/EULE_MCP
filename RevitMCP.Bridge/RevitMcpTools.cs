@@ -1751,7 +1751,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Also turn each element square to the wall it lands on (default false)")] bool rotateToSurface = false,
         [Description("How far a face may tilt and still count as wall/ceiling/floor, in degrees (1-44, default 30)")] double angleToleranceDegrees = 30,
         [Description("Horizontal directions sampled when looking for a wall (4-32, default 8)")] int horizontalSamples = 8,
-        [Description("3D view used for ray casting; defaults to the active 3D view, else the first one")] long searchViewId = 0,
+        [Description("3D view used for ray casting; defaults to the active 3D view, else the least clipped 3D view (isometric without a section box first)")] long searchViewId = 0,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default) =>
         SendAlignElements(
@@ -1773,7 +1773,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Also turn each element square to the wall it lands on (default false)")] bool rotateToSurface = false,
         [Description("How far a face may tilt and still count as wall/ceiling/floor, in degrees (1-44, default 30)")] double angleToleranceDegrees = 30,
         [Description("Horizontal directions sampled when looking for a wall (4-32, default 8)")] int horizontalSamples = 8,
-        [Description("3D view used for ray casting; defaults to the active 3D view, else the first one")] long searchViewId = 0,
+        [Description("3D view used for ray casting; defaults to the active 3D view, else the least clipped 3D view (isometric without a section box first)")] long searchViewId = 0,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default) =>
         SendAlignElements(
@@ -1971,7 +1971,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Only consider faces of elements in these categories, e.g. [\"Walls\",\"Ceilings\"]. Linked IFC elements often have generic categories — leave empty for them.")] string[]? hostCategories = null,
         [Description("Sets the family's 'Offset from Host' in mm after placing.")] double? offsetFromHostMm = null,
         [Description("How far a face may lean from vertical/horizontal and still count as a wall, ceiling or floor, in degrees (default 10).")] double angleToleranceDegrees = 10,
-        [Description("3D view used for the search. Only geometry visible in it can be found. Default: the active 3D view, else the first 3D view.")] long searchViewId = 0,
+        [Description("3D view used for the search. Only geometry visible in it can be found. Default: the active 3D view, else the least clipped 3D view (isometric without a section box first).")] long searchViewId = 0,
         [Description("true (default): any failure undoes the whole batch. false: place what can be placed.")] bool atomic = true,
         [Description("Let Revit try the placement in a transaction that is rolled back (default true).")] bool dryRun = true,
         [Description(DocumentArgDescription)] string? document = null,
@@ -1995,7 +1995,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Only consider faces of elements in these categories, e.g. [\"Walls\",\"Ceilings\"]. Linked IFC elements often have generic categories — leave empty for them.")] string[]? hostCategories = null,
         [Description("Sets the family's 'Offset from Host' in mm after placing.")] double? offsetFromHostMm = null,
         [Description("How far a face may lean from vertical/horizontal and still count as a wall, ceiling or floor, in degrees (default 10).")] double angleToleranceDegrees = 10,
-        [Description("3D view used for the search. Only geometry visible in it can be found. Default: the active 3D view, else the first 3D view.")] long searchViewId = 0,
+        [Description("3D view used for the search. Only geometry visible in it can be found. Default: the active 3D view, else the least clipped 3D view (isometric without a section box first).")] long searchViewId = 0,
         [Description("true (default): any failure undoes the whole batch. false: place what can be placed.")] bool atomic = true,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default) =>

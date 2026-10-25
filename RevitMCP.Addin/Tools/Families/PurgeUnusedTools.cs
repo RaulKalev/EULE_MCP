@@ -64,6 +64,9 @@ public sealed class PurgeUnusedTool : IRevitMcpTool, IApprovalSummaryTool
 
 internal static class PurgeExecutor
 {
+    /// <summary>Entries the preview lists per kind unless listAll=true.</summary>
+    private const int PreviewListLimit = 25;
+
     public static PurgeOptions Options(McpToolRequest request) => new()
     {
         Categories = ToolArguments.GetStringArray(request.Arguments, "categories").Select(c => c.Trim()).Where(c => c.Length > 0).ToList(),
@@ -316,6 +319,14 @@ internal static class PurgeExecutor
         var families = plans.Sum(p => p.Families.Count);
         var other = plans.Sum(p => p.Other.Count);
         var familiesTouched = plans.SelectMany(p => p.Types.Select(t => t.FamilyId)).Distinct().Count();
+        // A model can have hundreds of unused types: list the first few of each kind unless listAll=true. elementIds
+        // stays complete, since revit_purge_unused takes it.
+        var listAll = ToolArguments.GetBool(request.Arguments, "listAll");
+        List<object> Listed(List<PurgeCandidate> items) => (listAll ? items : items.Take(PreviewListLimit)).Select(Describe).ToList();
+        if (!listAll && (plans.Any(p => p.Types.Count > PreviewListLimit || p.Families.Count > PreviewListLimit || p.Other.Count > PreviewListLimit) ||
+                         plans[0].Protected.Count > PreviewListLimit))
+            warnings.Add($"Each list shows its first {PreviewListLimit} entries; byCategory has the counts and elementIds every id. " +
+                         "Pass listAll=true for every entry, or narrow with categories or familyNameContains.");
         return new McpToolResult
         {
             RequestId = request.RequestId,
@@ -334,14 +345,19 @@ internal static class PurgeExecutor
                 trial = transactionNote,
                 approvalSummary = PurgePlanner.Summary(types, familiesTouched, other),
                 elementIds = plans.SelectMany(p => p.DeletionIds()).Distinct().ToList(),
+                listAll,
                 passes = passes.Select((p, i) => new
                 {
                     pass = i + 1,
-                    types = p.Plan.Types.Select(Describe).ToList(),
-                    families = p.Plan.Families.Select(Describe).ToList(),
-                    other = p.Plan.Other.Select(Describe).ToList()
+                    counts = new { types = p.Plan.Types.Count, families = p.Plan.Families.Count, other = p.Plan.Other.Count },
+                    byCategory = p.Plan.Types.GroupBy(t => string.IsNullOrEmpty(t.Category) ? "(none)" : t.Category)
+                        .OrderByDescending(g => g.Count()).ToDictionary(g => g.Key, g => g.Count()),
+                    types = Listed(p.Plan.Types),
+                    families = Listed(p.Plan.Families),
+                    other = Listed(p.Plan.Other)
                 }).ToList(),
-                @protected = plans[0].Protected.Select(Describe).ToList(),
+                protectedCount = plans[0].Protected.Count,
+                @protected = Listed(plans[0].Protected),
                 notes = plans.SelectMany(p => p.Notes).Distinct().ToList()
             },
             Warnings = warnings,

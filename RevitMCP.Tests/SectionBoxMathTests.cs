@@ -3,7 +3,11 @@ using Xunit;
 
 namespace RevitMCP.Tests;
 
-/// <summary>#104: the section box convention — BasisX along from→to, BasisY up, BasisZ = BasisX × BasisY = ViewDirection.</summary>
+/// <summary>
+/// #104: the section box convention, as measured in Revit 2026: Revit looks along the box's +BasisZ from the Min.Z face
+/// (cut plane) and reports ViewDirection = −BasisZ. BasisZ is the look direction (left of from→to), BasisY up,
+/// BasisX = BasisY × BasisZ.
+/// </summary>
 public class SectionBoxMathTests
 {
     private static SectionBoxMath.Result Box(Vec3 from, Vec3 to, bool flip = false, double bottom = 0, double top = 3000, double depth = 3000)
@@ -33,13 +37,16 @@ public class SectionBoxMathTests
     [Fact]
     public void LineAlongX_LooksLeft_ToPlusY()
     {
+        // West → east: the section looks north, the case checked in Revit 2026.
         var box = Box(new Vec3(0, 0, 0), new Vec3(10000, 0, 0));
-        Near(1, box.BasisX.X);
         Near(1, box.BasisY.Z);
-        // BasisZ = X × Z = −Y: the view direction points to the viewer on the right of the line ...
-        Near(-1, box.BasisZ.Y);
-        // ... so the section looks to the left of from→to.
+        // BasisZ is the look direction: left of from→to.
+        Near(1, box.BasisZ.Y);
         Near(1, box.LookDirection.Y);
+        // Revit reports ViewDirection towards the viewer, who stands south of the far clip looking north.
+        Near(-1, box.ExpectedViewDirection.Y);
+        // BasisX = Y × Z runs against the line: the view's right is west, so from is on the right.
+        Near(-1, box.BasisX.X);
     }
 
     [Fact]
@@ -55,15 +62,15 @@ public class SectionBoxMathTests
     }
 
     [Fact]
-    public void MinMax_SpanTheLine_TheElevations_AndTheDepthBehindTheCutPlane()
+    public void MinMax_SpanTheLine_TheElevations_AndTheDepthBeyondTheCutPlane()
     {
         var box = Box(new Vec3(1000, 2000, 500), new Vec3(1000, 8000, 900), bottom: -200, top: 3600, depth: 2500);
         Near(-3000, box.Min.X);
         Near(3000, box.Max.X);
         Near(-200, box.Min.Y);
         Near(3600, box.Max.Y);
-        Near(-2500, box.Min.Z);
-        Near(0, box.Max.Z);
+        Near(0, box.Min.Z);
+        Near(2500, box.Max.Z);
         Near(6000, box.LengthMm);
         // Origin: the midpoint of the line, at elevation 0 so local y is the model elevation.
         Near(1000, box.Origin.X);
@@ -77,11 +84,12 @@ public class SectionBoxMathTests
         var from = new Vec3(0, 0, 0);
         var to = new Vec3(4000, 3000, 0);
         var box = Box(from, to, depth: 2000);
-        // Both end points of the line lie on the cut plane (local z = 0).
+        // Both end points of the line lie on the cut plane (local z = 0, the Min.Z face).
+        Near(0, box.Min.Z);
         Near(0, from.Minus(box.Origin).Dot(box.BasisZ));
         Near(0, to.Minus(box.Origin).Dot(box.BasisZ));
         // The far face is depthMm away along the look direction.
-        var farCentre = box.ToModel(new Vec3(0, 0, box.Min.Z));
+        var farCentre = box.ToModel(new Vec3(0, 0, box.Max.Z));
         Near(2000, farCentre.Minus(box.Origin).Dot(box.LookDirection));
         Assert.Equal(8, box.ModelCorners().Count());
     }

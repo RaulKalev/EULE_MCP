@@ -105,6 +105,7 @@ internal sealed partial class RevitMcpTools
         [Description("Limit to families whose name contains this.")] string? familyNameContains = null,
         [Description("Purge passes 1-3 (default 1): purging a type can orphan a nested family that only the next pass finds.")] int passes = 1,
         [Description("Also list other unused elements (patterns, materials, system types, …).")] bool includeOther = false,
+        [Description("List every entry (default false: the first 25 of each list, counts per category, and every id in elementIds).")] bool listAll = false,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -114,6 +115,7 @@ internal sealed partial class RevitMcpTools
             ["familyNameContains"] = familyNameContains ?? string.Empty,
             ["passes"] = passes,
             ["includeOther"] = includeOther,
+            ["listAll"] = listAll,
             ["document"] = document ?? string.Empty
         };
         return FormatResult(await pipeClient.SendAsync("revit_preview_purge_unused", args, cancellationToken));

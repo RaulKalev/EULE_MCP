@@ -4,17 +4,17 @@ namespace RevitMCP.Addin.Documentation.Views;
 /// The section box of a section drawn in plan from <c>from</c> to <c>to</c>, in model mm (#104). Pure, so the
 /// convention is unit tested.
 /// <para>
-/// Convention: walking from <c>from</c> towards <c>to</c>, BasisX points along the line, BasisY is up (model +Z) and
-/// BasisZ = BasisX × BasisY. BasisZ is the section's view direction in Revit's sense (View.ViewDirection points from
-/// the cut plane towards the viewer), so the section LOOKS along −BasisZ: to the LEFT of the line. <c>flip</c>
-/// reverses the view direction (BasisX and BasisZ both negate, the frame stays right-handed): the section then looks
-/// to the RIGHT of the line. In the section, the end the view's right direction (BasisX) points to is on the right:
-/// <c>to</c> without flip, <c>from</c> with flip.
+/// Convention: walking from <c>from</c> towards <c>to</c>, the section LOOKS to the LEFT of the line (<c>flip</c>: to the
+/// RIGHT). Revit looks along the box's +BasisZ from its Min.Z face (the cut plane) towards its Max.Z face (the far
+/// clip), and reports View.ViewDirection = −BasisZ (towards the viewer); this was measured in Revit 2026. So BasisZ is
+/// the look direction, BasisY is up (model +Z) and BasisX = BasisY × BasisZ (right-handed): against the drawn line
+/// without flip, along it with flip. BasisX is the section view's right direction, so <c>from</c> is on the right
+/// without flip and <c>to</c> with flip.
 /// </para>
 /// <para>
 /// The box origin is the midpoint of the line at elevation 0, so local Y is the model elevation. Min =
-/// (−length/2, bottom, −depth), Max = (+length/2, top, 0): the cut plane (local z = 0) runs through the drawn line and
-/// the far clip lies <c>depthMm</c> behind it, in the looking direction.
+/// (−length/2, bottom, 0), Max = (+length/2, top, depth): the cut plane (local z = 0) runs through the drawn line and
+/// the far clip lies <c>depthMm</c> beyond it, in the looking direction.
 /// </para>
 /// </summary>
 public static class SectionBoxMath
@@ -46,8 +46,11 @@ public static class SectionBoxMath
         public double DepthMm { get; init; }
         public bool Flip { get; init; }
 
-        /// <summary>The direction the section looks in (−BasisZ), in plan.</summary>
-        public Vec3 LookDirection => BasisZ.Negated();
+        /// <summary>The direction the section looks in (+BasisZ), in plan.</summary>
+        public Vec3 LookDirection => BasisZ;
+
+        /// <summary>The View.ViewDirection Revit reports for this box (towards the viewer, −BasisZ).</summary>
+        public Vec3 ExpectedViewDirection => BasisZ.Negated();
 
         /// <summary>A model point of the box from local coordinates.</summary>
         public Vec3 ToModel(Vec3 local) =>
@@ -65,8 +68,8 @@ public static class SectionBoxMath
         /// <summary>A description for the preview, in mm and unit vectors.</summary>
         public object Describe() => new
         {
-            convention = "BasisX along from->to, BasisY up, BasisZ = BasisX x BasisY = View.ViewDirection (towards the viewer); " +
-                         "the section looks along -BasisZ (left of the line; right with flip). Cut plane on the line, far clip depthMm behind it.",
+            convention = "BasisZ = the look direction (left of from->to; right with flip), BasisY up, BasisX = BasisY x BasisZ " +
+                         "(the view's right). Revit reports View.ViewDirection = -BasisZ. Cut plane on the line (local z 0), far clip depthMm beyond it.",
             originMm = Origin.ToMm(),
             basisX = BasisX.ToUnit(),
             basisY = BasisY.ToUnit(),
@@ -109,9 +112,10 @@ public static class SectionBoxMath
         }
 
         var along = plan.Scaled(1.0 / length);
-        var basisX = flip ? along.Negated() : along;
         var basisY = Vec3.UnitZ;
-        var basisZ = basisX.Cross(basisY);
+        var left = basisY.Cross(along);                 // up × along: to the left of from → to
+        var basisZ = flip ? left.Negated() : left;      // the look direction
+        var basisX = basisY.Cross(basisZ);              // right-handed: X = Y × Z, so X × Y = Z
         var mid = new Vec3((from.X + to.X) / 2, (from.Y + to.Y) / 2, 0);
 
         return new Result
@@ -120,8 +124,8 @@ public static class SectionBoxMath
             BasisX = basisX,
             BasisY = basisY,
             BasisZ = basisZ,
-            Min = new Vec3(-length / 2, bottomMm, -depthMm),
-            Max = new Vec3(length / 2, topMm, 0),
+            Min = new Vec3(-length / 2, bottomMm, 0),
+            Max = new Vec3(length / 2, topMm, depthMm),
             LengthMm = length,
             BottomMm = bottomMm,
             TopMm = topMm,

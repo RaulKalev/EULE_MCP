@@ -205,10 +205,17 @@ internal static class AlignmentRequest
         }
         else
         {
-            view = new FilteredElementCollector(doc)
+            // No 3D view is active: prefer the view that hides the least. A section box clips the search and a
+            // perspective view returned no hits in testing, so an unclipped isometric view comes first.
+            var candidates = new FilteredElementCollector(doc)
                 .OfClass(typeof(View3D))
                 .Cast<View3D>()
-                .FirstOrDefault(v => !v.IsTemplate);
+                .Where(v => !v.IsTemplate)
+                .ToList();
+            view = candidates
+                .OrderBy(v => SearchViewRank(v))
+                .ThenBy(v => v.Name, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
 
             if (view == null)
             {
@@ -226,9 +233,62 @@ internal static class AlignmentRequest
                     $"3D view '{view.Name}' has an active section box. Geometry outside it is invisible to " +
                     "the search and will not be found — pass searchViewId for an unclipped view if targets go missing.");
             }
+            if (view.IsPerspective)
+            {
+                warnings.Add(
+                    $"3D view '{view.Name}' is a perspective view; ray casts in it may miss surfaces. Pass searchViewId " +
+                    "for an isometric 3D view if targets go missing.");
+            }
         }
         catch { }
 
+        WarnAboutHiddenLinks(doc, view, warnings);
         return view;
+    }
+
+    /// <summary>0: isometric without a section box; 1: isometric with one; 2: perspective.</summary>
+    private static int SearchViewRank(View3D view)
+    {
+        try
+        {
+            if (view.IsPerspective) return 2;
+            return view.IsSectionBoxActive ? 1 : 0;
+        }
+        catch
+        {
+            return 3;
+        }
+    }
+
+    /// <summary>
+    /// Linked models hidden in the search view are invisible to the rays, which then report "nothing found" for
+    /// walls and ceilings that are there. Names the hidden links so the caller can pick another view.
+    /// </summary>
+    private static void WarnAboutHiddenLinks(Document doc, View3D view, List<string> warnings)
+    {
+        try
+        {
+            if (view.GetCategoryHidden(new ElementId(BuiltInCategory.OST_RvtLinks)))
+            {
+                warnings.Add($"Linked models are hidden in 3D view '{view.Name}' (Revit Links category), so the rays " +
+                             "cannot hit linked walls, ceilings or floors. Pass searchViewId for a view that shows them.");
+                return;
+            }
+
+            var hidden = new FilteredElementCollector(doc)
+                .OfClass(typeof(RevitLinkInstance))
+                .Cast<RevitLinkInstance>()
+                .Where(link => link.IsHidden(view))
+                .Select(link => link.Name)
+                .ToList();
+            if (hidden.Count > 0)
+                warnings.Add($"{hidden.Count} linked model(s) are hidden in 3D view '{view.Name}' and cannot be hit: " +
+                             string.Join(", ", hidden.Take(5)) + (hidden.Count > 5 ? ", …" : string.Empty) +
+                             ". Pass searchViewId for a view that shows them.");
+        }
+        catch
+        {
+            // Diagnostics only.
+        }
     }
 }

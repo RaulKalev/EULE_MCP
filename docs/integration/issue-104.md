@@ -54,15 +54,12 @@ One new `<ItemGroup>` at the end linking `Documentation/Views/ViewCreateSpec.cs`
 
 ## Deviations from the issue
 
-1. **Section box Z range.** The issue gives `Min.z = 0, Max.z = depth`. With BasisZ = BasisX × BasisY as the section's
-   `ViewDirection` (Revit: the direction towards the viewer), that volume would lie between the viewer and the line, so
-   the cut plane would sit `depth` in front of the drawn line. Built instead: `Min = (−L/2, bottom, −depth)`,
-   `Max = (+L/2, top, 0)` — the cut plane on the line, the far clip `depth` behind it (the Revit SDK CreateViewSection
-   sample and the Building Coder samples also use `Max.Z = 0`). Documented convention: walking from `from` to `to` the
-   section looks LEFT; `flip` looks right. Because the reference docs of `CreateSection` are ambiguous (they also call
-   the computed frame left-handed), the tool checks Revit's actual `ViewDirection` and cut-plane offset after creation,
-   returns them in `views[].actual` and warns if they disagree. **Please confirm in the manual test** (step 2); if Revit
-   disagrees, the fix is one line in `SectionBoxMath.Compute` (swap the Z range or negate BasisZ).
+1. **Section box Z range (corrected after the Revit test on 2026-10-25).** The first build put the box at
+   `Min.z = −depth, Max.z = 0` with BasisZ = BasisX × BasisY. In Revit 2026 a west → east section then looked south
+   with its cut plane 3000 mm off the line. Revit looks along the box's +BasisZ from its Min.Z face and reports
+   `ViewDirection = −BasisZ`. Now BasisZ is the look direction (left of the line, right with `flip`), BasisY is up,
+   BasisX = BasisY × BasisZ, and the box runs `Min.z = 0`, `Max.z = depth`, as the issue said. The post-creation
+   self-check compares Revit's ViewDirection with −BasisZ and still warns on a mismatch.
 2. **Box union and padding** live in `ViewExtentMath` / `ViewExtentService` (as asked); `ClashBoundingBoxHelper` /
    `ClashBoundingBoxMath` (#107) are not touched and no longer used by `ClashReviewViewService`.
 3. **Type selection change for the two refactored callers:** they now prefer the document's default 3D / floor plan

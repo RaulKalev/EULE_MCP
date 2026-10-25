@@ -97,16 +97,17 @@ Revit call: `ViewSection.CreateSection(doc, typeId, sectionBox)`.
 
 Stand at `from` and look towards `to`:
 
-- **BasisX** points along the line, from `from` to `to`; **BasisY** is up (model +Z); **BasisZ = BasisX × BasisY**.
-- BasisZ is the section's **view direction in Revit's sense**: `View.ViewDirection` points from the cut plane towards
-  the viewer. The section therefore **looks along −BasisZ, which is to your LEFT**. A line drawn west → east (+X)
-  looks north (+Y).
-- **`flip: true` reverses it**: BasisX and BasisZ both negate (the frame stays right-handed), and the section looks to
-  your **RIGHT**.
-- In the section view, BasisX is the view's right direction: `to` is on the right without flip, `from` with flip.
+- The section **looks to your LEFT**. A line drawn west → east (+X) looks north (+Y).
+- **`flip: true` reverses it**: the section looks to your **RIGHT**.
+- Revit looks along the section box's **+BasisZ**, from its `Min.Z` face (the cut plane) towards its `Max.Z` face
+  (the far clip). `View.ViewDirection` points the other way, towards the viewer, so Revit reports it as −BasisZ.
+  This was measured in Revit 2026.
+- So **BasisZ** is the look direction, **BasisY** is up (model +Z) and **BasisX = BasisY × BasisZ**, which keeps the
+  frame right-handed. BasisX is the section view's right direction: it runs against the line without flip, so `from`
+  is on the right, and along it with flip, so `to` is on the right.
 - The box origin is the midpoint of the line at elevation 0, so local y is the model elevation:
-  `Min = (−length/2, bottom, −depth)`, `Max = (+length/2, top, 0)`. The cut plane (local z = 0) runs through the drawn
-  line and the far clip lies `depthMm` behind it, in the looking direction.
+  `Min = (−length/2, bottom, 0)`, `Max = (+length/2, top, depth)`. The cut plane (local z = 0) runs through the drawn
+  line and the far clip lies `depthMm` beyond it, in the looking direction.
 
 The preview returns the box as `views[].sectionBox` (`originMm`, `basisX/Y/Z`, `lookDirection`, `minLocalMm`,
 `maxLocalMm`, `lengthMm`, `bottomMm`, `topMm`, `depthMm`), so the direction can be checked before anything is made.

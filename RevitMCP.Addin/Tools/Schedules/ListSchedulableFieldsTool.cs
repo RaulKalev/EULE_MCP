@@ -14,6 +14,9 @@ public sealed class ListSchedulableFieldsTool : IRevitMcpTool
 {
     public string Name => "revit_list_schedulable_fields";
 
+    private const int DefaultLimit = 150;
+    private const int MaxLimit = 1000;
+
     public string Description =>
         "Lists the fields a schedule of a category can show (ScheduleDefinition.GetSchedulableFields): name, " +
         "qualifiedName (\"Room: Name\" for fields of related elements), parameterId, fieldType (Instance, ElementType, " +
@@ -87,7 +90,10 @@ public sealed class ListSchedulableFieldsTool : IRevitMcpTool
             filtered = filtered.Where(f => ParameterMatcher.Normalize(f.QualifiedName).Contains(normalized));
         }
 
-        var fields = filtered.Select(f => new
+        var matching = filtered.ToList();
+        var limit = Math.Max(1, Math.Min(MaxLimit, ToolArguments.GetInt(args, "limit", DefaultLimit)));
+        var truncated = matching.Count > limit;
+        var fields = matching.Take(limit).Select(f => new
         {
             name = f.Name,
             qualifiedName = f.QualifiedName != f.Name ? f.QualifiedName : null,
@@ -97,16 +103,23 @@ public sealed class ListSchedulableFieldsTool : IRevitMcpTool
             dataType = f.DataType
         }).ToList();
 
-        return Task.FromResult(ScheduleToolSupport.Ok(request, sw,
-            $"{fields.Count} of {total} schedulable field(s), read from {source}.",
+        var result = ScheduleToolSupport.Ok(request, sw,
+            $"{fields.Count} of {matching.Count} matching schedulable field(s) ({total} in all), read from {source}." +
+            (truncated ? $" Capped at limit={limit}: narrow with nameFilter or fieldType." : string.Empty),
             new
             {
                 count = fields.Count,
+                matching = matching.Count,
                 total,
+                truncated,
+                limit,
                 source,
                 fieldTypes = catalog.GroupBy(f => f.FieldType).ToDictionary(g => g.Key, g => g.Count()),
                 fields
-            }));
+            });
+        if (truncated)
+            result.Warnings.Add($"{matching.Count - limit} more field(s) not listed. Pass nameFilter (e.g. \"Room\") or fieldType, or a higher limit (max {MaxLimit}).");
+        return Task.FromResult(result);
     }
 
     /// <summary>GetSchedulableFields of a schedule made for the purpose in a transaction that is always rolled back.</summary>
