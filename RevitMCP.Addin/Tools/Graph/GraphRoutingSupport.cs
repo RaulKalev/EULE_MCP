@@ -17,7 +17,11 @@ internal static class GraphRoutingSupport
     /// <summary>Per-call opt-out argument accepted by every broad live tool.</summary>
     public const string OptOutArg = "graphHint";
 
-    public static GraphRoutingState ReadState(UIApplication uiapp, Dictionary<string, object?> args)
+    /// <param name="category">
+    /// When set, only that category's host and linked element counts are read (the gate's cheap path); otherwise
+    /// every category, level and node kind.
+    /// </param>
+    public static GraphRoutingState ReadState(UIApplication uiapp, Dictionary<string, object?> args, string? category = null)
     {
         var state = new GraphRoutingState();
         var doc = uiapp.ActiveUIDocument?.Document;
@@ -29,11 +33,7 @@ internal static class GraphRoutingSupport
         state.Exists = true;
         state.Stale = graph.Freshness.Stale;
         state.StaleReason = graph.Freshness.Reason;
-        var summary = graph.Database.Summarize(topN: 200, sampleSize: 0);
-        foreach (var c in summary.NodesByKind) state.NodesByKind[c.Key] = c.Count;
-        state.Categories = summary.ElementsByCategory.Select(c => c.Key).Where(k => !string.IsNullOrEmpty(k)).ToList();
-        foreach (var c in summary.ElementsByCategory.Where(c => !string.IsNullOrEmpty(c.Key))) state.ElementsByCategory[c.Key] = c.Count;
-        state.Levels = summary.ElementsByLevel.Select(c => c.Key).Where(k => !string.IsNullOrEmpty(k) && k != "(none)").ToList();
+        state.SetCounts(graph.Database.RoutingCounts(category));
         return state;
     }
 
@@ -57,7 +57,7 @@ internal static class GraphRoutingSupport
             var matched = (long?)data["totalMatched"] ?? (long?)data["returned"] ?? (data["elements"] as JArray)?.Count ?? 0;
             if (matched < GraphRouting.BroadQueryThreshold) return;
 
-            var state = ReadState(uiapp, request.Arguments);
+            var state = ReadState(uiapp, request.Arguments, NullIfEmpty(ToolArguments.GetString(request.Arguments, "category")));
             var hint = GraphRouting.BroadQueryHint(
                 request.ToolName,
                 ToolArguments.GetString(request.Arguments, "category"),
@@ -173,22 +173,24 @@ internal static class GraphRoutingSupport
             if (!GraphRouting.IsGateCandidate(read) || !EnabledForUser("enforce")) return null;
             if (RevitMCP.Addin.Documents.ToolDocument.TargetsOtherDocument(uiapp, request)) return null;   // its graph is not the active one
 
-            var state = ReadState(uiapp, request.Arguments);
+            var state = ReadState(uiapp, request.Arguments, read.Category);
             var count = GraphRouting.GateCount(read, state);
             if (count == null) return null;
+            var linked = state.LinkedCount(read.Category);
 
             return new McpToolResult
             {
                 RequestId = request.RequestId,
                 Success = true,
                 Status = GraphRouting.GateStatus,
-                Message = GraphRouting.GateMessage(read, count.Value),
+                Message = GraphRouting.GateMessage(read, count.Value, linked),
                 Data = new
                 {
                     graphFirst = true,
                     read = false,
                     category = read.Category,
                     elementsInGraph = count.Value,
+                    elementsInLinks = linked,
                     threshold = GraphRouting.GateThreshold,
                     next = GraphRouting.GateSteps(read).Select(s => new { tool = s.Tool, args = s.Args, why = s.Why }),
                     bypass = new Dictionary<string, object> { [GraphRouting.GateArg] = false },
@@ -202,6 +204,8 @@ internal static class GraphRoutingSupport
             return null;
         }
     }
+
+    private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     /// <summary>graph.routingHints=false in the user config switches the hints off for that user.</summary>
     private static bool HintsEnabledForUser() => EnabledForUser("routingHints");

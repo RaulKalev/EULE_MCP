@@ -854,12 +854,9 @@ public sealed class GraphDatabase : IDisposable
 
         s.NodesByKind = GroupCount("SELECT kind, COUNT(*) FROM nodes GROUP BY kind ORDER BY 2 DESC", topN: int.MaxValue);
         s.EdgesByRel = GroupCount("SELECT rel, COUNT(*) FROM edges GROUP BY rel ORDER BY 2 DESC", topN: int.MaxValue);
-        s.ElementsByCategory = GroupCount(
-            "SELECT COALESCE(category, ''), COUNT(*) FROM nodes WHERE kind = 'element' GROUP BY category ORDER BY 2 DESC, 1", topN);
-        s.ElementsByLevel = GroupCount(
-            "SELECT COALESCE(level, ''), COUNT(*) FROM nodes WHERE kind = 'element' GROUP BY level ORDER BY 2 DESC, 1", topN);
-        s.ElementsByWorkset = GroupCount(
-            "SELECT COALESCE(workset, ''), COUNT(*) FROM nodes WHERE kind = 'element' GROUP BY workset ORDER BY 2 DESC, 1", topN);
+        s.ElementsByCategory = GroupCount(ElementGroupSql("category"), topN);
+        s.ElementsByLevel = GroupCount(ElementGroupSql("level"), topN);
+        s.ElementsByWorkset = GroupCount(ElementGroupSql("workset"), topN);
 
         using (var cmd = _connection.CreateCommand())
         {
@@ -900,6 +897,39 @@ public sealed class GraphDatabase : IDisposable
 
         return s;
     }
+
+    /// <summary>
+    /// The counts graph routing needs, without the panel and orphan scans of <see cref="Summarize"/>: nodes per kind,
+    /// and element counts per category and per level with their linked share (<see cref="GraphCount.Linked"/>).
+    /// With <paramref name="category"/> only that category's element count is read (one indexed lookup, for the
+    /// graph-first gate); kinds and levels stay empty then.
+    /// </summary>
+    public GraphSummaryResult RoutingCounts(string? category = null)
+    {
+        var s = new GraphSummaryResult { TopN = int.MaxValue };
+        if (!string.IsNullOrWhiteSpace(category))
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText =
+                $"SELECT category, COUNT(*), SUM({LinkedCase}) FROM nodes " +
+                "WHERE kind = 'element' AND category = $c COLLATE NOCASE GROUP BY category";
+            cmd.Parameters.AddWithValue("$c", category!.Trim());
+            AddGroupRows(cmd, s.ElementsByCategory);
+            return s;
+        }
+
+        s.NodesByKind = GroupCount("SELECT kind, COUNT(*) FROM nodes GROUP BY kind ORDER BY 2 DESC", topN: int.MaxValue);
+        s.ElementsByCategory = GroupCount(ElementGroupSql("category"), topN: int.MaxValue);
+        s.ElementsByLevel = GroupCount(ElementGroupSql("level"), topN: int.MaxValue);
+        return s;
+    }
+
+    /// <summary>1 for a linked-model node, 0 for a host node (range on the primary key, as in <see cref="LinkClause"/>).</summary>
+    private const string LinkedCase = "CASE WHEN id >= '" + GraphSchema.LinkIdPrefix + "' AND id < 'link;' THEN 1 ELSE 0 END";
+
+    /// <summary>Element counts grouped by one column, largest first, with the linked share in the third column.</summary>
+    private static string ElementGroupSql(string column) =>
+        $"SELECT COALESCE({column}, ''), COUNT(*), SUM({LinkedCase}) FROM nodes WHERE kind = 'element' GROUP BY {column} ORDER BY 2 DESC, 1";
 
     /// <summary>
     /// Element counts per category, type, level and workset for the given categories (matched
@@ -1019,16 +1049,23 @@ public sealed class GraphDatabase : IDisposable
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = topN == int.MaxValue ? sql : sql + " LIMIT $top";
         if (topN != int.MaxValue) cmd.Parameters.AddWithValue("$top", topN);
+        AddGroupRows(cmd, list);
+        return list;
+    }
+
+    /// <summary>Reads (key, count[, linked]) rows into <paramref name="into"/>.</summary>
+    private static void AddGroupRows(SqliteCommand cmd, List<GraphCount> into)
+    {
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
-            list.Add(new GraphCount
+            into.Add(new GraphCount
             {
                 Key = reader.IsDBNull(0) ? string.Empty : reader.GetString(0),
-                Count = reader.GetInt64(1)
+                Count = reader.GetInt64(1),
+                Linked = reader.FieldCount > 2 && !reader.IsDBNull(2) ? reader.GetInt64(2) : 0
             });
         }
-        return list;
     }
 
     // ─── Helpers ───────────────────────────────────────────────────────────
