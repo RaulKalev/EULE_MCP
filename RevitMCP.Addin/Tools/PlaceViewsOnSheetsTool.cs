@@ -4,6 +4,7 @@ using Autodesk.Revit.UI;
 using RevitMCP.Addin.Documentation.Placement;
 using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
+using RevitMCP.Addin.Schedules;
 using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Tools;
@@ -22,6 +23,7 @@ public class PlaceViewsOnSheetsTool : IRevitMcpTool
         "and requires sheetIds or allSheets=true. " +
         "fuzzyThreshold (double 0-1, default 0.6), customParamName (string), " +
         "skipAlreadyPlaced (bool; default false for PlaceViews and true for other modes). " +
+        "Schedule ids are placed as schedule instances (centred on the title block; one already on the sheet is skipped). " +
         "Use revit_preview_place_views_on_sheets first to verify proposals.";
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Documentation;
@@ -85,6 +87,13 @@ public class PlaceViewsOnSheetsTool : IRevitMcpTool
                 {
                     var view = doc.GetElement(new ElementId(vid)) as View;
                     if (view == null) { warnings.Add($"View {vid} not found."); continue; }
+                    if (view is ViewSchedule schedule)
+                    {
+                        // #103: Viewport.Create does not take schedules; they go on as a ScheduleSheetInstance.
+                        var placedSchedule = PlaceSchedule(doc, targetSheet, schedule, warnings);
+                        if (placedSchedule != null) { placed++; placed_.Add(placedSchedule); }
+                        continue;
+                    }
                     var center = PlacementPointResolver.GetSheetCenter(doc, targetSheet);
                     Viewport.Create(doc, targetSheet.Id, view.Id, center);
                     placed++;
@@ -163,6 +172,12 @@ public class PlaceViewsOnSheetsTool : IRevitMcpTool
                 var sheet  = doc.GetElement(new ElementId(p.SheetId!.Value)) as ViewSheet;
                 var view   = doc.GetElement(new ElementId(p.ViewId))         as View;
                 if (sheet == null || view == null) { warnings2.Add($"Could not resolve view/sheet for view {p.ViewId}"); continue; }
+                if (view is ViewSchedule schedule)
+                {
+                    var placedSchedule = PlaceSchedule(doc, sheet, schedule, warnings2);
+                    if (placedSchedule != null) { placed2++; placed2_.Add(placedSchedule); }
+                    continue;
+                }
 
                 var center = PlacementPointResolver.GetSheetCenter(doc, sheet);
                 Viewport.Create(doc, sheet.Id, view.Id, center);
@@ -241,6 +256,31 @@ public class PlaceViewsOnSheetsTool : IRevitMcpTool
                 continue;
             }
 
+            if (view is ViewSchedule schedule)
+            {
+                using var scheduleTransaction = new SubTransaction(doc);
+                scheduleTransaction.Start();
+                try
+                {
+                    var placedSchedule = PlaceSchedule(doc, sheet, schedule, warnings);
+                    if (placedSchedule == null)
+                    {
+                        scheduleTransaction.RollBack();
+                        continue;
+                    }
+                    scheduleTransaction.Commit();
+                    placed++;
+                    results.Add(placedSchedule);
+                }
+                catch (Exception ex)
+                {
+                    if (scheduleTransaction.GetStatus() == TransactionStatus.Started)
+                        scheduleTransaction.RollBack();
+                    warnings.Add($"Failed to place schedule '{view.Name}' on sheet '{sheet.SheetNumber}': {ex.Message}");
+                }
+                continue;
+            }
+
             try
             {
                 if (!Viewport.CanAddViewToSheet(doc, sheet.Id, view.Id))
@@ -305,6 +345,41 @@ public class PlaceViewsOnSheetsTool : IRevitMcpTool
             },
             Warnings = warnings,
             DurationMs = sw.ElapsedMilliseconds
+        };
+    }
+
+    /// <summary>
+    /// #103: a schedule id goes on the sheet with ScheduleSheetInstance.Create (Viewport.Create refuses schedules),
+    /// centred on the title block like a viewport. A schedule already on that sheet is skipped with a warning.
+    /// </summary>
+    private static object? PlaceSchedule(Document doc, ViewSheet sheet, ViewSchedule schedule, List<string> warnings)
+    {
+        var refusal = ScheduleLookup.Refusal(schedule, forEdit: true);
+        if (refusal != null)
+        {
+            warnings.Add(refusal);
+            return null;
+        }
+        if (ScheduleSheetPlacer.InstancesOn(doc, sheet, schedule.Id).Count > 0)
+        {
+            warnings.Add($"Schedule '{schedule.Name}' is already on sheet '{sheet.SheetNumber}'; revit_place_schedule_on_sheet with allowDuplicate=true places a second copy.");
+            return null;
+        }
+
+        var instance = ScheduleSheetPlacer.PlaceCentered(doc, sheet, schedule, warnings, out var box);
+        return new
+        {
+            viewId = schedule.Id.Value,
+            viewName = schedule.Name,
+            viewType = schedule.ViewType.ToString(),
+            kind = "schedule",
+            sheetId = sheet.Id.Value,
+            sheetNumber = sheet.SheetNumber,
+            sheetName = sheet.Name,
+            scheduleSheetInstanceId = instance.Id.Value,
+            boxMm = box is { } b
+                ? new { minX = Math.Round(b.MinX, 1), minY = Math.Round(b.MinY, 1), maxX = Math.Round(b.MaxX, 1), maxY = Math.Round(b.MaxY, 1) }
+                : null
         };
     }
 
