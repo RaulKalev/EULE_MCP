@@ -12,7 +12,7 @@ namespace RevitMCP.Addin.Tools;
 public class FindElementsByParameterTool : IRevitMcpTool
 {
     public string Name => "revit_find_elements_by_parameter";
-    public string Description => "Finds model elements matching one or more parameter filters. Supports instance/type parameters, partial name matching, and value operators (equals, contains, startsWith, isEmpty, greaterThan, etc.). Filter by type/family name with the pseudo-parameters Type, Type Name, Family, Family Name, Family and Type. Requires a category, filters, elementIds, useSelection, or summaryOnly=true — call revit_count_elements first if you don't know the model's categories yet.";
+    public string Description => "Finds model elements matching one or more parameter filters. Supports instance/type parameters, partial name matching, and value operators (equals, contains, startsWith, isEmpty, greaterThan, etc.). Filter by type/family name with the pseudo-parameters Type, Type Name, Family, Family Name, Family and Type, and by model state with Phase Created, Phase Demolished, Design Option, Workset (names; empty = none). includeModelState=true adds those four to each element, includeOwnership=true adds ownedBy. Requires a category, filters, elementIds, useSelection, or summaryOnly=true — call revit_count_elements first if you don't know the model's categories yet.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Parameters;
 
@@ -45,7 +45,9 @@ public class FindElementsByParameterTool : IRevitMcpTool
             TruncateStringLength = ToolArguments.GetInt(request.Arguments, "truncateStringLength", 0),
             SummaryOnly = ToolArguments.GetBool(request.Arguments, "summaryOnly", false),
             IncludeTags = ToolArguments.GetBool(request.Arguments, "includeTags", false),
-            CompactResponse = ToolArguments.GetBool(request.Arguments, "compact", false)
+            CompactResponse = ToolArguments.GetBool(request.Arguments, "compact", false),
+            IncludeModelState = ToolArguments.GetBool(request.Arguments, "includeModelState", false),
+            IncludeOwnership = ToolArguments.GetBool(request.Arguments, "includeOwnership", false)
         };
 
         // Nothing narrows the search at all — rather than scanning (and parameter-reading)

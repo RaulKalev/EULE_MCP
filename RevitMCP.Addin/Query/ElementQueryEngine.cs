@@ -1,5 +1,6 @@
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.ModelState;
 using RevitMCP.Core.Safety;
 
 namespace RevitMCP.Addin.Query;
@@ -51,9 +52,13 @@ public class ElementQueryEngine
         var reader = new ParameterReader();
         var responseReadOpts = CreateResponseReadOptions(options);
         var filterReadOpts = CreateFilterReadOptions(options);
+        // #109: one reader per query (it caches phase and workset names), only when a filter or the response needs it.
+        var states = options.IncludeModelState || options.IncludeOwnership || ParameterFilterEvaluator.NeedsModelState(options.Filters)
+            ? new ElementModelStateReader(doc)
+            : null;
 
         if (options.SummaryOnly)
-            return BuildSummaryResult(doc, elementIds, options, reader, filterReadOpts, cancellationToken);
+            return BuildSummaryResult(doc, elementIds, options, reader, filterReadOpts, states, cancellationToken);
 
         // --- 3. Resolve effective limits (clamp caller values against QueryLimits.Default) ---
         var (effectivePageSize, effectiveMaxParameters, effectiveTruncateLength) =
@@ -114,7 +119,7 @@ public class ElementQueryEngine
             // Filtering needs values only for parameters named by the filters.
             // Materializing every value here is especially expensive because this loop
             // continues past the requested page to preserve the exact totalMatched contract.
-            if (options.Filters.Count > 0 && !PassesFilters(doc, element, reader, filterReadOpts, options.Filters))
+            if (options.Filters.Count > 0 && !PassesFilters(doc, element, reader, filterReadOpts, options.Filters, states))
                 continue;
 
             // 0-based index of this matched element (capture before incrementing)
@@ -159,6 +164,19 @@ public class ElementQueryEngine
             {
                 try { info.LineStyle = curve.LineStyle?.Name; }
                 catch { /* some curve elements have no style; leave it out */ }
+            }
+
+            if (states != null && (options.IncludeModelState || options.IncludeOwnership))
+            {
+                var state = states.Read(element, options.IncludeOwnership);
+                if (options.IncludeModelState)
+                {
+                    info.PhaseCreated = state.PhaseCreated;
+                    info.PhaseDemolished = state.PhaseDemolished;
+                    info.DesignOption = state.DesignOption;
+                    info.Workset = state.Workset;
+                }
+                info.OwnedBy = state.OwnedBy;
             }
 
             if (options.IncludeTags)
@@ -256,18 +274,29 @@ public class ElementQueryEngine
     /// <summary>
     /// Evaluates the filters for one element. Filters on the identity pseudo-parameters
     /// (Type, Type Name, Family, Family Name, Family and Type) are answered from the
-    /// element's type; only the remaining filters trigger a parameter read.
+    /// element's type, the model-state ones (Phase Created, Phase Demolished, Design Option,
+    /// Workset, #109) from <paramref name="states"/>; only the remaining filters trigger a parameter read.
     /// </summary>
     private static bool PassesFilters(
         Document doc,
         Element element,
         ParameterReader reader,
         ParameterReadOptions filterReadOpts,
-        List<ParameterFilterDto> filters)
+        List<ParameterFilterDto> filters,
+        ElementModelStateReader? states)
     {
         var identity = ParameterFilterEvaluator.NeedsIdentity(filters)
             ? ParameterReader.ReadIdentity(doc, element)
             : null;
+        if (identity != null && states != null && ParameterFilterEvaluator.NeedsModelState(filters))
+        {
+            identity = new ElementIdentity
+            {
+                FamilyName = identity.FamilyName,
+                TypeName = identity.TypeName,
+                ModelState = states.Read(element, includeOwnership: false)
+            };
+        }
 
         // No parameter-backed filters → skip the read (an empty selector list would
         // otherwise mean "read everything").
@@ -295,8 +324,9 @@ public class ElementQueryEngine
         {
             IncludeInstanceParameters = options.IncludeInstanceParameters,
             IncludeTypeParameters = options.IncludeTypeParameters,
-            // Identity pseudo-parameters are resolved from the element type, not read.
-            ParameterSelectors = ParameterFilterEvaluator.ParameterBackedFilters(options.Filters)
+            // Identity pseudo-parameters are resolved from the element type, model-state ones by
+            // ElementModelStateReader (PassesFilters always fills them here), not read.
+            ParameterSelectors = ParameterFilterEvaluator.ParameterBackedFilters(options.Filters, modelStateResolved: true)
                 .Select(filter => new ParameterSelector
                 {
                     Name = filter.ParameterName,
@@ -329,6 +359,7 @@ public class ElementQueryEngine
         ElementQueryOptions options,
         ParameterReader reader,
         ParameterReadOptions readOpts,
+        ElementModelStateReader? states,
         CancellationToken cancellationToken)
     {
         bool needsParamRead = options.Filters.Count > 0;
@@ -360,7 +391,7 @@ public class ElementQueryEngine
             var element = doc.GetElement(elementId);
             if (element?.Category == null) continue;
 
-            if (needsParamRead && !PassesFilters(doc, element, reader, readOpts, options.Filters))
+            if (needsParamRead && !PassesFilters(doc, element, reader, readOpts, options.Filters, states))
                 continue;
 
             totalMatched++;

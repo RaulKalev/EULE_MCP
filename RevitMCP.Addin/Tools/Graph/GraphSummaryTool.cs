@@ -54,6 +54,7 @@ public class GraphSummaryTool : IRevitMcpTool
                 elementsByCategory = s.ElementsByCategory.Select(c => Row("category", c)).ToList(),
                 elementsByLevel = s.ElementsByLevel.Select(c => Row("level", c)).ToList(),
                 elementsByWorkset = s.ElementsByWorkset.Select(c => Row("workset", c)).ToList(),
+                elementsByPhase = s.ElementsByPhase.Select(c => Row("phase", c)).ToList(),
                 panels = s.Panels.Select(p => new
                 {
                     id = p.Id,

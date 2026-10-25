@@ -10,7 +10,69 @@ public sealed class ElementIdentity
     public string FamilyName { get; init; } = string.Empty;
     public string TypeName { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Phase, design option and workset names (#109), set by callers that read them for the model-state
+    /// pseudo-parameters. Null: not read, so those filters fall back to the element's own parameters.
+    /// </summary>
+    public ElementModelState? ModelState { get; init; }
+
     public static readonly ElementIdentity Empty = new();
+}
+
+/// <summary>
+/// An element's model state as names (#109): the phase it was created and demolished in, its design option and its
+/// workset. Empty string = none or not applicable (no phase parameters, main model, not workshared).
+/// </summary>
+public sealed class ElementModelState
+{
+    public string PhaseCreated { get; init; } = string.Empty;
+    public string PhaseDemolished { get; init; } = string.Empty;
+    public string DesignOption { get; init; } = string.Empty;
+    public string Workset { get; init; } = string.Empty;
+    /// <summary>Who has the element checked out ("" = nobody); null when ownership was not read.</summary>
+    public string? OwnedBy { get; init; }
+}
+
+/// <summary>
+/// Pseudo-parameters for the model state (#109): Phase Created, Phase Demolished, Design Option, Workset. Revit's own
+/// parameters of these names are element ids or integers whose display text varies ("Main Model", "None"); the
+/// pseudo-parameters compare the plain names, with an empty value for none (Design Option notEquals "" = in an option).
+/// </summary>
+public static class ModelStateParameters
+{
+    private enum Kind { PhaseCreated, PhaseDemolished, DesignOption, Workset }
+
+    private static readonly Dictionary<string, Kind> _names = new(StringComparer.Ordinal)
+    {
+        ["phasecreated"] = Kind.PhaseCreated,
+        ["phasedemolished"] = Kind.PhaseDemolished,
+        ["designoption"] = Kind.DesignOption,
+        ["workset"] = Kind.Workset,
+    };
+
+    /// <summary>Display names accepted as model-state pseudo-parameters.</summary>
+    public static readonly IReadOnlyList<string> Names = new[] { "Phase Created", "Phase Demolished", "Design Option", "Workset" };
+
+    /// <summary>True when <paramref name="parameterName"/> names a model-state pseudo-parameter (whole name, case/whitespace-insensitive).</summary>
+    public static bool IsModelStateName(string? parameterName) =>
+        !string.IsNullOrWhiteSpace(parameterName) && _names.ContainsKey(ParameterMatcher.Normalize(parameterName!));
+
+    /// <summary>The value from <paramref name="state"/>; false when the name is not one or the state was not read.</summary>
+    public static bool TryGetValue(string? parameterName, ElementModelState? state, out string value)
+    {
+        value = string.Empty;
+        if (state == null || string.IsNullOrWhiteSpace(parameterName) ||
+            !_names.TryGetValue(ParameterMatcher.Normalize(parameterName!), out var kind))
+            return false;
+        value = (kind switch
+        {
+            Kind.PhaseCreated => state.PhaseCreated,
+            Kind.PhaseDemolished => state.PhaseDemolished,
+            Kind.DesignOption => state.DesignOption,
+            _ => state.Workset
+        }) ?? string.Empty;
+        return true;
+    }
 }
 
 /// <summary>
@@ -86,11 +148,22 @@ public static class ParameterFilterEvaluator
     /// <summary>True when any filter targets an identity pseudo-parameter, so the caller
     /// must resolve the element's <see cref="ElementIdentity"/>.</summary>
     public static bool NeedsIdentity(IEnumerable<ParameterFilterDto> filters) =>
-        filters.Any(f => ElementIdentityParameters.IsIdentityName(f.ParameterName));
+        filters.Any(f => ElementIdentityParameters.IsIdentityName(f.ParameterName) ||
+                         ModelStateParameters.IsModelStateName(f.ParameterName));
 
-    /// <summary>Filters that must be evaluated against real parameter values.</summary>
-    public static List<ParameterFilterDto> ParameterBackedFilters(IEnumerable<ParameterFilterDto> filters) =>
-        filters.Where(f => !ElementIdentityParameters.IsIdentityName(f.ParameterName)).ToList();
+    /// <summary>True when any filter targets a model-state pseudo-parameter (Phase Created, Design Option, ...), so
+    /// the caller should fill <see cref="ElementIdentity.ModelState"/> (#109).</summary>
+    public static bool NeedsModelState(IEnumerable<ParameterFilterDto> filters) =>
+        filters.Any(f => ModelStateParameters.IsModelStateName(f.ParameterName));
+
+    /// <summary>
+    /// Filters that must be evaluated against real parameter values. Model-state filters stay in the list unless
+    /// <paramref name="modelStateResolved"/>: a caller that does not fill <see cref="ElementIdentity.ModelState"/>
+    /// keeps matching them against Revit's own Phase Created / Workset parameters, as before #109.
+    /// </summary>
+    public static List<ParameterFilterDto> ParameterBackedFilters(IEnumerable<ParameterFilterDto> filters, bool modelStateResolved = false) =>
+        filters.Where(f => !ElementIdentityParameters.IsIdentityName(f.ParameterName) &&
+                           !(modelStateResolved && ModelStateParameters.IsModelStateName(f.ParameterName))).ToList();
 
     /// <summary>
     /// Evaluates all filters (AND). Identity pseudo-parameters are answered from
@@ -104,7 +177,8 @@ public static class ParameterFilterEvaluator
     {
         foreach (var filter in filters)
         {
-            if (ElementIdentityParameters.TryGetValue(filter.ParameterName, identity, out var identityValue))
+            if (ElementIdentityParameters.TryGetValue(filter.ParameterName, identity, out var identityValue) ||
+                ModelStateParameters.TryGetValue(filter.ParameterName, identity?.ModelState, out identityValue))
             {
                 if (!EvaluateOperator(identityValue, filter.Operator, filter.Value))
                     return false;

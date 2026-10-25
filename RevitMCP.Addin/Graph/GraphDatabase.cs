@@ -632,11 +632,31 @@ public sealed class GraphDatabase : IDisposable
         return "(" + string.Join(" OR ", instances.Select((id, i) => Range(id, i))) + ")";
     }
 
+    /// <summary>
+    /// A filter on one key of the <c>extra</c> JSON (#109), exact and case-insensitive. The value <c>none</c> (or
+    /// <c>-</c>) matches nodes without the key: the main model for <c>option</c>, no phase for <c>phase</c>.
+    /// </summary>
+    private static void AddExtraEquals(List<string> clauses, List<(string Name, object Value)> parameters, string key, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return;
+        var trimmed = value!.Trim();
+        var path = "'$." + key + "'";
+        if (trimmed == "-" || trimmed.Equals("none", StringComparison.OrdinalIgnoreCase))
+        {
+            clauses.Add($"COALESCE(json_extract(extra, {path}), '') = ''");
+            return;
+        }
+        var name = "$extra_" + key;
+        clauses.Add($"json_extract(extra, {path}) = {name} COLLATE NOCASE");
+        parameters.Add((name, trimmed));
+    }
+
     /// <summary>Filtered, paginated node lookup. All filters are optional; matching is case-insensitive (ASCII).</summary>
     public PagedResult<GraphNode> Find(
         string? kind, string? category, string? level, string? workset, string? nameContains,
         int page, int pageSize, string? link = null,
-        string? param = null, string? paramValue = null, string? paramContains = null)
+        string? param = null, string? paramValue = null, string? paramContains = null,
+        string? phase = null, string? option = null)
     {
         if (page < 0) page = 0;
         if (pageSize <= 0) pageSize = QueryLimits.Default.DefaultPageSize;
@@ -669,6 +689,9 @@ public sealed class GraphDatabase : IDisposable
             clauses.Add(LinkClause(link!.Trim(), parameters));
         if (!string.IsNullOrWhiteSpace(param) || !string.IsNullOrWhiteSpace(paramValue) || !string.IsNullOrWhiteSpace(paramContains))
             clauses.Add(ParamClause(param, paramValue, paramContains, parameters));
+        // #109: the created phase and design option are routing hints in extra.
+        AddExtraEquals(clauses, parameters, GraphSchema.ExtraPhase, phase);
+        AddExtraEquals(clauses, parameters, GraphSchema.ExtraOption, option);
 
         var where =clauses.Count == 0 ? string.Empty : " WHERE " + string.Join(" AND ", clauses);
 
@@ -862,6 +885,8 @@ public sealed class GraphDatabase : IDisposable
         s.ElementsByCategory = GroupCount(ElementGroupSql("category"), topN);
         s.ElementsByLevel = GroupCount(ElementGroupSql("level"), topN);
         s.ElementsByWorkset = GroupCount(ElementGroupSql("workset"), topN);
+        // #109: created phase from the extra hint ('' = no phase / built before schema 3).
+        s.ElementsByPhase = GroupCount(ElementGroupSql($"json_extract(extra, '$.{GraphSchema.ExtraPhase}')"), topN);
 
         using (var cmd = _connection.CreateCommand())
         {

@@ -5,6 +5,7 @@ using Autodesk.Revit.DB.Architecture;
 using Autodesk.Revit.DB.Electrical;
 using Autodesk.Revit.DB.Mechanical;
 using Newtonsoft.Json.Linq;
+using RevitMCP.Addin.ModelState;
 
 namespace RevitMCP.Addin.Graph;
 
@@ -84,7 +85,9 @@ public static class RevitGraphExtractor
         private readonly Dictionary<string, GraphNode> _nodes = new(StringComparer.Ordinal);
         private readonly HashSet<(string Src, string Dst, string Rel, string Owner)> _edges = new();
         private readonly Dictionary<long, string> _levelNames = new();
-        private readonly Dictionary<int, string> _worksetNames = new();
+        // #109: workset names (cached) and phase/option names come from the shared ModelState readers.
+        private readonly WorksetNameReader _worksets;
+        private readonly ElementModelStateReader _states;
         private readonly HashSet<string> _userWorksetIds = new(StringComparer.Ordinal);
         private readonly Dictionary<string, FamilyInstance> _panels = new(StringComparer.Ordinal);
         private readonly bool _isWorkshared;
@@ -99,6 +102,8 @@ public static class RevitGraphExtractor
             _elementLimit = elementLimit;
             _subset = subset;
             try { _isWorkshared = doc.IsWorkshared; } catch { _isWorkshared = false; }
+            _worksets = new WorksetNameReader(doc);
+            _states = new ElementModelStateReader(doc);
         }
 
         public GraphExtractionResult Run()
@@ -158,7 +163,7 @@ public static class RevitGraphExtractor
             if (!_isWorkshared) return;
             foreach (var workset in new FilteredWorksetCollector(_doc).OfKind(WorksetKind.UserWorkset))
             {
-                _worksetNames[workset.Id.IntegerValue] = workset.Name;
+                _worksets.Remember(workset.Id, workset.Name);
                 _userWorksetIds.Add(GraphSchema.WorksetIdPrefix + workset.Id.IntegerValue.ToString(CultureInfo.InvariantCulture));
             }
         }
@@ -212,7 +217,7 @@ public static class RevitGraphExtractor
             foreach (var workset in new FilteredWorksetCollector(_doc).OfKind(WorksetKind.UserWorkset))
             {
                 var id = GraphSchema.WorksetIdPrefix + workset.Id.IntegerValue.ToString(CultureInfo.InvariantCulture);
-                _worksetNames[workset.Id.IntegerValue] = workset.Name;
+                _worksets.Remember(workset.Id, workset.Name);
                 _userWorksetIds.Add(id);
                 AddNode(new GraphNode
                 {
@@ -371,10 +376,12 @@ public static class RevitGraphExtractor
                 Category = panel.Category?.Name ?? "Electrical Equipment",
                 Level = levelName,
                 Workset = WorksetName(panel),
-                Extra = Extra(
+                Extra = Extra(new (string Key, object? Value)[]
+                {
                     ("family", SafeString(() => panel.Symbol?.Family?.Name)),
                     ("type", SafeString(() => panel.Symbol?.Name)),
-                    ("panelName", SafeString(() => panel.get_Parameter(BuiltInParameter.RBS_ELEC_PANEL_NAME)?.AsString())))
+                    ("panelName", SafeString(() => panel.get_Parameter(BuiltInParameter.RBS_ELEC_PANEL_NAME)?.AsString()))
+                }.Concat(ModelStateHints(panel)).ToArray())
             }), panel);
             if (levelId != null) AddEdge(id, Id(levelId), GraphSchema.Rels.OnLevel, owner: id);
             AddWorksetEdge(panel, id);
@@ -506,14 +513,17 @@ public static class RevitGraphExtractor
             string? extra;
             if (element is FamilyInstance fi)
             {
-                extra = Extra(
+                extra = Extra(new (string Key, object? Value)[]
+                {
                     ("family", SafeString(() => fi.Symbol?.Family?.Name)),
-                    ("type", SafeString(() => fi.Symbol?.Name)));
+                    ("type", SafeString(() => fi.Symbol?.Name))
+                }.Concat(ModelStateHints(element)).ToArray());
             }
             else
             {
                 var typeElem = TypeOf(element);
-                extra = Extra(("type", typeElem != null ? SafeName(typeElem) : null));
+                extra = Extra(new (string Key, object? Value)[] { ("type", typeElem != null ? SafeName(typeElem) : null) }
+                    .Concat(ModelStateHints(element)).ToArray());
             }
 
             AttachParams(AddNode(new GraphNode
@@ -1024,24 +1034,14 @@ public static class RevitGraphExtractor
             catch { }
         }
 
-        private string WorksetName(Element element)
+        private string WorksetName(Element element) => _isWorkshared ? _worksets.NameOf(element) : string.Empty;
+
+        /// <summary>#109 routing hints: the phase the element was created in and its design option (empty → left out).</summary>
+        private (string Key, object? Value)[] ModelStateHints(Element element) => new (string Key, object? Value)[]
         {
-            if (!_isWorkshared) return string.Empty;
-            try
-            {
-                var worksetId = element.WorksetId;
-                if (worksetId == null) return string.Empty;
-                if (_worksetNames.TryGetValue(worksetId.IntegerValue, out var cached)) return cached;
-                var workset = _doc.GetWorksetTable().GetWorkset(worksetId);
-                var name = workset?.Name ?? string.Empty;
-                _worksetNames[worksetId.IntegerValue] = name;
-                return name;
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
+            ("phase", _states.PhaseName(element, BuiltInParameter.PHASE_CREATED)),
+            ("option", ElementModelStateReader.DesignOptionName(element))
+        };
 
         private (string Name, ElementId? Id) LevelOf(Element element)
         {

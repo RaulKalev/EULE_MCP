@@ -201,6 +201,68 @@ public class GraphDatabaseTests
         Assert.Equal(1, db.Find("PANEL", null, null, null, null, 0, 10).TotalAvailable);
     }
 
+    // ── #109: phase / design option routing hints ───────────────────────────────────────
+
+    private static GraphDatabase BuildPhased()
+    {
+        var db = GraphDatabase.CreateInMemory();
+        var nodes = new List<GraphNode>
+        {
+            N("100", "element", "Socket old", "Electrical Fixtures", "L1", "", "{\"family\":\"F\",\"phase\":\"Olemasolev\"}"),
+            N("101", "element", "Socket new", "Electrical Fixtures", "L1", "", "{\"family\":\"F\",\"phase\":\"Uus\"}"),
+            N("102", "element", "Socket new A", "Electrical Fixtures", "L1", "", "{\"phase\":\"Uus\",\"option\":\"Variant A\"}"),
+            N("103", "panel", "P9", "Electrical Equipment", "L1", "", "{\"panelName\":\"P9\",\"phase\":\"uus\"}"),
+            N("104", "element", "Legacy node", "Walls", "L1", "", null),
+            N("105", "type", "T", "Electrical Fixtures", "", "", "{\"family\":\"F\"}")
+        };
+        db.WriteGraph(nodes, new List<GraphEdge>(), new Dictionary<string, string>
+        {
+            [GraphSchema.MetaKeys.SchemaVersion] = GraphSchema.SchemaVersion.ToString()
+        });
+        return db;
+    }
+
+    [Fact]
+    public void SchemaVersion_IsBumpedForThePhaseHints()
+    {
+        // Graphs built before #109 have no phase/option hints: version 2 reads as stale and is rebuilt.
+        Assert.True(GraphSchema.SchemaVersion >= 3);
+        Assert.Equal("phase", GraphSchema.ExtraPhase);
+        Assert.Equal("option", GraphSchema.ExtraOption);
+    }
+
+    [Fact]
+    public void Find_ByPhase_MatchesTheCreatedPhaseHint_CaseInsensitive()
+    {
+        using var db = BuildPhased();
+        var created = db.Find("element", null, null, null, null, 0, 10, phase: "UUS");
+        Assert.Equal(new[] { "101", "102", "103" }, created.Items.Select(n => n.Id).OrderBy(x => x));
+        Assert.Equal(1, db.Find("element", "Electrical Fixtures", null, null, null, 0, 10, phase: "Olemasolev").TotalAvailable);
+        Assert.Equal(0, db.Find(null, null, null, null, null, 0, 10, phase: "Lammutus").TotalAvailable);
+    }
+
+    [Fact]
+    public void Find_ByOption_AndNoneMeansWithoutTheHint()
+    {
+        using var db = BuildPhased();
+        Assert.Equal(new[] { "102" }, db.Find(null, null, null, null, null, 0, 10, option: "variant a").Items.Select(n => n.Id));
+        var mainModel = db.Find("element", null, null, null, null, 0, 10, option: "none");
+        Assert.Equal(new[] { "100", "101", "103", "104" }, mainModel.Items.Select(n => n.Id).OrderBy(x => x));
+        Assert.Equal(new[] { "104" }, db.Find("element", null, null, null, null, 0, 10, phase: "none").Items.Select(n => n.Id));
+        Assert.Equal(new[] { "102" }, db.Find("element", null, null, null, null, 0, 10, phase: "Uus", option: "Variant A").Items.Select(n => n.Id));
+    }
+
+    [Fact]
+    public void Summarize_CountsElementsByPhase()
+    {
+        using var db = BuildPhased();
+        var s = db.Summarize();
+        var byPhase = s.ElementsByPhase.ToDictionary(c => c.Key, c => c.Count);
+        Assert.Equal(1, byPhase["Olemasolev"]);
+        Assert.Equal(1, byPhase[""]);   // the node without a hint
+        Assert.Equal(3, byPhase.Where(p => p.Key.Equals("uus", StringComparison.OrdinalIgnoreCase)).Sum(p => p.Value));
+    }
+
     [Fact]
     public void FindPath_FindsShortestUndirectedPath()
     {

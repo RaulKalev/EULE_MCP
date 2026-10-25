@@ -10,7 +10,7 @@ namespace RevitMCP.Addin.Tools;
 public class GetElementsInfoTool : IRevitMcpTool
 {
     public string Name => "revit_get_elements_info";
-    public string Description => "Returns structured element info and selected parameter values for selection, explicit element IDs, or category+filter queries. More controlled than revit_get_element_parameters.";
+    public string Description => "Returns structured element info and selected parameter values for selection, explicit element IDs, or category+filter queries. More controlled than revit_get_element_parameters. includeModelState=true adds phaseCreated, phaseDemolished, designOption and workset; includeOwnership=true adds ownedBy.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Elements;
 
@@ -41,7 +41,9 @@ public class GetElementsInfoTool : IRevitMcpTool
             TruncateStringLength = ToolArguments.GetInt(request.Arguments, "truncateStringLength", 0),
             SummaryOnly = ToolArguments.GetBool(request.Arguments, "summaryOnly", false),
             IncludeTags = ToolArguments.GetBool(request.Arguments, "includeTags", false),
-            CompactResponse = ToolArguments.GetBool(request.Arguments, "compact", false)
+            CompactResponse = ToolArguments.GetBool(request.Arguments, "compact", false),
+            IncludeModelState = ToolArguments.GetBool(request.Arguments, "includeModelState", false),
+            IncludeOwnership = ToolArguments.GetBool(request.Arguments, "includeOwnership", false)
         };
 
         if (!opts.SummaryOnly &&

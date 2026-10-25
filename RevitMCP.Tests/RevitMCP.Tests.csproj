@@ -248,4 +248,12 @@
     <!-- Project Village: only the add-in-side graph reader is linked here; the rest of the module comes from the RevitMCP.Village project reference above. -->
     <Compile Include="..\RevitMCP.Addin\Village\VillageGraphReader.cs" Link="Village\VillageGraphReader.cs" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- #109 model state: phase write planning, audit thresholds, audit report models and page (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\ModelState\PhaseSetPlanner.cs" Link="ModelState\PhaseSetPlanner.cs" />
+    <Compile Include="..\RevitMCP.Addin\ModelState\AuditRules.cs" Link="ModelState\AuditRules.cs" />
+    <Compile Include="..\RevitMCP.Addin\ModelState\AuditModels.cs" Link="ModelState\AuditModels.cs" />
+    <Compile Include="..\RevitMCP.Addin\ModelState\AuditReportHtml.cs" Link="ModelState\AuditReportHtml.cs" />
+  </ItemGroup>
 </Project>
