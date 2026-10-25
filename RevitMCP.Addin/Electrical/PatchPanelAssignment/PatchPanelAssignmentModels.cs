@@ -8,6 +8,8 @@ public sealed class DeviceConnectorInput
     public int ConnectorId { get; init; }
     public bool IsCircuited { get; init; }
     public long? ExistingCircuitId { get; init; }
+    /// <summary>Every circuit this connector is on; one connector can report several.</summary>
+    public List<long> ExistingCircuitIds { get; init; } = new();
     public string? ExistingPanelName { get; init; }
 }
 
@@ -18,6 +20,11 @@ public sealed class DeviceInput
     public double X { get; init; }
     public double Y { get; init; }
     public List<DeviceConnectorInput> Connectors { get; init; } = new();
+    /// <summary>
+    /// Circuits of the target system type the device is on at device level (any connector), as Revit lists them.
+    /// A circuit here that no connector reports means the free connectors cannot be trusted.
+    /// </summary>
+    public List<long> DeviceCircuitIds { get; init; } = new();
 }
 
 public sealed class PanelInput

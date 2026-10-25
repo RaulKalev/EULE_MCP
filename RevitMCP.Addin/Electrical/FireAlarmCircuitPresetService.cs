@@ -27,6 +27,8 @@ public static class FireAlarmCircuitPresetService
         public string LoopName { get; set; } = "";
         public string LoopKind { get; set; } = "Unknown";
         public int DeviceCount { get; set; }
+        /// <summary>Devices whose type is a sounder or flasher (see <see cref="FireAlarmLoopClassifier.IsSounder"/>).</summary>
+        public int SounderCount { get; set; }
         public List<LevelSummary> Levels { get; set; } = [];
         public List<TypeSummary> DeviceTypeSummary { get; set; } = [];
         public CircuitInfo? CircuitInfo { get; set; }
@@ -123,7 +125,7 @@ public static class FireAlarmCircuitPresetService
             string desc      = ReadParam(e, typeElem, descriptionParameterName);
             string levelName = GetLevelName(doc, e);
 
-            if (string.IsNullOrWhiteSpace(loopNum)) loopNum = "(No Loop)";
+            if (string.IsNullOrWhiteSpace(loopNum)) loopNum = FireAlarmLoopClassifier.NoLoopName;
 
             if (!allowDeviceNumberXxx && devNum.Equals("XXX", StringComparison.OrdinalIgnoreCase))
                 continue; // skip unassigned if not allowed
@@ -229,6 +231,7 @@ public static class FireAlarmCircuitPresetService
                 LoopName = loopName,
                 LoopKind = loopKind,
                 DeviceCount = loopDevices.Count,
+                SounderCount = FireAlarmLoopClassifier.CountSounders(deviceTypes),
                 Levels = levelSummary,
                 DeviceTypeSummary = typeSummary,
                 CircuitInfo = circInfo,
