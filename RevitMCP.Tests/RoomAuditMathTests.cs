@@ -51,6 +51,90 @@ public class RoomAuditMathTests
         Assert.Equal(0, RoomAuditMath.LocateRoom(rooms, new P2(3998, 2000), 300));
     }
 
+    private static RoomCandidate DefaultHeightRoom(string number, double floorZ, double? storeyTop) => new()
+    {
+        Number = number,
+        Name = number,
+        AreaM2 = 16,
+        FloorZMm = floorZ,
+        HeightMm = 2438, // Revit's default Limit Offset
+        LevelElevationMm = floorZ,
+        StoreyTopMm = storeyTop,
+        Polygon = Rect(0, 0, 4000, 4000)
+    };
+
+    [Fact]
+    public void NextStoreyAbove_SkipsLevelsTooCloseAboveTheFloor()
+    {
+        double[] levels = [0, 1500, 4000, 8000];
+        Assert.Equal(4000, RoomAuditMath.NextStoreyAboveMm(0, levels));      // 1500 is too close above to be a storey
+        Assert.Equal(8000, RoomAuditMath.NextStoreyAboveMm(4000, levels));
+        Assert.Null(RoomAuditMath.NextStoreyAboveMm(8000, levels));
+    }
+
+    [Fact]
+    public void LocateRoom_CeilingDeviceAboveADefaultHeightRoom_IsInTheRoom()
+    {
+        // H3: a smoke detector at 3200 mm in a room whose height is the default 2438 mm.
+        var withStorey = new[] { DefaultHeightRoom("13", 0, storeyTop: 4000) };
+        Assert.Equal(0, RoomAuditMath.LocateRoom(withStorey, new P2(2000, 2000), 3200, levelElevationMm: 0));
+        Assert.Equal(0, RoomAuditMath.LocateRoom(withStorey, new P2(2000, 2000), 3900));
+
+        // No storey above known: the room top + 1.5 m allowance still takes the ceiling.
+        var noStorey = new[] { DefaultHeightRoom("13", 0, storeyTop: null) };
+        Assert.Equal(0, RoomAuditMath.LocateRoom(noStorey, new P2(2000, 2000), 3200));
+        Assert.Equal(-1, RoomAuditMath.LocateRoom(noStorey, new P2(2000, 2000), 4500));
+    }
+
+    [Fact]
+    public void LocateRoom_DeviceOnTheFloorAbove_IsNotInTheGroundFloorRoom()
+    {
+        // Only the ground floor's rooms are indexed (levelName filter); the storey above starts at 4000.
+        var rooms = new[] { DefaultHeightRoom("13", 0, storeyTop: 4000) };
+        Assert.Equal(-1, RoomAuditMath.LocateRoom(rooms, new P2(2000, 2000), 4000 + 1200, levelElevationMm: 4000));
+
+        // With both storeys indexed, a device standing on the upper floor goes to the upper room.
+        var both = new[] { DefaultHeightRoom("13", 0, storeyTop: 4000), DefaultHeightRoom("213", 4000, storeyTop: 8000) };
+        Assert.Equal(1, RoomAuditMath.LocateRoom(both, new P2(2000, 2000), 4000, levelElevationMm: 4000));
+        Assert.Equal(1, RoomAuditMath.LocateRoom(both, new P2(2000, 2000), 4000));
+        Assert.Equal(1, RoomAuditMath.LocateRoom(both, new P2(2000, 2000), 5200, levelElevationMm: 4000));
+    }
+
+    [Fact]
+    public void LocateRoom_DeviceJustBelowTheFloor_BelongsToItsLevel()
+    {
+        var both = new[] { DefaultHeightRoom("13", 0, storeyTop: 4000), DefaultHeightRoom("213", 4000, storeyTop: 8000) };
+
+        // A ceiling detector under the slab of the floor above, placed on the ground floor level.
+        Assert.Equal(0, RoomAuditMath.LocateRoom(both, new P2(2000, 2000), 3800, levelElevationMm: 0));
+        // Without a level the room whose floor is below the point wins over the one within slack above.
+        Assert.Equal(0, RoomAuditMath.LocateRoom(both, new P2(2000, 2000), 3800));
+        // A floor box 50 mm below the upper floor finish, placed on the upper level.
+        Assert.Equal(1, RoomAuditMath.LocateRoom(both, new P2(2000, 2000), 3950, levelElevationMm: 4000));
+
+        // A ground floor device just below the room floor (within the slack) is still in the room…
+        var ground = new[] { DefaultHeightRoom("13", 0, storeyTop: 4000) };
+        Assert.Equal(0, RoomAuditMath.LocateRoom(ground, new P2(2000, 2000), -200));
+        // …but not one deep below it.
+        Assert.Equal(-1, RoomAuditMath.LocateRoom(ground, new P2(2000, 2000), -500));
+    }
+
+    [Fact]
+    public void OnStorey_KeepsTheLevelsDevicesAndDropsOtherStoreys()
+    {
+        // H4: levelName filters the rooms to the ground floor; devices must follow.
+        var rooms = new[] { DefaultHeightRoom("13", 0, storeyTop: 4000), DefaultHeightRoom("14", 0, storeyTop: 4000) };
+
+        Assert.True(RoomAuditMath.OnStorey(rooms, 1200, 0));        // wall device on the level
+        Assert.True(RoomAuditMath.OnStorey(rooms, 3200, 0));        // ceiling detector above the room height
+        Assert.True(RoomAuditMath.OnStorey(rooms, 3200, null));     // same, without a level
+        Assert.True(RoomAuditMath.OnStorey(rooms, 3800, 4000));     // hung under the upper slab: physically on this storey
+        Assert.False(RoomAuditMath.OnStorey(rooms, 5200, 4000));    // HDMI outlet on the second floor
+        Assert.False(RoomAuditMath.OnStorey(rooms, 4000, null));    // on the upper floor's finish
+        Assert.False(RoomAuditMath.OnStorey(rooms, -3000, -3600));  // basement
+        Assert.False(RoomAuditMath.OnStorey([], 1200, 0));
+    }
+
     [Theory]
     [InlineData(0, 90, 90)]
     [InlineData(350, 10, 20)]

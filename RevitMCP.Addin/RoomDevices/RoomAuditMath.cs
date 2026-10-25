@@ -11,6 +11,13 @@ public sealed class RoomCandidate
     public RoomPolygon Polygon { get; set; } = new();
     public double FloorZMm { get; set; }
     public double? HeightMm { get; set; }
+    /// <summary>Elevation of the host level the room stands on; null when unknown.</summary>
+    public double? LevelElevationMm { get; set; }
+    /// <summary>
+    /// Floor of the next storey above the room (see <see cref="RoomAuditMath.NextStoreyAboveMm"/>);
+    /// null when there is none or it is unknown.
+    /// </summary>
+    public double? StoreyTopMm { get; set; }
 }
 
 /// <summary>One per-room requirement: rooms matching the filter need min…max devices of a code.</summary>
@@ -97,34 +104,99 @@ public static class RoomAuditMath
     public const double BoundaryToleranceMm = 5;
 
     /// <summary>
-    /// Index of the room containing the point: plan inside the footprint (or within
-    /// <see cref="BoundaryToleranceMm"/> of its edge) and z between the room floor and its top
-    /// (height or 6 m when unknown), with <see cref="VerticalSlackMm"/> slack. A room that strictly
-    /// contains the point beats one that only touches it; among equals the highest floor at or below
-    /// z wins. -1 if none.
+    /// Allowance above the room's own top when the next storey is unknown, as in
+    /// revit_get_linked_elements_in_room: Revit's default room height (2438 mm) is below most ceilings,
+    /// so ceiling devices sit above it.
     /// </summary>
-    public static int LocateRoom(IReadOnlyList<RoomCandidate> rooms, P2 point, double zMm)
+    public const double CeilingAllowanceMm = 1500;
+
+    /// <summary>A level less than this above a room floor is not the next storey (e.g. a ceiling reference level).</summary>
+    public const double MinStoreyHeightMm = 2000;
+
+    /// <summary>Two level elevations closer than this are the same level.</summary>
+    public const double LevelMatchToleranceMm = 1;
+
+    /// <summary>
+    /// Floor of the next storey above <paramref name="floorZMm"/>: the lowest of
+    /// <paramref name="storeyElevationsMm"/> at least <see cref="MinStoreyHeightMm"/> above it; null when none.
+    /// </summary>
+    public static double? NextStoreyAboveMm(double floorZMm, IEnumerable<double> storeyElevationsMm)
+    {
+        double? next = null;
+        foreach (var e in storeyElevationsMm)
+            if (e >= floorZMm + MinStoreyHeightMm && (next == null || e < next)) next = e;
+        return next;
+    }
+
+    /// <summary>
+    /// Highest z that still counts as in the room: up to the next storey's floor when it is known
+    /// (so ceiling devices above a default-height room count), else the room top +
+    /// <see cref="CeilingAllowanceMm"/>; never below the room top + <see cref="VerticalSlackMm"/>.
+    /// The room top is floor + height, or the next storey (6 m when that is unknown too) without a height.
+    /// </summary>
+    public static double VerticalTopMm(RoomCandidate room)
+    {
+        var top = room.FloorZMm + (room.HeightMm ?? (room.StoreyTopMm - room.FloorZMm) ?? 6000);
+        return Math.Max(top + VerticalSlackMm, room.StoreyTopMm ?? top + CeilingAllowanceMm);
+    }
+
+    /// <summary>
+    /// Index of the room containing the point: plan inside the footprint (or within
+    /// <see cref="BoundaryToleranceMm"/> of its edge) and z from the room floor − <see cref="VerticalSlackMm"/>
+    /// up to <see cref="VerticalTopMm"/>. Where several rooms qualify (rooms of two storeys overlap
+    /// near a slab), a room on the device's own level (<paramref name="levelElevationMm"/>) wins, then one
+    /// that strictly contains the point in plan, then one whose floor is at or below z, then the highest floor.
+    /// -1 if none.
+    /// </summary>
+    public static int LocateRoom(IReadOnlyList<RoomCandidate> rooms, P2 point, double zMm, double? levelElevationMm = null)
     {
         var best = -1;
-        var bestStrict = false;
+        (bool Level, bool Strict, bool Above, double Floor) bestKey = default;
         for (int i = 0; i < rooms.Count; i++)
         {
             var r = rooms[i];
-            var top = r.FloorZMm + (r.HeightMm ?? 6000);
-            if (zMm < r.FloorZMm - VerticalSlackMm || zMm > top + VerticalSlackMm) continue;
+            if (zMm < r.FloorZMm - VerticalSlackMm || zMm > VerticalTopMm(r)) continue;
 
             var strict = RoomGeometryMath.Contains(r.Polygon, point);
             if (!strict && RoomGeometryMath.DistanceToBoundary(r.Polygon, point) > BoundaryToleranceMm) continue;
 
-            var better = best < 0
-                || (strict && !bestStrict)
-                || (strict == bestStrict && r.FloorZMm > rooms[best].FloorZMm);
-            if (!better) continue;
+            var key = (
+                Level: levelElevationMm != null && r.LevelElevationMm != null &&
+                       Math.Abs(levelElevationMm.Value - r.LevelElevationMm.Value) < LevelMatchToleranceMm,
+                Strict: strict,
+                Above: zMm >= r.FloorZMm,
+                Floor: r.FloorZMm);
+            if (best >= 0 && !Better(key, bestKey)) continue;
             best = i;
-            bestStrict = strict;
+            bestKey = key;
         }
         return best;
+
+        static bool Better((bool Level, bool Strict, bool Above, double Floor) a, (bool Level, bool Strict, bool Above, double Floor) b) =>
+            a.Level != b.Level ? a.Level
+            : a.Strict != b.Strict ? a.Strict
+            : a.Above != b.Above ? a.Above
+            : a.Floor > b.Floor;
     }
+
+    /// <summary>
+    /// Whether a device belongs to the storey of <paramref name="rooms"/> (the rooms of one level, for
+    /// a levelName filter): its level is one of the rooms' levels, or else its z lies from the lowest
+    /// room floor − <see cref="VerticalSlackMm"/> up to (not including) the highest <see cref="VerticalTopMm"/>.
+    /// </summary>
+    public static bool OnStorey(IReadOnlyList<RoomCandidate> rooms, double zMm, double? levelElevationMm)
+    {
+        if (rooms.Count == 0) return false;
+        if (levelElevationMm != null && rooms.Any(r => r.LevelElevationMm != null &&
+                Math.Abs(r.LevelElevationMm.Value - levelElevationMm.Value) < LevelMatchToleranceMm))
+            return true;
+        var bottom = rooms.Min(r => r.FloorZMm) - VerticalSlackMm;
+        var top = rooms.Max(VerticalTopMm);
+        return zMm >= bottom && zMm < top;
+    }
+
+    /// <summary>Number of devices listed as outside every room; the total is always reported.</summary>
+    public const int MaxListedOutsideRooms = 50;
 
     // ── Rotation ──────────────────────────────────────────────────────────────
 
