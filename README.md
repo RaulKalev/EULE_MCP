@@ -37,6 +37,7 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | [Jobs: unattended work](docs/jobs.md) | 6 | Submit a whole job of tool calls with result binding; one approval, the connector runs it step by step between your own work, stops on failures or new Revit errors, survives a restart and publishes a report page |
 | [Plans: one approval per job](docs/plans.md) | 4 | Submit a plan (tools, element ids, categories, limits), approve once, then write calls inside it run without prompts; status, close, per-session plan id |
 | [Checkpoints and change review](docs/checkpoints.md) | 6 | Revit model warnings, checkpoints before a batch of writes, what changed since (by tool or user, before/now values, moves, new warnings), compensating rollback with manual approval |
+| [Transforms and groups](docs/transforms-and-groups.md) | 11 | Mirror across a line drawn in a view, linear and radial arrays as copies or Revit arrays, list/create/ungroup/place groups; move, rotate and copy act on whole groups |
 | [Model graph (routing layer)](docs/model-graph.md) | 4 | Per-model SQLite graph of element ids and relationships: build, freshness status, structured queries (neighbors/find/path/subtree), summary |
 
 ## Supported environment
@@ -123,6 +124,7 @@ Important repository references:
 - [`docs/model-graph.md`](docs/model-graph.md) — per-model routing graph: find element ids cheaply before querying the live model
 - [`docs/move-elements.md`](docs/move-elements.md) — moving existing elements onto exact coordinates or by a displacement, including Detail Items and other view-specific elements
 - [`docs/copy-elements.md`](docs/copy-elements.md) — copying any element Revit can copy, within a view, across views or in the model
+- [`docs/transforms-and-groups.md`](docs/transforms-and-groups.md) — mirroring across a plane, linear and radial arrays, and creating, ungrouping, placing and moving whole groups
 - [`docs/place-on-face.md`](docs/place-on-face.md) — placing face-based families on wall, ceiling and floor faces found from points, in the host model or in links
 - [`docs/place-from-cad.md`](docs/place-from-cad.md) — placing families at locations marked in an imported DWG, and reconstructing fixtures from loose DWG line work
 - [`docs/skills.md`](docs/skills.md) — company skills, project overrides, and the skill runner
