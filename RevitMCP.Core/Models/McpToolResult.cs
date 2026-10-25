@@ -11,7 +11,8 @@ public class McpToolResult
     /// tool_execution_failed | transaction_failed | validation_failed | unknown_tool |
     /// checkpoint_not_found | checkpoint_other_document | snapshot_too_large (checkpoints, #98) |
     /// plan_not_found | plan_not_active | plan_envelope_violated (plans, #99; plan_exhausted is a warning only) |
-    /// job_not_found | job_not_resumable | job_step_invalid (jobs, #100)
+    /// job_not_found | job_not_resumable | job_step_invalid (jobs, #100) |
+    /// document_already_open | not_workshared | owned_by_other | active_document_required (worker document, #101)
     /// Null means a normal success or generic failure — inspect Success + Message.
     /// </summary>
     public string? Status { get; set; }

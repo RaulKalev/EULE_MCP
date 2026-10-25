@@ -30,7 +30,7 @@ public static class BridgeToolGroups
         ["cad"] = "DWG/CAD imports, overrides and placement from CAD",
         ["pages"] = "Model pages: publish a generated HTML report as a local page whose rows select elements in Revit, show live parameter values and can be edited",
         ["memory"] = "Shared memory: list, review page, forget, weekly consolidation (recall and remember are in core)",
-        ["documents"] = "Open documents: activate, reload/remove DWG/IFC/RVT links, link visibility, save and sync with central",
+        ["documents"] = "Open documents: open your own local copy, close, activate, worksets, ownership/checkout/relinquish, reload latest, reload/remove DWG/IFC/RVT links, link visibility, save and sync with central",
         ["autonomy"] = "Checkpoints, Revit model warnings, what changed since a checkpoint (change diff) and rollback; plans (one approval for several write steps); jobs the connector runs by itself",
         ["skills"] = "Skill builder and skill runs",
         ["office"] = "Configuration, files, Excel, standards lookup, delivery checks, monthly usage report"
@@ -77,7 +77,9 @@ public static class BridgeToolGroups
         {
             "revit_activate_document", "revit_preview_reload_links_from", "revit_reload_links_from", "revit_preview_remove_links",
             "revit_remove_links", "revit_preview_set_link_visibility", "revit_set_link_visibility", "revit_save_document",
-            "revit_sync_with_central"
+            "revit_sync_with_central",
+            "revit_open_document", "revit_close_document", "revit_list_worksets", "revit_preview_set_workset", "revit_set_workset",
+            "revit_get_ownership", "revit_checkout_elements", "revit_relinquish", "revit_reload_latest"
         }),
         ("pages", new[] { "revit_publish_page", "revit_list_pages" }),
         ("autonomy", new[]

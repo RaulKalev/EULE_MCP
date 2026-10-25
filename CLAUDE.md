@@ -63,8 +63,14 @@ reviews — point them to it instead of repeating it.
 `revit_list_open_documents` lists the open project documents and their DWG/IFC/RVT links. The `documents` group
 (`revit_reload_links_from`, `revit_remove_links`, `revit_set_link_visibility`, `revit_save_document`,
 `revit_sync_with_central`, each with a preview where it changes the model) takes `document` (title or path) and works
-on non-active documents; approvals bind to that target document. Other tools still act on the active document —
-switch with `revit_activate_document` when needed.
+on non-active documents; approvals bind to that target document. So do the `core` and `query` reads
+(`revit_get_elements_info`, `revit_find_elements_by_parameter`, …; see [`docs/worker-document.md`](docs/worker-document.md)
+for the migrated list); other tools still act on the active document — switch with `revit_activate_document` when
+needed. A UI-bound call (`useSelection`) on a non-active document returns `active_document_required`.
+
+To work beside the user instead of in their document, open your own local: `revit_open_document path=<central>`
+(a background `<central>_<user>_mcp.rvt`, never activated), then pass `document=<its title>` on every call, check out
+what you edit (`revit_get_ownership`, `revit_checkout_elements`), sync, `revit_relinquish` and `revit_close_document`.
 
 ## PanelSchematics plugin data
 
