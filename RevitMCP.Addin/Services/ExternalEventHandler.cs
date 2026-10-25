@@ -447,8 +447,11 @@ public class ExternalEventHandler : IExternalEventHandler
         var enteredSlot = false;
         try
         {
-            await _backgroundSlots.WaitAsync(item.CancellationToken).ConfigureAwait(false);
-            enteredSlot = true;
+            if (tool is not IWaitingMcpTool)
+            {
+                await _backgroundSlots.WaitAsync(item.CancellationToken).ConfigureAwait(false);
+                enteredSlot = true;
+            }
             item.CancellationToken.ThrowIfCancellationRequested();
 
             // Marker contract: background tools must not access the UIApplication.

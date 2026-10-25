@@ -53,6 +53,8 @@ public class ToolSearchIndexTests
     [InlineData("undo changes since checkpoint", "revit_preview_checkpoint_rollback")]
     [InlineData("one approval for several write steps plan", "revit_plan_submit")]
     [InlineData("plan status remaining calls", "revit_plan_status")]
+    [InlineData("run a multi-step job unattended", "revit_job_submit")]
+    [InlineData("job progress status", "revit_job_status")]
     public void IntentFindsTheTool_InTheTopThree(string query, string expected) =>
         Assert.Contains(expected, Top(query));
 

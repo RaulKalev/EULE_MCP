@@ -1,0 +1,43 @@
+{
+  "Label": "jobs-before",
+  "Model": "",
+  "StartedAt": "2026-10-25 16:52:53 \u002B02:00",
+  "BridgePath": "C:\\Users\\mibil\\AppData\\Local\\Temp\\claude\\C--Users-mibil-Documents-AntigravityGit-EULE-MCP--claude-worktrees-open-github-issues-40c955\\dcec02e3-5062-4b7a-bac1-5f833bc4047e\\scratchpad\\base100\\RevitMCP.Bridge\\bin\\Release\\net8.0\\RevitMCP.Bridge.exe",
+  "Schemas": [
+    {
+      "Profile": "full",
+      "ToolCount": 285,
+      "SchemaBytes": 375930,
+      "SchemaTokens": 93983,
+      "InstructionTokens": 659,
+      "Error": null
+    },
+    {
+      "Profile": "core",
+      "ToolCount": 21,
+      "SchemaBytes": 24515,
+      "SchemaTokens": 6129,
+      "InstructionTokens": 659,
+      "Error": null
+    },
+    {
+      "Profile": "query",
+      "ToolCount": 38,
+      "SchemaBytes": 41016,
+      "SchemaTokens": 10254,
+      "InstructionTokens": 659,
+      "Error": null
+    },
+    {
+      "Profile": "read-only",
+      "ToolCount": 194,
+      "SchemaBytes": 240298,
+      "SchemaTokens": 60075,
+      "InstructionTokens": 659,
+      "Error": null
+    }
+  ],
+  "GraphBuild": null,
+  "GraphIncremental": null,
+  "Scenarios": []
+}

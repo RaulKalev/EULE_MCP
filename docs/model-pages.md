@@ -17,6 +17,9 @@ The first two are in the `pages` tool group; the server instructions point agent
 `revit_publish_page`. "Read-only" there means the model: the tool writes the page to
 `%LOCALAPPDATA%\RevitMCP\Pages`.
 
+Job reports ([jobs.md](jobs.md)) are model pages too: `revit_job_report` publishes them under the page id
+`job-<id>`, so re-publishing a job's report keeps its link.
+
 ## Markup
 
 The add-in adds a helper script and a default stylesheet to every page it serves. The agent only

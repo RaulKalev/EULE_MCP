@@ -124,7 +124,7 @@ public sealed class JobSubmitTool : IRevitMcpTool, IConditionalApprovalTool, IAp
 }
 
 /// <summary>revit_job_status (#100): progress, per-step results; waitSeconds long-polls until the job changes.</summary>
-public sealed class JobStatusTool : IRevitMcpTool, IBackgroundMcpTool
+public sealed class JobStatusTool : IRevitMcpTool, IWaitingMcpTool
 {
     public const int MaxWaitSeconds = 25;
 

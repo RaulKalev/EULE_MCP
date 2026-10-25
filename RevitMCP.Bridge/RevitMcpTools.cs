@@ -7294,4 +7294,100 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             Data = new { planId = now, previous }
         }));
     }
+
+    // ── Jobs: whole jobs run by the connector under one approval (#100) ──────────────────────
+
+    private const string JobStepsDescription =
+        "Ordered tool calls: [{\"tool\":\"revit_graph_query\", \"arguments\":{…}, \"bind\":{\"ids\":\"$.data.items[*].id\"}}, " +
+        "{\"tool\":\"revit_set_parameter\", \"title\":\"Set Mark\", \"arguments\":{\"elementIds\":\"{{ids}}\", \"parameterName\":\"Mark\", \"value\":\"A\"}}]. " +
+        "bind paths: .name, [n], [*], [:n], [?(@.key=='value')] into the result {success,status,message,data}; \"{{var}}\" as a whole " +
+        "string keeps arrays. Per step: continueOnError, optional (a refusal skips it). Max 200 steps.";
+
+    [McpServerTool(Name = "revit_job_submit"),
+     Description("For a multi-step task the user need not watch: submits the whole job (steps with result binding). After ONE approval the connector runs the steps by itself, one per Revit idle slot, while the user keeps working; the approval activates a plan (envelope; its tools default to the job's write tools) and a checkpoint. It stops on a failure, a new Revit error (stop.stopOnNewWarnings) or time, journals itself to disk (a Revit restart leaves it suspended) and publishes a report page when it ends. Steps outside the envelope or destructive steps (allowDestructiveSteps=true) wait for their own approval. Follow it with revit_job_status jobId=… waitSeconds=25.")]
+    public async Task<string> JobSubmit(
+        [Description("One line: what the job does (shown in the approval and the report).")] string title,
+        [Description(JobStepsDescription)] object[] steps,
+        [Description("Optional plan envelope (see revit_plan_submit); tools default to the steps' approval-gated write tools.")] object? envelope = null,
+        [Description("Optional {\"stopOnFailure\":true, \"stopOnNewWarnings\":\"error\"|\"any\"|\"none\", \"maxNewWarnings\":0, \"maxDurationMinutes\":120, \"maxConsecutiveBusy\":20}.")] object? stop = null,
+        [Description("Include destructive steps (they still wait for a manual approval when they run). Default false.")] bool allowDestructiveSteps = false,
+        [Description("auto (default: publish the report page when the job stops) | never.")] string report = "auto",
+        [Description("Open the report in the browser when it is first published. Default true.")] bool openReport = true,
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["title"] = title,
+            ["steps"] = ToJToken(steps),
+            ["envelope"] = ToJToken(envelope),
+            ["stop"] = ToJToken(stop),
+            ["allowDestructiveSteps"] = allowDestructiveSteps,
+            ["report"] = report,
+            ["openReport"] = openReport,
+            ["document"] = document ?? string.Empty
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_job_submit", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_job_status", ReadOnly = true),
+     Description("A job's state (running, waitingApproval, paused, suspended, completed, failed, cancelled), stop reason, progress, each step's state and message, new Revit warnings and the report url. waitSeconds (0–25) blocks until the job changes, so you poll once per change instead of every second. include=results adds the last steps' full results.")]
+    public async Task<string> JobStatus(
+        [Description("Job id from revit_job_submit.")] string jobId,
+        [Description("Wait up to this many seconds (max 25) for the job to change before answering.")] int waitSeconds = 0,
+        [Description("results: add the stored results of the last steps.")] string? include = null,
+        [Description("With include=results: how many steps (1–20, default 3).")] int results = 3,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["jobId"] = jobId,
+            ["waitSeconds"] = waitSeconds,
+            ["include"] = include ?? string.Empty,
+            ["results"] = results
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_job_status", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_job_list", ReadOnly = true),
+     Description("Lists jobs of this Revit session and earlier ones from their journals (suspended by a restart, finished): state, progress, document, whether it can be resumed, report url. removeJobId deletes a finished job's journal.")]
+    public async Task<string> JobList(
+        [Description("Delete this job's journal (not while it runs).")] string? removeJobId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["removeJobId"] = removeJobId ?? string.Empty };
+        return FormatResult(await pipeClient.SendAsync("revit_job_list", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_job_cancel", ReadOnly = true),
+     Description("Cancels a job after its running step (a step waiting for approval stops at once, its approval rejected). Nothing is undone: review with revit_checkpoint_diff, undo with revit_checkpoint_rollback. Publishes the report page.")]
+    public async Task<string> JobCancel(
+        [Description("Job id.")] string jobId,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["jobId"] = jobId };
+        return FormatResult(await pipeClient.SendAsync("revit_job_cancel", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_job_resume"),
+     Description("Resumes a paused, suspended (e.g. after a Revit restart) or failed job from its first unfinished step, with the variables bound so far. Needs one approval, which also covers the new plan a suspended job gets; the warnings that made it pause are accepted.")]
+    public async Task<string> JobResume(
+        [Description("Job id.")] string jobId,
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["jobId"] = jobId, ["document"] = document ?? string.Empty };
+        return FormatResult(await pipeClient.SendAsync("revit_job_resume", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_job_report", ReadOnly = true),
+     Description("Publishes (or re-publishes, same link) a job's handoff page: steps, changed elements with before → now values (live), added and deleted elements, new Revit warnings and how to undo; rows select elements in Revit. Works for a running job too (a snapshot).")]
+    public async Task<string> JobReport(
+        [Description("Job id.")] string jobId,
+        [Description("Open the page in the browser. Default false.")] bool open = false,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["jobId"] = jobId, ["open"] = open };
+        return FormatResult(await pipeClient.SendAsync("revit_job_report", args, cancellationToken));
+    }
 }
