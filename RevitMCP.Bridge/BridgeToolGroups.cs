@@ -21,7 +21,7 @@ public static class BridgeToolGroups
         ["query"] = "Broad element queries, parameter filters, grouping, query presets, parameter QA",
         ["edit"] = "Generic model edits: parameters, move/align/rotate/elevation, delete/duplicate/rename, family types, placement",
         ["devices"] = "Room geometry, device codes, room-based device placement and device/fire-alarm audits",
-        ["electrical"] = "Circuits, panels, wires/cables, voltage drop, fire alarm circuits, patch panels",
+        ["electrical"] = "Circuits, panels, wires/cables, voltage drop, fire alarm circuits, patch panels, cable tray and conduit runs (containment)",
         ["panelschematics"] = "PanelSchematics plugin (Kilbiskeemid): panel tables, empty rows, circuit row parameters, its Extensible Storage data",
         ["ifc"] = "IFC links, IFC spaces to rooms, linked-model element queries",
         ["views"] = "Views, sheets, schedules, title blocks, revisions, view templates",
@@ -90,6 +90,12 @@ public static class BridgeToolGroups
             "revit_job_submit", "revit_job_status", "revit_job_list", "revit_job_remove", "revit_job_cancel", "revit_job_resume", "revit_job_report"
         }),
         ("memory", new[] { "revit_memory_list", "revit_memory_page", "revit_memory_forget", "revit_memory_consolidate" }),
+        // MEP routing (#106): "preview" contains "view", and conduit/mep names match no electrical keyword.
+        ("electrical", new[]
+        {
+            "revit_list_mep_curve_types", "revit_preview_create_mep_run", "revit_create_mep_run", "revit_connect_mep_curves",
+            "revit_get_mep_run_summary"
+        }),
         ("office", new[] { "revit_usage_report" }),
         ("coordination", new[] { "revit_export_issues", "revit_merge_issue_reports" }));
 

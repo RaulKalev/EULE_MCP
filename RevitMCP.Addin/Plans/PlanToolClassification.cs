@@ -19,7 +19,9 @@ public static class PlanToolClassification
     private static readonly string[] CreatingPrefixes =
     {
         "revit_place_", "revit_create_", "revit_duplicate", "revit_copy_elements", "revit_draw_", "revit_annotate_",
-        "revit_retag", "revit_ensure_", "revit_run_skill", "revit_apply_selected_tag_template", "convert_ifc_spaces_to_rooms"
+        "revit_retag", "revit_ensure_", "revit_run_skill", "revit_apply_selected_tag_template", "convert_ifc_spaces_to_rooms",
+        // #106: joining two trays or conduits places an elbow, union or transition fitting.
+        "revit_connect_mep_"
     };
 
     private static readonly string[] ModifyingPrefixes =
