@@ -1,0 +1,43 @@
+{
+  "Label": "graph-routing-h8-h9",
+  "Model": "",
+  "StartedAt": "2026-10-25 19:02:34 \u002B02:00",
+  "BridgePath": "C:\\Users\\mibil\\Documents\\AntigravityGit\\EULE_MCP\\.claude\\worktrees\\agent-a1f6a284054f03feb\\RevitMCP.Bridge\\bin\\Release\\net8.0\\RevitMCP.Bridge.exe",
+  "Schemas": [
+    {
+      "Profile": "full",
+      "ToolCount": 300,
+      "SchemaBytes": 411431,
+      "SchemaTokens": 102858,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "core",
+      "ToolCount": 21,
+      "SchemaBytes": 24974,
+      "SchemaTokens": 6244,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "query",
+      "ToolCount": 38,
+      "SchemaBytes": 44348,
+      "SchemaTokens": 11087,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "read-only",
+      "ToolCount": 201,
+      "SchemaBytes": 261164,
+      "SchemaTokens": 65291,
+      "InstructionTokens": 696,
+      "Error": null
+    }
+  ],
+  "GraphBuild": null,
+  "GraphIncremental": null,
+  "Scenarios": []
+}

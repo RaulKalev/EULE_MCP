@@ -6732,8 +6732,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
 
     [McpServerTool(Name = "revit_graph_summary", ReadOnly = true),
      Description("Summarises the model graph for cheap orientation at session start: node counts per kind, element counts per " +
-                 "category/level/workset, panels with circuit and fed-element counts, orphan circuits (no panel / no elements), " +
-                 "and elements with no located_in edge. Includes built_at, central_version, stale and the routing-only note.")]
+                 "category/level/workset (count = host model, linked = in linked models), panels with circuit and fed-element " +
+                 "counts, orphan circuits (no panel / no elements), and elements with no located_in edge. Includes built_at, central_version, stale and the routing-only note.")]
     public async Task<string> GraphSummary(
         [Description("Maximum rows per count list (1-200). Default 25.")] int topN = 25,
         [Description("Sample ids listed for orphan circuits and unlocated elements (0-200). Default 25.")] int sampleSize = 25,
