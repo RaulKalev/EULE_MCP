@@ -79,10 +79,11 @@ public class ToolDocumentMigrationTests
         var resolving = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (_, source) in ToolSources())
         {
-            var ok = Regex.IsMatch(source, @"ToolDocument\.|WorksharingSupport\.Workshared\(|RevitDocumentResolver\.Resolve|DocumentToolSupport\.Resolve|CheckpointSupport\.Resolve|SaveSupport\.Resolve")
+            // PanelSchematicsToolSupport.ActiveDocument (called as Support.ActiveDocument) resolves through ToolDocument.
+            var ok = Regex.IsMatch(source, @"ToolDocument\.|WorksharingSupport\.Workshared\(|Support\.ActiveDocument\(|RevitDocumentResolver\.Resolve|DocumentToolSupport\.Resolve|CheckpointSupport\.Resolve|SaveSupport\.Resolve")
                      && !source.Contains("ActiveUIDocument");
             if (!ok) continue;
-            foreach (Match m in Regex.Matches(source, @"(?:Name\s*=>\s*|ToolName\s*=\s*)""(revit_[a-z0-9_]+)"""))
+            foreach (Match m in Regex.Matches(source, @"(?:Name\s*=>\s*|ToolName\s*=\s*)""([a-z][a-z0-9_]+)"""))
                 resolving.Add(m.Groups[1].Value);
         }
 
@@ -94,7 +95,7 @@ public class ToolDocumentMigrationTests
             var end = i + 1 < starts.Count ? starts[i + 1].Index : bridge.Length;
             var block = bridge.Substring(starts[i].Index, end - starts[i].Index);
             if (!Regex.IsMatch(block, @"\bstring\??\s+document\b")) continue;
-            var targets = Regex.Matches(block, @"(?:SendAsync|Send\w+)\(\s*""(revit_[a-z0-9_]+)""").Select(m => m.Groups[1].Value).Distinct();
+            var targets = Regex.Matches(block, @"(?:SendAsync|Send\w+)\(\s*""([a-z][a-z0-9_]+)""").Select(m => m.Groups[1].Value).Distinct();
             offenders.AddRange(targets.Where(t => !resolving.Contains(t) && !resolveItThemselves.Contains(t))
                 .Select(t => $"{starts[i].Groups[1].Value} -> {t}"));
         }

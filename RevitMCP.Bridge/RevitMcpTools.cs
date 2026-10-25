@@ -178,6 +178,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Read settings from the assigned view template when present. Default true.")] bool useViewTemplate = true,
         [Description("Optional substring filter for CAD import/type name.")] string? importNameFilter = null,
         [Description("Maximum category settings to return. 0 means all.")] int limit = 0,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -188,6 +189,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["importNameFilter"] = importNameFilter ?? string.Empty,
             ["limit"] = limit
         };
+        args["document"] = document ?? string.Empty;
         return FormatResult(await pipeClient.SendAsync("revit_list_cad_imports", args, cancellationToken));
     }
 
@@ -198,6 +200,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Single target view ID. 0 uses the active view when viewIds is empty.")] long viewId = 0,
         [Description("Multiple target view IDs.")] long[]? viewIds = null,
         [Description("Modify an assigned view template rather than the project view. Default true; this can affect other views using the template.")] bool useViewTemplate = true,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -207,6 +210,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["viewIds"] = viewIds ?? [],
             ["useViewTemplate"] = useViewTemplate
         };
+        args["document"] = document ?? string.Empty;
         return FormatResult(await pipeClient.SendAsync("revit_preview_set_cad_overrides", args, cancellationToken));
     }
 
@@ -217,6 +221,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Single target view ID. 0 uses the active view when viewIds is empty.")] long viewId = 0,
         [Description("Multiple target view IDs.")] long[]? viewIds = null,
         [Description("Modify an assigned view template rather than the project view. Default true; this can affect other views using the template.")] bool useViewTemplate = true,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -226,6 +231,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["viewIds"] = viewIds ?? [],
             ["useViewTemplate"] = useViewTemplate
         };
+        args["document"] = document ?? string.Empty;
         return FormatResult(await pipeClient.SendAsync("revit_set_cad_overrides", args, cancellationToken));
     }
 
@@ -238,6 +244,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Read source settings from its assigned view template. Default true.")] bool useSourceViewTemplate = true,
         [Description("Write target settings to assigned view templates. Default true; this can affect other views using those templates.")] bool useTargetViewTemplates = true,
         [Description("Optional substring filter for CAD import/type name.")] string? importNameFilter = null,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -249,6 +256,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["useTargetViewTemplates"] = useTargetViewTemplates,
             ["importNameFilter"] = importNameFilter ?? string.Empty
         };
+        args["document"] = document ?? string.Empty;
         return FormatResult(await pipeClient.SendAsync("revit_preview_copy_cad_overrides", args, cancellationToken));
     }
 
@@ -261,6 +269,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Read source settings from its assigned view template. Default true.")] bool useSourceViewTemplate = true,
         [Description("Write target settings to assigned view templates. Default true; this can affect other views using those templates.")] bool useTargetViewTemplates = true,
         [Description("Optional substring filter for CAD import/type name.")] string? importNameFilter = null,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -272,6 +281,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["useTargetViewTemplates"] = useTargetViewTemplates,
             ["importNameFilter"] = importNameFilter ?? string.Empty
         };
+        args["document"] = document ?? string.Empty;
         return FormatResult(await pipeClient.SendAsync("revit_copy_cad_overrides", args, cancellationToken));
     }
 
@@ -341,6 +351,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Count elements in the active document carrying each schema. Default true.")] bool includeElementCounts = true,
         [Description("Return only schemas actually used by elements in this document. Default false.")] bool onlyUsedInDocument = false,
         [Description("Maximum schemas to return. 0 means all.")] int limit = 0,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -352,6 +363,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["onlyUsedInDocument"] = onlyUsedInDocument,
             ["limit"] = limit
         };
+        args["document"] = document ?? string.Empty;
         return FormatResult(await pipeClient.SendAsync("revit_list_extensible_storage_schemas", args, cancellationToken));
     }
 
@@ -366,6 +378,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Include decoded field values. Set false to list only which schemas each element carries. Default true.")] bool includeValues = true,
         [Description("Maximum elements to read. Default 25, hard cap 500.")] int maxElements = 25,
         [Description("How deep to follow nested sub-entities. Default 3.")] int maxDepth = 3,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -379,6 +392,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["maxElements"] = maxElements,
             ["maxDepth"] = maxDepth
         };
+        args["document"] = document ?? string.Empty;
         return FormatResult(await pipeClient.SendAsync("revit_read_extensible_storage", args, cancellationToken));
     }
 
@@ -579,6 +593,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Category name inside the link, e.g. 'Walls'")] string? category = null,
         [Description("Substring matched against element and type names")] string? nameFilter = null,
         [Description("Max elements to return (default 500)")] int limit = 500,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -588,6 +603,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["nameFilter"] = nameFilter ?? string.Empty,
             ["limit"] = limit
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_query_linked_elements", args, cancellationToken);
         return FormatResult(result);
     }
@@ -1394,6 +1410,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Which geometry counts as a location: block | point | circle (default: all three)")] string[]? pointSources = null,
         [Description("Merge marks closer than this into one location, in mm (default 1)")] double mergeToleranceMm = 1,
         [Description("Maximum points to return (default 200, max 2000)")] int limit = 200,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -1404,6 +1421,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["mergeToleranceMm"] = mergeToleranceMm,
             ["limit"] = limit
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_get_cad_placement_points", args, cancellationToken);
         return FormatResult(result);
     }
@@ -1429,12 +1447,13 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Cap on instances created (default 500, max 2000)")] int maxInstances = 500,
         [Description("View element ID for view-based (detail item) families")] long viewId = 0,
         [Description("Host element ID for hosted families")] long hostElementId = 0,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default) =>
         SendPlaceFromCad(
             "revit_preview_place_from_cad", layers, elevationMode, typeId, familyName, typeName, levelName,
             offsetMm, elevationMm, importInstanceId, pointSources, mergeToleranceMm, applyBlockRotation,
             rotationOffsetDegrees, skipExisting, duplicateToleranceMm, maxInstances, viewId, hostElementId,
-            cancellationToken);
+            document, cancellationToken);
 
     [McpServerTool(Name = "revit_place_from_cad"),
      Description("Places a family at every location an imported DWG marks — block inserts, points, or circles on the layers you name. Requires approval. Layer names differ per project, so ask the user which layers hold the locations. A 2D drawing carries no mounting height, so elevationMode must be stated: 'dwg' keeps the drawing height, 'level' takes levelName + offsetMm, 'explicit' takes an absolute elevationMm. skipExisting (default true) means re-running tops the model up instead of doubling every location. Run revit_preview_place_from_cad first.")]
@@ -1457,12 +1476,13 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Cap on instances created (default 500, max 2000)")] int maxInstances = 500,
         [Description("View element ID for view-based (detail item) families")] long viewId = 0,
         [Description("Host element ID for hosted families")] long hostElementId = 0,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default) =>
         SendPlaceFromCad(
             "revit_place_from_cad", layers, elevationMode, typeId, familyName, typeName, levelName,
             offsetMm, elevationMm, importInstanceId, pointSources, mergeToleranceMm, applyBlockRotation,
             rotationOffsetDegrees, skipExisting, duplicateToleranceMm, maxInstances, viewId, hostElementId,
-            cancellationToken);
+            document, cancellationToken);
 
     private async Task<string> SendPlaceFromCad(
         string toolName,
@@ -1484,6 +1504,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         int maxInstances,
         long viewId,
         long hostElementId,
+        string? document,
         CancellationToken cancellationToken)
     {
         if (layers == null || layers.Length == 0)
@@ -1517,6 +1538,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["viewId"] = viewId,
             ["hostElementId"] = hostElementId
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync(toolName, args, cancellationToken);
         return FormatResult(result);
     }
@@ -1535,6 +1557,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Size bucket for the signature, in mm (default 10) — no two drawn symbols measure exactly alike")] double signatureBucketMm = 10,
         [Description("Clusters longer than this are flagged as drawing line work, not fixtures, in mm (default 3000)")] double maxShapeSizeMm = 3000,
         [Description("Maximum fixtures to return (default 200, max 2000)")] int limit = 200,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -1546,6 +1569,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["maxShapeSizeMm"] = maxShapeSizeMm,
             ["limit"] = limit
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_get_cad_shapes", args, cancellationToken);
         return FormatResult(result);
     }
@@ -1574,13 +1598,14 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Cap on instances created (default 500, max 2000)")] int maxInstances = 500,
         [Description("View element ID for view-based (detail item) families")] long viewId = 0,
         [Description("Host element ID for hosted families")] long hostElementId = 0,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default) =>
         SendPlaceFromCadShapes(
             "revit_preview_place_from_cad_shapes", layers, elevationMode, typeMap, levelName, offsetMm,
             elevationMm, importInstanceId, joinToleranceMm, signatureBucketMm, maxShapeSizeMm,
             autoMatchTypes, autoMatchFamilyName, autoMatchCategory, autoMatchToleranceMm,
             applyShapeRotation, rotationOffsetDegrees, skipExisting, duplicateToleranceMm, maxInstances,
-            viewId, hostElementId, cancellationToken);
+            viewId, hostElementId, document, cancellationToken);
 
     [McpServerTool(Name = "revit_place_from_cad_shapes"),
      Description("Places families on fixtures reconstructed from loose CAD line work — symbols drawn as bare lines or circles that were never made into blocks. Touching segments are grouped into one fixture; the smallest box around the group gives the insertion point and the rotation. Requires approval. Layer names differ per project, so ask the user which layers hold the fixtures. A 2D drawing carries no mounting height, so elevationMode must be stated. Types come from typeMap keyed on shape signature; unmapped signatures fall back to matching the family's own footprint and are skipped when nothing fits unambiguously. The Revit API cannot read DWG text, so the drawing's type marks (V11.1 and the like) cannot be used — say so rather than implying the labels were read. Run revit_preview_place_from_cad_shapes first.")]
@@ -1606,13 +1631,14 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Cap on instances created (default 500, max 2000)")] int maxInstances = 500,
         [Description("View element ID for view-based (detail item) families")] long viewId = 0,
         [Description("Host element ID for hosted families")] long hostElementId = 0,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default) =>
         SendPlaceFromCadShapes(
             "revit_place_from_cad_shapes", layers, elevationMode, typeMap, levelName, offsetMm,
             elevationMm, importInstanceId, joinToleranceMm, signatureBucketMm, maxShapeSizeMm,
             autoMatchTypes, autoMatchFamilyName, autoMatchCategory, autoMatchToleranceMm,
             applyShapeRotation, rotationOffsetDegrees, skipExisting, duplicateToleranceMm, maxInstances,
-            viewId, hostElementId, cancellationToken);
+            viewId, hostElementId, document, cancellationToken);
 
     private async Task<string> SendPlaceFromCadShapes(
         string toolName,
@@ -1637,6 +1663,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         int maxInstances,
         long viewId,
         long hostElementId,
+        string? document,
         CancellationToken cancellationToken)
     {
         if (layers == null || layers.Length == 0)
@@ -1673,6 +1700,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["viewId"] = viewId,
             ["hostElementId"] = hostElementId
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync(toolName, args, cancellationToken);
         return FormatResult(result);
     }
@@ -5340,6 +5368,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Include linked models (default true)")] bool includeLinks = true,
         [Description("Include Generic Models category (default true)")] bool includeGenericModels = true,
         [Description("Include imported geometry (DWG/DXF) (default true)")] bool includeImportedGeometry = true,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -5348,15 +5377,18 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["includeGenericModels"] = includeGenericModels,
             ["includeImportedGeometry"] = includeImportedGeometry
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_list_clashable_categories", args, cancellationToken);
         return FormatResult(result);
     }
 
     [McpServerTool(Name = "revit_list_clashable_links", ReadOnly = true),
      Description("Lists all Revit link instances and imported geometry in the active document that can participate in clash detection, including load status.")]
-    public async Task<string> ListClashableLinks(CancellationToken cancellationToken = default)
+    public async Task<string> ListClashableLinks(
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
     {
-        var result = await pipeClient.SendAsync("revit_list_clashable_links", [], cancellationToken);
+        var result = await pipeClient.SendAsync("revit_list_clashable_links", new Dictionary<string, object?> { ["document"] = document ?? string.Empty }, cancellationToken);
         return FormatResult(result);
     }
 
@@ -5370,6 +5402,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Include imported geometry (default true)")] bool includeImportedGeometry = true,
         [Description("Filter by link name substrings (optional)")] string[]? linkNameFilters = null,
         [Description("Max candidates per set (0 = unlimited, default 5000)")] int limit = 5000,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -5379,6 +5412,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["includeImportedGeometry"] = includeImportedGeometry,
             ["linkNameFilters"] = linkNameFilters ?? [], ["limit"] = limit
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_get_clash_candidates", args, cancellationToken);
         return FormatResult(result);
     }
@@ -5401,6 +5435,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Save as last run for navigation tools (default true)")] bool saveAsLastRun = true,
         [Description("Rule name label. Empty = default per mode.")] string? ruleName = null,
         [Description("Severity: Low | Medium | High | Critical (default Medium)")] string severity = "Medium",
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var m = mode?.Trim().ToLowerInvariant();
@@ -5432,6 +5467,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             args["ruleName"] = string.IsNullOrWhiteSpace(ruleName) ? "Ad-hoc Clearance" : ruleName;
         }
 
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync(toolName, args, cancellationToken);
         return FormatResult(result);
     }
@@ -5497,6 +5533,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Save merged result as last run (default true)")] bool saveAsLastRun = true,
         [Description("Allow low-confidence bounding-box fallback for hard clash rules when solids are unavailable. Default false.")]
         bool allowBoundingBoxFallback = false,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -5506,6 +5543,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["limit"] = limit, ["maxPairs"] = maxPairs, ["saveAsLastRun"] = saveAsLastRun,
             ["allowBoundingBoxFallback"] = allowBoundingBoxFallback
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_run_clash_preset", args, cancellationToken);
         return FormatResult(result);
     }
@@ -5576,12 +5614,14 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     public async Task<string> CreateClashReviewView(
         [Description("Clash ID to focus the section box on (optional)")] string clashId = "",
         [Description("Section box padding in mm (default 1000)")] double sectionBoxPaddingMm = 1000,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
         {
             ["clashId"] = clashId, ["sectionBoxPaddingMm"] = sectionBoxPaddingMm
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_create_clash_review_view", args, cancellationToken);
         return FormatResult(result);
     }
@@ -5993,6 +6033,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Optional substring filter for sheet numbers")] string? sheetNumberFilter = null,
         [Description("Recurse into subdirectories")] bool recursive = true,
         [Description("Maximum file results to return")] int maxResults = 5000,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -6005,6 +6046,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["recursive"] = recursive,
             ["maxResults"] = maxResults
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("delivery_check_against_revit_sheets", args, cancellationToken);
         return FormatResult(result);
     }
@@ -6060,6 +6102,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Extra file extensions allowed beyond requiredExtensions (for suspicious-extension check)")] string[]? allowedExtraExtensions = null,
         [Description("At least one file with each of these extensions must be present (e.g. ifc, nwc)")] string[]? requiredProjectFileExtensions = null,
         [Description("File name patterns to ignore during policy checks (e.g. thumbs.db)")] string[]? ignoredPatterns = null,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -6083,6 +6126,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["requiredProjectFileExtensions"] = requiredProjectFileExtensions ?? [],
             ["ignoredPatterns"] = ignoredPatterns ?? []
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("delivery_run_full_check", args, cancellationToken);
         return FormatResult(result);
     }
@@ -6230,6 +6274,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         bool includeAllRevitLinks = false,
         [Description("If true, include links that are currently unloaded. Default false.")]
         bool includeUnloaded = false,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -6237,6 +6282,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["includeAllRevitLinks"] = includeAllRevitLinks,
             ["includeUnloaded"]      = includeUnloaded
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("ifc_list_links", args, cancellationToken);
         return FormatResult(result);
     }
@@ -6270,6 +6316,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Highest-priority storey parameter. Effective project default: IfcDecomposes.")] string? storeyParameter = null,
         [Description("Highest-priority validation area parameter. Effective project default: AR_Ruum.120_Pindala.")] string? areaParameter = null,
         [Description("Enable AR_Ruum project defaults before legacy fallbacks. Default true.")] bool enableArRuumDefaults = true,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -6285,6 +6332,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["areaParameter"]            = areaParameter,
             ["enableArRuumDefaults"]     = enableArRuumDefaults
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("ifc_preview_spaces", args, cancellationToken);
         return FormatResult(result);
     }
@@ -6325,6 +6373,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Highest-priority storey parameter.")] string? storeyParameter = null,
         [Description("Highest-priority validation area parameter.")] string? areaParameter = null,
         [Description("Enable AR_Ruum project defaults. Default true.")] bool enableArRuumDefaults = true,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -6344,6 +6393,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["areaParameter"]                 = areaParameter,
             ["enableArRuumDefaults"]          = enableArRuumDefaults
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("ifc_preview_space_geometry", args, cancellationToken);
         return FormatResult(result);
     }
@@ -6401,6 +6451,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Highest-priority storey parameter.")] string? storeyParameter = null,
         [Description("Highest-priority validation area parameter.")] string? areaParameter = null,
         [Description("Enable AR_Ruum project defaults. Default true.")] bool enableArRuumDefaults = true,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -6424,6 +6475,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["areaParameter"]                   = areaParameter,
             ["enableArRuumDefaults"]            = enableArRuumDefaults
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("convert_ifc_spaces_to_rooms", args, cancellationToken);
         return FormatResult(result);
     }
@@ -6467,6 +6519,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Highest-priority storey parameter.")] string? storeyParameter = null,
         [Description("Highest-priority validation area parameter.")] string? areaParameter = null,
         [Description("Enable AR_Ruum project defaults. Default true.")] bool enableArRuumDefaults = true,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -6486,6 +6539,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["areaParameter"]             = areaParameter,
             ["enableArRuumDefaults"]      = enableArRuumDefaults
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("validate_ifc_space_room_conversion", args, cancellationToken);
         return FormatResult(result);
     }
@@ -6520,6 +6574,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Highest-priority storey parameter.")] string? storeyParameter = null,
         [Description("Highest-priority validation area parameter.")] string? areaParameter = null,
         [Description("Enable AR_Ruum project defaults. Default true.")] bool enableArRuumDefaults = true,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -6535,6 +6590,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["areaParameter"]                = areaParameter,
             ["enableArRuumDefaults"]         = enableArRuumDefaults
         };
+        args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("sync_ifc_space_room_data", args, cancellationToken);
         return FormatResult(result);
     }
@@ -7180,18 +7236,23 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
 
     [McpServerTool(Name = "revit_panelschematics_guide", ReadOnly = true),
      Description("How the PanelSchematics plugin (Kilbiskeemid, panel schematics) stores its data: the row fields, which circuit / connected-element / detail-item parameter each field is written to, its Extensible Storage stores, the panel metadata keys and the rules for changing them. Read this before any other revit_panelschematics_* tool.")]
-    public async Task<string> PanelSchematicsGuide(CancellationToken cancellationToken = default)
+    public async Task<string> PanelSchematicsGuide(
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
     {
-        return FormatResult(await pipeClient.SendAsync("revit_panelschematics_guide", new Dictionary<string, object?>(), cancellationToken));
+        return FormatResult(await pipeClient.SendAsync("revit_panelschematics_guide",
+            new Dictionary<string, object?> { ["document"] = document ?? string.Empty }, cancellationToken));
     }
 
     [McpServerTool(Name = "revit_panelschematics_get_panel_table", ReadOnly = true),
      Description("A panel's PanelSchematics table: its circuits and its empty rows merged in Rea nr order, each with its values, identity (for row groups), row id and detail-item count. Without 'panel' it lists the panels that have rows. Circuit values are live parameters; empty-row values come from the panel's Extensible Storage.")]
     public async Task<string> PanelSchematicsGetPanelTable(
         [Description(PanelArgDescription + " Empty = list the panels that have rows.")] string? panel = null,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?> { ["panel"] = panel ?? string.Empty };
+        args["document"] = document ?? string.Empty;
         return FormatResult(await pipeClient.SendAsync("revit_panelschematics_get_panel_table", args, cancellationToken));
     }
 
@@ -7200,10 +7261,12 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     public async Task<string> PanelSchematicsGetData(
         [Description(PanelArgDescription + " Empty = every panel that has data.")] string? panel = null,
         [Description("Also list panels that have no stored data. Default false when no panel is given.")] bool includePanelsWithoutData = false,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?> { ["panel"] = panel ?? string.Empty };
         if (includePanelsWithoutData) args["includePanelsWithoutData"] = true;
+        args["document"] = document ?? string.Empty;
         return FormatResult(await pipeClient.SendAsync("revit_panelschematics_get_data", args, cancellationToken));
     }
 
@@ -7212,9 +7275,11 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     public async Task<string> PanelSchematicsReadDrawing(
         [Description("View names or element ids, e.g. [\"EL-7-JK-C1\",\"EL-7-JK-C2\"].")] string[] views,
         [Description("Also return detail items that are not row symbols (frames, headers, title pages). Default false.")] bool includeNonRowItems = false,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?> { ["views"] = views, ["includeNonRowItems"] = includeNonRowItems };
+        args["document"] = document ?? string.Empty;
         return FormatResult(await pipeClient.SendAsync("revit_panelschematics_read_drawing", args, cancellationToken));
     }
 
@@ -7224,6 +7289,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description(PanelArgDescription)] string panel,
         [Description(EmptyRowOperationsDescription)] object[] operations,
         [Description("Also update the schematic detail items of changed rows. Default true.")] bool updateDetailItems = true,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -7232,6 +7298,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["operations"] = ToJToken(operations),
             ["updateDetailItems"] = updateDetailItems
         };
+        args["document"] = document ?? string.Empty;
         return FormatResult(await pipeClient.SendAsync("revit_panelschematics_preview_edit_empty_rows", args, cancellationToken));
     }
 
@@ -7242,6 +7309,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description(EmptyRowOperationsDescription)] object[] operations,
         [Description("Also update the schematic detail items of changed rows. Default true.")] bool updateDetailItems = true,
         [Description(StateTokenDescription)] string? expectedStateToken = null,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -7251,6 +7319,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["updateDetailItems"] = updateDetailItems,
             ["expectedStateToken"] = expectedStateToken ?? string.Empty
         };
+        args["document"] = document ?? string.Empty;
         return FormatResult(await pipeClient.SendAsync("revit_panelschematics_edit_empty_rows", args, cancellationToken));
     }
 
@@ -7260,6 +7329,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description(CircuitRowsDescription)] object[] rows,
         [Description("Mirror Rea Nr, Group Name, Group Nr, Circuit Breaker and Kaabel to the elements on the circuit. Default true.")] bool updateConnectedElements = true,
         [Description("Update the row's schematic detail items (matched by the 'id' parameter). Default true.")] bool updateDetailItems = true,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -7268,6 +7338,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["updateConnectedElements"] = updateConnectedElements,
             ["updateDetailItems"] = updateDetailItems
         };
+        args["document"] = document ?? string.Empty;
         return FormatResult(await pipeClient.SendAsync("revit_panelschematics_preview_set_circuit_rows", args, cancellationToken));
     }
 
@@ -7278,6 +7349,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Mirror Rea Nr, Group Name, Group Nr, Circuit Breaker and Kaabel to the elements on the circuit. Default true.")] bool updateConnectedElements = true,
         [Description("Update the row's schematic detail items (matched by the 'id' parameter). Default true.")] bool updateDetailItems = true,
         [Description(StateTokenDescription)] string? expectedStateToken = null,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -7287,6 +7359,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["updateDetailItems"] = updateDetailItems,
             ["expectedStateToken"] = expectedStateToken ?? string.Empty
         };
+        args["document"] = document ?? string.Empty;
         return FormatResult(await pipeClient.SendAsync("revit_panelschematics_set_circuit_rows", args, cancellationToken));
     }
 
@@ -7297,6 +7370,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("The project's main panel: element id or name; 'none' clears it. Empty = unchanged.")] string? mainPanel = null,
         [Description("Colour labels to add or change, e.g. [{\"hex\":\"#4CAF50\",\"label\":\"Korrus 1\"},{\"id\":\"ab12cd34\",\"label\":\"Uus nimi\"}]. Without id a new label is made.")] object[]? colorLabels = null,
         [Description("Ids of colour labels to remove; they are also cleared from the panels that use them.")] string[]? removeColorLabelIds = null,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -7306,6 +7380,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["colorLabels"] = ToJToken(colorLabels),
             ["removeColorLabelIds"] = removeColorLabelIds ?? []
         };
+        args["document"] = document ?? string.Empty;
         return FormatResult(await pipeClient.SendAsync("revit_panelschematics_preview_set_panel_data", args, cancellationToken));
     }
 
@@ -7317,6 +7392,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Colour labels to add or change, e.g. [{\"hex\":\"#4CAF50\",\"label\":\"Korrus 1\"},{\"id\":\"ab12cd34\",\"label\":\"Uus nimi\"}]. Without id a new label is made.")] object[]? colorLabels = null,
         [Description("Ids of colour labels to remove; they are also cleared from the panels that use them.")] string[]? removeColorLabelIds = null,
         [Description(StateTokenDescription)] string? expectedStateToken = null,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -7327,6 +7403,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["removeColorLabelIds"] = removeColorLabelIds ?? [],
             ["expectedStateToken"] = expectedStateToken ?? string.Empty
         };
+        args["document"] = document ?? string.Empty;
         return FormatResult(await pipeClient.SendAsync("revit_panelschematics_set_panel_data", args, cancellationToken));
     }
 
@@ -7335,9 +7412,11 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     public async Task<string> PanelSchematicsPreviewSetRowGroups(
         [Description(PanelArgDescription)] string panel,
         [Description(RowGroupsDescription)] object[] groups,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?> { ["panel"] = panel, ["groups"] = ToJToken(groups) };
+        args["document"] = document ?? string.Empty;
         return FormatResult(await pipeClient.SendAsync("revit_panelschematics_preview_set_row_groups", args, cancellationToken));
     }
 
@@ -7347,6 +7426,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description(PanelArgDescription)] string panel,
         [Description(RowGroupsDescription)] object[] groups,
         [Description(StateTokenDescription)] string? expectedStateToken = null,
+        [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
@@ -7355,6 +7435,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["groups"] = ToJToken(groups),
             ["expectedStateToken"] = expectedStateToken ?? string.Empty
         };
+        args["document"] = document ?? string.Empty;
         return FormatResult(await pipeClient.SendAsync("revit_panelschematics_set_row_groups", args, cancellationToken));
     }
 
