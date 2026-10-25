@@ -104,9 +104,13 @@ public static class ApprovalSummaryBuilder
             "revit_panelschematics_set_panel_data" => BuildPanelSchematicsPanelData(request),
             "revit_panelschematics_set_row_groups" =>
                 $"PanelSchematics: replace the row groups of panel '{ToolArguments.GetString(request.Arguments, "panel")}' with {CountItems(request, "groups")} group(s).",
-            _ => $"Execute {request.ToolName}"
+            _ => BuildDomainSummary(request) ?? $"Execute {request.ToolName}"
         };
     }
+
+    /// <summary>Approval summaries the domain areas (#102-#109) build for their own write tools.</summary>
+    private static string? BuildDomainSummary(McpToolRequest request) =>
+        MepApprovalSummaries.TryBuild(request);
 
     private static int CountItems(McpToolRequest request, string key)
         => request.Arguments.TryGetValue(key, out var value) && value is Newtonsoft.Json.Linq.JArray array ? array.Count : 0;

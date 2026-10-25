@@ -466,6 +466,8 @@ public class App : IExternalApplication
             handler.RegisterTool(new RevitMCP.Addin.Tools.Jobs.JobCancelTool());
             handler.RegisterTool(new RevitMCP.Addin.Tools.Jobs.JobResumeTool());
             handler.RegisterTool(new RevitMCP.Addin.Tools.Jobs.JobReportTool());
+            // Domain gaps #102-#109: each area registers its own tools.
+            RevitMCP.Addin.Tools.Mep.MepToolRegistration.Register(handler); // #106 cable tray and conduit runs
 
             var eventService = new ExternalEventService(handler);
 
