@@ -1,5 +1,6 @@
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Events;
+using RevitMCP.Addin.Checkpoints;
 
 namespace RevitMCP.Addin.Plans;
 
@@ -35,9 +36,10 @@ internal static class PlanChangeRecorder
         {
             var doc = e.GetDocument();
             if (doc == null || !expected.IsValidObject || !doc.Equals(expected)) return;
+            // Revit's bookkeeping elements are not the call's changes (a strict plan would refuse them).
             changes.Record(
-                e.GetAddedElementIds().Select(id => id.Value),
-                e.GetModifiedElementIds().Select(id => id.Value),
+                CheckpointChangeTracker.WithoutInternal(doc, e.GetAddedElementIds()),
+                CheckpointChangeTracker.WithoutInternal(doc, e.GetModifiedElementIds()),
                 e.GetDeletedElementIds().Select(id => id.Value));
         }
         catch

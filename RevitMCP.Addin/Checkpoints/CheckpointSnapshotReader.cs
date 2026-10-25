@@ -77,8 +77,8 @@ internal sealed class CheckpointSnapshotReader
 
     /// <summary>
     /// Reads one element; null when it does not exist. With <paramref name="parameterNames"/> exactly those
-    /// instance parameters are read (a missing value is stored as null); without, every instance parameter with
-    /// a value, writable first, up to QueryLimits.MaxParametersPerElement.
+    /// instance parameters are read (a missing value is stored as null); without, the writable instance parameters
+    /// (with a value first, then empty ones) and the read-only ones with a value, up to QueryLimits.MaxParametersPerElement.
     /// </summary>
     public ElementSnapshot? Read(long id, IReadOnlyCollection<string>? parameterNames)
     {
@@ -181,20 +181,38 @@ internal sealed class CheckpointSnapshotReader
             return;
         }
 
-        var withValue = new List<Parameter>();
+        // Writable empty parameters too: a value written into them later must show in the diff (SnapshotParameterSelection).
+        var parameterOf = new Dictionary<SnapshotParameterCandidate, Parameter>();
         foreach (var p in parameters)
         {
             try
             {
-                if (p.Definition?.Name is { Length: > 0 } && p.HasValue && ParameterResolver.DisplayValue(p) is { Length: > 0 })
-                    withValue.Add(p);
+                if (p.Definition?.Name is not { Length: > 0 } name) continue;
+                var candidate = new SnapshotParameterCandidate(name, p.IsReadOnly, p.HasValue && ParameterResolver.DisplayValue(p) is { Length: > 0 });
+                parameterOf[candidate] = p;
             }
             catch { }
         }
-        foreach (var p in withValue.Where(p => !p.IsReadOnly).Concat(withValue.Where(p => p.IsReadOnly)).Take(_maxParameters))
+        foreach (var c in SnapshotParameterSelection.Select(parameterOf.Keys, _maxParameters))
+            Add(parameterOf[c], c.Name, snapshot);
+    }
+
+    /// <summary>
+    /// Revit bookkeeping (the hidden System Browser view, plain uncategorised elements) that change tracking
+    /// skips; see <see cref="InternalElementRule"/>. False for a missing element or one that cannot be read.
+    /// </summary>
+    public static bool IsInternal(Document doc, long id)
+    {
+        try
         {
-            var name = p.Definition!.Name;
-            if (!snapshot.Parameters.ContainsKey(name)) Add(p, name, snapshot);
+            var element = doc.GetElement(new ElementId(id));
+            if (element == null) return false;
+            return InternalElementRule.IsInternal(element.Category != null, element is ElementType, element is View,
+                element.GetType() == typeof(Element));
+        }
+        catch
+        {
+            return false;
         }
     }
 

@@ -36,6 +36,7 @@
     <Compile Include="..\RevitMCP.Addin\Checkpoints\CheckpointDiff.cs" Link="Checkpoints\CheckpointDiff.cs" />
     <Compile Include="..\RevitMCP.Addin\Checkpoints\RollbackPlanner.cs" Link="Checkpoints\RollbackPlanner.cs" />
     <Compile Include="..\RevitMCP.Addin\Checkpoints\CheckpointDiffReport.cs" Link="Checkpoints\CheckpointDiffReport.cs" />
+    <Compile Include="..\RevitMCP.Addin\Checkpoints\SnapshotParameterSelection.cs" Link="Checkpoints\SnapshotParameterSelection.cs" />
     <!-- Plans (#99): envelope parsing, argument scope, post-check, classification, registry, summary (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Plans\PlanModels.cs" Link="Plans\PlanModels.cs" />
     <Compile Include="..\RevitMCP.Addin\Plans\PlanArgs.cs" Link="Plans\PlanArgs.cs" />

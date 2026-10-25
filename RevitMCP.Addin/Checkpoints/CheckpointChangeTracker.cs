@@ -65,8 +65,8 @@ internal static class CheckpointChangeTracker
                 At = DateTimeOffset.Now,
                 Operation = e.Operation.ToString(),
                 Attribution = ActiveToolProbe.CurrentAttribution(),
-                Added = e.GetAddedElementIds().Select(id => id.Value).ToArray(),
-                Modified = e.GetModifiedElementIds().Select(id => id.Value).ToArray(),
+                Added = WithoutInternal(doc, e.GetAddedElementIds()),
+                Modified = WithoutInternal(doc, e.GetModifiedElementIds()),
                 Deleted = e.GetDeletedElementIds().Select(id => id.Value).ToArray()
             };
             try { batch.TransactionNames = e.GetTransactionNames().ToList(); } catch { }
@@ -91,6 +91,16 @@ internal static class CheckpointChangeTracker
         {
             // Never let checkpoint bookkeeping disturb Revit's event pipeline.
         }
+    }
+
+    /// <summary>
+    /// The ids without Revit's bookkeeping elements (<see cref="InternalElementRule"/>), which nearly every
+    /// transaction touches. A batch larger than <see cref="MaxIdentityReadsPerEvent"/> is kept as it is.
+    /// </summary>
+    public static long[] WithoutInternal(Document doc, ICollection<ElementId> ids)
+    {
+        if (ids.Count > MaxIdentityReadsPerEvent) return ids.Select(id => id.Value).ToArray();
+        return ids.Select(id => id.Value).Where(id => !CheckpointSnapshotReader.IsInternal(doc, id)).ToArray();
     }
 
     private static void PruneClosed()
