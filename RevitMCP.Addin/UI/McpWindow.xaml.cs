@@ -206,8 +206,9 @@ public partial class McpWindow : Window
         MinWidth = 0;
         MinHeight = 0;
         ResizeMode = ResizeMode.NoResize;
-        SetBounds(WindowPlacementMath.Compact(_normalBounds, AvailableArea(), CompactWidth, CompactHeight));
+        // Content first, then one move: the strip is drawn at its final place without the full window passing through.
         ViewModel.IsCompact = true;
+        SetBounds(WindowPlacementMath.Compact(_normalBounds, AvailableArea(), CompactWidth, CompactHeight));
         UpdateActivityLine();
         if (IsLoaded) SaveWindowState();
     }
@@ -218,13 +219,14 @@ public partial class McpWindow : Window
         if (!ViewModel.IsCompact) return;
         HidePeek();
 
-        ViewModel.IsCompact = false;
+        // One move to the full bounds before the minimum sizes return (setting them first would grow the strip in
+        // place), then the full content.
+        var normal = _normalBounds ?? new WindowPlacement(Left, Top, 360, 620);
+        SetBounds(WindowPlacementMath.Expanded(StripBounds(), AvailableArea(), normal.Width, normal.Height, _normalMinWidth, _normalMinHeight));
         ResizeMode = _normalResizeMode;
         MinWidth = _normalMinWidth;
         MinHeight = _normalMinHeight;
-
-        var normal = _normalBounds ?? new WindowPlacement(Left, Top, 360, 620);
-        SetBounds(WindowPlacementMath.Expanded(StripBounds(), AvailableArea(), normal.Width, normal.Height, MinWidth, MinHeight));
+        ViewModel.IsCompact = false;
         _normalBounds = null;
         SaveWindowState();
     }
@@ -240,14 +242,36 @@ public partial class McpWindow : Window
         return new WindowPlacement(bounds.Left, bounds.Top, bounds.Width, bounds.Height);
     }
 
+    /// <summary>
+    /// Moves and resizes in one native call. Setting Left, Top, Width and Height one by one moves the window four
+    /// times, and collapsing showed the full window sliding down before it shrank (2026-10-25). The WPF properties
+    /// are set afterwards so they agree; the window is already there, so they move nothing.
+    /// </summary>
     private void SetBounds(WindowPlacement bounds)
     {
         BeginAnimation(HeightProperty, null);
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle != IntPtr.Zero && PresentationSource.FromVisual(this)?.CompositionTarget is { } target)
+        {
+            var toDevice = target.TransformToDevice;
+            SetWindowPos(handle, IntPtr.Zero,
+                (int)Math.Round(bounds.Left * toDevice.M11), (int)Math.Round(bounds.Top * toDevice.M22),
+                (int)Math.Round(bounds.Width * toDevice.M11), (int)Math.Round(bounds.Height * toDevice.M22),
+                SwpNoZOrder | SwpNoActivate | SwpNoOwnerZOrder);
+        }
         Left = bounds.Left;
         Top = bounds.Top;
         Width = bounds.Width;
         Height = bounds.Height;
     }
+
+    private const uint SwpNoZOrder = 0x0004;
+    private const uint SwpNoActivate = 0x0010;
+    private const uint SwpNoOwnerZOrder = 0x0200;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
 
     /// <summary>The whole desktop across monitors, as for restoring saved bounds (a strip may sit on any monitor).</summary>
     private static WindowPlacement AvailableArea() => new(
