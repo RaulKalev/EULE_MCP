@@ -126,23 +126,39 @@ public class ExportFireAlarmCircuitPresetToExcelTool : IRevitMcpTool
                 int vRow = 2;
                 foreach (var l in presetResult.Loops)
                 {
+                    bool hasCircuit = l.CircuitInfo != null;
                     string cableType = l.CircuitInfo?.CableType ?? "";
-                    double lengthM = l.CircuitInfo?.CircuitLengthMeters ?? 0;
+                    double? lengthM = l.CircuitInfo?.CircuitLengthMeters;
                     var profile = CableResistanceProfileService.FindMatch(cableType, profileCollection);
                     double res = profile?.RoundTripOhmPerMeter ?? fallbackRes;
-                    double totalCurrentA = l.DeviceCount * sounderCurrentmA / 1000.0;
-                    double voltDrop = l.LoopKind == "ConventionalSounderLine" ? Math.Round(totalCurrentA * lengthM * res, 2) : 0;
-                    double loopRes = (l.LoopKind == "AddressableLoop" || l.LoopKind == "ModuleLoop") ? Math.Round(lengthM * res, 2) : 0;
+                    bool isSounderLine = l.LoopKind == "ConventionalSounderLine";
+                    bool isLoop = l.LoopKind == "AddressableLoop" || l.LoopKind == "ModuleLoop";
+
+                    // Same decisions as revit_get_fire_alarm_voltage_drop_summary (default 24 V supply, 18 V minimum,
+                    // 120 Ω loop limit): missing data is InsufficientData, sounder current counts sounders only.
+                    var estimate = isSounderLine
+                        ? FireAlarmVoltageDropEvaluator.EvaluateSounderLine(hasCircuit, lengthM, cableType, res,
+                            l.SounderCount, sounderCurrentmA, supplyVoltage: 24.0, minimumVoltage: 18.0)
+                        : isLoop
+                            ? FireAlarmVoltageDropEvaluator.EvaluateLoopResistance(hasCircuit, lengthM, cableType, res, 120.0)
+                            : null;
+
                     ws3.Cell(vRow, 1).Value = l.LoopName;
                     ws3.Cell(vRow, 2).Value = l.LoopKind;
                     ws3.Cell(vRow, 3).Value = l.DeviceCount;
                     ws3.Cell(vRow, 4).Value = cableType;
-                    ws3.Cell(vRow, 5).Value = lengthM;
+                    ws3.Cell(vRow, 5).Value = lengthM ?? 0;
                     ws3.Cell(vRow, 6).Value = res;
-                    ws3.Cell(vRow, 7).Value = l.LoopKind == "ConventionalSounderLine" ? Math.Round(totalCurrentA * 1000, 1) : 0;
-                    ws3.Cell(vRow, 8).Value = voltDrop;
-                    ws3.Cell(vRow, 9).Value = l.LoopKind == "ConventionalSounderLine" ? Math.Round(24.0 - voltDrop, 2) : 0;
-                    ws3.Cell(vRow, 10).Value = l.LoopKind == "AddressableLoop" ? $"Loop Ω: {loopRes}" : "";
+                    if (estimate?.TotalCurrentMilliAmps is double currentmA) ws3.Cell(vRow, 7).Value = currentmA;
+                    if (estimate?.EstimatedVoltageDrop is double voltDrop) ws3.Cell(vRow, 8).Value = voltDrop;
+                    if (estimate?.EstimatedEndVoltage is double endVoltage) ws3.Cell(vRow, 9).Value = endVoltage;
+                    ws3.Cell(vRow, 10).Value = estimate == null
+                        ? "Unknown"
+                        : estimate.Reason != null
+                            ? $"{estimate.Status}: {estimate.Reason}"
+                            : estimate.EstimatedLoopResistanceOhm is double loopRes
+                                ? $"{estimate.Status} (loop Ω: {loopRes})"
+                                : estimate.Status;
                     vRow++;
                 }
                 if (vRow > 2)

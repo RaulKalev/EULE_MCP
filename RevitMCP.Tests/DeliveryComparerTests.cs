@@ -83,6 +83,92 @@ public class DeliveryComparerTests : IDisposable
         Assert.Contains(issues, i => i.Category.Contains("Orphan", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void RevitSheetComparer_RealSheetNumbersWithFilters_AreCompared()
+    {
+        // H13: these sheet numbers used to fail to parse, so disciplineFilter dropped every sheet.
+        WriteFile("73226_PP_EN-5-10_1k-ATS.pdf");
+        var scan = ScanTempDir();
+
+        var sheets = new[]
+        {
+            RevitSheetDescriptor.FromSheet("73226_PP_EN-5-10_1k-ATS", "1k ATS"),
+            RevitSheetDescriptor.FromSheet("73226_PP_EN-5-20_1k-Side", "1k Side")
+        };
+
+        var result = DeliveryRevitSheetComparer.CompareSheets(scan, sheets, new[] { "pdf" },
+            new[] { "PP" }, new[] { "EN" }, "TESTRUN");
+
+        Assert.Equal(2, result.ComparedSheetCount);
+        Assert.Empty(result.UnparsedSheetNumbers);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("Delivery.MissingPDF", issue.Category);
+        Assert.Equal("EN-5-20", issue.SheetNumber);
+    }
+
+    [Fact]
+    public void RevitSheetComparer_UnparsedSheetWithDisciplineFilter_IsReported()
+    {
+        var scan = ScanTempDir();
+        var sheets = new[]
+        {
+            RevitSheetDescriptor.FromSheet("EN-5-01", "Parsed"),
+            RevitSheetDescriptor.FromSheet("A101", "Unparsed 1"),
+            RevitSheetDescriptor.FromSheet("Kaanetiitel", "Unparsed 2")
+        };
+
+        var result = DeliveryRevitSheetComparer.CompareSheets(scan, sheets, new[] { "pdf" },
+            Array.Empty<string>(), new[] { "EN" }, "TESTRUN");
+
+        Assert.Equal(1, result.ComparedSheetCount);
+        Assert.Equal(new[] { "A101", "Kaanetiitel" }, result.UnparsedSheetNumbers);
+        var warning = Assert.Single(result.Issues, i => i.Category == "Delivery.UnparsedSheetNumber");
+        Assert.Contains("2 Revit sheet(s)", warning.Title);
+        Assert.Contains("A101", warning.Description);
+        Assert.Contains("Kaanetiitel", warning.Description);
+
+        var message = DeliveryRevitSheetComparer.DescribeSheetCounts(scan.Files.Count, sheets.Length, result);
+        Assert.Contains("against 1 of 3 Revit sheet(s)", message);
+        Assert.Contains("2 sheet(s) skipped", message);
+    }
+
+    [Fact]
+    public void RevitSheetComparer_UnparsedSheetWithoutFilter_IsComparedByRawNumber()
+    {
+        WriteFile("1626_TP_EL-5-01_Plaan.pdf");
+        var scan = ScanTempDir();
+        var sheets = new[] { RevitSheetDescriptor.FromSheet("A101", "Unparsed") };
+
+        var result = DeliveryRevitSheetComparer.CompareSheets(scan, sheets, new[] { "pdf" },
+            Array.Empty<string>(), Array.Empty<string>(), "TESTRUN");
+
+        Assert.Equal(1, result.ComparedSheetCount);
+        Assert.Empty(result.UnparsedSheetNumbers);
+        Assert.DoesNotContain(result.Issues, i => i.Category == "Delivery.UnparsedSheetNumber");
+        Assert.Contains(result.Issues, i => i.Category == "Delivery.MissingPDF" && i.SheetNumber == "A101");
+        Assert.Equal("Checked 1 file(s) against 1 Revit sheet(s).",
+            DeliveryRevitSheetComparer.DescribeSheetCounts(scan.Files.Count, sheets.Length, result));
+    }
+
+    [Fact]
+    public void RevitSheetComparer_DisciplineFilterExcludesOthers_CountsOnlyCompared()
+    {
+        var scan = ScanTempDir();
+        var sheets = new[]
+        {
+            RevitSheetDescriptor.FromSheet("1626_TP_EL-5-01", "EL"),
+            RevitSheetDescriptor.FromSheet("1626_TP_EN-5-01", "EN")
+        };
+
+        var result = DeliveryRevitSheetComparer.CompareSheets(scan, sheets, new[] { "pdf" },
+            Array.Empty<string>(), new[] { "EN" }, "TESTRUN");
+
+        Assert.Equal(1, result.ComparedSheetCount);
+        Assert.Empty(result.UnparsedSheetNumbers);
+        Assert.Contains("against 1 of 2 Revit sheet(s)",
+            DeliveryRevitSheetComparer.DescribeSheetCounts(0, sheets.Length, result));
+    }
+
     // ── ExcelRegisterComparer ────────────────────────────────────────────────
 
     private string CreateExcelRegister(IEnumerable<string> sheetNumbers, string worksheetName = "Register")

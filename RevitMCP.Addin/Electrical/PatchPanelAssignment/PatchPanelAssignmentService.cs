@@ -92,6 +92,23 @@ public static class PatchPanelAssignmentService
                 continue;
             }
 
+            // Device-level circuits of the target system type. A circuit no connector below reports
+            // (seen live: a "2 x RJ45" outlet on two circuits whose connector 2 looked free) makes the
+            // planner skip the device instead of planning a duplicate circuit.
+            var deviceSystems = ElectricalConnectorHelper.GetDeviceSystems(fi)
+                .Where(s => IsSystemType(s, systemType))
+                .ToList();
+            var attributedByConnector = new Dictionary<int, HashSet<long>>();
+            foreach (var system in deviceSystems)
+            {
+                foreach (var connectorId in ElectricalConnectorHelper.GetDeviceConnectorIdsOn(system, fi))
+                {
+                    if (!attributedByConnector.TryGetValue(connectorId, out var set))
+                        attributedByConnector[connectorId] = set = new HashSet<long>();
+                    set.Add(system.Id.Value);
+                }
+            }
+
             var connectors = new List<DeviceConnectorInput>();
             foreach (var connector in ElectricalConnectorHelper.GetElectricalConnectors(fi))
             {
@@ -107,12 +124,18 @@ public static class PatchPanelAssignmentService
                     continue;
                 }
 
-                var assigned = ElectricalConnectorHelper.GetAssignedSystem(connector);
+                var assignedSystems = ElectricalConnectorHelper.GetAssignedSystems(connector);
+                var circuitIds = new SortedSet<long>(assignedSystems.Select(s => s.Id.Value));
+                if (attributedByConnector.TryGetValue(connector.Id, out var attributed))
+                    circuitIds.UnionWith(attributed);
+                var assigned = assignedSystems.FirstOrDefault()
+                               ?? deviceSystems.FirstOrDefault(s => circuitIds.Contains(s.Id.Value));
                 connectors.Add(new DeviceConnectorInput
                 {
                     ConnectorId = connector.Id,
-                    IsCircuited = assigned != null,
-                    ExistingCircuitId = assigned?.Id.Value,
+                    IsCircuited = circuitIds.Count > 0,
+                    ExistingCircuitId = circuitIds.Count > 0 ? circuitIds.Min : null,
+                    ExistingCircuitIds = circuitIds.ToList(),
                     ExistingPanelName = assigned == null ? null : CircuitDtoBuilder.TryGetPanel(assigned)?.Name
                 });
             }
@@ -123,7 +146,8 @@ public static class PatchPanelAssignmentService
                 TypeName = fi.Symbol?.Name ?? string.Empty,
                 X = point.X,
                 Y = point.Y,
-                Connectors = connectors
+                Connectors = connectors,
+                DeviceCircuitIds = deviceSystems.Select(s => s.Id.Value).ToList()
             });
         }
 
@@ -158,6 +182,19 @@ public static class PatchPanelAssignmentService
         }
 
         return result;
+    }
+
+    private static bool IsSystemType(ElectricalSystem system, ElectricalSystemType systemType)
+    {
+        try
+        {
+            return system.SystemType == systemType;
+        }
+        catch
+        {
+            // Unknown type: count it, so an unreadable circuit never hides an existing assignment.
+            return true;
+        }
     }
 
     private static int ReadCapacity(FamilyInstance panel)

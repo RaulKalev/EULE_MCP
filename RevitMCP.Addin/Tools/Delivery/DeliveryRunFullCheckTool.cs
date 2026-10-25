@@ -58,26 +58,15 @@ public class DeliveryRunFullCheckTool : IRevitMcpTool
             .OfClass(typeof(ViewSheet))
             .Cast<ViewSheet>()
             .Where(s => !s.IsPlaceholder)
-            .Select(s =>
-            {
-                var parsed = RevitSheetNumberParser.Parse(s.SheetNumber);
-                return new RevitSheetDescriptor
-                {
-                    SheetNumber   = parsed?.SheetNumberCore ?? s.SheetNumber,
-                    SheetName     = s.Name,
-                    Discipline    = parsed?.Discipline,
-                    Stage         = parsed?.Stage,
-                    ProjectNumber = parsed?.ProjectNumber
-                };
-            })
+            .Select(s => RevitSheetDescriptor.FromSheet(s.SheetNumber, s.Name))
             .ToList();
 
         var runId = Guid.NewGuid().ToString("N")[..8].ToUpper();
         var allIssues = new List<IssueDto>();
 
         // Step 2 — Revit comparison
-        var revitIssues = DeliveryRevitSheetComparer.Compare(scan, sheets, requiredExtensions, stageFilter, disciplineFilter, runId);
-        allIssues.AddRange(revitIssues);
+        var comparison = DeliveryRevitSheetComparer.CompareSheets(scan, sheets, requiredExtensions, stageFilter, disciplineFilter, runId);
+        allIssues.AddRange(comparison.Issues);
 
         // Step 3 — Excel register comparison (optional)
         string? registerCompareError = null;
@@ -162,6 +151,8 @@ public class DeliveryRunFullCheckTool : IRevitMcpTool
         var warnings = scan.Warnings.Concat(exportWarnings).ToList();
         if (registerCompareError != null)
             warnings.Insert(0, $"Excel register comparison skipped: {registerCompareError}");
+        if (comparison.UnparsedSheetNumbers.Count > 0)
+            warnings.Add($"{comparison.UnparsedSheetNumbers.Count} sheet(s) skipped by disciplineFilter: sheet number not recognised.");
 
         sw.Stop();
         return Task.FromResult(new McpToolResult
@@ -169,7 +160,7 @@ public class DeliveryRunFullCheckTool : IRevitMcpTool
             RequestId = request.RequestId,
             Success = true,
             Message = $"Full delivery check complete. {allIssues.Count} issue(s) found ({report.ErrorCount} errors, {report.WarningCount} warnings). " +
-                      $"Checked {scan.Files.Count} file(s) against {sheets.Count} Revit sheet(s).",
+                      DeliveryRevitSheetComparer.DescribeSheetCounts(scan.Files.Count, sheets.Count, comparison),
             Data = new
             {
                 runId,
@@ -177,6 +168,8 @@ public class DeliveryRunFullCheckTool : IRevitMcpTool
                 {
                     totalFiles = scan.Files.Count,
                     totalSheets = sheets.Count,
+                    comparedSheets = comparison.ComparedSheetCount,
+                    unparsedSheets = comparison.UnparsedSheetNumbers.Count,
                     totalIssues = report.TotalCount,
                     criticalIssues = report.CriticalCount,
                     errorIssues = report.ErrorCount,

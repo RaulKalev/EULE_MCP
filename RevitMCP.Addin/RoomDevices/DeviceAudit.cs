@@ -30,7 +30,7 @@ internal sealed class RoomIndex
 
     public RoomRecord? Locate(DeviceRecord device)
     {
-        device.RoomIndex = RoomAuditMath.LocateRoom(Candidates, device.Point, device.ZMm);
+        device.RoomIndex = RoomAuditMath.LocateRoom(Candidates, device.Point, device.ZMm, device.Level != null ? device.LevelElevationMm : null);
         return device.RoomIndex >= 0 ? Rooms[device.RoomIndex] : null;
     }
 
@@ -40,6 +40,7 @@ internal sealed class RoomIndex
     public static RoomIndex Build(RoomSourceService service, RoomFilter filter, List<string> warnings)
     {
         var rooms = service.LoadRooms(filter, warnings, limit: 5000);
+        var storeys = StoreyElevationsMm(service);
         return new RoomIndex
         {
             Service = service,
@@ -51,9 +52,28 @@ internal sealed class RoomIndex
                 AreaM2 = r.AreaM2,
                 Polygon = r.Polygon,
                 FloorZMm = r.FloorZMm,
-                HeightMm = r.HeightMm
+                HeightMm = r.HeightMm,
+                LevelElevationMm = r.HostLevel != null ? r.HostLevelElevationMm : null,
+                StoreyTopMm = RoomAuditMath.NextStoreyAboveMm(r.FloorZMm, storeys)
             }).ToList()
         };
+    }
+
+    /// <summary>
+    /// Host level elevations (mm) that bound a storey: the levels marked Building Story, or every level
+    /// when none is marked.
+    /// </summary>
+    private static List<double> StoreyElevationsMm(RoomSourceService service)
+    {
+        static bool IsStorey(Level level)
+        {
+            try { return level.get_Parameter(BuiltInParameter.LEVEL_IS_BUILDING_STORY)?.AsInteger() == 1; }
+            catch { return false; }
+        }
+
+        var levels = service.HostLevels;
+        var storeys = levels.Where(l => IsStorey(l.Level)).ToList();
+        return (storeys.Count > 0 ? storeys : levels).Select(l => RoomUnits.FtToMm(l.ElevationFt)).ToList();
     }
 }
 

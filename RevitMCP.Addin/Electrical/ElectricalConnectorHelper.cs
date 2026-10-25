@@ -43,19 +43,92 @@ public static class ElectricalConnectorHelper
     /// the ElectricalSystem element.
     /// </summary>
     public static ElectricalSystem? GetAssignedSystem(Connector connector)
+        => GetAssignedSystems(connector).FirstOrDefault();
+
+    /// <summary>
+    /// Every electrical system this connector is circuited to, ordered by id. Reads both the
+    /// connector's <see cref="Connector.MEPSystem"/> and the owners of its references, because
+    /// neither alone is reliable for every family (a reference may point at the panel's connector
+    /// rather than at the circuit).
+    /// </summary>
+    public static List<ElectricalSystem> GetAssignedSystems(Connector connector)
     {
+        var result = new Dictionary<long, ElectricalSystem>();
+        try
+        {
+            if (connector.MEPSystem is ElectricalSystem own)
+                result[own.Id.Value] = own;
+        }
+        catch
+        {
+            // Some connectors cannot report their system; the references below still can.
+        }
         try
         {
             foreach (Connector reference in connector.AllRefs)
             {
                 if (reference.Owner is ElectricalSystem system)
-                    return system;
+                    result[system.Id.Value] = system;
             }
         }
         catch
         {
             // Treat unreadable references as "not circuited" — callers re-validate at write time.
         }
-        return null;
+        return result.OrderBy(kv => kv.Key).Select(kv => kv.Value).ToList();
+    }
+
+    /// <summary>
+    /// The electrical systems the whole device is assigned to (any connector), ordered by id.
+    /// This is the device-level view Revit's own "Circuits" list shows; callers compare it with the
+    /// per-connector view to catch circuits no connector reports.
+    /// </summary>
+    public static List<ElectricalSystem> GetDeviceSystems(FamilyInstance fi)
+    {
+        try
+        {
+            var systems = fi.MEPModel?.GetAssignedElectricalSystems();
+            if (systems == null) return new List<ElectricalSystem>();
+            return systems.Where(s => s != null).GroupBy(s => s.Id.Value).Select(g => g.First())
+                .OrderBy(s => s.Id.Value).ToList();
+        }
+        catch
+        {
+            return new List<ElectricalSystem>();
+        }
+    }
+
+    /// <summary>
+    /// Ids of the device's connectors that a circuit's own connectors reference — the reverse of
+    /// <see cref="GetAssignedSystems"/>, used to attribute a device-level circuit to a connector.
+    /// </summary>
+    public static List<int> GetDeviceConnectorIdsOn(ElectricalSystem system, FamilyInstance fi)
+    {
+        var ids = new SortedSet<int>();
+        try
+        {
+            var manager = system.ConnectorManager;
+            if (manager == null) return ids.ToList();
+            foreach (Connector systemConnector in manager.Connectors)
+            {
+                try
+                {
+                    foreach (Connector reference in systemConnector.AllRefs)
+                    {
+                        if (reference.Owner?.Id == fi.Id && reference.Domain == Domain.DomainElectrical)
+                            ids.Add(reference.Id);
+                    }
+                }
+                catch
+                {
+                    // Skip a system connector whose references cannot be read.
+                }
+            }
+        }
+        catch
+        {
+            // No attribution possible; the device-level circuit stays unattributed.
+        }
+        return ids.ToList();
     }
 }

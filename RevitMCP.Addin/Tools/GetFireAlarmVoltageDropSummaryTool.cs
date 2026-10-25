@@ -10,7 +10,7 @@ namespace RevitMCP.Addin.Tools;
 public class GetFireAlarmVoltageDropSummaryTool : IRevitMcpTool
 {
     public string Name => "revit_get_fire_alarm_voltage_drop_summary";
-    public string Description => "Returns preliminary loop resistance or voltage-drop estimates grouped by Ahela nr. AddressableLoops use loop resistance (Ω); ConventionalSounderLines use voltage-drop (V). Results are preliminary only. Accepts: panelName, loopParameterName (default 'Ahela nr.'), deviceTypeParameterName, sounderCurrentMilliAmps (default 50.0), sounderSupplyVoltage (default 24.0), minimumSounderVoltage (default 18.0), addressableLoopMaxResistanceOhm (default 120.0), fallbackResistanceOhmPerMeter (default 0.035), limit.";
+    public string Description => "Returns preliminary loop resistance or voltage-drop estimates grouped by Ahela nr. AddressableLoops use loop resistance (Ω); ConventionalSounderLines use voltage-drop (V) from the sounders' current only. Status is Ok/Warning/Critical, or InsufficientData (with a reason) when the circuit, its length or its cable type is missing or a sounder line has no sounder. Results are preliminary only. Accepts: panelName, loopParameterName (default 'Ahela nr.'), deviceTypeParameterName, sounderCurrentMilliAmps (default 50.0), sounderSupplyVoltage (default 24.0), minimumSounderVoltage (default 18.0), addressableLoopMaxResistanceOhm (default 120.0), fallbackResistanceOhmPerMeter (default 0.035), limit.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Electrical;
 
@@ -50,17 +50,17 @@ public class GetFireAlarmVoltageDropSummaryTool : IRevitMcpTool
         {
             if (cancellationToken.IsCancellationRequested) break;
 
+            bool hasCircuit = loop.CircuitInfo != null;
             string cableType = loop.CircuitInfo?.CableType ?? "";
-            double lengthMeters = loop.CircuitInfo?.CircuitLengthMeters ?? 0;
+            double? lengthMeters = loop.CircuitInfo?.CircuitLengthMeters;
             var profile = CableResistanceProfileService.FindMatch(cableType, profileCollection);
             double resistanceOhmPerMeter = profile?.RoundTripOhmPerMeter ?? fallbackResOhm;
 
             if (loop.LoopKind == "AddressableLoop" || loop.LoopKind == "ModuleLoop")
             {
-                double loopRes = Math.Round(lengthMeters * resistanceOhmPerMeter, 2);
-                double pctOfLimit = maxLoopResOhm > 0 ? Math.Round(loopRes / maxLoopResOhm * 100, 1) : 0;
-                string status = loopRes > maxLoopResOhm ? "Critical"
-                    : (loopRes > maxLoopResOhm * 0.8 ? "Warning" : "Ok");
+                // No circuit, length or cable type gives InsufficientData with a reason, never "Ok".
+                var estimate = FireAlarmVoltageDropEvaluator.EvaluateLoopResistance(
+                    hasCircuit, lengthMeters, cableType, resistanceOhmPerMeter, maxLoopResOhm);
 
                 loopResults.Add(new
                 {
@@ -70,35 +70,37 @@ public class GetFireAlarmVoltageDropSummaryTool : IRevitMcpTool
                     cableType,
                     lengthMeters,
                     resistanceOhmPerMeter,
-                    estimatedLoopResistanceOhm = loopRes,
+                    estimatedLoopResistanceOhm = estimate.EstimatedLoopResistanceOhm,
                     limitOhm = maxLoopResOhm,
-                    percentOfLimit = pctOfLimit,
-                    status,
+                    percentOfLimit = estimate.PercentOfLimit,
+                    status = estimate.Status,
+                    reason = estimate.Reason,
                     profileMatched = profile != null
                 });
             }
             else if (loop.LoopKind == "ConventionalSounderLine")
             {
-                double totalCurrentA = loop.DeviceCount * sounderCurrentmA / 1000.0;
-                double voltageDrop = Math.Round(totalCurrentA * lengthMeters * resistanceOhmPerMeter, 2);
-                double endVoltage = Math.Round(supplyVoltage - voltageDrop, 2);
-                string status = endVoltage < minVoltage ? "Critical"
-                    : (endVoltage < minVoltage + 2.0 ? "Warning" : "Ok");
+                // Current from sounders only: detectors and call points on the group draw no sounder current.
+                var estimate = FireAlarmVoltageDropEvaluator.EvaluateSounderLine(
+                    hasCircuit, lengthMeters, cableType, resistanceOhmPerMeter,
+                    loop.SounderCount, sounderCurrentmA, supplyVoltage, minVoltage);
 
                 loopResults.Add(new
                 {
                     loopName = loop.LoopName,
                     loopKind = loop.LoopKind,
                     deviceCount = loop.DeviceCount,
+                    sounderCount = estimate.SounderCount,
                     cableType,
                     lengthMeters,
                     deviceCurrentMilliAmps = sounderCurrentmA,
-                    totalCurrentMilliAmps = Math.Round(totalCurrentA * 1000, 1),
+                    totalCurrentMilliAmps = estimate.TotalCurrentMilliAmps,
                     resistanceOhmPerMeter,
-                    estimatedVoltageDrop = voltageDrop,
-                    estimatedEndVoltage = endVoltage,
+                    estimatedVoltageDrop = estimate.EstimatedVoltageDrop,
+                    estimatedEndVoltage = estimate.EstimatedEndVoltage,
                     minimumVoltage = minVoltage,
-                    status,
+                    status = estimate.Status,
+                    reason = estimate.Reason,
                     profileMatched = profile != null
                 });
             }
@@ -112,7 +114,9 @@ public class GetFireAlarmVoltageDropSummaryTool : IRevitMcpTool
                     cableType,
                     lengthMeters,
                     status = "Unknown",
-                    note = "Loop kind is Unknown — cannot estimate resistance or voltage drop."
+                    note = FireAlarmLoopClassifier.IsNoLoop(loop.LoopName)
+                        ? "These devices have no loop value, so they form no loop or line — cannot estimate resistance or voltage drop."
+                        : "Loop kind is Unknown — cannot estimate resistance or voltage drop."
                 });
             }
         }

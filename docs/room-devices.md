@@ -215,6 +215,15 @@ A rule applies to rooms matching `roomNumbers`, `roomFilter` (name regex), not
 or above `max`, each rule's number of rooms checked, devices outside every room, and devices whose
 height is off their code by more than `heightToleranceMm` (default 50).
 
+In these audits (devices per room, alignment, coverage, fire alarm) a device is in a room when it
+lies inside the footprint and between the room floor (− 300 mm) and the floor of the next storey
+above (host levels marked Building Story), so ceiling devices above Revit's default room height of
+2438 mm still count. Without a storey above, the room top + 1.5 m is the limit. Where two storeys'
+rooms both qualify near a slab, the room on the device's own level wins. `levelName` limits the
+devices as well as the rooms: devices of other storeys are left out with a warning. Devices
+outside every room are listed up to 50; `devicesOutsideRoomsTotal`
+counts them all.
+
 ### Device alignment
 
 Unhosted devices do not move with the linked walls and ceilings, so check them after every AR

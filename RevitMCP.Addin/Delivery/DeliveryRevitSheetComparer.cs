@@ -20,8 +20,24 @@ public static class DeliveryRevitSheetComparer
         IReadOnlyList<string> stageFilter,
         IReadOnlyList<string> disciplineFilter,
         string runId)
+        => CompareSheets(scan, revitSheets, requiredExtensions, stageFilter, disciplineFilter, runId).Issues;
+
+    /// <summary>
+    /// Same as <see cref="Compare"/>, but also reports how many sheets were actually compared and which
+    /// were skipped because <paramref name="disciplineFilter"/> was given and their number could not be parsed
+    /// (their discipline is unknown). Those skipped sheets are reported as one warning issue, never dropped silently.
+    /// </summary>
+    public static DeliveryRevitSheetComparison CompareSheets(
+        DeliveryScanResult scan,
+        IReadOnlyList<RevitSheetDescriptor> revitSheets,
+        IReadOnlyList<string> requiredExtensions,
+        IReadOnlyList<string> stageFilter,
+        IReadOnlyList<string> disciplineFilter,
+        string runId)
     {
         var issues = new List<IssueDto>();
+        var unparsed = new List<string>();
+        int compared = 0;
         int seq = 0;
 
         // Build lookup: sheet number → sheet descriptor
@@ -43,9 +59,18 @@ public static class DeliveryRevitSheetComparer
         // ── Check each Revit sheet has required files ─────────────────────────
         foreach (var sheet in revitSheets)
         {
-            if (disciplineFilter.Count > 0 && !disciplineFilter.Contains(sheet.Discipline ?? "", StringComparer.OrdinalIgnoreCase))
-                continue;
+            if (disciplineFilter.Count > 0)
+            {
+                if (sheet.Discipline == null)
+                {
+                    unparsed.Add(sheet.OriginalSheetNumber ?? sheet.SheetNumber);
+                    continue;
+                }
+                if (!disciplineFilter.Contains(sheet.Discipline, StringComparer.OrdinalIgnoreCase))
+                    continue;
+            }
 
+            compared++;
             foreach (var ext in requiredExtensions)
             {
                 var key = $"{sheet.SheetNumber}|{ext}";
@@ -106,7 +131,37 @@ public static class DeliveryRevitSheetComparer
             }
         }
 
-        return issues;
+        if (unparsed.Count > 0)
+        {
+            seq++;
+            issues.Add(DeliveryIssueBuilder.UnparsedSheetNumbers(runId, seq, unparsed.Count,
+                unparsed.Take(MaxUnparsedExamples), disciplineFilter));
+        }
+
+        return new DeliveryRevitSheetComparison
+        {
+            Issues = issues,
+            ComparedSheetCount = compared,
+            UnparsedSheetNumbers = unparsed
+        };
+    }
+
+    /// <summary>How many unparsed sheet numbers the warning issue names as examples.</summary>
+    public const int MaxUnparsedExamples = 5;
+
+    /// <summary>
+    /// The one-line summary the delivery tools return, e.g.
+    /// "Checked 3 file(s) against 2 of 22 Revit sheet(s); 20 skipped because their number could not be parsed …".
+    /// </summary>
+    public static string DescribeSheetCounts(int fileCount, int totalSheets, DeliveryRevitSheetComparison comparison)
+    {
+        var text = comparison.ComparedSheetCount == totalSheets
+            ? $"Checked {fileCount} file(s) against {totalSheets} Revit sheet(s)."
+            : $"Checked {fileCount} file(s) against {comparison.ComparedSheetCount} of {totalSheets} Revit sheet(s).";
+        if (comparison.UnparsedSheetNumbers.Count > 0)
+            text += $" {comparison.UnparsedSheetNumbers.Count} sheet(s) skipped because their number could not be parsed for disciplineFilter, e.g. " +
+                    string.Join(", ", comparison.UnparsedSheetNumbers.Take(MaxUnparsedExamples)) + ".";
+        return text;
     }
 
     private static bool IsSuspiciouslySmall(DeliveryFileEntry file)
@@ -122,9 +177,40 @@ public static class DeliveryRevitSheetComparer
 
 public sealed class RevitSheetDescriptor
 {
+    /// <summary>The parsed core (e.g. "EN-5-10"), or the raw sheet number when it could not be parsed.</summary>
     public string SheetNumber { get; init; } = string.Empty;
     public string SheetName { get; init; } = string.Empty;
+    /// <summary>Null when the sheet number could not be parsed.</summary>
     public string? Discipline { get; init; }
     public string? Stage { get; init; }
     public string? ProjectNumber { get; init; }
+    /// <summary>The sheet number as it is in Revit, e.g. "73226_PP_EN-5-10_1k-ATS".</summary>
+    public string? OriginalSheetNumber { get; init; }
+
+    /// <summary>Builds a descriptor from a Revit sheet's number and name via <see cref="RevitSheetNumberParser"/>.</summary>
+    public static RevitSheetDescriptor FromSheet(string sheetNumber, string sheetName)
+    {
+        var parsed = RevitSheetNumberParser.Parse(sheetNumber);
+        return new RevitSheetDescriptor
+        {
+            SheetNumber         = parsed?.SheetNumberCore ?? sheetNumber,
+            SheetName           = sheetName,
+            Discipline          = parsed?.Discipline,
+            Stage               = parsed?.Stage,
+            ProjectNumber       = parsed?.ProjectNumber,
+            OriginalSheetNumber = sheetNumber
+        };
+    }
+}
+
+/// <summary>Result of <see cref="DeliveryRevitSheetComparer.CompareSheets"/>.</summary>
+public sealed class DeliveryRevitSheetComparison
+{
+    public List<IssueDto> Issues { get; init; } = new();
+
+    /// <summary>Sheets that passed the discipline filter and were checked against the delivery folder.</summary>
+    public int ComparedSheetCount { get; init; }
+
+    /// <summary>Raw numbers of sheets skipped because a discipline filter was given and the number did not parse.</summary>
+    public List<string> UnparsedSheetNumbers { get; init; } = new();
 }

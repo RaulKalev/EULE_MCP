@@ -307,4 +307,118 @@ public class PatchPanelAssignmentPlannerTests
         Assert.Equal(2, plan.TotalCircuitsPlanned);
         Assert.Contains(plan.Warnings, w => w.Contains("matches no connectorRule"));
     }
+
+    // ── Existing assignments the connectors miss (live finding: 2206289 "2 x RJ45") ──
+
+    // The device is on two circuits at device level, but only connector 1 reports one:
+    // connector 2 looks free and must not get a third circuit.
+    [Fact]
+    public void DeviceOnCircuitsNoConnectorReports_IsSkippedWithWarning()
+    {
+        var device = new DeviceInput
+        {
+            ElementId = 2206289, TypeName = "2 x RJ45", X = 0, Y = 0,
+            Connectors =
+            {
+                new DeviceConnectorInput { ConnectorId = 1, IsCircuited = true, ExistingCircuitId = 501 },
+                new DeviceConnectorInput { ConnectorId = 2 }
+            },
+            DeviceCircuitIds = { 501, 502 }
+        };
+
+        var plan = PatchPanelAssignmentPlanner.Plan(new[] { device }, new[] { Panel(10, "FD1-01", 24) }, Rj45Rules, Options());
+
+        Assert.Equal(0, plan.TotalCircuitsPlanned);
+        Assert.Contains(plan.Skipped, s => s.ElementId == 2206289);
+        Assert.Contains(plan.Warnings, w => w.Contains("2206289") && w.Contains("ID:502"));
+    }
+
+    // Both circuits sit on connector 1: circuits are counted, not connectors, so the 2-port quota is full.
+    [Fact]
+    public void TwoCircuitsOnOneConnector_FillTwoPortQuota()
+    {
+        var device = new DeviceInput
+        {
+            ElementId = 7, TypeName = "2 x RJ45",
+            Connectors =
+            {
+                new DeviceConnectorInput { ConnectorId = 1, IsCircuited = true, ExistingCircuitId = 501, ExistingCircuitIds = { 501, 502 } },
+                new DeviceConnectorInput { ConnectorId = 2 }
+            },
+            DeviceCircuitIds = { 501, 502 }
+        };
+
+        var plan = PatchPanelAssignmentPlanner.Plan(new[] { device }, new[] { Panel(10, "FD1-01", 24) }, Rj45Rules, Options());
+
+        Assert.True(plan.IsValid);
+        Assert.Equal(0, plan.TotalCircuitsPlanned);
+        Assert.Contains(plan.Skipped, s => s.ElementId == 7 && s.Reason.Contains("Already circuited"));
+    }
+
+    // A device-level-only circuit on a device whose quota is still open: skip, never guess a free connector.
+    [Fact]
+    public void UnattributedCircuit_WithQuotaOpen_SkipsDeviceInsteadOfGuessingAConnector()
+    {
+        var device = new DeviceInput
+        {
+            ElementId = 9, TypeName = "2 x RJ45",
+            Connectors = { new DeviceConnectorInput { ConnectorId = 1 }, new DeviceConnectorInput { ConnectorId = 2 } },
+            DeviceCircuitIds = { 900 }
+        };
+
+        var plan = PatchPanelAssignmentPlanner.Plan(new[] { device }, new[] { Panel(10, "FD1-01", 24) }, Rj45Rules, Options());
+
+        Assert.Equal(0, plan.TotalCircuitsPlanned);
+        Assert.Contains(plan.Skipped, s => s.ElementId == 9 && s.Reason.Contains("cannot be trusted"));
+        Assert.Contains(plan.Warnings, w => w.Contains("ID:900") && w.Contains("skipped"));
+    }
+
+    [Fact]
+    public void UnattributedCircuit_CountsTowardQuota()
+    {
+        var onePort = new DeviceInput
+        {
+            ElementId = 8, TypeName = "1 x RJ45",
+            Connectors = { new DeviceConnectorInput { ConnectorId = 1 }, new DeviceConnectorInput { ConnectorId = 2 } },
+            DeviceCircuitIds = { 900 }
+        };
+
+        var plan = PatchPanelAssignmentPlanner.Plan(new[] { onePort }, new[] { Panel(10, "FD1-01", 24) }, Rj45Rules, Options());
+
+        // The one unattributed circuit already meets the 1-port quota: nothing planned, reported as circuited.
+        Assert.Equal(0, plan.TotalCircuitsPlanned);
+        Assert.Contains(plan.Skipped, s => s.ElementId == 8 && s.Reason.Contains("Already circuited"));
+    }
+
+    [Fact]
+    public void PartiallyCircuitedDevice_WarnsAboutItsExistingCircuit()
+    {
+        var plan = PatchPanelAssignmentPlanner.Plan(
+            new[] { Device(1, "2 x RJ45", 0, 0, connectors: 2, circuited: 1) },
+            new[] { Panel(10, "FD-01", 24) },
+            Rj45Rules, Options());
+
+        Assert.Equal(1, plan.TotalCircuitsPlanned);
+        Assert.Contains(plan.Warnings, w => w.Contains("already has 1 circuit"));
+    }
+
+    [Fact]
+    public void CountExistingCircuits_MergesConnectorAndDeviceViews()
+    {
+        var device = new DeviceInput
+        {
+            Connectors =
+            {
+                new DeviceConnectorInput { ConnectorId = 1, IsCircuited = true, ExistingCircuitId = 3, ExistingCircuitIds = { 3, 4 } },
+                new DeviceConnectorInput { ConnectorId = 2, IsCircuited = true } // flagged without an id
+            },
+            DeviceCircuitIds = { 4, 5 }
+        };
+
+        var existing = PatchPanelAssignmentPlanner.CountExistingCircuits(device);
+
+        Assert.Equal(new long[] { 3, 4, 5 }, existing.All);
+        Assert.Equal(new long[] { 5 }, existing.Unattributed);
+        Assert.Equal(3, existing.Count);
+    }
 }
