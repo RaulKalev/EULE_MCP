@@ -255,5 +255,6 @@
     <Compile Include="..\RevitMCP.Addin\Mep\MepRunPlanner.cs" Link="Mep\MepRunPlanner.cs" />
     <Compile Include="..\RevitMCP.Addin\Mep\MepConnectMath.cs" Link="Mep\MepConnectMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Mep\MepRunSummaryMath.cs" Link="Mep\MepRunSummaryMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Mep\MepApprovalText.cs" Link="Mep\MepApprovalText.cs" />
   </ItemGroup>
 </Project>

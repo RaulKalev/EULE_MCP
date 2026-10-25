@@ -169,6 +169,18 @@ public class MepRunSpecParsingTests
     }
 
     [Fact]
+    public void ApprovalText_NamesTypeSegmentsLengthElbowsAndJoins()
+    {
+        var text = MepApprovalText.CreateRun(MepKind.CableTray, "KL-300x60", 6, 38_412, 5,
+            new MepEndConnection { Mode = MepEndMode.Element, ElementId = 123456 }, MepEndConnection.None, 50);
+        Assert.Equal("Create a cable tray run 'KL-300x60' of 6 segments, 38.4 m, 5 elbows, connect start to tray 123456.", text);
+
+        var conduit = MepApprovalText.CreateRun(MepKind.Conduit, "PVC", 1, 2500, 0, MepEndConnection.None,
+            new MepEndConnection { Mode = MepEndMode.Auto }, 50, "Level 1");
+        Assert.Equal("Create a conduit run 'PVC' of 1 segment, 2.5 m, 0 elbows on 'Level 1', connect end to the nearest open conduit end within 50 mm.", conduit);
+    }
+
+    [Fact]
     public void BadFittingsAndSnap_AreRejected()
     {
         var (errors, _) = Fail("""{"kind":"conduit","type":"T","points":[[0,0,0],[1000,0,0]],"fittings":"tees","snapMm":0}""");
