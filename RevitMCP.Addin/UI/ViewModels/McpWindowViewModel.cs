@@ -55,10 +55,24 @@ public class McpWindowViewModel : BaseViewModel
         PendingApprovals.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasNoPendingApprovals));
-            PendingTabHeader = PendingApprovals.Count > 0
-                ? $"PENDING ({PendingApprovals.Count})"
-                : "PENDING";
+            UpdatePendingTabHeader();
         };
+        Plans.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasPlans));
+            UpdatePendingTabHeader();
+        };
+        if (RevitMCP.Addin.Plans.PlanService.Current is { } planService)
+        {
+            planService.Registry.Changed += () => RunOnUi(RefreshPlans);
+            // Plans expire on time even when no call checks them.
+            _planTimer = new DispatcherTimer(TimeSpan.FromSeconds(30), DispatcherPriority.Background, (_, _) =>
+            {
+                planService.ExpireDue();
+                RefreshPlans();
+            }, _dispatcher);
+            _planTimer.Start();
+        }
 
         RecentApprovalOutcomes.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRecentApprovalOutcomes));
 
@@ -78,6 +92,8 @@ public class McpWindowViewModel : BaseViewModel
         ApproveCommand = new RelayCommand(id => ApproveItem(id as string));
         RejectCommand = new RelayCommand(id => RejectItem(id as string));
         RejectAllCommand = new RelayCommand(_ => _approvalService?.RejectAll(), _ => PendingApprovals.Count > 0);
+        RevokePlanCommand = new RelayCommand(id => RevokePlan(id as string));
+        ShowPlanChangesCommand = new RelayCommand(id => ShowPlanChanges(id as string), _ => DispatchInternal != null);
         ToggleDirectEditCommand = new RelayCommand(_ => ToggleDirectEdit());
         MakeActiveCommand = new RelayCommand(_ => MakeActive(), _ => !_isActiveInstance);
     }
@@ -107,6 +123,14 @@ public class McpWindowViewModel : BaseViewModel
     public bool HasRecentApprovalOutcomes => RecentApprovalOutcomes.Count > 0;
     private const int RecentOutcomeCount = 10;
     public string PendingTabHeader { get => _pendingTabHeader; private set => SetProperty(ref _pendingTabHeader, value); }
+
+    /// <summary>Plans of this session (#99), newest first; active and exhausted ones can be revoked.</summary>
+    public ObservableCollection<PlanItem> Plans { get; } = [];
+    public bool HasPlans => Plans.Count > 0;
+    private readonly DispatcherTimer? _planTimer;
+
+    /// <summary>Sends an internal request to the Revit API thread (wired in App); used by "Show changes".</summary>
+    public Func<RevitMCP.Core.Models.McpToolRequest, Task<RevitMCP.Core.Models.McpToolResult>>? DispatchInternal { get; set; }
     public bool IsDirectEditEnabled { get => _isDirectEditEnabled; private set => SetProperty(ref _isDirectEditEnabled, value); }
     public int SelectedTabIndex { get => _selectedTabIndex; set => SetProperty(ref _selectedTabIndex, value); }
     public Action<Action<bool>>? RequestDirectEditConfirmation { get; set; }
@@ -126,6 +150,8 @@ public class McpWindowViewModel : BaseViewModel
     public ICommand ApproveCommand { get; }
     public ICommand RejectCommand { get; }
     public ICommand RejectAllCommand { get; }
+    public ICommand RevokePlanCommand { get; }
+    public ICommand ShowPlanChangesCommand { get; }
     public ICommand ToggleDirectEditCommand { get; }
     public ICommand MakeActiveCommand { get; }
 
@@ -234,6 +260,72 @@ public class McpWindowViewModel : BaseViewModel
                 IsSucceeded = o.State == ApprovalOutcome.Succeeded,
                 IsFailed = failed
             });
+        }
+    }
+
+    // ── Plans (#99) ──────────────────────────────────────────────────────────
+    private void UpdatePendingTabHeader()
+    {
+        var active = Plans.Count(p => p.CanRevoke);
+        var header = PendingApprovals.Count > 0 ? $"PENDING ({PendingApprovals.Count})" : "PENDING";
+        PendingTabHeader = active > 0 ? $"{header} · PLANS ({active})" : header;
+    }
+
+    /// <summary>Rebuilds the Plans section from the registry. Must run on the UI thread.</summary>
+    private void RefreshPlans()
+    {
+        var service = RevitMCP.Addin.Plans.PlanService.Current;
+        Plans.Clear();
+        if (service == null) return;
+        var now = DateTimeOffset.Now;
+        foreach (var plan in service.Registry.All().Take(20))
+        {
+            var env = plan.Envelope;
+            var parts = new List<string>
+            {
+                $"{plan.Calls}/{env.MaxCalls} calls",
+                $"{plan.Touched.Count}/{env.MaxElementsTotal} elements"
+            };
+            if (plan.Violations.Count > 0) parts.Add($"{plan.Violations.Count} not covered");
+            if (!plan.IsEnded && plan.ExpiresAt is { } at) parts.Add($"expires in {Math.Max(0, (int)Math.Ceiling((at - now).TotalMinutes))} min");
+            Plans.Add(new PlanItem
+            {
+                PlanId = plan.Id,
+                Title = plan.Title,
+                Client = plan.ClientName,
+                Document = plan.DocumentTitle,
+                StateLabel = plan.State.ToString().ToUpperInvariant(),
+                IsActive = plan.IsActive,
+                CanRevoke = !plan.IsEnded,
+                Progress = string.Join(" · ", parts),
+                StateReason = plan.StateReason ?? string.Empty
+            });
+        }
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    private void RevokePlan(string? planId)
+    {
+        var service = RevitMCP.Addin.Plans.PlanService.Current;
+        var plan = service?.Registry.Get(planId);
+        if (plan != null) service!.Finish(plan, RevitMCP.Addin.Plans.PlanState.Revoked, "revoked in the MCP window");
+    }
+
+    private async void ShowPlanChanges(string? planId)
+    {
+        if (planId == null || DispatchInternal == null) return;
+        try
+        {
+            await DispatchInternal(new RevitMCP.Core.Models.McpToolRequest
+            {
+                ToolName = RevitMCP.Addin.Tools.Plans.PlanShowChangesTool.ToolName,
+                ClientName = "MCP window",
+                Arguments = new Dictionary<string, object?> { ["planId"] = planId }
+            });
+        }
+        catch
+        {
+            // Selecting is a convenience; a busy Revit simply does not select.
         }
     }
 

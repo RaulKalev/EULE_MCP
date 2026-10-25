@@ -40,6 +40,15 @@ Before a batch of writes, `revit_checkpoint_create` with the ids or categories y
 now complains about. Publish long lists with `revit_publish_page`. `revit_checkpoint_rollback` undoes the agent's changes
 (manual approval; it never recreates deleted elements, and skips what the user changed last unless `force=true`).
 
+## Several write steps: submit a plan
+
+For more than a couple of write calls, `revit_plan_submit` once (`autonomy` group, see [`docs/plans.md`](docs/plans.md))
+with the tools you will call and the element ids or categories you will touch, instead of one approval per call. After
+the user approves it, the bridge attaches the `planId` to this session's writes and calls inside the envelope run without
+prompts. A call it does not cover waits for its own approval (the reason is in `warnings`); one whose changes break it is
+rolled back with `plan_envelope_violated` — narrow the call or submit a new plan, do not retry it unchanged. Deletes are
+never covered. Review with `revit_checkpoint_diff checkpointId=<the plan's checkpoint>`; end with `revit_plan_close`.
+
 ## Several open projects
 
 `revit_list_open_documents` lists the open project documents and their DWG/IFC/RVT links. The `documents` group

@@ -77,6 +77,14 @@ public class LogEntry
     /// <summary>The project the call ran in (project config, Project Information number, else the model name).</summary>
     [JsonProperty("projectId", NullValueHandling = NullValueHandling.Ignore)]
     public string? ProjectId { get; set; }
+
+    /// <summary>The plan (#99) the call carried, when any.</summary>
+    [JsonProperty("planId", NullValueHandling = NullValueHandling.Ignore)]
+    public string? PlanId { get; set; }
+
+    /// <summary>authorized | fallback:&lt;reason&gt; | violated, or the plan event (close, revoke, expire, exhausted).</summary>
+    [JsonProperty("planCheck", NullValueHandling = NullValueHandling.Ignore)]
+    public string? PlanCheck { get; set; }
 }
 
 /// <summary>

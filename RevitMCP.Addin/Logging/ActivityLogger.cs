@@ -83,6 +83,9 @@ public class ActivityLogger
         try { SetUsageFields(entry, result, context); }
         catch (MissingMethodException) { }
         catch (Exception) { /* usage fields never fail a log line */ }
+        try { SetPlanFields(entry, request); }
+        catch (MissingMethodException) { }
+        catch (Exception) { /* plan fields never fail a log line */ }
 
         await AppendEntryAsync(entry);
     }
@@ -103,6 +106,19 @@ public class ActivityLogger
         if (context == null || (string.IsNullOrEmpty(context.ModelTitle) && string.IsNullOrEmpty(context.CentralPath))) return;
         var modelPath = string.IsNullOrEmpty(context.CentralPath) ? context.LocalPath : context.CentralPath;
         entry.ProjectId = Usage.UsageProjectId.Resolve(ConfigProjectId(modelPath), ProjectKeyOf(context), context.ModelTitle);
+    }
+
+    /// <summary>Plan id and check outcome (#99), so an unattended session can be audited from the log alone.</summary>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void SetPlanFields(LogEntry entry, McpToolRequest request)
+    {
+        var check = Plans.PlanService.Current?.CheckOf(request.RequestId);
+        var planId = check?.PlanId;
+        if (planId == null && request.Arguments != null && request.Arguments.TryGetValue("planId", out var raw) && raw != null)
+            planId = raw.ToString();
+        if (string.IsNullOrWhiteSpace(planId)) return;
+        entry.PlanId = planId;
+        entry.PlanCheck = check?.Check;
     }
 
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]

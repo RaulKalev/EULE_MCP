@@ -54,6 +54,79 @@ internal static class CheckpointSupport
         return null;
     }
 
+    /// <summary>
+    /// Snapshots a scope, reads the warnings and stores a new checkpoint (revit_checkpoint_create, plan activation).
+    /// Null with <paramref name="failure"/> for a bad scope or one over QueryLimits.MaxScanElements.
+    /// </summary>
+    public static Checkpoint? Create(
+        UIApplication uiapp,
+        RevitDocumentResolver.DocumentTarget target,
+        CheckpointStore store,
+        SnapshotScope scope,
+        string title,
+        string client,
+        McpToolRequest request,
+        CancellationToken cancellationToken,
+        out List<Checkpoint> evicted,
+        out int unreadableWarnings,
+        out McpToolResult? failure)
+    {
+        evicted = new List<Checkpoint>();
+        unreadableWarnings = 0;
+        var doc = target.Document;
+        var snapshot = new Dictionary<long, ElementSnapshot>();
+        if (!scope.IsEmpty)
+        {
+            var ids = CheckpointSnapshotReader.ResolveScope(uiapp, doc, target.IsActive, scope, out var scopeError);
+            if (ids == null)
+            {
+                failure = Fail(request, scopeError!);
+                return null;
+            }
+            var cap = RevitMCP.Core.Safety.QueryLimits.Default.MaxScanElements;
+            if (ids.Count > cap)
+            {
+                failure = Fail(request,
+                    $"The scope resolves to {ids.Count:N0} elements; a snapshot holds at most {cap:N0}. Narrow it (elementIds, fewer categories, a view), or create the checkpoint without a scope to track change ids and warnings only.",
+                    SnapshotTooLarge, new { elements = ids.Count, cap });
+                return null;
+            }
+
+            var reader = new CheckpointSnapshotReader(doc);
+            foreach (var id in ids)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var snap = reader.Read(id, scope.Parameters.Count > 0 ? scope.Parameters : null);
+                if (snap != null) snapshot[id] = snap;
+            }
+            // Selection and views are resolved now; store the ids so a diff after a restart covers the same elements.
+            scope.ElementIds = snapshot.Keys.OrderBy(i => i).ToList();
+        }
+
+        var checkpoint = new Checkpoint
+        {
+            Id = CheckpointIds.NewId(),
+            Title = CheckpointStore.NormalizeTitle(title),
+            ModelId = CheckpointChangeTracker.ModelIdOf(doc),
+            DocumentTitle = doc.Title,
+            CreatedAt = DateTimeOffset.Now,
+            DocumentVersion = RevitMCP.Addin.Approval.DocumentChangeTracker.Capture(doc),
+            CreatedBy = client,
+            Warnings = RevitWarningReader.Read(doc, out unreadableWarnings),
+            Scope = scope.IsEmpty ? null : scope,
+            Snapshot = snapshot
+        };
+
+        try { evicted = store.Add(checkpoint); }
+        catch (ArgumentException ex)
+        {
+            failure = Fail(request, ex.Message, "tool_execution_failed");
+            return null;
+        }
+        failure = null;
+        return checkpoint;
+    }
+
     /// <summary>Re-reads the snapshotted elements and the document's warnings, and builds the diff.</summary>
     public static (CheckpointDiff Diff, WarningDiffResult Warnings, int UnreadableWarnings) ComputeDiff(Document doc, Checkpoint checkpoint)
     {

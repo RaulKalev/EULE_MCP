@@ -438,6 +438,14 @@ public class App : IExternalApplication
             handler.RegisterTool(new RevitMCP.Addin.Tools.Checkpoints.CheckpointDiffTool());
             handler.RegisterTool(new RevitMCP.Addin.Tools.Checkpoints.PreviewCheckpointRollbackTool());
             handler.RegisterTool(new RevitMCP.Addin.Tools.Checkpoints.CheckpointRollbackTool());
+            // Plan-level approval (Plans\, docs/plans.md, #99): one approval per plan of write calls.
+            RevitMCP.Addin.Plans.PlanService.Current = new RevitMCP.Addin.Plans.PlanService(
+                handler.GetToolPermission, handler.IsBackgroundTool, logger, handler.GetLastContext);
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Plans.PlanSubmitTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Plans.PlanStatusTool());
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Plans.PlanCloseTool());
+            // Not advertised by the bridge: the Pending tab's "Show changes" button.
+            handler.RegisterTool(new RevitMCP.Addin.Tools.Plans.PlanShowChangesTool());
 
             var eventService = new ExternalEventService(handler);
 
@@ -474,6 +482,7 @@ public class App : IExternalApplication
             var connector = new ConnectorService(pipeServer, eventService, approvalService, registration);
             _connector = connector;
             _viewModel = new McpWindowViewModel(connector, logger, approvalService);
+            _viewModel.DispatchInternal = request => eventService.DispatchAsync(request);
             if (DirectEditDefault.Read())
             {
                 // Opt-in per user so unattended batches survive add-in reloads and Revit restarts (#90).
@@ -576,6 +585,7 @@ public class App : IExternalApplication
         DocumentChangeTracker.MarkChanged(e.GetDocument());
         RevitMCP.Addin.Graph.GraphChangeTracker.Record(e);
         RevitMCP.Addin.Checkpoints.CheckpointChangeTracker.Record(e);
+        RevitMCP.Addin.Plans.PlanChangeRecorder.Record(e);
     }
 
     private static void AddRibbonButton(UIControlledApplication application)

@@ -7216,4 +7216,82 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         ["force"] = force,
         ["document"] = document ?? string.Empty
     };
+
+    // ── Plans: one approval per plan of write calls (#99) ────────────────────────────────────
+
+    private const string PlanEnvelopeDescription =
+        "What the plan may do without prompts: {\"tools\":[write tools it will call], \"elementIds\":[ids it may change], " +
+        "\"categories\":[\"Electrical Fixtures\"], \"levelIds\":[], \"viewIds\":[views for tags/text], \"worksets\":[], " +
+        "\"allowCreate\":true, \"allowModify\":true, \"maxElementsPerCall\":500, \"maxElementsTotal\":2000, \"maxCalls\":100, " +
+        "\"expiresMinutes\":120, \"strict\":false}. Only tools is required. Destructive tools (deletes) are refused: call them on their own. " +
+        "strict=false ignores side effects on tags, dimensions, circuits and wires.";
+
+    [McpServerTool(Name = "revit_plan_submit"),
+     Description("For several write steps: submits ONE plan instead of asking approval per call. The user approves it once in Revit; afterwards this session's write calls carry its planId automatically and run without prompts while they stay inside the envelope (tools, element ids, categories, limits), one Revit undo per call. A call outside it waits for its own approval with the reason in its warnings; a call whose changes break it is rolled back (plan_envelope_violated). Deletes are never covered. Activation creates a checkpoint (revit_checkpoint_diff to review). Returns approval_required: confirm with revit_get_approval_status, follow with revit_plan_status, end with revit_plan_close.")]
+    public async Task<string> PlanSubmit(
+        [Description("One line: what the plan does (shown in the approval).")] string title,
+        [Description(PlanEnvelopeDescription)] object envelope,
+        [Description("The steps you intend, one line each (shown to the user; informational).")] string[]? steps = null,
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        // The id is chosen here so the following calls can carry it while the plan still waits for approval.
+        var planId = "plan-" + Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(3)).ToLowerInvariant();
+        var args = new Dictionary<string, object?>
+        {
+            ["planId"] = planId,
+            ["title"] = title,
+            ["envelope"] = ToJToken(envelope),
+            ["steps"] = steps ?? [],
+            ["document"] = document ?? string.Empty
+        };
+        var result = await pipeClient.SendAsync("revit_plan_submit", args, cancellationToken);
+        if (result.Success || result.Status == "approval_required")
+        {
+            pipeClient.ActivePlanId = planId;
+            result.Warnings.Add($"planId {planId} is now attached to this session's write calls (revit_plan_use to change it).");
+        }
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_plan_status", ReadOnly = true),
+     Description("A plan's state (active, exhausted, expired, revoked, closed), counters, remaining calls and elements, calls it did not cover so far, and its checkpoint id. planId defaults to the session's active plan; with none, lists every plan of the Revit session.")]
+    public async Task<string> PlanStatus(
+        [Description("Plan id; default: the plan this session attaches to its writes.")] string? planId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["planId"] = planId ?? pipeClient.ActivePlanId ?? string.Empty };
+        return FormatResult(await pipeClient.SendAsync("revit_plan_status", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_plan_close"),
+     Description("Ends a plan early (default: the session's active plan) and stops attaching it to writes. Returns the final counters and a summary of what changed since the plan's checkpoint. Does not change the model.")]
+    public async Task<string> PlanClose(
+        [Description("Plan id; default: the plan this session attaches to its writes.")] string? planId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var id = planId ?? pipeClient.ActivePlanId ?? string.Empty;
+        var result = await pipeClient.SendAsync("revit_plan_close", new Dictionary<string, object?> { ["planId"] = id }, cancellationToken);
+        if (string.Equals(pipeClient.ActivePlanId, id, StringComparison.Ordinal) && (result.Success || result.Status == "plan_not_found"))
+            pipeClient.ActivePlanId = null;
+        return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_plan_use", ReadOnly = true),
+     Description("Sets the plan id this session attaches to every following write call, or clears it with an empty planId. revit_plan_submit sets it by itself; use this to switch between plans or to stop using one without closing it. Bridge-local: does not call Revit.")]
+    public Task<string> PlanUse(
+        [Description("Plan id to attach; empty clears it.")] string? planId = null)
+    {
+        var previous = pipeClient.ActivePlanId;
+        pipeClient.ActivePlanId = planId;
+        var now = pipeClient.ActivePlanId;
+        return Task.FromResult(FormatResult(new McpToolResult
+        {
+            Success = true,
+            Message = now == null
+                ? "No plan is attached to this session's write calls now" + (previous != null ? $" (was {previous})." : ".")
+                : $"Write calls of this session now carry planId {now}.",
+            Data = new { planId = now, previous }
+        }));
+    }
 }

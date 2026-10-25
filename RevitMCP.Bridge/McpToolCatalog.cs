@@ -132,6 +132,12 @@ internal static class McpToolCatalog
     /// <summary>All tool names the bridge defines (for discovery and tests).</summary>
     public static IReadOnlyList<string> AllToolNames() => GetToolMethods().Select(GetToolName).ToList();
 
+    private static readonly Lazy<HashSet<string>> ReadOnlyNames = new(() => new HashSet<string>(
+        GetToolMethods().Where(item => item.Attribute.ReadOnly).Select(GetToolName), StringComparer.OrdinalIgnoreCase));
+
+    /// <summary>True for a tool the bridge marks ReadOnly; such requests never carry a plan id (#99).</summary>
+    public static bool IsReadOnlyTool(string toolName) => ReadOnlyNames.Value.Contains(toolName);
+
     private static void ThrowOnUnknownGroups(List<string> unknown)
     {
         if (unknown.Count > 0)

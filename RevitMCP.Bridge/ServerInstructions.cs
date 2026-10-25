@@ -16,6 +16,8 @@ internal static class ServerInstructions
         "4. Act, then verify live. Write tools need approval and always act on the live model.\n" +
         "Before a batch of writes create a checkpoint (revit_checkpoint_create with the ids you will touch); after it, " +
         "revit_checkpoint_diff and revit_get_warnings sinceCheckpointId show what changed and what Revit now complains about.\n" +
+        "For several write steps submit one revit_plan_submit with the ids and tools you will use; approved plans run without " +
+        "per-call prompts inside their limits.\n" +
         "Memory: before a write, revit_memory_recall with what you are about to do — colleagues' decisions and corrections " +
         "for this project (hints, verify live; revit_graph_route may already carry them in its memory block). At task end, " +
         "revit_memory_remember a user correction, a decision and its reason, or an exception to a rule — one note each, never a " +

@@ -68,6 +68,10 @@ public class ExternalEventHandler : IExternalEventHandler
     public ToolPermission? GetToolPermission(string name)
         => _tools.TryGetValue(name, out var tool) ? tool.Permission : null;
 
+    /// <summary>True for a registered tool that runs off the Revit API thread (and so never touches the model).</summary>
+    public bool IsBackgroundTool(string name)
+        => _tools.TryGetValue(name, out var tool) && tool is IBackgroundMcpTool;
+
     public bool TryEnqueue(ExternalEventWorkItem item) => _queue.TryEnqueue(item);
 
     public RevitDocumentContext? GetLastContext() => _lastContext;
@@ -244,6 +248,24 @@ public class ExternalEventHandler : IExternalEventHandler
             return true;
         }
 
+        // Plan-level approval (#99): a call inside an approved plan's envelope runs now, without a prompt; one the
+        // plan does not cover takes the normal path below with the reason in planWarning.
+        string? planWarning = null;
+        if (!request.IsApproved &&
+            tool.Permission == ToolPermission.RequiresApproval &&
+            tool is not IBackgroundMcpTool &&
+            RevitMCP.Addin.Plans.PlanService.Current is { } plans &&
+            (tool is not IConditionalApprovalTool planConditional || planConditional.NeedsApproval(request)))
+        {
+            var planned = plans.TryRunUnderPlan(app, tool, request, () => RunTool(app, tool, request, item.CancellationToken), out planWarning);
+            if (planned != null)
+            {
+                tcs.TrySetResult(planned);
+                _ = _activityLogger?.WriteAsync(request, planned, _lastContext);
+                return true;
+            }
+        }
+
             // Intercept RequiresApproval / DestructiveRequiresManualApproval tools —
             // defer execution until user approves in the UI.
             // Approved requests (re-dispatched after user clicks Approve) skip this check.
@@ -337,6 +359,7 @@ public class ExternalEventHandler : IExternalEventHandler
                     }
                 };
                 try { approvalResult.Status = "approval_required"; } catch (MissingMethodException) { }
+                if (planWarning != null) approvalResult.Warnings.Add(planWarning);
             tcs.TrySetResult(approvalResult);
             return true;
         }
@@ -349,23 +372,8 @@ public class ExternalEventHandler : IExternalEventHandler
 
         try
         {
-            item.CancellationToken.ThrowIfCancellationRequested();
-
-            // Graph-first (#96): keep the graph built and fresh for the calls that use it, and answer an
-            // unnarrowed read of a large category with the graph route instead of running it.
-            var graphNote = RevitMCP.Addin.Tools.Graph.GraphRoutingSupport.EnsureFresh(app, request);
-            var result = RevitMCP.Addin.Tools.Graph.GraphRoutingSupport.TryGate(app, request);
-            if (result == null)
-            {
-                var execution = tool.ExecuteAsync(app, request, item.CancellationToken);
-                if (!execution.IsCompleted)
-                    throw new InvalidOperationException($"Tool '{tool.Name}' performed asynchronous work on the Revit API thread. Mark safe non-Revit I/O as background execution instead.");
-
-                result = execution.GetAwaiter().GetResult();
-                // Graph-first routing hint on broad live queries (#64); advisory, never fails the result.
-                RevitMCP.Addin.Tools.Graph.GraphRoutingSupport.TryAttachHint(app, request, result);
-            }
-            if (graphNote != null) result.Warnings.Add(graphNote);
+            var result = RunTool(app, tool, request, item.CancellationToken);
+            if (planWarning != null) result.Warnings.Add(planWarning);
             tcs.TrySetResult(result);
             if (request.IsApproved)
                 _ = _activityLogger?.WriteAsync(request, result, _lastContext);
@@ -405,6 +413,29 @@ public class ExternalEventHandler : IExternalEventHandler
         }
 
         return true;
+    }
+
+    /// <summary>Runs a Revit-thread tool synchronously: graph freshness, the graph-first gate, then the tool.</summary>
+    private static McpToolResult RunTool(UIApplication app, IRevitMcpTool tool, McpToolRequest request, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Graph-first (#96): keep the graph built and fresh for the calls that use it, and answer an
+        // unnarrowed read of a large category with the graph route instead of running it.
+        var graphNote = RevitMCP.Addin.Tools.Graph.GraphRoutingSupport.EnsureFresh(app, request);
+        var result = RevitMCP.Addin.Tools.Graph.GraphRoutingSupport.TryGate(app, request);
+        if (result == null)
+        {
+            var execution = tool.ExecuteAsync(app, request, cancellationToken);
+            if (!execution.IsCompleted)
+                throw new InvalidOperationException($"Tool '{tool.Name}' performed asynchronous work on the Revit API thread. Mark safe non-Revit I/O as background execution instead.");
+
+            result = execution.GetAwaiter().GetResult();
+            // Graph-first routing hint on broad live queries (#64); advisory, never fails the result.
+            RevitMCP.Addin.Tools.Graph.GraphRoutingSupport.TryAttachHint(app, request, result);
+        }
+        if (graphNote != null) result.Warnings.Add(graphNote);
+        return result;
     }
 
     private async Task ExecuteBackgroundItemAsync(
