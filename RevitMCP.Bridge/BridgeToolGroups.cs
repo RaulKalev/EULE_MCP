@@ -31,6 +31,7 @@ public static class BridgeToolGroups
         ["pages"] = "Model pages: publish a generated HTML report as a local page whose rows select elements in Revit, show live parameter values and can be edited",
         ["memory"] = "Shared memory: list, review page, forget, weekly consolidation (recall and remember are in core)",
         ["documents"] = "Open documents: activate, reload/remove DWG/IFC/RVT links, link visibility, save and sync with central",
+        ["autonomy"] = "Checkpoints, Revit model warnings, what changed since a checkpoint (change diff) and rollback",
         ["skills"] = "Skill builder and skill runs",
         ["office"] = "Configuration, files, Excel, standards lookup, delivery checks, monthly usage report"
     };
@@ -79,6 +80,11 @@ public static class BridgeToolGroups
             "revit_sync_with_central"
         }),
         ("pages", new[] { "revit_publish_page", "revit_list_pages" }),
+        ("autonomy", new[]
+        {
+            "revit_get_warnings", "revit_checkpoint_create", "revit_checkpoint_diff", "revit_checkpoint_list",
+            "revit_preview_checkpoint_rollback", "revit_checkpoint_rollback"
+        }),
         ("memory", new[] { "revit_memory_list", "revit_memory_page", "revit_memory_forget", "revit_memory_consolidate" }),
         ("office", new[] { "revit_usage_report" }),
         ("coordination", new[] { "revit_export_issues", "revit_merge_issue_reports" }));

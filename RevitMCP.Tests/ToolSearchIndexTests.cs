@@ -48,6 +48,9 @@ public class ToolSearchIndexTests
     [InlineData("export view image", "revit_export_view_image")]
     [InlineData("clash detection", "revit_detect_clashes")]
     [InlineData("ruumi geomeetria", "revit_get_room_geometry")]
+    [InlineData("what changed since checkpoint", "revit_checkpoint_diff")]
+    [InlineData("revit model warnings", "revit_get_warnings")]
+    [InlineData("undo changes since checkpoint", "revit_preview_checkpoint_rollback")]
     public void IntentFindsTheTool_InTheTopThree(string query, string expected) =>
         Assert.Contains(expected, Top(query));
 
