@@ -4,6 +4,7 @@ using Autodesk.Revit.DB.Electrical;
 using Autodesk.Revit.DB.ExtensibleStorage;
 using Autodesk.Revit.UI;
 using RevitMCP.Addin.Electrical;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Placement;
 using RevitMCP.Addin.Transactions;
@@ -63,11 +64,14 @@ internal static class DrawCircuitArcsExecutor
     public static McpToolResult Execute(UIApplication uiapp, McpToolRequest request, bool apply, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        var doc = uidoc?.Document;
-        if (doc == null) return Fail(request, "No active document.");
+        var target = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (target == null) return documentFailure!;
+        var doc = target.Document;
+        var uidoc = ToolDocument.UiDocumentOf(uiapp, target);
+        if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+            return ToolDocument.ActiveRequired(request, "useSelection", doc.Title);
 
-        var (view, viewError) = PlacementHelpers.ResolveGraphicalView(uidoc!, doc, ToolArguments.GetLong(request.Arguments, "viewId"));
+        var (view, viewError) = PlacementHelpers.ResolveGraphicalView(uidoc, doc, ToolArguments.GetLong(request.Arguments, "viewId"));
         if (view == null) return Fail(request, viewError!);
         if (view is not ViewPlan)
             return Fail(request, $"View '{view.Name}' is a {view.ViewType}; circuit arcs are drawn in floor or ceiling plans. Pass the plan's viewId.");

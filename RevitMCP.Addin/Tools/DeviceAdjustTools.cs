@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using Newtonsoft.Json.Linq;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.RoomDevices;
 using RevitMCP.Core.Models;
@@ -238,8 +239,9 @@ public sealed class PreviewRotateElementsTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null) return Task.FromResult(RoomToolSupport.Fail(request, "No active document."));
+        var target = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (target == null) return Task.FromResult(documentFailure!);
+        var doc = target.Document;
         var warnings = new List<string>();
         var plan = RotatePlanner.Build(doc, request.Arguments, warnings, out var error);
         return Task.FromResult(plan == null
@@ -260,8 +262,9 @@ public sealed class RotateElementsTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null) return Task.FromResult(RoomToolSupport.Fail(request, "No active document."));
+        var target = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (target == null) return Task.FromResult(documentFailure!);
+        var doc = target.Document;
         var warnings = new List<string>();
         var plan = RotatePlanner.Build(doc, request.Arguments, warnings, out var error);
         return Task.FromResult(plan == null
@@ -355,8 +358,9 @@ public sealed class PreviewSetElevationTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null) return Task.FromResult(RoomToolSupport.Fail(request, "No active document."));
+        var target = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (target == null) return Task.FromResult(documentFailure!);
+        var doc = target.Document;
         var warnings = new List<string>();
         var plan = ElevationPlanner.Build(doc, request.Arguments, warnings, out var error);
         return Task.FromResult(plan == null
@@ -378,8 +382,9 @@ public sealed class SetElevationTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null) return Task.FromResult(RoomToolSupport.Fail(request, "No active document."));
+        var target = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (target == null) return Task.FromResult(documentFailure!);
+        var doc = target.Document;
         var warnings = new List<string>();
         var plan = ElevationPlanner.Build(doc, request.Arguments, warnings, out var error);
         return Task.FromResult(plan == null
@@ -488,8 +493,9 @@ public sealed class PreviewAssignRoomToElementsTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null) return Task.FromResult(RoomToolSupport.Fail(request, "No active document."));
+        var target = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (target == null) return Task.FromResult(documentFailure!);
+        var doc = target.Document;
         var warnings = new List<string>();
         var plan = AssignRoomPlanner.Build(doc, request.Arguments, warnings, out var parameter, out var error);
         if (plan == null) return Task.FromResult(RoomToolSupport.Fail(request, error!, warnings));
@@ -510,8 +516,9 @@ public sealed class AssignRoomToElementsTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null) return Task.FromResult(RoomToolSupport.Fail(request, "No active document."));
+        var target = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (target == null) return Task.FromResult(documentFailure!);
+        var doc = target.Document;
         var warnings = new List<string>();
         var plan = AssignRoomPlanner.Build(doc, request.Arguments, warnings, out var parameter, out var error);
         if (plan == null) return Task.FromResult(RoomToolSupport.Fail(request, error!, warnings));

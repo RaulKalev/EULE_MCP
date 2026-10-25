@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Autodesk.Revit.UI;
 using RevitMCP.Addin.Electrical.PatchPanelAssignment;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Core.Models;
 
@@ -22,8 +23,9 @@ public class AssignDataDevicesToPatchPanelsTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var doc = uiapp.ActiveUIDocument?.Document;
-        if (doc == null) return Task.FromResult(Fail(request, "No active document."));
+        var target = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (target == null) return Task.FromResult(documentFailure!);
+        var doc = target.Document;
 
         var parsed = PatchPanelAssignmentToolHelper.Parse(request);
         if (parsed.Error != null) return Task.FromResult(Fail(request, parsed.Error));

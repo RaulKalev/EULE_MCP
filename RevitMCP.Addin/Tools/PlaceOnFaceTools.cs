@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Placement;
 using RevitMCP.Addin.Transactions;
@@ -58,10 +59,12 @@ internal static class PlaceOnFaceExecutor
     public static McpToolResult Execute(UIApplication uiapp, McpToolRequest request, bool apply, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        var doc = uidoc?.Document;
-        if (doc == null)
-            return Fail(request, "No active document.");
+        var target = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (target == null) return documentFailure!;
+        var doc = target.Document;
+        var uidoc = ToolDocument.UiDocumentOf(uiapp, target);
+        if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+            return ToolDocument.ActiveRequired(request, "useSelection", doc.Title);
 
         var arguments = request.Arguments;
         var (symbol, symbolError) = FamilyInstancePlacer.ResolveSymbol(
@@ -82,7 +85,7 @@ internal static class PlaceOnFaceExecutor
             return Fail(request, parseError!);
 
         var warnings = new List<string>();
-        var view = AlignmentRequest.ResolveSearchView(uidoc!, arguments, warnings, out var viewError);
+        var view = AlignmentRequest.ResolveSearchView(target.Document, uidoc, arguments, warnings, out var viewError);
         if (view == null)
             return Fail(request, viewError!);
 

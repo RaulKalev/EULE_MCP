@@ -20,7 +20,8 @@ internal static class PlacementHelpers
     /// Resolves the target view: explicit viewId when &gt; 0, otherwise the active view.
     /// Rejects view templates and non-graphical views.
     /// </summary>
-    public static (View? View, string? Error) ResolveGraphicalView(UIDocument uidoc, Document doc, long viewId)
+    /// <param name="uidoc">The active UI document, for the active-view fallback; null for a non-active document (#101), which then needs viewId.</param>
+    public static (View? View, string? Error) ResolveGraphicalView(UIDocument? uidoc, Document doc, long viewId)
     {
         View? view;
         if (viewId > 0)
@@ -31,6 +32,8 @@ internal static class PlacementHelpers
         }
         else
         {
+            if (uidoc == null)
+                return (null, $"'{doc.Title}' is not the active document, so it has no active view: pass viewId.");
             view = uidoc.ActiveView;
             if (view == null)
                 return (null, "No active view. Pass viewId explicitly.");
