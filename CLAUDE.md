@@ -32,6 +32,14 @@ connection). Find any other tool with `revit_tools_search`, read its schema with
 and run it with `revit_tools_call` (or `revit_tools_load` it into the session). `--tool-profile full`
 advertises every tool. See `docs/mcp-performance.md`.
 
+## Verify your writes
+
+Before a batch of writes, `revit_checkpoint_create` with the ids or categories you will touch (`autonomy` group, see
+[`docs/checkpoints.md`](docs/checkpoints.md)). After it, `revit_checkpoint_diff` lists what changed and who changed it
+(`agent:<tool>`, `page`, `user`) with before/now values, and `revit_get_warnings sinceCheckpointId=…` shows what Revit
+now complains about. Publish long lists with `revit_publish_page`. `revit_checkpoint_rollback` undoes the agent's changes
+(manual approval; it never recreates deleted elements, and skips what the user changed last unless `force=true`).
+
 ## Several open projects
 
 `revit_list_open_documents` lists the open project documents and their DWG/IFC/RVT links. The `documents` group

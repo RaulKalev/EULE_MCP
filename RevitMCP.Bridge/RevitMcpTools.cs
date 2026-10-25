@@ -7079,4 +7079,141 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         };
         return FormatResult(await pipeClient.SendAsync("revit_panelschematics_set_row_groups", args, cancellationToken));
     }
+
+    // ── Checkpoints: Revit warnings, change diff and rollback (#98) ──────────────────────────
+
+    private const string CheckpointIdDescription = "Checkpoint id (\"cp-\" + 6 hex) from revit_checkpoint_create or revit_checkpoint_list.";
+
+    [McpServerTool(Name = "revit_get_warnings", ReadOnly = true),
+     Description("Lists Revit's own model warnings and errors (Review Warnings) with their element ids, grouped by description (groupBy=none lists each one). Filters: severity, containsText, elementIds, categories, sinceCheckpointId (only warnings new since that checkpoint — what a batch of writes made Revit complain about). Publish long lists with revit_publish_page.")]
+    public async Task<string> GetWarnings(
+        [Description("all (default) | warning | error (errors include document corruption).")] string severity = "all",
+        [Description("Only warnings whose text contains this (case-insensitive).")] string? containsText = null,
+        [Description("Only warnings touching any of these element ids.")] long[]? elementIds = null,
+        [Description("Only warnings touching an element of these categories.")] string[]? categories = null,
+        [Description("Only warnings that were not present when this checkpoint was created.")] string? sinceCheckpointId = null,
+        [Description("description (default: one row per warning text with counts and ids) | none (one row per warning).")] string groupBy = "description",
+        [Description("Page number, 1-based.")] int page = 1,
+        [Description("Rows per page (default 100, max 500).")] int? pageSize = null,
+        [Description("Add element names to the rows. Default false.")] bool includeElementNames = false,
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["severity"] = severity,
+            ["containsText"] = containsText ?? string.Empty,
+            ["elementIds"] = elementIds ?? [],
+            ["categories"] = categories ?? [],
+            ["sinceCheckpointId"] = sinceCheckpointId ?? string.Empty,
+            ["groupBy"] = groupBy,
+            ["page"] = page,
+            ["pageSize"] = pageSize ?? 0,
+            ["includeElementNames"] = includeElementNames,
+            ["document"] = document ?? string.Empty
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_get_warnings", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_checkpoint_create", ReadOnly = true),
+     Description("Before a batch of writes: creates a checkpoint that remembers the model's state — its Revit warnings and, for a scope (elementIds, categories, viewId or useSelection), a snapshot of parameter values and locations. Afterwards revit_checkpoint_diff shows what changed since and who changed it, and revit_checkpoint_rollback can undo it. Without a scope only change ids and warnings are tracked (fast, unbounded). Does not change the model.")]
+    public async Task<string> CheckpointCreate(
+        [Description("Title shown in lists and the rollback approval. Default: client and time.")] string? title = null,
+        [Description("Snapshot these elements.")] long[]? elementIds = null,
+        [Description("Snapshot every instance of these categories.")] string[]? categories = null,
+        [Description("Snapshot the elements visible in this view.")] long? viewId = null,
+        [Description("Snapshot the current selection (active document only).")] bool useSelection = false,
+        [Description("Parameter names to snapshot. Default: every instance parameter with a value (capped per element).")] string[]? parameters = null,
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["title"] = title ?? string.Empty,
+            ["elementIds"] = elementIds ?? [],
+            ["categories"] = categories ?? [],
+            ["viewId"] = viewId ?? 0,
+            ["useSelection"] = useSelection,
+            ["parameters"] = parameters ?? [],
+            ["document"] = document ?? string.Empty
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_checkpoint_create", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_checkpoint_diff", ReadOnly = true),
+     Description("What changed in the model since a checkpoint: added / modified / deleted element ids with who made each change (agent:<tool>, page or user), before/now parameter values and moves for snapshotted elements, the transactions Revit recorded (its Undo names), new and resolved Revit warnings, and what a rollback could undo. Use it to verify your own writes or review an unattended session.")]
+    public async Task<string> CheckpointDiff(
+        [Description(CheckpointIdDescription)] string checkpointId,
+        [Description("summary (default: counts, transactions, warnings) | elements (plus element lists, paged) | all (plus ids per transaction).")] string include = "summary",
+        [Description("Only elements of these categories.")] string[]? categories = null,
+        [Description("all (default) | agent | user | page | a tool name.")] string attribution = "all",
+        [Description("Page number for the element lists, 1-based.")] int page = 1,
+        [Description("Elements per list and page (default 100, max 500).")] int? pageSize = null,
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["checkpointId"] = checkpointId,
+            ["include"] = include,
+            ["categories"] = categories ?? [],
+            ["attribution"] = attribution,
+            ["page"] = page,
+            ["pageSize"] = pageSize ?? 0,
+            ["document"] = document ?? string.Empty
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_checkpoint_diff", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_checkpoint_list", ReadOnly = true),
+     Description("Lists the checkpoints of the open documents (or of one with document): id, title, age, snapshot size, recorded transactions, whether change tracking is complete (false after a Revit restart), plan id. removeCheckpointId deletes one checkpoint record (the model is not changed).")]
+    public async Task<string> CheckpointList(
+        [Description("Delete this checkpoint record.")] string? removeCheckpointId = null,
+        [Description(DocumentArgDescription + " Empty here = every open document.")] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["removeCheckpointId"] = removeCheckpointId ?? string.Empty,
+            ["document"] = document ?? string.Empty
+        };
+        return FormatResult(await pipeClient.SendAsync("revit_checkpoint_list", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_preview_checkpoint_rollback", ReadOnly = true),
+     Description("Previews undoing the changes since a checkpoint WITHOUT changing anything: added elements that would be deleted, parameter values that would be restored, elements that would move back, and what cannot be undone (deleted elements, elements outside the snapshot, elements the user changed last unless force=true).")]
+    public async Task<string> PreviewCheckpointRollback(
+        [Description(CheckpointIdDescription)] string checkpointId,
+        [Description("Subset of deleteAdded, restoreValues, restoreLocations. Default all three.")] string[]? what = null,
+        [Description("Limit the rollback to these element ids.")] long[]? elementIds = null,
+        [Description("Also roll back elements whose latest change was not an agent's. Default false.")] bool force = false,
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = RollbackArgs(checkpointId, what, elementIds, force, document);
+        return FormatResult(await pipeClient.SendAsync("revit_preview_checkpoint_rollback", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_checkpoint_rollback", Destructive = true),
+     Description("DESTRUCTIVE: undoes the changes since a checkpoint in one transaction (one Revit undo): deletes elements added since, restores snapshotted parameter values, moves elements back. Deleted elements are never recreated; elements the user changed last are skipped unless force=true. Always needs manual approval in Revit, even in Direct Edit. Run revit_preview_checkpoint_rollback first.")]
+    public async Task<string> CheckpointRollback(
+        [Description(CheckpointIdDescription)] string checkpointId,
+        [Description("Subset of deleteAdded, restoreValues, restoreLocations. Default all three.")] string[]? what = null,
+        [Description("Limit the rollback to these element ids.")] long[]? elementIds = null,
+        [Description("Also roll back elements whose latest change was not an agent's. Default false.")] bool force = false,
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = RollbackArgs(checkpointId, what, elementIds, force, document);
+        return FormatResult(await pipeClient.SendAsync("revit_checkpoint_rollback", args, cancellationToken));
+    }
+
+    private static Dictionary<string, object?> RollbackArgs(string checkpointId, string[]? what, long[]? elementIds, bool force, string? document) => new()
+    {
+        ["checkpointId"] = checkpointId,
+        ["what"] = what ?? [],
+        ["elementIds"] = elementIds ?? [],
+        ["force"] = force,
+        ["document"] = document ?? string.Empty
+    };
 }
