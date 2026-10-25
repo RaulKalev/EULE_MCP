@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Placement;
 using RevitMCP.Core.Models;
@@ -27,17 +28,20 @@ public class PreviewAlignInViewTool : IRevitMcpTool
         CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        if (uidoc?.Document == null)
-            return Task.FromResult(Fail(request, "No active document."));
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
+        var uidoc = ToolDocument.UiDocumentOf(uiapp, documentTarget);
+        if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+            return Task.FromResult(ToolDocument.ActiveRequired(request, "useSelection", documentTarget.Document.Title));
 
         var warnings = new List<string>();
 
-        var view = ViewAlignmentRequest.ResolveView(uidoc, request.Arguments, warnings, out var error);
+        var view = ViewAlignmentRequest.ResolveView(doc, uidoc, request.Arguments, warnings, out var error);
         if (view == null)
             return Task.FromResult(Fail(request, error!));
 
-        var elements = ViewAlignmentRequest.ResolveElements(uidoc, view, request.Arguments, warnings, out error);
+        var elements = ViewAlignmentRequest.ResolveElements(doc, uidoc, view, request.Arguments, warnings, out error);
         if (elements == null)
             return Task.FromResult(Fail(request, error!));
 

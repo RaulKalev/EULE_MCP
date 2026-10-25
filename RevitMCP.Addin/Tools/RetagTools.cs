@@ -3,6 +3,7 @@
 using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Tagging;
 using RevitMCP.Addin.Transactions;
@@ -73,10 +74,12 @@ namespace RevitMCP.Addin.Tools
             bool previewOnly)
         {
             var stopwatch = Stopwatch.StartNew();
-            var uidoc = uiapp.ActiveUIDocument;
-            var doc = uidoc?.Document;
-            if (doc == null)
-                return TaggingToolSupport.Fail(request, "No active document.");
+            var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+            if (documentTarget == null) return documentFailure!;
+            var doc = documentTarget.Document;
+            var uidoc = ToolDocument.UiDocumentOf(uiapp, documentTarget);
+            if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+                return ToolDocument.ActiveRequired(request, "useSelection", documentTarget.Document.Title);
 
             var view = TaggingToolSupport.ResolveView(
                 uidoc,

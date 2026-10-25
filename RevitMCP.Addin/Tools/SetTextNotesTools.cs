@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RevitMCP.Addin.Annotation;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Transactions;
 using RevitMCP.Core.Models;
@@ -68,10 +69,12 @@ internal static class SetTextNotesExecutor
     public static McpToolResult Execute(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken, bool previewOnly)
     {
         var sw = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        var doc = uidoc?.Document;
-        if (uidoc == null || doc == null)
-            return Fail(request, "No active document.");
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return documentFailure!;
+        var doc = documentTarget.Document;
+        var uidoc = ToolDocument.UiDocumentOf(uiapp, documentTarget);
+        if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+            return ToolDocument.ActiveRequired(request, "useSelection", documentTarget.Document.Title);
 
         var args = request.Arguments;
         request.Arguments.TryGetValue("map", out var rawMap);
@@ -282,9 +285,10 @@ internal static class SetTextNotesExecutor
     }
 
     private static List<TextNote>? ResolveTargets(
-        UIDocument uidoc, Document doc, Dictionary<string, object?> args,
+        UIDocument? uidoc, Document doc, Dictionary<string, object?> args,
         List<string> warnings, List<object> skipped, out string scope, out string? error)
     {
+        // uidoc is null for a non-active document; the tool refuses useSelection for it before this runs.
         error = null;
         var elementIds = ToolArguments.GetLongArray(args, "elementIds");
         if (elementIds.Length > 0)
@@ -306,7 +310,7 @@ internal static class SetTextNotesExecutor
             scope = "current selection";
             var list = new List<TextNote>();
             var others = 0;
-            foreach (var id in uidoc.Selection.GetElementIds())
+            foreach (var id in uidoc!.Selection.GetElementIds())
             {
                 if (doc.GetElement(id) is TextNote tn) list.Add(tn);
                 else others++;
@@ -341,7 +345,7 @@ internal static class SetTextNotesExecutor
         }
         else
         {
-            view = uidoc.ActiveView;
+            view = uidoc?.ActiveView;   // null for a non-active document (#101): it has no active view
             if (view == null)
             {
                 scope = "active view";

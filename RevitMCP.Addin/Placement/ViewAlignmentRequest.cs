@@ -167,14 +167,15 @@ internal static class ViewAlignmentRequest
     /// Picks the view the alignment happens in. Everything is measured and moved in this view's
     /// plane, so it decides what "left" and "up" mean.
     /// </summary>
+    /// <param name="uidoc">The active UI document, for the active-view fallback; null for a non-active document (#101).</param>
     public static View? ResolveView(
-        UIDocument uidoc,
+        Document doc,
+        UIDocument? uidoc,
         Dictionary<string, object?> arguments,
         List<string> warnings,
         out string? error)
     {
         error = null;
-        var doc = uidoc.Document;
         var viewId = ToolArguments.GetLong(arguments, "viewId");
 
         View? view;
@@ -189,6 +190,11 @@ internal static class ViewAlignmentRequest
         }
         else
         {
+            if (uidoc == null)
+            {
+                error = $"'{doc.Title}' is not the active document, so it has no active view: pass viewId.";
+                return null;
+            }
             view = uidoc.ActiveView;
             if (view == null)
             {
@@ -235,15 +241,16 @@ internal static class ViewAlignmentRequest
     /// and anything owned by a different view is dropped, because a move measured in this view's
     /// plane means nothing to an annotation that lives somewhere else.
     /// </summary>
+    /// <param name="uidoc">The active UI document, for useSelection; null for a non-active document (#101).</param>
     public static List<Element>? ResolveElements(
-        UIDocument uidoc,
+        Document doc,
+        UIDocument? uidoc,
         View view,
         Dictionary<string, object?> arguments,
         List<string> warnings,
         out string? error)
     {
         error = null;
-        var doc = uidoc.Document;
         var elementIds = ToolArguments.GetLongArray(arguments, "elementIds");
         var useSelection = ToolArguments.GetBool(arguments, "useSelection");
 
@@ -254,6 +261,11 @@ internal static class ViewAlignmentRequest
         }
         else if (useSelection)
         {
+            if (uidoc == null)
+            {
+                error = $"useSelection needs the document to be active, and '{doc.Title}' is not. Pass elementIds instead.";
+                return null;
+            }
             ids = uidoc.Selection.GetElementIds().ToList();
             if (ids.Count == 0)
             {

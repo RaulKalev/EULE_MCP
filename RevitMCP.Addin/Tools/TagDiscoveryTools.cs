@@ -3,6 +3,7 @@
 using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Tagging;
 using RevitMCP.Core.Models;
@@ -27,10 +28,9 @@ namespace RevitMCP.Addin.Tools
             CancellationToken cancellationToken)
         {
             var stopwatch = Stopwatch.StartNew();
-            var doc = uiapp.ActiveUIDocument?.Document;
-            if (doc == null)
-                return Task.FromResult(
-                    TaggingToolSupport.Fail(request, "No active document."));
+            var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+            if (documentTarget == null) return Task.FromResult(documentFailure!);
+            var doc = documentTarget.Document;
 
             var categoryIdValue = ToolArguments.GetLong(
                 request.Arguments,
@@ -106,11 +106,12 @@ namespace RevitMCP.Addin.Tools
             CancellationToken cancellationToken)
         {
             var stopwatch = Stopwatch.StartNew();
-            var uidoc = uiapp.ActiveUIDocument;
-            var doc = uidoc?.Document;
-            if (doc == null)
-                return Task.FromResult(
-                    TaggingToolSupport.Fail(request, "No active document."));
+            var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+            if (documentTarget == null) return Task.FromResult(documentFailure!);
+            var doc = documentTarget.Document;
+            var uidoc = ToolDocument.UiDocumentOf(uiapp, documentTarget);
+            if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+                return Task.FromResult(ToolDocument.ActiveRequired(request, "useSelection", documentTarget.Document.Title));
 
             var view = TaggingToolSupport.ResolveView(
                 uidoc,
@@ -196,11 +197,12 @@ namespace RevitMCP.Addin.Tools
             CancellationToken cancellationToken)
         {
             var stopwatch = Stopwatch.StartNew();
-            var uidoc = uiapp.ActiveUIDocument;
-            var doc = uidoc?.Document;
-            if (doc == null)
-                return Task.FromResult(
-                    TaggingToolSupport.Fail(request, "No active document."));
+            var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+            if (documentTarget == null) return Task.FromResult(documentFailure!);
+            var doc = documentTarget.Document;
+            var uidoc = ToolDocument.UiDocumentOf(uiapp, documentTarget);
+            if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+                return Task.FromResult(ToolDocument.ActiveRequired(request, "useSelection", documentTarget.Document.Title));
 
             var view = TaggingToolSupport.ResolveView(
                 uidoc,

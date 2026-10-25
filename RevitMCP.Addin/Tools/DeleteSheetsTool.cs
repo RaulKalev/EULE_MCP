@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Core.Models;
 
@@ -25,10 +26,12 @@ public class DeleteSheetsTool : IRevitMcpTool
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw    = Stopwatch.StartNew();
-        var uidoc = uiapp.ActiveUIDocument;
-        var doc   = uidoc?.Document;
-        if (doc == null)
-            return Task.FromResult(Fail(request, "No active document."));
+        var documentTarget = ToolDocument.Resolve(uiapp, request, out var documentFailure);
+        if (documentTarget == null) return Task.FromResult(documentFailure!);
+        var doc = documentTarget.Document;
+        var uidoc = ToolDocument.UiDocumentOf(uiapp, documentTarget);
+        if (ToolArguments.GetBool(request.Arguments, "useSelection") && uidoc == null)
+            return Task.FromResult(ToolDocument.ActiveRequired(request, "useSelection", documentTarget.Document.Title));
 
         var sheetIds          = ToolArguments.GetLongArray(request.Arguments, "sheetIds");
         var sheetNumbers      = ToolArguments.GetStringArray(request.Arguments, "sheetNumbers");
@@ -101,7 +104,7 @@ public class DeleteSheetsTool : IRevitMcpTool
 
         // Revit refuses to delete the active view (and open views on some versions) —
         // a sheet can be the active view too. Switch away / close tabs first.
-        var undeletable = ViewDeletionPrep.PrepareForDeletion(uidoc!, toDelete.Select(s => s.Id).ToHashSet(), warnings);
+        var undeletable = ViewDeletionPrep.PrepareForDeletion(uidoc ?? new UIDocument(doc), toDelete.Select(s => s.Id).ToHashSet(), warnings);
         if (undeletable.Count > 0)
             toDelete.RemoveAll(s => undeletable.Contains(s.Id));
 
