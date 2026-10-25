@@ -18,6 +18,8 @@ internal static class ServerInstructions
         "revit_checkpoint_diff and revit_get_warnings sinceCheckpointId show what changed and what Revit now complains about.\n" +
         "For several write steps submit one revit_plan_submit with the ids and tools you will use; approved plans run without " +
         "per-call prompts inside their limits.\n" +
+        "For a multi-step task the user need not watch, submit it as revit_job_submit: one approval, the connector runs the " +
+        "steps and publishes a report page.\n" +
         "Memory: before a write, revit_memory_recall with what you are about to do — colleagues' decisions and corrections " +
         "for this project (hints, verify live; revit_graph_route may already carry them in its memory block). At task end, " +
         "revit_memory_remember a user correction, a decision and its reason, or an exception to a rule — one note each, never a " +

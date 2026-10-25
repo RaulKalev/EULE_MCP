@@ -31,7 +31,7 @@ public static class BridgeToolGroups
         ["pages"] = "Model pages: publish a generated HTML report as a local page whose rows select elements in Revit, show live parameter values and can be edited",
         ["memory"] = "Shared memory: list, review page, forget, weekly consolidation (recall and remember are in core)",
         ["documents"] = "Open documents: activate, reload/remove DWG/IFC/RVT links, link visibility, save and sync with central",
-        ["autonomy"] = "Checkpoints, Revit model warnings, what changed since a checkpoint (change diff) and rollback; plans (one approval for several write steps)",
+        ["autonomy"] = "Checkpoints, Revit model warnings, what changed since a checkpoint (change diff) and rollback; plans (one approval for several write steps); jobs the connector runs by itself",
         ["skills"] = "Skill builder and skill runs",
         ["office"] = "Configuration, files, Excel, standards lookup, delivery checks, monthly usage report"
     };
@@ -84,7 +84,8 @@ public static class BridgeToolGroups
         {
             "revit_get_warnings", "revit_checkpoint_create", "revit_checkpoint_diff", "revit_checkpoint_list",
             "revit_preview_checkpoint_rollback", "revit_checkpoint_rollback",
-            "revit_plan_submit", "revit_plan_status", "revit_plan_close", "revit_plan_use"
+            "revit_plan_submit", "revit_plan_status", "revit_plan_close", "revit_plan_use",
+            "revit_job_submit", "revit_job_status", "revit_job_list", "revit_job_cancel", "revit_job_resume", "revit_job_report"
         }),
         ("memory", new[] { "revit_memory_list", "revit_memory_page", "revit_memory_forget", "revit_memory_consolidate" }),
         ("office", new[] { "revit_usage_report" }),

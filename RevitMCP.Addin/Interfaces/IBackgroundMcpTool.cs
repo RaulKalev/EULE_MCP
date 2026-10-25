@@ -8,3 +8,11 @@ namespace RevitMCP.Addin.Interfaces;
 public interface IBackgroundMcpTool
 {
 }
+
+/// <summary>
+/// A background tool that mostly waits (a long-poll such as revit_job_status waitSeconds) and does no file or
+/// network I/O, so it does not take one of the bounded background slots other background tools queue for.
+/// </summary>
+public interface IWaitingMcpTool : IBackgroundMcpTool
+{
+}

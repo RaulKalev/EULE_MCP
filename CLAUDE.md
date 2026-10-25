@@ -49,6 +49,15 @@ prompts. A call it does not cover waits for its own approval (the reason is in `
 rolled back with `plan_envelope_violated` — narrow the call or submit a new plan, do not retry it unchanged. Deletes are
 never covered. Review with `revit_checkpoint_diff checkpointId=<the plan's checkpoint>`; end with `revit_plan_close`.
 
+## Unattended work: submit a job
+
+When the user need not watch the steps, plan the work with the graph and live reads, then hand it over as one
+`revit_job_submit` (see [`docs/jobs.md`](docs/jobs.md)): steps with `bind` paths and `{{var}}` placeholders, an optional
+envelope (tools default to the steps' write tools) and stop conditions. One approval starts it; the connector runs the
+steps without you. Follow it with `revit_job_status waitSeconds=25` (one call per change, not a loop of quick polls). A
+paused or suspended job continues with `revit_job_resume` (approval). The report page it publishes is what the user
+reviews — point them to it instead of repeating it.
+
 ## Several open projects
 
 `revit_list_open_documents` lists the open project documents and their DWG/IFC/RVT links. The `documents` group

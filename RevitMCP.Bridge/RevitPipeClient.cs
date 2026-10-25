@@ -56,6 +56,7 @@ public class RevitPipeClient
     {
         if (planId == null ||
             toolName.StartsWith("revit_plan_", StringComparison.Ordinal) ||
+            toolName.StartsWith("revit_job_", StringComparison.Ordinal) ||
             arguments.ContainsKey("planId") ||
             McpToolCatalog.IsReadOnlyTool(toolName))
             return arguments;
