@@ -19,7 +19,9 @@ public static class PlanToolClassification
     private static readonly string[] CreatingPrefixes =
     {
         "revit_place_", "revit_create_", "revit_duplicate", "revit_copy_elements", "revit_draw_", "revit_annotate_",
-        "revit_retag", "revit_ensure_", "revit_run_skill", "revit_apply_selected_tag_template", "convert_ifc_spaces_to_rooms"
+        "revit_retag", "revit_ensure_", "revit_run_skill", "revit_apply_selected_tag_template", "convert_ifc_spaces_to_rooms",
+        // Loading a family adds the family and its types (#102).
+        "revit_load_family"
     };
 
     private static readonly string[] ModifyingPrefixes =
@@ -28,7 +30,7 @@ public static class PlanToolClassification
         "revit_add_elements_", "revit_change_", "revit_reassign_", "revit_edit_", "revit_select_", "revit_panelschematics_",
         "revit_focus_", "revit_copy_cad_", "revit_activate_", "revit_save_", "revit_sync_", "revit_reload_", "revit_remove_",
         "revit_delete", "revit_checkpoint_", "revit_memory_", "revit_export_", "revit_update_skill", "revit_plan_", "revit_job_",
-        "revit_open_", "revit_close_", "revit_checkout_", "revit_relinquish",
+        "revit_open_", "revit_close_", "revit_checkout_", "revit_relinquish", "revit_purge_", "revit_bind_parameter_",
         "revit_page_", "sync_ifc_", "config_", "file_", "excel_",
         // Change connector files or records, not the model (H1).
         "standards_", "revit_usage_", "revit_propose_", "revit_manage_project_skill_", "revit_configure_"
