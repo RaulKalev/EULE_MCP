@@ -19,7 +19,7 @@ public static class BridgeToolGroups
         [Discovery] = "Search, describe, load and call any connector tool",
         [Graph] = "Model graph: build, status, summary, query, route (cheap id-first discovery)",
         ["query"] = "Broad element queries, parameter filters, grouping, query presets, parameter QA",
-        ["edit"] = "Generic model edits: parameters, move/align/rotate/elevation, delete/duplicate/rename, family types, placement",
+        ["edit"] = "Generic model edits: parameters, move/align/rotate/elevation, delete/duplicate/rename, family types, placement, families (list, load, reload, purge unused), project and shared parameters (list, create, bind categories)",
         ["devices"] = "Room geometry, device codes, room-based device placement and device/fire-alarm audits",
         ["electrical"] = "Circuits, panels, wires/cables, voltage drop, fire alarm circuits, patch panels",
         ["panelschematics"] = "PanelSchematics plugin (Kilbiskeemid): panel tables, empty rows, circuit row parameters, its Extensible Storage data",
@@ -61,7 +61,11 @@ public static class BridgeToolGroups
             "revit_preview_delete", "revit_delete", "revit_preview_duplicate", "revit_duplicate", "revit_preview_rename", "revit_rename",
             "revit_set_parameter", "revit_set_parameters_bulk", "revit_place_family_instances", "revit_preview_edit_family_types",
             "revit_edit_family_types", "revit_list_family_types", "revit_create_lines", "revit_list_extensible_storage_schemas",
-            "revit_read_extensible_storage"
+            "revit_read_extensible_storage",
+            // Families and parameters (#102)
+            "revit_list_families", "revit_preview_load_family", "revit_load_family", "revit_reload_family",
+            "revit_preview_purge_unused", "revit_purge_unused", "revit_list_project_parameters", "revit_list_shared_parameters",
+            "revit_preview_create_parameters", "revit_create_parameters", "revit_bind_parameter_categories"
         }),
         ("query", new[]
         {
