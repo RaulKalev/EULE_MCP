@@ -23,7 +23,7 @@ Schema: [`RevitMCP.Addin/Graph/SCHEMA.md`](../RevitMCP.Addin/Graph/SCHEMA.md).
 | `revit_graph_build` | Full rebuild from the open document (Revit API thread, one collector pass), or with `incremental=true` an update of only the elements changed since the last build in this session (see [Incremental updates](#incremental-updates-61)). Reports node/edge counts and timings. |
 | `revit_graph_status` | Does a graph exist for the open model, where, `built_at`, `central_version`, the current document version, and `stale` with a human-readable reason. |
 | `revit_graph_query` | Structured queries only (no SQL): `neighbors`, `find`, `path`, `subtree`. |
-| `revit_graph_summary` | Counts per kind/category/level/workset/panel, orphan circuits, elements without a room/space. Cheap orientation at session start. |
+| `revit_graph_summary` | Counts per kind/category/level/workset/phase/panel, orphan circuits, elements without a room/space. Cheap orientation at session start. |
 
 All four are read-only tools for Revit (the build writes only the graph file). They run on the
 Revit API thread like the other `revit_*` query tools; reads are indexed lookups and take
@@ -34,7 +34,7 @@ milliseconds.
 | `operation` | Arguments | Returns |
 |---|---|---|
 | `neighbors` | `id`, `rel?`, `direction?` (`in` \| `out` \| `both`, default `both`), `limit?` (1–500, default 100), `link?` | The node plus its neighbours with `rel` and `direction` |
-| `find` | `kind?`, `category?`, `level?`, `workset?`, `nameContains?`, `link?`, `param?`, `paramValue?`, `paramContains?`, `page?`, `pageSize?` (default 100, max 500) | Paginated ids + names (`itemsReturned`, `totalAvailable`, `hasMore`, `nextPage`); items carry `routingParams` when the graph indexes any |
+| `find` | `kind?`, `category?`, `level?`, `workset?`, `nameContains?`, `link?`, `param?`, `paramValue?`, `paramContains?`, `phase?`, `option?`, `page?`, `pageSize?` (default 100, max 500) | Paginated ids + names (`itemsReturned`, `totalAvailable`, `hasMore`, `nextPage`); items carry `routingParams` when the graph indexes any |
 | `path` | `fromId`, `toId`, `maxHops?` (1–10, default 6) | Shortest undirected path; each step has `rel` and `direction` |
 | `subtree` | `id`, `rel`, `depth?` (1–10, default 3), `direction?` (`in` \| `out`, default `in`), `maxNodes?` (1–2000, default 500) | Everything reachable via one relationship, with `depth` and `parentId` |
 
@@ -47,10 +47,19 @@ revit_graph_query operation=neighbors id=234567 rel=located_in direction=out
 revit_graph_query operation=path fromId=234567 toId=123456 maxHops=4
 revit_graph_query operation=find kind=element category="Lighting Fixtures" level="2. korrus" page=0 pageSize=200
 revit_graph_query operation=find param="Loop number" paramValue=L1 link=host   # needs graph.routingParameters
+revit_graph_query operation=find kind=element category="Electrical Fixtures" phase=Uus option=none   # new, main model
 ```
 
 Name matching (`nameContains`) is a SQLite `LIKE`, so it is case-insensitive for ASCII letters only.
 Category/level/workset filters are exact, case-insensitive matches.
+
+**Phase and design option hints (#109, schema 3).** Element and panel nodes carry `extra.phase` (the phase the
+element was created in) and `extra.option` (its design option; absent in the main model). `find phase=<name>` and
+`find option=<name>` match them exactly and case-insensitively; `none` matches nodes without the hint (`option=none` =
+main model). `revit_graph_summary` adds `elementsByPhase`. Graphs built before schema 3 report `stale` and are rebuilt
+once, after which the filters work; on an old graph a phase/option filter warns. Like every graph value these are
+routing hints: read `phaseCreated` / `designOption` live with `revit_get_elements_info includeModelState=true` before
+reporting or writing (see [model-state.md](model-state.md)).
 
 ---
 

@@ -38,6 +38,7 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | [Plans: one approval per job](docs/plans.md) | 4 | Submit a plan (tools, element ids, categories, limits), approve once, then write calls inside it run without prompts; status, close, per-session plan id |
 | [Checkpoints and change review](docs/checkpoints.md) | 6 | Revit model warnings, checkpoints before a batch of writes, what changed since (by tool or user, before/now values, moves, new warnings), compensating rollback with manual approval |
 | [Model graph (routing layer)](docs/model-graph.md) | 4 | Per-model SQLite graph of element ids and relationships: build, freshness status, structured queries (neighbors/find/path/subtree), summary |
+| [Model state and health audit](docs/model-state.md) | 6 | Phases, design options and worksets in queries and filters, set element and view phases, model health audit published as a page |
 
 ## Supported environment
 
@@ -121,6 +122,7 @@ Important repository references:
 - [`docs/mcp-performance.md`](docs/mcp-performance.md) — lower-latency queries and reduced-credit tool profiles
 - [`docs/project-village.md`](docs/project-village.md) — opt-in "Project Village" activity visualizer with a flyer board of query results and Show in Revit (no AI calls, no model changes)
 - [`docs/model-graph.md`](docs/model-graph.md) — per-model routing graph: find element ids cheaply before querying the live model
+- [`docs/model-state.md`](docs/model-state.md) — phases, design options and worksets in queries, phase writes, and the model health audit
 - [`docs/move-elements.md`](docs/move-elements.md) — moving existing elements onto exact coordinates or by a displacement, including Detail Items and other view-specific elements
 - [`docs/copy-elements.md`](docs/copy-elements.md) — copying any element Revit can copy, within a view, across views or in the model
 - [`docs/place-on-face.md`](docs/place-on-face.md) — placing face-based families on wall, ceiling and floor faces found from points, in the host model or in links
