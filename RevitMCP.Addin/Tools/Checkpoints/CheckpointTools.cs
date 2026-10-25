@@ -217,16 +217,27 @@ public sealed class CheckpointCreateTool : IRevitMcpTool
     }
 }
 
-/// <summary>revit_checkpoint_list (#98): checkpoints of the open documents; removeCheckpointId deletes one.</summary>
+/// <summary>revit_checkpoint_list (#98): checkpoints of the open documents. Read-only: revit_checkpoint_remove deletes one.</summary>
 public sealed class CheckpointListTool : IRevitMcpTool
 {
     public string Name => "revit_checkpoint_list";
     public string Description =>
         "Lists the checkpoints of the open documents (or one with document=<title>): id, title, age, snapshot size, " +
-        "recorded transactions, whether tracking is complete, plan id. removeCheckpointId deletes one checkpoint (its " +
-        "record only; the model is not changed).";
+        "recorded transactions, whether tracking is complete, plan id. revit_checkpoint_remove deletes one.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Reports;
+
+    /// <summary>The open project documents, or the one named by <c>document</c>; null with <paramref name="failure"/> otherwise.</summary>
+    internal static List<Document>? Documents(UIApplication uiapp, McpToolRequest request, out McpToolResult? failure)
+    {
+        failure = null;
+        if (string.IsNullOrWhiteSpace(ToolArguments.GetString(request.Arguments, RevitDocumentResolver.ArgumentName)))
+            return RevitDocumentResolver.GetProjectDocuments(uiapp);
+        var target = RevitDocumentResolver.Resolve(uiapp, request, out var error);
+        if (target != null) return new List<Document> { target.Document };
+        failure = CheckpointSupport.Fail(request, error ?? "Document was not found.");
+        return null;
+    }
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
@@ -234,28 +245,10 @@ public sealed class CheckpointListTool : IRevitMcpTool
         if (store == null)
             return Task.FromResult(CheckpointSupport.Fail(request, "Checkpoints are not available: the connector's checkpoint store did not start.", "tool_execution_failed"));
 
-        List<Document> documents;
-        if (string.IsNullOrWhiteSpace(ToolArguments.GetString(request.Arguments, RevitDocumentResolver.ArgumentName)))
-        {
-            documents = RevitDocumentResolver.GetProjectDocuments(uiapp);
-        }
-        else
-        {
-            var target = RevitDocumentResolver.Resolve(uiapp, request, out var error);
-            if (target == null) return Task.FromResult(CheckpointSupport.Fail(request, error ?? "Document was not found."));
-            documents = new List<Document> { target.Document };
-        }
+        var documents = Documents(uiapp, request, out var failure);
+        if (documents == null) return Task.FromResult(failure!);
 
         var messages = new List<string>();
-        var remove = ToolArguments.GetString(request.Arguments, "removeCheckpointId").Trim();
-        if (remove.Length > 0)
-        {
-            var removed = documents.Any(d => store.Remove(CheckpointChangeTracker.ModelIdOf(d), remove));
-            if (!removed)
-                return Task.FromResult(CheckpointSupport.Fail(request, $"Checkpoint {remove} was not found in the open documents.", CheckpointSupport.NotFound));
-            messages.Add($"Removed checkpoint {remove}.");
-        }
-
         var now = DateTimeOffset.Now;
         var rows = new List<object>();
         foreach (var doc in documents)
@@ -288,6 +281,43 @@ public sealed class CheckpointListTool : IRevitMcpTool
             Success = true,
             Message = string.Join(" ", messages),
             Data = new { checkpoints = rows }
+        });
+    }
+}
+
+/// <summary>
+/// revit_checkpoint_remove (H1): deletes one checkpoint record, split off revit_checkpoint_list so the list stays
+/// read-only. The model is not changed, so it needs no approval.
+/// </summary>
+public sealed class CheckpointRemoveTool : IRevitMcpTool
+{
+    public string Name => "revit_checkpoint_remove";
+    public string Description =>
+        "Deletes one checkpoint record (checkpointId, from revit_checkpoint_list) of the open documents or of document=<title>. " +
+        "The model is not changed; the checkpoint can no longer be diffed or rolled back.";
+    public ToolPermission Permission => ToolPermission.DirectEdit;
+    public ToolCategory Category => ToolCategory.Reports;
+
+    public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
+    {
+        var store = CheckpointChangeTracker.Store;
+        if (store == null)
+            return Task.FromResult(CheckpointSupport.Fail(request, "Checkpoints are not available: the connector's checkpoint store did not start.", "tool_execution_failed"));
+
+        var id = ToolArguments.GetString(request.Arguments, "checkpointId").Trim();
+        if (id.Length == 0) return Task.FromResult(CheckpointSupport.Fail(request, "checkpointId is required."));
+
+        var documents = CheckpointListTool.Documents(uiapp, request, out var failure);
+        if (documents == null) return Task.FromResult(failure!);
+
+        if (!documents.Any(d => store.Remove(CheckpointChangeTracker.ModelIdOf(d), id)))
+            return Task.FromResult(CheckpointSupport.Fail(request, $"Checkpoint {id} was not found in the open documents.", CheckpointSupport.NotFound));
+        return Task.FromResult(new McpToolResult
+        {
+            RequestId = request.RequestId,
+            Success = true,
+            Message = $"Removed checkpoint {id}. The model was not changed.",
+            Data = new { removed = id }
         });
     }
 }

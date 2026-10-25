@@ -21,7 +21,7 @@ public class SelectLinkedElementsTool : IRevitMcpTool
         "Required: linkInstanceId (from revit_list_clashable_links / ifc_list_links), elementIds (ids in the LINKED document, e.g. from revit_query_linked_elements). " +
         "Optional: replaceSelection (default true — false keeps the current selection), zoomToSelection (bool). " +
         "Does not modify model data.";
-    public ToolPermission Permission => ToolPermission.ReadOnly;
+    public ToolPermission Permission => ToolPermission.DirectEdit;
     public ToolCategory Category => ToolCategory.Selection;
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)

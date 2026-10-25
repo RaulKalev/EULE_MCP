@@ -81,13 +81,13 @@ public static class BridgeToolGroups
             "revit_open_document", "revit_close_document", "revit_list_worksets", "revit_preview_set_workset", "revit_set_workset",
             "revit_get_ownership", "revit_checkout_elements", "revit_relinquish", "revit_reload_latest"
         }),
-        ("pages", new[] { "revit_publish_page", "revit_list_pages" }),
+        ("pages", new[] { "revit_publish_page", "revit_list_pages", "revit_remove_page" }),
         ("autonomy", new[]
         {
-            "revit_get_warnings", "revit_checkpoint_create", "revit_checkpoint_diff", "revit_checkpoint_list",
+            "revit_get_warnings", "revit_checkpoint_create", "revit_checkpoint_diff", "revit_checkpoint_list", "revit_checkpoint_remove",
             "revit_preview_checkpoint_rollback", "revit_checkpoint_rollback",
             "revit_plan_submit", "revit_plan_status", "revit_plan_close", "revit_plan_use",
-            "revit_job_submit", "revit_job_status", "revit_job_list", "revit_job_cancel", "revit_job_resume", "revit_job_report"
+            "revit_job_submit", "revit_job_status", "revit_job_list", "revit_job_remove", "revit_job_cancel", "revit_job_resume", "revit_job_report"
         }),
         ("memory", new[] { "revit_memory_list", "revit_memory_page", "revit_memory_forget", "revit_memory_consolidate" }),
         ("office", new[] { "revit_usage_report" }),

@@ -19,7 +19,7 @@ public class ProposeSkillMasterUpdateTool : IRevitMcpTool
 {
     public string Name        => "revit_propose_master_skill_update";
     public string Description => "Proposes updating the company master skill based on a project override. Writes a proposal JSON to the local proposals folder. Does NOT modify any company master files.";
-    public ToolPermission Permission => ToolPermission.ReadOnly;
+    public ToolPermission Permission => ToolPermission.DirectEdit;
     public ToolCategory   Category   => ToolCategory.Skills;
 
     private static readonly string ProposalsDir =

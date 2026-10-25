@@ -78,15 +78,11 @@ public class StandardsSourceService
     }
 
     /// <summary>
-    /// Saves an example config file at the config path (only if the file does not already exist).
+    /// An example config as JSON, without writing anything: what the read-only standards_validate_source_config
+    /// shows when no config file exists yet (an administrator saves it at <see cref="ConfigFilePath"/>).
     /// </summary>
-    public string SaveExample()
+    public static string ExampleJson()
     {
-        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(ConfigPath)!);
-
-        if (File.Exists(ConfigPath))
-            return ConfigPath;
-
         var example = new StandardsSourceConfig
         {
             Sources =
@@ -103,7 +99,6 @@ public class StandardsSourceService
             ]
         };
 
-        File.WriteAllText(ConfigPath, JsonConvert.SerializeObject(example, _jsonSettings));
-        return ConfigPath;
+        return JsonConvert.SerializeObject(example, _jsonSettings);
     }
 }

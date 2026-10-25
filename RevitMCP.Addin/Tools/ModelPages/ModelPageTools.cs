@@ -119,11 +119,11 @@ public class PublishPageTool : IRevitMcpTool
         Task.FromResult(new McpToolResult { RequestId = request.RequestId, Success = success, Message = message });
 }
 
-/// <summary>Lists the published model pages, or removes one.</summary>
+/// <summary>Lists the published model pages. Read-only: revit_remove_page deletes one.</summary>
 public class ListPagesTool : IRevitMcpTool
 {
     public string Name => "revit_list_pages";
-    public string Description => "Lists the published model pages with their links; removePageId deletes one.";
+    public string Description => "Lists the published model pages with their links; revit_remove_page deletes one.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Reports;
 
@@ -131,10 +131,6 @@ public class ListPagesTool : IRevitMcpTool
     {
         var service = ModelPageService.Current;
         if (service == null) return PublishPageTool.Done(request, false, "Model pages are not available in this Revit session.");
-
-        var removeId = ToolArguments.GetString(request.Arguments, "removePageId").Trim();
-        bool? removed = removeId.Length == 0 ? null : service.Store.Remove(removeId);
-        if (removed == false) return PublishPageTool.Done(request, false, $"No page with id '{removeId}'.");
 
         var pages = service.Store.List();
         string? activeModel = null;
@@ -159,9 +155,33 @@ public class ListPagesTool : IRevitMcpTool
         {
             RequestId = request.RequestId,
             Success = true,
-            Message = (removed == true ? $"Removed '{removeId}'. " : string.Empty) + $"{rows.Count} published page{(rows.Count == 1 ? "" : "s")}.",
+            Message = $"{rows.Count} published page{(rows.Count == 1 ? "" : "s")}.",
             Data = new { index = service.Url, pages = rows },
             Warnings = warnings
         });
+    }
+}
+
+/// <summary>
+/// revit_remove_page (H1): deletes one published page, split off revit_list_pages so the list stays read-only.
+/// The model is not changed, so it needs no approval.
+/// </summary>
+public class RemovePageTool : IRevitMcpTool
+{
+    public string Name => "revit_remove_page";
+    public string Description => "Deletes one published model page (pageId, from revit_list_pages); its link stops working. The model is not changed.";
+    public ToolPermission Permission => ToolPermission.DirectEdit;
+    public ToolCategory Category => ToolCategory.Reports;
+
+    public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
+    {
+        var service = ModelPageService.Current;
+        if (service == null) return PublishPageTool.Done(request, false, "Model pages are not available in this Revit session.");
+
+        var pageId = ToolArguments.GetString(request.Arguments, "pageId").Trim();
+        if (pageId.Length == 0) return PublishPageTool.Done(request, false, "pageId is required.");
+        return service.Store.Remove(pageId)
+            ? PublishPageTool.Done(request, true, $"Removed page '{pageId}'. The model was not changed.")
+            : PublishPageTool.Done(request, false, $"No page with id '{pageId}'.");
     }
 }

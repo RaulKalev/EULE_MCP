@@ -23,7 +23,6 @@ public class ConfigGetProjectConfigTool : IRevitMcpTool, IBackgroundMcpTool
     {
         var sw = Stopwatch.StartNew();
         var projectRoot     = ToolArguments.GetString(request.Arguments, "projectRoot");
-        var createIfMissing = ToolArguments.GetBool(request.Arguments, "createIfMissing", false);
 
         if (string.IsNullOrWhiteSpace(projectRoot))
             return Task.FromResult(Fail(request, "projectRoot is required."));
@@ -31,7 +30,8 @@ public class ConfigGetProjectConfigTool : IRevitMcpTool, IBackgroundMcpTool
         var (filePath, pathErr) = ConfigPathResolver.Resolve(ConfigPathResolver.ScopeProject, projectRoot);
         if (pathErr != null) return Task.FromResult(Fail(request, pathErr));
 
-        var (config, readErr) = _svc.Read(filePath!, createIfMissing);
+        // Read-only: never creates the file (config_update createIfMissing=true or config_write does, with approval).
+        var (config, readErr) = _svc.Read(filePath!, createIfMissing: false);
         sw.Stop();
 
         if (readErr != null)

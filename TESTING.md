@@ -1714,7 +1714,7 @@ Delete the view I currently have open.
 This section enumerates every MCP tool exposed by `RevitMCP.Bridge` and describes a one-shot smoke test for an agent to run. The intent is end-to-end runnability without a human present (except for steps explicitly noted as **manual approval**).
 
 **Column legend:**
-- **Permission** — One of `ReadOnly` (RO), `RequiresApproval` (RA), `DestructiveRequiresManualApproval` (DRA). Source: `RevitMCP.Core/Models/ToolPermission.cs`.
+- **Permission** — One of `ReadOnly` (RO), `RequiresApproval` (RA), `DirectEdit` (DE: changes the UI selection or connector state, not the model; no approval, not read-only), `DestructiveRequiresManualApproval` (DRA). Source: `RevitMCP.Core/Models/ToolPermission.cs`.
 - **Smoke Prompt** — A natural-language prompt to send through the MCP client.
 - **Expected Result** — What success looks like at the JSON layer.
 - **Approval** — Approval behavior expected. `Direct Edit` (DE) **bypasses RA** but **never** bypasses DRA.
@@ -1768,8 +1768,8 @@ This section enumerates every MCP tool exposed by `RevitMCP.Bridge` and describe
 
 | Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
 |------|------|------------|--------------|-----------------|----------|------|-------|
-| Selection | `revit_select_elements` | RO | "Select elements with ids [12345, 12346]." | `{count}` and elements highlighted in Revit UI | N/A | N/A | Selection is UI-only, not a model change — runs in UI thread but uses no DB transaction |
-| Selection | `revit_select_elements_by_query` | RO | "Select all walls on Level 1." | `{count}` and elements highlighted | N/A | N/A | Same UI-only semantics |
+| Selection | `revit_select_elements` | DE | "Select elements with ids [12345, 12346]." | `{count}` and elements highlighted in Revit UI | N/A | N/A | Selection is UI-only, not a model change: no approval, but not read-only |
+| Selection | `revit_select_elements_by_query` | DE | "Select all walls on Level 1." | `{count}` and elements highlighted | N/A | N/A | Same UI-only semantics |
 
 ### 30.5 Generic Write
 
@@ -1824,8 +1824,8 @@ This section enumerates every MCP tool exposed by `RevitMCP.Bridge` and describe
 
 | Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
 |------|------|------------|--------------|-----------------|----------|------|-------|
-| Electrical | `revit_select_circuit_elements` | RA | "Select all elements on circuit 99999." | Approval flow → UI selection updated | Required (DE bypasses) | N/A (UI-only) | Marked RA in addin; no model change but classified as RA |
-| Electrical | `revit_select_uncircuited_elements` | RA | "Select all uncircuited Lighting Fixtures." | Approval flow → UI selection updated | Required (DE bypasses) | N/A (UI-only) | Same UI-only semantics |
+| Electrical | `revit_select_circuit_elements` | DE | "Select all elements on circuit 99999." | UI selection updated | N/A | N/A (UI-only) | Selection only: no approval, not read-only |
+| Electrical | `revit_select_uncircuited_elements` | DE | "Select all uncircuited Lighting Fixtures." | UI selection updated | N/A | N/A (UI-only) | Same UI-only semantics |
 
 ### 30.10 Electrical Excel Export
 
@@ -1982,8 +1982,8 @@ These tests cover tools added in the Phase 1 finalization pass. Run them against
 
 ### S6 — Config tools
 
-1. Run `config_read` with `scope="user"` and `createIfMissing=false`. If the file doesn't exist, confirm a clear "not found" error.
-2. Run again with `createIfMissing=true`. Confirm the file is created with an empty `{}` object.
+1. Run `config_read` with `scope="user"`. If the file doesn't exist, confirm a clear "not found" error.
+2. Run `config_update` with `scope="user"`, `createIfMissing=true` and `updates={"created":"true"}` (approval). Confirm the file is created; `config_read` itself never creates one (read-only).
 3. Run `config_update` with `scope="user"` and `updates={"testKey":"testValue"}`. Confirm success.
 4. Run `config_read` again. Confirm `testKey` is present in the returned JSON.
 5. Run `config_update` with a dot-path key: `{"$.nested.setting":"true"}`. Confirm `nested.setting` is present after reading back.
@@ -2043,7 +2043,7 @@ These tests cover tools added in the Phase 1 finalization pass. Run them against
 | Coord | `revit_get_clash_dashboard_summary` | RO | "Get clash dashboard summary." | `{totalClashes, byRule, bySeverity, byStatus}` | N/A | N/A | — |
 | Coord | `revit_get_next_clash` | RO | "Get next clash." | `{currentIndex, totalCount, clash}` | N/A | N/A | Returns error when no cache exists |
 | Coord | `revit_get_previous_clash` | RO | "Get previous clash." | `{currentIndex, totalCount, clash}` with index decremented | N/A | N/A | Wraps to last clash at index 0 |
-| Coord | `revit_select_clash_elements` | RA | "Select elements of clash CL-0001." | `approval_required` → both elements selected in UI after approval | Pending tab | N/A | Linked elements: selects `RevitLinkInstance` as fallback |
+| Coord | `revit_select_clash_elements` | DE | "Select elements of clash CL-0001." | Both elements selected in the UI | N/A | N/A | Linked elements: selects `RevitLinkInstance` as fallback |
 | Coord | `revit_focus_clash` | RA | "Focus clash CL-0001 in active view." | `approval_required` → active 3D view zooms + elements selected | Pending tab | N/A | Requires an open 3D view |
 | Coord | `revit_create_clash_review_view` | RA | "Create clash review view for clash CL-0001." | `approval_required` → reusable 3D view `MCP Clash Review` created or reused, section box scoped to clash | Pending tab | Revit Undo removes view (if newly created) | Transaction: `"Revit MCP - Create Clash Review View"` |
 
@@ -2095,7 +2095,7 @@ These tests cover tools added in the Phase 1 finalization pass. Run them against
 
 | Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
 |------|------|------------|--------------|-----------------|----------|------|-------|
-| Config | `config_read` | RO | "Read the user config file." | JSON config object; `createIfMissing=true` creates empty `{}` on first call | N/A | N/A | Detailed coverage in S6; scope: `user`, `project`, or `addin` |
+| Config | `config_read` | RO | "Read the user config file." | JSON config object; a missing file is reported, never created | N/A | N/A | Detailed coverage in S6; scope: `user`, `project`, or `addin` |
 | Config | `config_get_project_config` | RO | "Get the project config for `C:\Temp\ProjectRoot`." | Saved project config JSON or not-found error | N/A | N/A | Config file is `.rktools\mcp.project.config.json` under the project root |
 | Config | `config_write` | RA | "Write `{\"testKey\":\"testValue\"}` to the user config." | `approval_required` → `{filePath, keyCount}` | Pending tab | N/A | Overwrites entire file; prefer `config_update` for partial edits |
 | Config | `config_update` | RA | "Update user config: set `testKey` to `updatedValue`." | `approval_required` → `{updatedKeys}` | Pending tab | N/A | Merges into existing; dot-path keys supported |
@@ -2108,12 +2108,12 @@ These tests cover tools added in the Phase 1 finalization pass. Run them against
 | Skills | `revit_list_skills` | RO | "List all company skills." | Array of `{id, name, version, taskCount, hasProjectOverride}` | N/A | N/A | Reads from `CompanySkills/` under config folder |
 | Skills | `revit_get_skill_details` | RO | "Get details for skill 'company.electrical.qa'." | Full skill JSON with task definitions and settings | N/A | N/A | `includeProjectOverride=true` merges project override into response |
 | Skills | `revit_preview_skill_run` | RO | "Preview running skill 'company.electrical.qa'." | `{tasks:[{id, name, modifiesModel}], requiresConfirmation}` | N/A | N/A | Call before `revit_run_skill` to understand impact |
-| Skills | `revit_run_skill` | RA | "Run skill 'company.electrical.qa'." | `approval_required` → per-task `{success, issueCount}` | Required (DE bypasses) | Single Undo (model-writing tasks) | Call `revit_preview_skill_run` first; read-only tasks run without transaction |
+| Skills | `revit_run_skill` | RA | "Run skill 'company.electrical.qa'." | `approval_required` only when an enabled task changes the model → per-task `{success, issueCount}` | Required for model-changing tasks (DE bypasses) | Single Undo (model-writing tasks) | Call `revit_preview_skill_run` first; read-only tasks run without transaction |
 | Skills | `revit_run_skill_task` | RA | "Run task 'check.cabletray.vs.ducts' in skill 'company.electrical.qa'." | `approval_required` → single-task result | Required (DE bypasses) | Single Undo | Useful for re-running or debugging one task |
 | Skills | `revit_create_project_skill_override` | RO | "Create a project override for skill 'company.electrical.qa' for project 'P-2026-001'." | `{overridePath, skillId, projectId}` confirming file created | N/A | N/A | `changesJson`: `{\"tasks\":{\"<taskId>\":{\"enabled\":true,\"settings\":{...}}}}` |
 | Skills | `revit_update_project_skill_override` | RO | "Update the project override: disable task 'check.facp.clearance'." | `{updated: true, mergedKeys}` | N/A | N/A | Merges `changesJson` into existing override |
 | Skills | `revit_reset_project_skill_override` | RO | "Reset project override for skill 'company.electrical.qa' on project 'P-2026-001'." | `{deleted: true}` or not-found message | N/A | N/A | Reverts to company master skill |
-| Skills | `revit_configure_sheet_naming_skill` | RO | "Configure sheet naming skill for project 'P-2026-001' with Excel register at `C:\Temp\register.xlsx`." | `{overridePath, configuredTasks}` | N/A | N/A | Convenience wrapper for `company.lehed.nimetamise-kontroll`; set `enableExcelComparison=true` |
+| Skills | `revit_configure_sheet_naming_skill` | DE | "Configure sheet naming skill for project 'P-2026-001' with Excel register at `C:\Temp\register.xlsx`." | `{overridePath, configuredTasks}` | N/A | N/A | Convenience wrapper for `company.lehed.nimetamise-kontroll`; set `enableExcelComparison=true` |
 | Skills | `revit_skill_builder_guide` | RO | "I want to create a new skill." | Static guided-interview workflow text | N/A | N/A | Bridge-side static tool; no pipe/Revit connection needed |
 | Skills | `revit_list_skill_tasks` | RO | "What task building blocks are available for skills?" | Array of `{id, name, changesModel, exampleSettings, usedBySkills}` | N/A | N/A | Example settings harvested from loaded skills |
 | Skills | `revit_create_skill` | RA | "Create a skill 'user.test.demo' that scans a delivery folder and exports an Excel report." | `approval_required` → skill file written, registry reloaded, activation instructions returned | Required (DE bypasses) | Delete the `.skill.json` file to revert | Validates task ids; refuses company-master ids; skill content must be English |
@@ -2124,7 +2124,7 @@ These tests cover tools added in the Phase 1 finalization pass. Run them against
 | Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
 |------|------|------------|--------------|-----------------|----------|------|-------|
 | Skills Admin | `revit_compare_skill_override_to_master` | RO | "Compare project override for skill 'company.electrical.qa' on project 'P-2026-001' to master." | `{changedSettings, disabledTasks, newTasksInMaster, versionMismatch}` diff JSON | N/A | N/A | Returns `upToDate: true` when no diffs found |
-| Skills Admin | `revit_propose_master_skill_update` | RO | "Propose a master update for skill 'company.electrical.qa' from project 'P-2026-001'." | `{proposalPath}` confirming proposal JSON written to local proposals folder | N/A | N/A | Never modifies company master files directly |
+| Skills Admin | `revit_propose_master_skill_update` | DE | "Propose a master update for skill 'company.electrical.qa' from project 'P-2026-001'." | `{proposalPath}` confirming proposal JSON written to local proposals folder | N/A | N/A | Never modifies company master files directly |
 | Skills Admin | `revit_export_skill_override_diff_markdown` | RO | "Export a Markdown diff of the override for skill 'company.electrical.qa' on project 'P-2026-001'." | `{filePath}` pointing to a `.md` diff report in the exports folder | N/A | N/A | Does not modify any skill files |
 
 ### 30.28 Standards
@@ -2132,10 +2132,10 @@ These tests cover tools added in the Phase 1 finalization pass. Run them against
 | Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
 |------|------|------------|--------------|-----------------|----------|------|-------|
 | Standards | `standards_list_sources` | RO | "List company standards sources." | Array of `{id, name, enabled, fileCount, indexedAt}` | N/A | N/A | Config in `StandardsSources.json` under user data folder |
-| Standards | `standards_index_sources` | RO | "Index all enabled company standards sources." | `{indexed, skipped, errors}` counts per source | N/A | N/A | `force=true` rebuilds stale indexes; run before `standards_search` |
+| Standards | `standards_index_sources` | DE | "Index all enabled company standards sources." | `{indexed, skipped, errors}` counts per source | N/A | N/A | `force=true` rebuilds stale indexes; run before `standards_search` |
 | Standards | `standards_search` | RO | "Search company standards for 'cable tray sizing'." | Array of `{chunkId, source, heading, score, snippet}` | N/A | N/A | Run `standards_index_sources` first; `discipline` hint improves relevance |
 | Standards | `standards_get_document_chunk` | RO | "Get document chunk 'src1::chunk-042' with 1 context chunk before and after." | `{chunkId, text, source, heading, contextBefore:[], contextAfter:[]}` | N/A | N/A | `chunkId` from `standards_search` results |
-| Standards | `standards_validate_source_config` | RO | "Validate the standards source configuration." | `{valid, issues:[{source, issue}]}` — creates example config if none exists | N/A | N/A | Run first to diagnose missing or misconfigured sources |
+| Standards | `standards_validate_source_config` | RO | "Validate the standards source configuration." | `{valid, issues:[{source, issue}]}` — with no config, its path and `exampleConfig`; creates nothing | N/A | N/A | Run first to diagnose missing or misconfigured sources |
 
 ### 30.29 Family Creation
 
@@ -3097,7 +3097,7 @@ What do I have selected? (after manually picking elements inside a link)
 | Docs | `revit_list_dimension_types` | RO | "List dimension types." | Array of `{typeId, name, style}` | N/A | N/A | `styleFilter` narrows |
 | Docs | `revit_place_dimensions` | RA | "Dimension between walls A and B." | `approval_required` → dimension created, `createdCount` ≥ 1 | Required (DE bypasses) | Single Undo | Per-element warnings for unresolvable references; radial/diameter/arcLength need Revit 2025+ |
 | Selection | `revit_query_linked_elements` | RO | "Find walls in link `<id>`." | `{linkName, totalMatched, elements[]}` with linked-doc ids | N/A | N/A | Requires category and/or nameFilter |
-| Selection | `revit_select_linked_elements` | RO | "Select linked elements [ids] in link `<id>`." | Elements highlighted in host UI, `selectedCount` | N/A | N/A | Uses link references (SetReferences); zoom transforms link coordinates |
+| Selection | `revit_select_linked_elements` | DE | "Select linked elements [ids] in link `<id>`." | Elements highlighted in host UI, `selectedCount` | N/A | N/A | Uses link references (SetReferences); zoom transforms link coordinates |
 
 ---
 

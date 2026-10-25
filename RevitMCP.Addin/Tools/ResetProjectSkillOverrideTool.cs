@@ -13,7 +13,7 @@ public class ResetProjectSkillOverrideTool : IRevitMcpTool
 {
     public string Name => "revit_reset_project_skill_override";
     public string Description => "Deletes the project-specific skill override, reverting to the company master skill. Args: skillId (required), projectId (required).";
-    public ToolPermission Permission => ToolPermission.ReadOnly;
+    public ToolPermission Permission => ToolPermission.DirectEdit;
     public ToolCategory Category => ToolCategory.Skills;
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)

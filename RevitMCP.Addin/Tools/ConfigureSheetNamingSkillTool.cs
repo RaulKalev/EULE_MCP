@@ -22,7 +22,7 @@ public class ConfigureSheetNamingSkillTool : IRevitMcpTool
         "Creates or updates the project skill override, enabling Excel comparison and export tasks. " +
         "Args: projectId (required), projectName, excelFilePath, enableExcelComparison (bool), " +
         "enableExcelReport (bool), enableJsonReport (bool), allowedDisciplines (string[]), allowedStages (string[]).";
-    public ToolPermission Permission => ToolPermission.ReadOnly;
+    public ToolPermission Permission => ToolPermission.DirectEdit;
     public ToolCategory Category => ToolCategory.Skills;
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)

@@ -29,7 +29,9 @@ public static class PlanToolClassification
         "revit_focus_", "revit_copy_cad_", "revit_activate_", "revit_save_", "revit_sync_", "revit_reload_", "revit_remove_",
         "revit_delete", "revit_checkpoint_", "revit_memory_", "revit_export_", "revit_update_skill", "revit_plan_", "revit_job_",
         "revit_open_", "revit_close_", "revit_checkout_", "revit_relinquish",
-        "revit_page_", "sync_ifc_", "config_", "file_", "excel_"
+        "revit_page_", "sync_ifc_", "config_", "file_", "excel_",
+        // Change connector files or records, not the model (H1).
+        "standards_", "revit_usage_", "revit_propose_", "revit_manage_project_skill_", "revit_configure_"
     };
 
     public static PlanToolKind Classify(string toolName)

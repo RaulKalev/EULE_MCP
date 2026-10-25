@@ -10,8 +10,8 @@ namespace RevitMCP.Addin.Tools;
 public class SelectCircuitElementsTool : IRevitMcpTool
 {
     public string Name => "revit_select_circuit_elements";
-    public string Description => "Selects all elements connected to a circuit in the Revit UI. Requires approval. Accepts: circuitId (long, required), replaceSelection (bool, default true), zoomToSelection (bool, default false).";
-    public ToolPermission Permission => ToolPermission.RequiresApproval;
+    public string Description => "Selects all elements connected to a circuit in the Revit UI. Accepts: circuitId (long, required), replaceSelection (bool, default true), zoomToSelection (bool, default false).";
+    public ToolPermission Permission => ToolPermission.DirectEdit;
     public ToolCategory Category => ToolCategory.Electrical;
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
