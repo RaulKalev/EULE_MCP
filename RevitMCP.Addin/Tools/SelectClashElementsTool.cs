@@ -15,7 +15,6 @@ public class SelectClashElementsTool : IRevitMcpTool
     public ToolPermission Permission => ToolPermission.DirectEdit;
     public ToolCategory Category => ToolCategory.Coordination;
 
-    private readonly ClashRunCacheService _cache = new();
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
@@ -27,7 +26,7 @@ public class SelectClashElementsTool : IRevitMcpTool
         var clashId = ToolArguments.GetString(request.Arguments, "clashId");
         if (string.IsNullOrWhiteSpace(clashId)) return Task.FromResult(Fail(request, "clashId is required."));
 
-        var run = _cache.Load();
+        var run = ClashRunScope.Cache(uiapp, request).Load();
         if (run == null) return Task.FromResult(Fail(request, "No clash run in cache. Run a detection first."));
 
         var clash = run.Clashes.FirstOrDefault(c =>

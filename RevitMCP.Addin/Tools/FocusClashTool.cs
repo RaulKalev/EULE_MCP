@@ -16,7 +16,6 @@ public class FocusClashTool : IRevitMcpTool
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Coordination;
 
-    private readonly ClashRunCacheService _cache = new();
     private readonly ClashFocusService _focusService = new();
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
@@ -32,7 +31,7 @@ public class FocusClashTool : IRevitMcpTool
 
         var sectionBoxPaddingMm = GetDouble(args, "sectionBoxPaddingMm", 1000.0);
 
-        var run = _cache.Load();
+        var run = ClashRunScope.Cache(uiapp, request).Load();
         if (run == null) return Task.FromResult(Fail(request, "No clash run in cache. Run a detection first."));
 
         var clash = run.Clashes.FirstOrDefault(c =>

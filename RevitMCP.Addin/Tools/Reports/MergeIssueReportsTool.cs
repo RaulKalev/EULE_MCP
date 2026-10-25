@@ -38,8 +38,7 @@ public class MergeIssueReportsTool : IRevitMcpTool, IBackgroundMcpTool
         {
             try
             {
-                var r = JsonSerializer.Deserialize<IssueReportDto>(reportJsonArray[i],
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                var r = JsonSerializer.Deserialize<IssueReportDto>(reportJsonArray[i], IssueReportService.ReadOptions);
                 if (r != null) reports.Add(r);
             }
             catch (Exception ex)
@@ -51,7 +50,9 @@ public class MergeIssueReportsTool : IRevitMcpTool, IBackgroundMcpTool
         if (reports.Count == 0)
             return Task.FromResult(Fail(request, $"No valid reports to merge. Parse errors: {string.Join("; ", parseErrors)}"));
 
-        var merged = _service.MergeReports(mergedTitle, reports);
+        var merged = _service.MergeReports(mergedTitle, reports, out var duplicatesRemoved);
+        if (duplicatesRemoved > 0)
+            parseErrors.Add($"{duplicatesRemoved} issue(s) with an id already merged were kept once.");
 
         string mergedJson;
         try
@@ -69,7 +70,8 @@ public class MergeIssueReportsTool : IRevitMcpTool, IBackgroundMcpTool
         {
             RequestId = request.RequestId,
             Success = true,
-            Message = $"Merged {reports.Count} report(s) into {merged.TotalCount} issue(s).",
+            Message = $"Merged {reports.Count} report(s) into {merged.TotalCount} issue(s)" +
+                      (duplicatesRemoved > 0 ? $" ({duplicatesRemoved} duplicate(s) removed)." : "."),
             Data = new
             {
                 mergedReport = mergedJson,
@@ -79,7 +81,8 @@ public class MergeIssueReportsTool : IRevitMcpTool, IBackgroundMcpTool
                 errorCount = merged.ErrorCount,
                 warningCount = merged.WarningCount,
                 infoCount = merged.InfoCount,
-                sourceReportCount = reports.Count
+                sourceReportCount = reports.Count,
+                duplicatesRemoved
             },
             Warnings = parseErrors,
             DurationMs = sw.ElapsedMilliseconds

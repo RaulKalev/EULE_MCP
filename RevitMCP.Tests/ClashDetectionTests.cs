@@ -204,16 +204,18 @@ public class ClashDetectionTests
             ]
         };
 
-        // Cursor starts at 0. GetNext advances to 1.
+        // M24: the first "next" of a run is clash 1 (it used to skip to clash 2).
         var (c1, i1, t1) = svc.GetNext(run);
-        Assert.Equal("CL-0002", c1!.ClashId);
-        Assert.Equal(2, i1);
+        Assert.Equal("CL-0001", c1!.ClashId);
+        Assert.Equal(1, i1);
         Assert.Equal(2, t1);
 
-        // GetNext again wraps around to 0.
-        var (c2, i2, _) = svc.GetNext(run);
-        Assert.Equal("CL-0001", c2!.ClashId);
-        Assert.Equal(1, i2);
+        Assert.Equal("CL-0002", svc.GetNext(run).Clash!.ClashId);
+
+        // Wraps around.
+        var (c3, i3, _) = svc.GetNext(run);
+        Assert.Equal("CL-0001", c3!.ClashId);
+        Assert.Equal(1, i3);
     }
 
     [Fact]
@@ -231,11 +233,47 @@ public class ClashDetectionTests
             ]
         };
 
-        // Cursor at 0. GetPrevious wraps to last = index 1.
+        // Before any move, "previous" gives the last clash.
         var (c, i, t) = svc.GetPrevious(run);
         Assert.Equal("CL-0002", c!.ClashId);
         Assert.Equal(2, i);
         Assert.Equal(2, t);
+    }
+
+    [Fact]
+    public void ClashRunCacheService_CursorIsPerClientRunAndDocument()
+    {
+        // M24: one static cursor and one global file served every session and document.
+        ClashRunCacheService.ResetCursor();
+        var folder = Path.Combine(Path.GetTempPath(), "rmcp-clash-" + Guid.NewGuid().ToString("N"));
+        ClashRunCacheService.FolderOverride = folder;
+        try
+        {
+            var modelA = new ClashRunCacheService("model-a");
+            var modelB = new ClashRunCacheService("model-b");
+            var run = new ClashRunResultDto
+            {
+                RunId = "R1",
+                Clashes = [new ClashResultDto { ClashId = "CL-0001" }, new ClashResultDto { ClashId = "CL-0002" }]
+            };
+
+            Assert.Equal("CL-0001", modelA.GetNext(run, "Claude Code").Clash!.ClashId);
+            Assert.Equal("CL-0002", modelA.GetNext(run, "Claude Code").Clash!.ClashId);
+            Assert.Equal("CL-0001", modelA.GetNext(run, "Claude Desktop").Clash!.ClashId);   // another client
+            Assert.Equal("CL-0001", modelB.GetNext(run, "Claude Code").Clash!.ClashId);      // another document
+
+            var newRun = new ClashRunResultDto { RunId = "R2", Clashes = run.Clashes };
+            Assert.Equal("CL-0001", modelA.GetNext(newRun, "Claude Code").Clash!.ClashId);   // a new run starts over
+
+            modelA.Save(run);
+            Assert.Equal("R1", modelA.Load()!.RunId);
+            Assert.Null(modelB.Load());
+        }
+        finally
+        {
+            ClashRunCacheService.FolderOverride = null;
+            try { Directory.Delete(folder, true); } catch { }
+        }
     }
 
     [Fact]

@@ -5,6 +5,9 @@ public class ClashLocationDto
     public double X { get; set; }
     public double Y { get; set; }
     public double Z { get; set; }
+
+    /// <summary>X, Y and Z are in metres (host internal coordinates); M23: the unit was not stated.</summary>
+    public string Unit { get; set; } = "m";
 }
 
 public class ClashResultDto

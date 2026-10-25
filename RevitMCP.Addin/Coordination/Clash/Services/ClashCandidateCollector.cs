@@ -1,4 +1,5 @@
 using Autodesk.Revit.DB;
+using RevitMCP.Addin.Coordination.Clash.DTOs;
 using RevitMCP.Addin.Coordination.Clash.Geometry;
 
 namespace RevitMCP.Addin.Coordination.Clash.Services;
@@ -10,9 +11,31 @@ public class ClashCandidateInfo
     public string Model { get; set; } = "Host";
     public long? LinkInstanceId { get; set; }
     public string? LinkName { get; set; }
+    public string UniqueId { get; set; } = string.Empty;
+    public string Family { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string? Level { get; set; }
     public BoundingBoxXYZ? BoundingBox { get; set; }
     public Document OwnerDocument { get; set; } = null!;
     public Transform LinkTransform { get; set; } = Transform.Identity;
+
+    public ClashElementRefDto ToRef() => new()
+    {
+        ElementId = ElementId,
+        UniqueId = UniqueId,
+        Category = Category,
+        Family = Family,
+        Type = Type,
+        Model = Model,
+        LinkInstanceId = LinkInstanceId,
+        LinkName = LinkName
+    };
+
+    /// <summary>The clash's level: the host element's, else the other one's (the summary groups by it).</summary>
+    public static string? LevelOf(ClashCandidateInfo source, ClashCandidateInfo target) =>
+        source.LinkInstanceId == null && source.Level != null ? source.Level
+        : target.LinkInstanceId == null && target.Level != null ? target.Level
+        : source.Level ?? target.Level;
 }
 
 public class ClashCandidateCollector
@@ -106,7 +129,7 @@ public class ClashCandidateCollector
             if (bbox == null) continue;
             result.Add(new ClashCandidateInfo
             {
-                ElementId = imp.Id.Value, Category = "ImportedGeometry",
+                ElementId = imp.Id.Value, Category = "ImportedGeometry", UniqueId = imp.UniqueId, Type = SafeName(imp),
                 Model = "Host", BoundingBox = bbox,
                 OwnerDocument = hostDoc, LinkTransform = Transform.Identity
             });
@@ -128,10 +151,15 @@ public class ClashCandidateCollector
         {
             var bbox = el.get_BoundingBox(null);
             if (bbox == null) continue;
+            var (family, type, level) = Names(doc, el);
             result.Add(new ClashCandidateInfo
             {
                 ElementId = el.Id.Value,
                 Category = catName,
+                UniqueId = el.UniqueId,
+                Family = family,
+                Type = type,
+                Level = level,
                 Model = modelLabel,
                 LinkInstanceId = linkInstanceId,
                 LinkName = linkName,
@@ -140,5 +168,32 @@ public class ClashCandidateCollector
                 LinkTransform = transform
             });
         }
+    }
+
+    /// <summary>Family, type and level names for the clash report; they were always empty (M23).</summary>
+    private static (string Family, string Type, string? Level) Names(Document doc, Element el)
+    {
+        string family = string.Empty, type = string.Empty;
+        string? level = null;
+        try
+        {
+            var elementType = doc.GetElement(el.GetTypeId()) as ElementType;
+            type = elementType?.Name ?? string.Empty;
+            family = el is FamilyInstance fi ? fi.Symbol?.FamilyName ?? string.Empty : elementType?.FamilyName ?? string.Empty;
+        }
+        catch { }
+        try
+        {
+            if (el.LevelId != null && el.LevelId != ElementId.InvalidElementId)
+                level = doc.GetElement(el.LevelId)?.Name;
+        }
+        catch { }
+        return (family, type, level);
+    }
+
+    private static string SafeName(Element e)
+    {
+        try { return e.Name ?? string.Empty; }
+        catch { return string.Empty; }
     }
 }

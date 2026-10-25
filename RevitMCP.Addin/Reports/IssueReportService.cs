@@ -52,10 +52,39 @@ public class IssueReportService
     /// Merges multiple reports into one. Each source report's issues keep their original IDs;
     /// a new overall run ID is generated for the merged report.
     /// </summary>
-    public IssueReportDto MergeReports(string mergedTitle, IEnumerable<IssueReportDto> reports)
+    /// <summary>
+    /// Reads report JSON with enums by name ("Warning") or number: exported reports use names, the tools' own output
+    /// numbers, and the merge rejected names (M25).
+    /// </summary>
+    public static readonly System.Text.Json.JsonSerializerOptions ReadOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+    };
+
+    public IssueReportDto MergeReports(string mergedTitle, IEnumerable<IssueReportDto> reports) =>
+        MergeReports(mergedTitle, reports, out _);
+
+    /// <summary>
+    /// Merges the reports. An issue id seen before is the same issue (ids carry their run id), so it is kept once:
+    /// merging a report with itself, or with a re-export of it, doubled every issue (M25). Issues without an id are
+    /// all kept.
+    /// </summary>
+    public IssueReportDto MergeReports(string mergedTitle, IEnumerable<IssueReportDto> reports, out int duplicatesRemoved)
     {
         var allReports = reports.ToList();
-        var allIssues = allReports.SelectMany(r => r.Issues).ToList();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var allIssues = new List<IssueDto>();
+        duplicatesRemoved = 0;
+        foreach (var issue in allReports.SelectMany(r => r.Issues))
+        {
+            if (!string.IsNullOrWhiteSpace(issue.IssueId) && !seen.Add(issue.IssueId))
+            {
+                duplicatesRemoved++;
+                continue;
+            }
+            allIssues.Add(issue);
+        }
         var modelTitles = allReports
             .Select(r => r.ModelTitle)
             .Where(t => !string.IsNullOrWhiteSpace(t))

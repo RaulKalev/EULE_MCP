@@ -137,6 +137,38 @@ public class IssueReportDtoTests
         Assert.Equal("SRC-0001", merged.Issues[0].IssueId);
     }
 
+    [Fact]
+    public void MergeReports_KeepsAnIssueIdOnce_AndEveryIssueWithoutId()
+    {
+        // M25: merging a report with itself doubled every issue.
+        var svc = new IssueReportService();
+        var r = new IssueReportDto
+        {
+            RunId = "SRC",
+            Issues = new List<IssueDto>
+            {
+                new() { IssueId = "SRC-0001", Severity = IssueSeverity.Error },
+                new() { Severity = IssueSeverity.Info },
+                new() { Severity = IssueSeverity.Info }
+            }
+        };
+
+        var merged = svc.MergeReports("Test", new[] { r, r }, out var removed);
+
+        Assert.Equal(1, removed);
+        Assert.Equal(5, merged.TotalCount);
+        Assert.Single(merged.Issues, i => i.IssueId == "SRC-0001");
+    }
+
+    [Fact]
+    public void IssueReport_ReadsSeverityNamesAndNumbers()
+    {
+        // M25: the merge tool rejected "Warning"; names and numbers both read now.
+        var r = System.Text.Json.JsonSerializer.Deserialize<IssueReportDto>(
+            "{\"Issues\":[{\"Severity\":\"Warning\"},{\"Severity\":2}]}", IssueReportService.ReadOptions)!;
+        Assert.Equal(new[] { IssueSeverity.Warning, IssueSeverity.Error }, r.Issues.Select(i => i.Severity));
+    }
+
     // ── Export path sanitization ──────────────────────────────────────────────
 
     [Fact]

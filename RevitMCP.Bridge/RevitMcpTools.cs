@@ -512,6 +512,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Treat whitespace-only values as empty")] bool treatWhitespaceAsEmpty = true,
         [Description("Include problem element details")] bool includeElementIds = true,
         [Description("Max elements to check (default 5000)")] int limit = 5000,
+        [Description(ReturnIssueReportDescription)] bool returnIssueReport = false,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -525,7 +526,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["includeTypeParameters"] = includeTypeParameters,
             ["treatWhitespaceAsEmpty"] = treatWhitespaceAsEmpty,
             ["includeElementIds"] = includeElementIds,
-            ["limit"] = limit
+            ["limit"] = limit,
+            ["returnIssueReport"] = returnIssueReport
         };
         args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_check_parameter_completeness", args, cancellationToken);
@@ -3936,6 +3938,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Checks to run — default all: MissingPanel, EmptyCircuitNumber, DuplicateCircuitNumbers, MissingCableType, MissingLoadName, NoConnectedElements")] string[]? checks = null,
         [Description("Include connected elements for circuits with issues")] bool includeElements = true,
         [Description("Max circuits to check (default 5000)")] int limit = 5000,
+        [Description(ReturnIssueReportDescription)] bool returnIssueReport = false,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -3945,7 +3948,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["systemType"] = systemType ?? string.Empty,
             ["checks"] = checks ?? Array.Empty<string>(),
             ["includeElements"] = includeElements,
-            ["limit"] = limit
+            ["limit"] = limit,
+            ["returnIssueReport"] = returnIssueReport
         };
         args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_check_circuit_health", args, cancellationToken);
@@ -5452,6 +5456,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Save as last run for navigation tools (default true)")] bool saveAsLastRun = true,
         [Description("Rule name label. Empty = default per mode.")] string? ruleName = null,
         [Description("Severity: Low | Medium | High | Critical (default Medium)")] string severity = "Medium",
+        [Description(ReturnIssueReportDescription)] bool returnIssueReport = false,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -5466,7 +5471,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["includeImportedGeometry"] = includeImportedGeometry,
             ["linkNameFilters"] = linkNameFilters ?? [], ["limit"] = limit,
             ["maxPairs"] = maxPairs, ["saveAsLastRun"] = saveAsLastRun,
-            ["severity"] = severity
+            ["severity"] = severity, ["returnIssueReport"] = returnIssueReport
         };
 
         string toolName;
@@ -5550,6 +5555,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Save merged result as last run (default true)")] bool saveAsLastRun = true,
         [Description("Allow low-confidence bounding-box fallback for hard clash rules when solids are unavailable. Default false.")]
         bool allowBoundingBoxFallback = false,
+        [Description("Only links whose name contains one of these (all rules)")] string[]? linkNameFilters = null,
+        [Description(ReturnIssueReportDescription)] bool returnIssueReport = false,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -5558,7 +5565,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["presetName"] = presetName, ["includeLinks"] = includeLinks,
             ["includeGenericModels"] = includeGenericModels, ["includeImportedGeometry"] = includeImportedGeometry,
             ["limit"] = limit, ["maxPairs"] = maxPairs, ["saveAsLastRun"] = saveAsLastRun,
-            ["allowBoundingBoxFallback"] = allowBoundingBoxFallback
+            ["allowBoundingBoxFallback"] = allowBoundingBoxFallback,
+            ["linkNameFilters"] = linkNameFilters ?? [], ["returnIssueReport"] = returnIssueReport
         };
         args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_run_clash_preset", args, cancellationToken);
@@ -5884,13 +5892,15 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("ID of the skill to run, e.g. company.electrical.qa")] string skillId,
         [Description("Optional project ID for override lookup")] string? projectId = null,
         [Description("Apply the project override when running")] bool useProjectOverride = false,
+        [Description(ReturnIssueReportDescription)] bool returnIssueReport = false,
         CancellationToken cancellationToken = default)
     {
         var args = new Dictionary<string, object?>
         {
             ["skillId"] = skillId,
             ["projectId"] = projectId ?? string.Empty,
-            ["useProjectOverride"] = useProjectOverride
+            ["useProjectOverride"] = useProjectOverride,
+            ["returnIssueReport"] = returnIssueReport
         };
         var result = await pipeClient.SendAsync("revit_run_skill", args, cancellationToken);
         return FormatResult(result);
@@ -6769,6 +6779,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
 
     // Repeated in ~160 tool schemas: kept short on purpose (each word costs tokens in every tools/list).
     private const string DocumentArgDescription = "Document title or path (revit_list_open_documents); empty = active.";
+    private const string ReturnIssueReportDescription =
+        "Also return the results as an issue report (data.issueReport) for revit_export_issues and revit_merge_issue_reports. Default false.";
 
     private const string LinksToReloadDescription =
         "Files to reload from, e.g. [{\"path\":\"C:\\\\in\\\\ARH.ifc\"},{\"path\":\"C:\\\\in\\\\plan.dwg\",\"link\":\"old_plan.dwg\"}]. " +

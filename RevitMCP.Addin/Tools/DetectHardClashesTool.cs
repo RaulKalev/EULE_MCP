@@ -20,7 +20,6 @@ public class DetectHardClashesTool : IRevitMcpTool
 
     private readonly ClashCandidateCollector _collector = new();
     private readonly HardClashDetector _detector = new();
-    private readonly ClashRunCacheService _cache = new();
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
@@ -64,7 +63,7 @@ public class DetectHardClashesTool : IRevitMcpTool
             CountByRule = new Dictionary<string, int> { [ruleName] = clashes.Count }
         };
 
-        if (saveAsLastRun) _cache.Save(run);
+        if (saveAsLastRun) ClashRunScope.Cache(uiapp, request).Save(run);
 
         IssueReportDto? issueReport = null;
         if (returnIssueReport)

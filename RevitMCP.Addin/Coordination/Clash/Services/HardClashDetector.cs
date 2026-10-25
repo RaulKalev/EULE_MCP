@@ -130,9 +130,10 @@ public class HardClashDetector
                         RuleName = ruleName,
                         ClashType = "HardClash",
                         Severity = severity,
-                        Source = BuildRef(src),
-                        Target = BuildRef(tgt),
+                        Source = src.ToRef(),
+                        Target = tgt.ToRef(),
                         Location = new ClashLocationDto { X = lx, Y = ly, Z = lz },
+                        Level = ClashCandidateInfo.LevelOf(src, tgt),
                         IntersectionVolume = volume,
                         DetectionMethod = "SolidIntersection",
                         Confidence = "High",
@@ -156,9 +157,10 @@ public class HardClashDetector
                         RuleName = ruleName,
                         ClashType = "HardClash",
                         Severity = severity,
-                        Source = BuildRef(src),
-                        Target = BuildRef(tgt),
+                        Source = src.ToRef(),
+                        Target = tgt.ToRef(),
                         Location = new ClashLocationDto { X = lx, Y = ly, Z = lz },
+                        Level = ClashCandidateInfo.LevelOf(src, tgt),
                         IntersectionVolume = null,
                         DetectionMethod = "BoundingBoxFallback",
                         Confidence = "Low",
@@ -181,13 +183,4 @@ public class HardClashDetector
 
         return (clashes, warnings);
     }
-
-    private static ClashElementRefDto BuildRef(ClashCandidateInfo c) => new()
-    {
-        ElementId = c.ElementId,
-        Category = c.Category,
-        Model = c.Model,
-        LinkInstanceId = c.LinkInstanceId,
-        LinkName = c.LinkName
-    };
 }

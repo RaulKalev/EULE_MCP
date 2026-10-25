@@ -21,7 +21,6 @@ public class RunClashPresetTool : IRevitMcpTool
     private readonly ClashCandidateCollector _collector = new();
     private readonly HardClashDetector _hardDetector = new();
     private readonly ClearanceClashDetector _clearanceDetector = new();
-    private readonly ClashRunCacheService _cache = new();
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
@@ -48,6 +47,7 @@ public class RunClashPresetTool : IRevitMcpTool
         var saveAsLastRun = ToolArguments.GetBool(args, "saveAsLastRun", true);
         var allowBoundingBoxFallback = ToolArguments.GetBool(args, "allowBoundingBoxFallback", false);
         var returnIssueReport = ToolArguments.GetBool(args, "returnIssueReport", false);
+        var linkNameFilters = ToolArguments.GetStringArray(args, "linkNameFilters");   // M3: the ad-hoc tools had it, the preset did not
 
         var allClashes = new List<ClashResultDto>();
         var allWarnings = new List<string>();
@@ -68,8 +68,8 @@ public class RunClashPresetTool : IRevitMcpTool
             var incIG = includeImportedGeometry && rule.IncludeImportedGeometry;
             var incLinks = includeLinks && (rule.TargetScope == "HostAndLinks");
 
-            var (sources, sw1) = _collector.Collect(doc, rule.SourceCategories, incLinks, incGM, incIG, null, 0);
-            var (targets, tw1) = _collector.Collect(doc, rule.TargetCategories, incLinks, incGM, incIG, null, 0);
+            var (sources, sw1) = _collector.Collect(doc, rule.SourceCategories, incLinks, incGM, incIG, linkNameFilters, 0);
+            var (targets, tw1) = _collector.Collect(doc, rule.TargetCategories, incLinks, incGM, incIG, linkNameFilters, 0);
             allWarnings.AddRange(sw1); allWarnings.AddRange(tw1);
 
             // B. Skip rules with no real candidates — avoids expensive detector work on empty sets.
@@ -120,7 +120,7 @@ public class RunClashPresetTool : IRevitMcpTool
             CountByRule = countByRule
         };
 
-        if (saveAsLastRun) _cache.Save(run);
+        if (saveAsLastRun) ClashRunScope.Cache(uiapp, request).Save(run);
 
         IssueReportDto? issueReport = null;
         if (returnIssueReport)

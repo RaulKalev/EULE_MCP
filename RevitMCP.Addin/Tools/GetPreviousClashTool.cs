@@ -13,12 +13,11 @@ public class GetPreviousClashTool : IRevitMcpTool
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Coordination;
 
-    private readonly ClashRunCacheService _cache = new();
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
         var sw = Stopwatch.StartNew();
-        var run = _cache.Load();
+        var run = ClashRunScope.Cache(uiapp, request).Load();
         if (run == null)
             return Task.FromResult(Fail(request, "No clash run in cache. Run a detection first."));
         if (run.Clashes.Count == 0)
@@ -31,7 +30,7 @@ public class GetPreviousClashTool : IRevitMcpTool
                 DurationMs = sw.ElapsedMilliseconds
             });
 
-        var (clash, index, total) = _cache.GetPrevious(run);
+        var (clash, index, total) = ClashRunScope.Cache(uiapp, request).GetPrevious(run, request.ClientName);
 
         sw.Stop();
         return Task.FromResult(new McpToolResult

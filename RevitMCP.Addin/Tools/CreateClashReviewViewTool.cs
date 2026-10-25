@@ -19,7 +19,6 @@ public class CreateClashReviewViewTool : IRevitMcpTool
     public ToolCategory Category => ToolCategory.Coordination;
 
     private readonly ClashReviewViewService _viewService = new();
-    private readonly ClashRunCacheService _cache = new();
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
@@ -44,7 +43,7 @@ public class CreateClashReviewViewTool : IRevitMcpTool
 
         if (!string.IsNullOrWhiteSpace(clashId))
         {
-            var run = _cache.Load();
+            var run = ClashRunScope.Cache(uiapp, request).Load();
             var clash = run?.Clashes.FirstOrDefault(c =>
                 c.ClashId.Equals(clashId, StringComparison.OrdinalIgnoreCase));
 

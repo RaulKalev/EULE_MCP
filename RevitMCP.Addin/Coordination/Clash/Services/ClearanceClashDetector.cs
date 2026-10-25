@@ -88,9 +88,10 @@ public class ClearanceClashDetector
                     RuleName = ruleName,
                     ClashType = "Clearance",
                     Severity = severity,
-                    Source = BuildRef(src),
-                    Target = BuildRef(tgt),
+                    Source = src.ToRef(),
+                    Target = tgt.ToRef(),
                     Location = new ClashLocationDto { X = lx, Y = ly, Z = lz },
+                    Level = ClashCandidateInfo.LevelOf(src, tgt),
                     DistanceMm = Math.Round(distMm, 1),
                     RequiredClearanceMm = clearanceMm,
                     DetectionMethod = useCentroid ? "CentroidApproximation" : "ExpandedBoundingBox",
@@ -103,15 +104,6 @@ public class ClearanceClashDetector
 
         return (clashes, warnings);
     }
-
-    private static ClashElementRefDto BuildRef(ClashCandidateInfo c) => new()
-    {
-        ElementId = c.ElementId,
-        Category = c.Category,
-        Model = c.Model,
-        LinkInstanceId = c.LinkInstanceId,
-        LinkName = c.LinkName
-    };
 
     private static double ComputeCentroidDistanceMm(
         Autodesk.Revit.DB.BoundingBoxXYZ a,

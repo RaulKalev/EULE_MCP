@@ -2037,7 +2037,7 @@ These tests cover tools added in the Phase 1 finalization pass. Run them against
 | Coord | `revit_list_clash_presets` | RO | "List clash presets." | At least 2 built-in presets returned | N/A | N/A | Built-ins: "Electrical vs HVAC", "Fire Alarm Devices Placement QA" |
 | Coord | `revit_get_clash_preset` | RO | "Get preset 'Electrical vs HVAC'." | Full preset JSON with `name`, `rules[]` | N/A | N/A | Returns error if preset not found |
 | Coord | `revit_validate_clash_preset` | RO | "Validate preset JSON." | `{isValid:true, ruleCount:N, errors:[]}` | N/A | N/A | Pass invalid preset to verify `isValid:false` path |
-| Coord | `revit_run_clash_preset` | RO | "Run preset 'Electrical vs HVAC'." | `{totalClashCount, ruleResults:[...]}` cached for review | N/A | N/A | Result cached to `LastClashRun.json` |
+| Coord | `revit_run_clash_preset` | RO | "Run preset 'Electrical vs HVAC'." | `{totalClashCount, ruleResults:[...]}` cached for review | N/A | N/A | Result cached per document (`ClashRuns/<model id>.json`); next/previous keep a cursor per client |
 | Coord | `revit_export_clash_report_to_excel` | RO | "Export last clash run to Excel." | `{filePath: "...ClashReport_*.xlsx"}` | N/A | N/A | File has Summary + Details sheets |
 | Coord | `revit_get_clash_dashboard_summary` | RO | "Get clash dashboard summary." | `{totalClashes, byRule, bySeverity, byStatus}` | N/A | N/A | — |
 | Coord | `revit_get_next_clash` | RO | "Get next clash." | `{currentIndex, totalCount, clash}` | N/A | N/A | Returns error when no cache exists |

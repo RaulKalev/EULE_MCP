@@ -16,7 +16,6 @@ public class GetClashDashboardSummaryTool : IRevitMcpTool
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Coordination;
 
-    private readonly ClashRunCacheService _cache = new();
 
     public Task<McpToolResult> ExecuteAsync(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
@@ -29,7 +28,7 @@ public class GetClashDashboardSummaryTool : IRevitMcpTool
 
         ClashRunResultDto? run = null;
         if (useLastRun)
-            run = _cache.Load();
+            run = ClashRunScope.Cache(uiapp, request).Load();
         else if (!string.IsNullOrWhiteSpace(clashesJson))
             run = JsonSerializer.Deserialize<ClashRunResultDto>(clashesJson);
 
