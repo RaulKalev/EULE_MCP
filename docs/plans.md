@@ -75,7 +75,7 @@ revit_plan_close                              → counters + diff summary
 
 | Field | Default | |
 |---|---|---|
-| `tools` | — (required) | Approval-gated write tools; destructive and non-model tools are refused, read-only ones ignored |
+| `tools` | — (required) | Approval-gated write tools; destructive and non-model tools are refused, read-only ones ignored. A combined bridge tool (`revit_set_parameters_bulk`, `revit_rename`, `revit_duplicate` …) covers the add-in tools it routes to (`revit_set_view_parameters_bulk`, `revit_set_sheet_parameters_bulk` …; `BridgeToolRoutes`), which the summary lists |
 | `elementIds` | none | Allow list (max 20 000); empty = not restricted by id. New elements are never on it |
 | `categories` | none | Display name (`Electrical Fixtures`) or `OST_` name |
 | `levelIds`, `viewIds`, `worksets` | none | Optional further scope |

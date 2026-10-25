@@ -64,6 +64,11 @@ public static class PlanEnvelopeParser
         foreach (var tool in PlanArgs.Strings(envelope["tools"]).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var permission = permissionOf(tool);
+            if (permission == null && BridgeToolRoutes.Find(tool) is { } route)
+            {
+                AddRoute(def, route, permissionOf, isBackground);
+                continue;
+            }
             if (permission == null)
                 def.Errors.Add($"Unknown tool '{tool}'.");
             else if (permission == ToolPermission.DestructiveRequiresManualApproval)
@@ -72,7 +77,7 @@ public static class PlanEnvelopeParser
                 def.Errors.Add($"'{tool}' does not change the Revit model and cannot run under a plan.");
             else if (permission != ToolPermission.RequiresApproval)
                 def.Warnings.Add($"'{tool}' needs no approval; it is left out of the plan.");
-            else
+            else if (!env.Tools.Contains(tool, StringComparer.OrdinalIgnoreCase))
                 env.Tools.Add(tool);
         }
         if (env.Tools.Count == 0 && def.Errors.Count == 0)
@@ -107,6 +112,41 @@ public static class PlanEnvelopeParser
         if (env.ElementIds.Count == 0 && env.Categories.Count == 0)
             def.Warnings.Add("The envelope is not restricted by elementIds or categories: only the counters limit it.");
         return def;
+    }
+
+    /// <summary>
+    /// A combined bridge tool (revit_set_parameters_bulk, revit_rename …) in envelope.tools: the plan covers the
+    /// approval-gated add-in tools it routes to, since those are the names its calls arrive under. Destructive
+    /// targets stay out (they always prompt); read-only ones need no cover.
+    /// </summary>
+    private static void AddRoute(PlanDefinition def, BridgeToolRoute route, Func<string, ToolPermission?> permissionOf, Func<string, bool> isBackground)
+    {
+        var covered = new List<string>();
+        var destructive = new List<string>();
+        var known = false;
+        foreach (var target in route.Targets)
+        {
+            var permission = permissionOf(target);
+            if (permission == null) continue;
+            known = true;
+            if (permission == ToolPermission.DestructiveRequiresManualApproval) destructive.Add(target);
+            else if (permission == ToolPermission.RequiresApproval && !isBackground(target)) covered.Add(target);
+        }
+
+        var tool = route.BridgeTool;
+        if (!known)
+            def.Errors.Add($"Unknown tool '{tool}'.");
+        else if (covered.Count == 0 && destructive.Count > 0)
+            def.Errors.Add($"'{tool}' is destructive and always needs a manual approval; a plan can never run it without a prompt. Leave it out and call it on its own.");
+        else if (covered.Count == 0)
+            def.Warnings.Add($"'{tool}' needs no approval; it is left out of the plan.");
+        else
+        {
+            foreach (var target in covered)
+                if (!def.Envelope.Tools.Contains(target, StringComparer.OrdinalIgnoreCase)) def.Envelope.Tools.Add(target);
+            def.Warnings.Add($"'{tool}' is covered as {string.Join(", ", covered)} (the tools it routes to)." +
+                             (destructive.Count > 0 ? $" {string.Join(", ", destructive)} still need a manual approval." : string.Empty));
+        }
     }
 
     private static int Clamp(PlanDefinition def, string name, int value, int min, int max)

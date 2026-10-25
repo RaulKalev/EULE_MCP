@@ -43,7 +43,10 @@ report url.
 A step is `{tool, arguments, bind, title, continueOnError, optional}`.
 
 - `tool` — any registered tool except `revit_job_*` and `revit_plan_*`. A destructive tool needs
-  `allowDestructiveSteps=true` on the submit and still waits for a manual approval when it runs.
+  `allowDestructiveSteps=true` on the submit and still waits for a manual approval when it runs. A combined bridge
+  tool (`revit_set_parameters_bulk`, `revit_rename`, `revit_duplicate`, `revit_delete`, `revit_detect_clashes` …) is
+  accepted and runs as the add-in tool its routing argument picks (`entity`, `target`, `mode` …, which must then be a
+  literal value, not a placeholder); the other arguments pass through unchanged (`BridgeToolRoutes`).
 - `bind` — variable → JSON path into the step's result `{success, status, message, data, warnings}`. Supported:
   `.name` (case-insensitive), `[n]`, `[*]`, `[:n]` and the equality filter `[?(@.key=='value')]` (also numbers and
   `true`/`false`). A path through `[*]`, `[:n]` or a filter yields an array; string ids become numbers.
@@ -112,7 +115,11 @@ nothing resumes without `revit_job_resume`. At most 50 journals per model; the o
 
 `JobReportHtml` builds one self-contained model page ([model-pages.md](model-pages.md)) — deterministic, no AI, no
 external URLs, `<html lang="et">` like the team's other pages — under the page id `job-<id>`, so re-publishing keeps
-the link:
+the link. It covers only what the job's own steps changed: the batches of its checkpoint attributed to the job's
+requests (client `Job <id>`) and the snapshot comparison of the elements they touched, so the user's work during the
+job and anything changed after it are left out, and a job write that is back to its checkpoint value now is still
+listed ("praegu nagu enne"). Values are read live. When tracking is incomplete (Revit restart, recording cap) every
+snapshot difference is kept. New warnings are still compared up to now.
 
 - **Kokkuvõte**: steps ok / failed / skipped, elements added / modified / deleted, new warnings, duration, plan usage;
 - **Sammud**: #, title, tool, state, ms, message;

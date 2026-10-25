@@ -92,8 +92,19 @@ public static class JobDefinitionParser
             };
             def.Job.Steps.Add(step);
 
+            // A combined bridge tool (revit_set_parameters_bulk entity=views …) runs as the add-in tool it routes to.
+            string? routeError = null;
+            if (permissionOf(step.Tool) == null &&
+                BridgeToolRoutes.TryResolveStep(step.Tool, step.Arguments, out var resolvedTool, out var resolvedArguments, out routeError))
+            {
+                step.Tool = resolvedTool;
+                step.Arguments = resolvedArguments;
+            }
+
             var permission = step.Tool.Length == 0 ? null : permissionOf(step.Tool);
-            if (permission == null)
+            if (routeError != null)
+                def.Errors.Add($"{label}: {routeError}");
+            else if (permission == null)
                 def.Errors.Add($"{label}: unknown tool '{step.Tool}'.");
             else if (step.Tool.StartsWith("revit_job_", StringComparison.Ordinal) || step.Tool.StartsWith("revit_plan_", StringComparison.Ordinal))
                 def.Errors.Add($"{label}: {step.Tool} cannot run inside a job.");

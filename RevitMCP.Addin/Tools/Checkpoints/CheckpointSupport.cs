@@ -130,17 +130,22 @@ internal static class CheckpointSupport
     /// <summary>Re-reads the snapshotted elements and the document's warnings, and builds the diff.</summary>
     public static (CheckpointDiff Diff, WarningDiffResult Warnings, int UnreadableWarnings) ComputeDiff(Document doc, Checkpoint checkpoint)
     {
+        var diff = CheckpointDiffBuilder.Build(checkpoint, ComputeDeltas(doc, checkpoint));
+        var now = RevitWarningReader.Read(doc, out var unreadable);
+        return (diff, WarningDiff.Compare(checkpoint.Warnings, now), unreadable);
+    }
+
+    /// <summary>Re-reads the snapshotted elements and compares them with the checkpoint snapshot.</summary>
+    public static Dictionary<long, ElementDelta> ComputeDeltas(Document doc, Checkpoint checkpoint)
+    {
         var reader = new CheckpointSnapshotReader(doc);
         var scopeParameters = checkpoint.Scope?.Parameters ?? new List<string>();
-        var deltas = SnapshotDiff.CompareAll(checkpoint.Snapshot, id =>
+        return SnapshotDiff.CompareAll(checkpoint.Snapshot, id =>
         {
             var before = checkpoint.Snapshot[id];
             var names = before.Parameters.Keys.Union(scopeParameters, StringComparer.OrdinalIgnoreCase).ToList();
             return reader.Read(id, names);
         });
-        var diff = CheckpointDiffBuilder.Build(checkpoint, deltas);
-        var now = RevitWarningReader.Read(doc, out var unreadable);
-        return (diff, WarningDiff.Compare(checkpoint.Warnings, now), unreadable);
     }
 
     /// <summary>Restart / tracking-cap caveat for results built on a checkpoint.</summary>

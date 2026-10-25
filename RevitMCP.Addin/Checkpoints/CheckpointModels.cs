@@ -45,6 +45,15 @@ public static class ChangeAttribution
         var space = rest.IndexOf(' ');
         return space < 0 ? rest : rest.Substring(0, space);
     }
+
+    /// <summary>The client of an agent attribution ("agent:tool (client)" → "client"); null when there is none.</summary>
+    public static string? AgentClient(string? attribution)
+    {
+        if (!IsAgent(attribution)) return null;
+        var open = attribution!.IndexOf(" (", AgentPrefix.Length, StringComparison.Ordinal);
+        if (open < 0 || !attribution.EndsWith(")", StringComparison.Ordinal)) return null;
+        return attribution.Substring(open + 2, attribution.Length - open - 3);
+    }
 }
 
 /// <summary>Category, name, type and level of an element, kept so a deleted element can still be described.</summary>

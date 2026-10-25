@@ -62,7 +62,13 @@ public static class JobReportHtml
         sb.Append("<section>\n<h2>Kokkuvõte</h2>\n<ul>\n");
         Li(sb, $"Sammud: {ok} õnnestus, {failed} ebaõnnestus, {skipped} vahele jäetud, kokku {job.Steps.Count}");
         if (diff != null)
-            Li(sb, $"Elemendid: {diff.Count(NetChangeKind.Added)} lisatud, {ChangedEntries(diff).Count} muudetud, {diff.Count(NetChangeKind.Deleted)} kustutatud");
+        {
+            var changed = ChangedEntries(diff);
+            var reverted = changed.Count(CheckpointDiffReport.IsTouchedUnchanged);
+            Li(sb, $"Elemendid: {diff.Count(NetChangeKind.Added)} lisatud, {changed.Count} muudetud" +
+                   (reverted > 0 ? $" (neist {reverted} praegu nagu enne)" : string.Empty) +
+                   $", {diff.Count(NetChangeKind.Deleted)} kustutatud");
+        }
         if (warnings != null)
             Li(sb, $"Uued Revit hoiatused: {warnings.New.Count} ({warnings.New.Count(WarningDiff.IsErrorSeverity)} viga), lahendatud {warnings.Resolved.Count}");
         Li(sb, $"Kestus: {Math.Round(job.ElapsedMs / 60000.0, 1).ToString(CultureInfo.InvariantCulture)} min");
@@ -106,7 +112,8 @@ public static class JobReportHtml
                 if (e.Delta.Rotated)
                     lines.Add(("pööre", Deg(e.Delta.RotationBeforeRad!.Value), Deg(e.Delta.RotationNowRad!.Value), null));
             }
-            if (lines.Count == 0) lines.Add(("(muudetud)", null, null, null));
+            if (lines.Count == 0)
+                lines.Add((CheckpointDiffReport.IsTouchedUnchanged(e) ? "(muudetud, praegu nagu enne)" : "(muudetud)", null, null, null));
 
             foreach (var (what, before, nowValue, param) in lines)
             {
@@ -178,8 +185,12 @@ public static class JobReportHtml
         sb.Append("</section>\n");
     }
 
+    /// <summary>
+    /// Every element the job modified, including those whose values are back to the checkpoint's now (H14): the
+    /// diff is limited to the job's own batches, so a touched element is the job's write even when it nets to zero.
+    /// </summary>
     private static List<DiffEntry> ChangedEntries(CheckpointDiff diff)
-        => diff.Of(NetChangeKind.Modified).Where(e => !CheckpointDiffReport.IsTouchedUnchanged(e)).ToList();
+        => diff.Of(NetChangeKind.Modified).ToList();
 
     private static string Badge(JobStep step) => step.State switch
     {
