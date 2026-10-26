@@ -146,6 +146,7 @@ Important repository references:
 - [`docs/view-alignment.md`](docs/view-alignment.md) — lining up and distributing tags, text, and elements within a view
 - [`docs/view-creation.md`](docs/view-creation.md) — creating plans per level, sections, callouts, 3D views, drafting views and legends from specs, and setting view extents
 - [`docs/integration/revit-test-plan-102-109.md`](docs/integration/revit-test-plan-102-109.md) — Revit test plan for issues #102–#109, with per-issue integration notes and deviations
+- [`docs/integration/ai-test-runbook-102-109.md`](docs/integration/ai-test-runbook-102-109.md) — step-by-step runbook for an AI agent to test #102–#109 in Revit on another machine, with expected results and a results template
 
 ## License
 

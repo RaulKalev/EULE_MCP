@@ -13,6 +13,8 @@ has run inside Revit yet. Run this plan in Revit 2026 first, then repeat the smo
 | #108 | Transforms and groups | 11 | [issue-108.md](issue-108.md) |
 | #109 | Model state and health audit | 6, plus `includeModelState` on three query tools | [issue-109.md](issue-109.md) |
 
+To have an AI agent run these tests on another machine, give it the [AI test runbook](ai-test-runbook-102-109.md).
+
 Each integration note holds the full manual test for its issue, the deviations from the issue text and the API
 notes per target.
 
