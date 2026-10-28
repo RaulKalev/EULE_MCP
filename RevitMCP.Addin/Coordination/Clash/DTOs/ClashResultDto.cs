@@ -33,4 +33,10 @@ public class ClashResultDto
     public string Confidence { get; set; } = string.Empty;
     public string Status { get; set; } = "New";
     public string Message { get; set; } = string.Empty;
+
+    /// <summary>The BCF topic this clash came from (revit_bcf_check); null for detected clashes.</summary>
+    public string? BcfTopicGuid { get; set; }
+
+    /// <summary>The BCF file this clash came from; null for detected clashes.</summary>
+    public string? BcfFile { get; set; }
 }

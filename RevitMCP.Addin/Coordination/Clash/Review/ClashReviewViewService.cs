@@ -1,5 +1,6 @@
 using Autodesk.Revit.DB;
 using RevitMCP.Addin.Coordination.Clash.DTOs;
+using RevitMCP.Addin.Coordination.Clash.Geometry;
 using RevitMCP.Addin.Documentation.Views;
 
 namespace RevitMCP.Addin.Coordination.Clash.Review;
@@ -44,22 +45,17 @@ public class ClashReviewViewService
     {
         BoundingBoxXYZ? box = null;
 
-        // Try to compute from elements
-        var srcElem = doc.GetElement(new ElementId(clash.Source.ElementId));
-        var tgtElem = clash.Target.LinkInstanceId.HasValue
-            ? null
-            : doc.GetElement(new ElementId(clash.Target.ElementId));
-
-        var srcBox = srcElem?.get_BoundingBox(null);
-        var tgtBox = tgtElem?.get_BoundingBox(null);
+        // Try to compute from elements; a linked element's box is moved into host coordinates.
+        var srcBox = HostBox(doc, clash.Source);
+        var tgtBox = HostBox(doc, clash.Target);
 
         if (srcBox != null && tgtBox != null)
         {
             box = ViewExtentService.Union(srcBox, tgtBox);
         }
-        else if (srcBox != null)
+        else if (srcBox != null || tgtBox != null)
         {
-            box = srcBox;
+            box = srcBox ?? tgtBox;
         }
         else if (clash.Location != null)
         {
@@ -76,5 +72,16 @@ public class ClashReviewViewService
 
         // The shared view extent service (#104): pad every side, then set and activate the section box.
         ViewExtentService.ApplySectionBox(reviewView, ViewExtentService.Pad(box, paddingMm));
+    }
+
+    /// <summary>The element's bounding box in host coordinates, for host and linked elements alike.</summary>
+    internal static BoundingBoxXYZ? HostBox(Document doc, ClashElementRefDto reference)
+    {
+        if (reference.LinkInstanceId is not { } linkId)
+            return doc.GetElement(new ElementId(reference.ElementId))?.get_BoundingBox(null);
+
+        if (doc.GetElement(new ElementId(linkId)) is not RevitLinkInstance link) return null;
+        var box = link.GetLinkDocument()?.GetElement(new ElementId(reference.ElementId))?.get_BoundingBox(null);
+        return box == null ? null : ClashTransformHelper.TransformBoundingBox(box, link.GetTotalTransform());
     }
 }

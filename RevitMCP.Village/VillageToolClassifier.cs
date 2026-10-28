@@ -58,6 +58,7 @@ public sealed class VillageToolClassifier
         ("elevation",          VillageAreas.Elements),
         ("coverage",           VillageAreas.Elements),
         ("clash",              VillageAreas.Coordination),
+        ("bcf",                VillageAreas.Coordination),
         ("tag",                VillageAreas.TagsAnnotations),
         ("retag",              VillageAreas.TagsAnnotations),
         ("dimension",          VillageAreas.TagsAnnotations),
@@ -143,7 +144,10 @@ public sealed class VillageToolClassifier
         ["revit_get_cad_placement_points"]       = VillageActivities.Inspect,
         ["revit_skill_builder_guide"]            = VillageActivities.Inspect,
         ["revit_select_instance"]                = VillageActivities.Inspect,
-        ["revit_merge_issue_reports"]            = VillageActivities.Export
+        ["revit_merge_issue_reports"]            = VillageActivities.Export,
+        ["revit_bcf_read"]                       = VillageActivities.Inspect,
+        ["revit_bcf_check"]                      = VillageActivities.Validate,
+        ["revit_propose_clash_fixes"]            = VillageActivities.Analyze
     };
 
     /// <summary>Verb (first token after the namespace prefix) → activity.</summary>

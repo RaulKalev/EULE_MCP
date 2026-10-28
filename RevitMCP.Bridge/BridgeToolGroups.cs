@@ -26,7 +26,7 @@ public static class BridgeToolGroups
         ["ifc"] = "IFC links, IFC spaces to rooms, linked-model element queries",
         ["views"] = "Views, sheets, schedules (read definitions and rows, create, edit, place on sheets, export), title blocks, revisions, view templates",
         ["tags"] = "Tags, dimensions, text notes, detail lines, view alignment",
-        ["coordination"] = "Clash detection, clash review, issue reports",
+        ["coordination"] = "Clash detection, clash review, BCF files (read, match to the model, re-check), clash fix proposals and verified fixes, issue reports",
         ["cad"] = "DWG/CAD imports, overrides and placement from CAD",
         ["pages"] = "Model pages: publish a generated HTML report as a local page whose rows select elements in Revit, show live parameter values and can be edited",
         ["memory"] = "Shared memory: list, review page, forget, weekly consolidation (recall and remember are in core)",
@@ -114,7 +114,7 @@ public static class BridgeToolGroups
             "revit_get_mep_run_summary"
         }),
         ("office", new[] { "revit_usage_report" }),
-        ("coordination", new[] { "revit_export_issues", "revit_merge_issue_reports" }));
+        ("coordination", new[] { "revit_export_issues", "revit_merge_issue_reports", "revit_bcf_read", "revit_bcf_check" }));
 
     /// <summary>Ordered rules for everything not in the exact table: the first keyword found in the name wins.</summary>
     private static readonly (string Keyword, string Group)[] Rules =
