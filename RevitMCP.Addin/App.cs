@@ -52,6 +52,8 @@ public class App : IExternalApplication
         try
         {
             application.ControlledApplication.DocumentChanged += OnDocumentChanged;
+            // Worker mode: answers Revit dialogs that appear while the connector runs a tool (docs/worker-mode.md).
+            application.DialogBoxShowing += RevitMCP.Addin.Dialogs.DialogAutoAnswer.OnDialogBoxShowing;
             DiagLog("Creating ActivityLogger");
             // Build services
             var logger = new ActivityLogger();
@@ -79,6 +81,7 @@ public class App : IExternalApplication
             // Worker document (#101): the agent's own local, worksets, ownership
             handler.RegisterTool(new OpenDocumentTool());
             handler.RegisterTool(new CloseDocumentTool());
+            handler.RegisterTool(new WorkerStatusTool());
             handler.RegisterTool(new ListWorksetsTool());
             handler.RegisterTool(new PreviewSetWorksetTool());
             handler.RegisterTool(new SetWorksetTool());
@@ -605,6 +608,7 @@ public class App : IExternalApplication
         catch (Exception ex)
         {
             application.ControlledApplication.DocumentChanged -= OnDocumentChanged;
+            application.DialogBoxShowing -= RevitMCP.Addin.Dialogs.DialogAutoAnswer.OnDialogBoxShowing;
             DiagLog($"EXCEPTION: {ex.GetType().FullName}: {ex.Message}");
             DiagLog($"StackTrace: {ex.StackTrace}");
             if (ex.InnerException != null)
@@ -617,6 +621,7 @@ public class App : IExternalApplication
     public Result OnShutdown(UIControlledApplication application)
     {
         application.ControlledApplication.DocumentChanged -= OnDocumentChanged;
+        application.DialogBoxShowing -= RevitMCP.Addin.Dialogs.DialogAutoAnswer.OnDialogBoxShowing;
         try { _village?.Dispose(); } catch { }
         try { _modelPages?.Dispose(); } catch { }
         try { _memory?.Dispose(); } catch { }

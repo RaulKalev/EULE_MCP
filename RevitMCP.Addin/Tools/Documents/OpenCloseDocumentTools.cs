@@ -106,6 +106,10 @@ public sealed class OpenDocumentTool : IRevitMcpTool
             return Task.FromResult(DocumentToolSupport.Fail(request, $"'{open.Path}' could not be opened: {ex.Message}", "transaction_failed"));
         }
 
+        // Worker mode: sync, close and the other worker operations are pre-approved only on documents the
+        // connector opened itself.
+        RevitMCP.Addin.Approval.WorkerDocumentRegistry.Add(doc.PathName);
+
         var openCount = 0;
         var closedCount = 0;
         if (doc.IsWorkshared)
@@ -200,7 +204,8 @@ public sealed class CloseDocumentTool : IRevitMcpTool, IApprovalSummaryTool
     public string Description =>
         "Closes an open document that is NOT the active one (document is required), with save=true saving it first (a " +
         "workshared local is saved locally; sync with revit_sync_with_central before). Unsaved changes are lost with " +
-        "save=false. Ownership is not relinquished automatically — use revit_relinquish first. Always needs manual approval.";
+        "save=false. Ownership is not relinquished automatically — use revit_relinquish first. Needs manual approval unless " +
+        "worker mode pre-approves it (docs/worker-mode.md).";
     public ToolPermission Permission => ToolPermission.DestructiveRequiresManualApproval;
     public ToolCategory Category => ToolCategory.Worksharing;
 
@@ -233,6 +238,7 @@ public sealed class CloseDocumentTool : IRevitMcpTool, IApprovalSummaryTool
             return Task.FromResult(DocumentToolSupport.Fail(request, blocked, "validation_failed"));
 
         var title = doc.Title;
+        var closedPath = doc.PathName;
         var save = ToolArguments.GetBool(request.Arguments, "save");
         bool modified;
         try { modified = doc.IsModified; } catch { modified = false; }
@@ -241,6 +247,7 @@ public sealed class CloseDocumentTool : IRevitMcpTool, IApprovalSummaryTool
             if (save && modified) doc.Save();
             if (!doc.Close(false))
                 return Task.FromResult(DocumentToolSupport.Fail(request, $"Revit did not close '{title}'.", "transaction_failed"));
+            RevitMCP.Addin.Approval.WorkerDocumentRegistry.Remove(closedPath);
         }
         catch (Exception ex)
         {

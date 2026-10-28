@@ -73,6 +73,16 @@ To work beside the user instead of in their document, open your own local: `revi
 (a background `<central>_<user>_mcp.rvt`, never activated), then pass `document=<its title>` on every call, check out
 what you edit (`revit_get_ownership`, `revit_checkout_elements`), sync, `revit_relinquish` and `revit_close_document`.
 
+## Worker mode: unattended open, sync and close
+
+On a worker machine the user config can pre-approve `revit_open_document`, `revit_sync_with_central`,
+`revit_close_document`, `revit_relinquish`, `revit_reload_latest` and `revit_checkout_elements` for models in listed
+folders, and auto-answer Revit dialogs raised while a tool runs (see [`docs/worker-mode.md`](docs/worker-mode.md)).
+Call `revit_get_worker_status` before unattended work. Pre-approval only covers documents you opened with
+`revit_open_document` (activate=false) in this Revit session, never `all=true`, and never close with unsaved changes —
+pass `save=true`. A result warning "Revit dialog '…'" means a dialog appeared: report it, and check the dialog log in
+`revit_get_worker_status` when an answer looks wrong.
+
 ## PanelSchematics plugin data
 
 The `panelschematics` group (`revit_panelschematics_*`, see [`docs/panelschematics.md`](docs/panelschematics.md))

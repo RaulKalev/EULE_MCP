@@ -70,7 +70,7 @@ public sealed class SyncWithCentralTool : IRevitMcpTool
     public string Name => "revit_sync_with_central";
     public string Description =>
         "Synchronizes a workshared document (active or not), or every open workshared document with all=true, with " +
-        "central. Always requires manual approval. Options: comment, relinquishAll (default true), saveLocal (save the " +
+        "central. Requires manual approval unless worker mode pre-approves it (docs/worker-mode.md). Options: comment, relinquishAll (default true), saveLocal (save the " +
         "local file before and after, default true), compact (default false).";
     public ToolPermission Permission => ToolPermission.DestructiveRequiresManualApproval;
     public ToolCategory Category => ToolCategory.Worksharing;

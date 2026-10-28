@@ -93,6 +93,8 @@
     <Compile Include="..\RevitMCP.Addin\PanelSchematics\PanelSchematicsSymbols.cs" Link="PanelSchematics\PanelSchematicsSymbols.cs" />
     <Compile Include="..\RevitMCP.Addin\Services\LongRunningTools.cs" Link="Services\LongRunningTools.cs" />
     <Compile Include="..\RevitMCP.Addin\Approval\DirectEditDefault.cs" Link="Approval\DirectEditDefault.cs" />
+    <Compile Include="..\RevitMCP.Addin\Approval\WorkerPolicy.cs" Link="Approval\WorkerPolicy.cs" />
+    <Compile Include="..\RevitMCP.Addin\Dialogs\DialogRules.cs" Link="Dialogs\DialogRules.cs" />
     <Compile Include="..\RevitMCP.Bridge\ToolSearchIndex.cs" Link="Bridge\ToolSearchIndex.cs" />
     <Compile Include="..\RevitMCP.Bridge\ToolArgumentCoercion.cs" Link="Bridge\ToolArgumentCoercion.cs" />
     <Compile Include="..\RevitMCP.Benchmark\Core\BenchmarkReport.cs" Link="Benchmark\BenchmarkReport.cs" />

@@ -248,6 +248,20 @@ public class ExternalEventHandler : IExternalEventHandler
             return true;
         }
 
+        // Worker mode (docs/worker-mode.md): the user config can pre-approve open / sync / close / relinquish / reload
+        // latest / checkout of models in listed folders (except open, only on documents the connector opened). A covered
+        // call runs now as if approved, with the approving rule in its warnings and the activity log. Checked before
+        // plans, so a worker operation inside a job never runs in a plan's transaction group.
+        string? workerNote = null;
+        string? workerApproved = null;
+        if (!request.IsApproved &&
+            (tool.Permission == ToolPermission.RequiresApproval || tool.Permission == ToolPermission.DestructiveRequiresManualApproval) &&
+            RevitMCP.Addin.Approval.WorkerPreapproval.Covers(app, tool.Name, request, out workerNote))
+        {
+            request.IsApproved = true;
+            workerApproved = workerNote;
+            workerNote = null;
+        }
         // Plan-level approval (#99): a call inside an approved plan's envelope runs now, without a prompt; one the
         // plan does not cover takes the normal path below with the reason in planWarning.
         string? planWarning = null;
@@ -360,6 +374,7 @@ public class ExternalEventHandler : IExternalEventHandler
                 };
                 try { approvalResult.Status = "approval_required"; } catch (MissingMethodException) { }
                 if (planWarning != null) approvalResult.Warnings.Add(planWarning);
+                if (workerNote != null) approvalResult.Warnings.Add(workerNote);
             tcs.TrySetResult(approvalResult);
             return true;
         }
@@ -374,6 +389,7 @@ public class ExternalEventHandler : IExternalEventHandler
         {
             var result = RunTool(app, tool, request, item.CancellationToken);
             if (planWarning != null) result.Warnings.Add(planWarning);
+            if (workerApproved != null) result.Warnings.Add(workerApproved);
             tcs.TrySetResult(result);
             if (request.IsApproved)
                 _ = _activityLogger?.WriteAsync(request, result, _lastContext);
@@ -420,6 +436,17 @@ public class ExternalEventHandler : IExternalEventHandler
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var culture = new InvariantCultureScope();   // X1: "45.21 m" on every machine
+        // Dialogs Revit raises while this tool runs are auto-answered by the user's dialog rules and listed in the
+        // result's warnings (docs/worker-mode.md).
+        using var dialogScope = RevitMCP.Addin.Dialogs.DialogJournal.Enter(tool.Name, request.RequestId ?? string.Empty, request.ClientName ?? string.Empty);
+        var dialogResult = RunToolCore(app, tool, request, cancellationToken);
+        foreach (var dialog in RevitMCP.Addin.Dialogs.DialogJournal.DrainCurrent())
+            dialogResult.Warnings.Add(dialog.ToWarning());
+        return dialogResult;
+    }
+
+    private static McpToolResult RunToolCore(UIApplication app, IRevitMcpTool tool, McpToolRequest request, CancellationToken cancellationToken)
+    {
 
         // Graph-first (#96): keep the graph built and fresh for the calls that use it, and answer an
         // unnarrowed read of a large category with the graph route instead of running it.

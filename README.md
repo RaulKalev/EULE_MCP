@@ -2,7 +2,7 @@
 
 EULE MCP connects Claude Code, Codex, and Antigravity CLI to a live Autodesk Revit model through the [Model Context Protocol](https://modelcontextprotocol.io). It provides local model queries, discipline workflows, controlled writes, QA, reporting, and file operations without requiring users to write Revit API scripts.
 
-The current bridge exposes **195 MCP tools** across eleven documented capability groups.
+The current bridge exposes **196 MCP tools** across eleven documented capability groups.
 
 ## Documentation
 
@@ -36,6 +36,7 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | [Families and parameters](docs/families-and-parameters.md) | 11 | List, load (overwrite policy, one undo step), reload and purge unused families; list project and shared parameters, create them from the shared parameter file and bind categories |
 | [Worker document](docs/worker-document.md) | 9 | Open your own local copy of a central in the background, worksets, ownership, checkout and relinquish, reload latest, close; `document=` on the core and query reads |
 | [Jobs: unattended work](docs/jobs.md) | 6 | Submit a whole job of tool calls with result binding; one approval, the connector runs it step by step between your own work, stops on failures or new Revit errors, survives a restart and publishes a report page |
+| [Worker mode](docs/worker-mode.md) | 1 | Per-user pre-approval of open, sync, close, relinquish, reload latest and checkout for models in listed folders (only documents the connector opened), and auto-answers for Revit dialogs raised during connector work, with a dialog log |
 | [Plans: one approval per job](docs/plans.md) | 4 | Submit a plan (tools, element ids, categories, limits), approve once, then write calls inside it run without prompts; status, close, per-session plan id |
 | [Checkpoints and change review](docs/checkpoints.md) | 6 | Revit model warnings, checkpoints before a batch of writes, what changed since (by tool or user, before/now values, moves, new warnings), compensating rollback with manual approval |
 | [MEP routing: cable trays and conduits](docs/mep-routing.md) | 5 | Tray and conduit runs along a polyline with elbows at bends and joins to existing open ends, connecting two runs, lengths per type/size/level/workset and open-end lists |
@@ -144,6 +145,7 @@ Important repository references:
 - [`docs/tool-consolidation.md`](docs/tool-consolidation.md) — discriminator-based tools and the old → new name mapping
 - [`docs/usage-reporting.md`](docs/usage-reporting.md) — per-user usage collection (opt-in, after telling staff), monthly HTML/Excel reports, credit cost join and estimated time saved
 - [`docs/view-alignment.md`](docs/view-alignment.md) — lining up and distributing tags, text, and elements within a view
+- [`docs/worker-mode.md`](docs/worker-mode.md) — pre-approved open/sync/close for unattended runs and Revit dialog auto-answers
 - [`docs/view-creation.md`](docs/view-creation.md) — creating plans per level, sections, callouts, 3D views, drafting views and legends from specs, and setting view extents
 - [`docs/integration/revit-test-plan-102-109.md`](docs/integration/revit-test-plan-102-109.md) — Revit test plan for issues #102–#109, with per-issue integration notes and deviations
 - [`docs/integration/ai-test-runbook-102-109.md`](docs/integration/ai-test-runbook-102-109.md) — step-by-step runbook for an AI agent to test #102–#109 in Revit on another machine, with expected results and a results template

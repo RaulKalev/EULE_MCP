@@ -96,7 +96,7 @@ public static class BridgeToolGroups
             "revit_remove_links", "revit_preview_set_link_visibility", "revit_set_link_visibility", "revit_save_document",
             "revit_sync_with_central",
             "revit_open_document", "revit_close_document", "revit_list_worksets", "revit_preview_set_workset", "revit_set_workset",
-            "revit_get_ownership", "revit_checkout_elements", "revit_relinquish", "revit_reload_latest"
+            "revit_get_ownership", "revit_checkout_elements", "revit_relinquish", "revit_reload_latest", "revit_get_worker_status"
         }),
         ("pages", new[] { "revit_publish_page", "revit_list_pages", "revit_remove_page" }),
         ("autonomy", new[]

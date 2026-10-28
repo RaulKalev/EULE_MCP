@@ -6969,7 +6969,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_sync_with_central", Destructive = true),
-     Description("Synchronizes a workshared document (active or not), or every open workshared document with all=true, with central. Always requires manual approval — cannot be bypassed by Direct Edit.")]
+     Description("Synchronizes a workshared document (active or not), or every open workshared document with all=true, with central. Requires manual approval — cannot be bypassed by Direct Edit; worker mode (user config approval.worker) can pre-approve it for a document the connector opened in a worker folder.")]
     public async Task<string> SyncWithCentral(
         [Description(DocumentArgDescription)] string? document = null,
         [Description("Synchronize every open workshared document.")] bool all = false,
@@ -7851,7 +7851,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_close_document", Destructive = true),
-     Description("DESTRUCTIVE: closes an open document that is not the active one; save=true saves it first (a local is saved locally — sync before). Unsaved changes are lost otherwise. Does not relinquish: call revit_relinquish first. Always needs manual approval.")]
+     Description("DESTRUCTIVE: closes an open document that is not the active one; save=true saves it first (a local is saved locally — sync before). Unsaved changes are lost otherwise. Does not relinquish: call revit_relinquish first. Needs manual approval; worker mode (user config approval.worker) can pre-approve it for a document the connector opened in a worker folder, never with unsaved changes and save=false.")]
     public async Task<string> CloseDocument(
         [Description("Title or path of the document to close (required; never the active one).")] string document,
         [Description("Save before closing. Default false.")] bool save = false,
@@ -7953,5 +7953,15 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     {
         var args = new Dictionary<string, object?> { ["document"] = document ?? string.Empty };
         return FormatResult(await pipeClient.SendAsync("revit_reload_latest", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_get_worker_status", ReadOnly = true),
+     Description("Worker mode status: which document operations (open, sync, close, relinquish, reloadLatest, checkout) the user config pre-approves and for which folders, the documents the connector opened this session, the dialog auto-answer rules, and the last Revit dialogs raised while the connector worked (dialog id, message, what was answered). Call it before unattended work, and after a call reports a Revit dialog.")]
+    public async Task<string> GetWorkerStatus(
+        [Description("How many recent dialogs to list (default 20, max 200).")] int dialogs = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?> { ["dialogs"] = dialogs };
+        return FormatResult(await pipeClient.SendAsync("revit_get_worker_status", args, cancellationToken));
     }
 }

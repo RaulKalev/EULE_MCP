@@ -3963,3 +3963,32 @@ map lookup, width estimate) is covered by `TextNoteEditPlannerTests`.
 |------|------|------------|--------------|-----------------|----------|------|-------|
 | Elements | `revit_preview_set_text_notes` | RO | "Preview adding ' // Power' to every 'Toide' text note" | `{changedCount, unchangedCount, skippedCount, changed[], unchanged[], skipped[]}` | N/A | N/A | Same plan the write tool executes |
 | Elements | `revit_set_text_notes` | Approval | "Translate the rack labels with this map" | Per-note old → new text, `formattingPreserved` | Yes | One Undo | Element ids kept; worksharing-blocked notes skipped |
+
+## 58. Worker Mode: Pre-approved Open, Sync, Close and Dialog Auto-answer
+
+Use a **test copy** of a workshared central inside a folder you list. Put this in `%APPDATA%\RKTools\MCP\user.config.json`
+(keep the other keys):
+
+```json
+"approval": { "worker": { "enabled": true, "operations": ["open", "sync", "close", "relinquish"], "folders": ["C:\\WorkerTest"] } },
+"dialogs": { "autoAnswer": true, "unknown": "show" }
+```
+
+Rename one DWG or IFC link file of the test model so it is missing. Direct Edit off.
+
+| # | Step | Expected |
+|---|---|---|
+| 1 | `revit_get_worker_status` | `worker.active=true`, the four operations, `C:\WORKERTEST`; no problems |
+| 2 | `revit_open_document path=C:\WorkerTest\Test_central.rvt` | Opens without a Pending item; warning "Pre-approved by worker mode ('open' …)"; a warning "Revit dialog 'TaskDialog_Unresolved_References' answered 1002 …" and the model opened ignoring the missing link |
+| 3 | `revit_get_worker_status` | The dialog listed with `accepted=true`; the local's path under `openedByConnector`. If the answer was wrong (dialog stayed, or opening was cancelled), note the id and correct the rule |
+| 4 | Change one parameter in the local, then `revit_close_document document=… save=false` | Goes to Pending (unsaved changes); the warning says pass save=true. Reject it |
+| 5 | `revit_sync_with_central document=…` | Runs without a Pending item; central has the change |
+| 6 | `revit_sync_with_central all=true` | Goes to Pending (all=true is never pre-approved). Reject |
+| 7 | `revit_sync_with_central` on a document you opened yourself in the same folder | Goes to Pending ("only documents the connector opened") |
+| 8 | `revit_close_document document=… save=true` | Closes without a Pending item; the path leaves `openedByConnector` |
+| 9 | `revit_open_document … activate=true` | Goes to Pending (activate is never pre-approved) |
+| 10 | A model outside `C:\WorkerTest` | Open goes to Pending ("outside the worker folders") |
+| 11 | Set `"unknown": "cancel"`, remove the `TaskDialog_Unresolved_References` default with `"rules": {"TaskDialog_Unresolved_References": "show"}`, open again | The dialog is shown to you (rule says show) and logged as `Show` |
+| 12 | Open a model yourself in Revit with a missing link while the connector is idle | The dialog appears normally and is **not** logged |
+| 13 | A job with steps open → set parameter → sync → close (`allowDestructiveSteps=true`) | One approval for the job; open, sync and close steps do not wait in Pending; the report page shows the change |
+| 14 | `"enabled": false` | Every step above goes to Pending again |

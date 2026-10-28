@@ -109,7 +109,7 @@ public static class JobDefinitionParser
             else if (step.Tool.StartsWith("revit_job_", StringComparison.Ordinal) || step.Tool.StartsWith("revit_plan_", StringComparison.Ordinal))
                 def.Errors.Add($"{label}: {step.Tool} cannot run inside a job.");
             else if (permission == ToolPermission.DestructiveRequiresManualApproval && !allowDestructive)
-                def.Errors.Add($"{label}: {step.Tool} is destructive. Pass allowDestructiveSteps=true to include it; it will still wait for a manual approval when it runs.");
+                def.Errors.Add($"{label}: {step.Tool} is destructive. Pass allowDestructiveSteps=true to include it; it will still wait for a manual approval when it runs, unless worker mode pre-approves it.");
             step.IsReadOnly = permission == ToolPermission.ReadOnly;
 
             foreach (var name in JobJsonPath.Placeholders(step.Arguments))
