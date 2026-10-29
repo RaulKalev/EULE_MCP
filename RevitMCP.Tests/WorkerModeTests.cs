@@ -214,6 +214,50 @@ public class DialogRulesTests
     }
 
     [Fact]
+    public void ImportWarnings_AreClosedByMessage_EvenWithAnUnknownId()
+    {
+        var rules = Rules("""{ "dialogs": { "autoAnswer": true } }""");
+        var lost = rules.Decide("TaskDialog_Whatever", "Some entities were lost during import.", true);
+        Assert.Equal(DialogAction.Answer, lost.Action);
+        Assert.Equal(DialogRules.Close, lost.Result);
+        var range = rules.Decide(null, "Some numerical data within the imported file was out of range.  This numerical data has been truncated.", true);
+        Assert.Equal(DialogRules.Close, range.Result);
+    }
+
+    [Fact]
+    public void IdRule_WinsOverMessageRule_AndLongestMessageWins()
+    {
+        var rules = Rules("""
+            { "dialogs": { "autoAnswer": true,
+                "rules": { "Known_Id": 1 },
+                "messageRules": { "lost": "show", "were lost during import": 2 } } }
+            """);
+        Assert.Equal(DialogRules.Ok, rules.Decide("Known_Id", "Some entities were lost during import.", true).Result);
+        Assert.Equal(DialogRules.Cancel, rules.Decide("X", "Some entities were lost during import.", true).Result);
+        Assert.Equal(DialogAction.Show, rules.Decide("X", "Something got lost", true).Action);
+    }
+
+    [Fact]
+    public void ScopeAlways_AnswersTheUsersDialogs_ByRuleOnly()
+    {
+        var connector = Rules("""{ "dialogs": { "autoAnswer": true, "unknown": "cancel" } }""");
+        Assert.Equal(DialogAction.Show, connector.Decide("X", "Some entities were lost during import.", false).Action);
+
+        var always = Rules("""{ "dialogs": { "autoAnswer": true, "unknown": "cancel", "scope": "always" } }""");
+        Assert.True(always.AlwaysScope);
+        Assert.Equal(DialogAction.Answer, always.Decide("X", "Some entities were lost during import.", false).Action);
+        Assert.Equal(DialogAction.Show, always.Decide("Other", "Save changes?", false).Action);   // never cancel the user's dialogs
+        Assert.Equal(DialogAction.Cancel, always.Decide("Other", "Save changes?", true).Action);
+    }
+
+    [Fact]
+    public void CloseFallsBackToOk()
+    {
+        Assert.Equal(new[] { DialogRules.Ok, DialogRules.Cancel }, DialogRules.Fallbacks(DialogRules.Close));
+        Assert.Empty(DialogRules.Fallbacks(DialogRules.Yes));
+    }
+
+    [Fact]
     public void Journal_CollectsDialogsOfTheCurrentCallOnly()
     {
         DialogJournal.Reset();

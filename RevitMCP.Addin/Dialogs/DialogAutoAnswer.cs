@@ -7,9 +7,10 @@ namespace RevitMCP.Addin.Dialogs;
 
 /// <summary>
 /// Revit's <c>DialogBoxShowing</c> handler: while the connector runs a tool or a job step, answers dialogs by the
-/// <see cref="DialogRules"/> of the user config, so an unattended open, sync or close does not hang on a dialog.
+/// <see cref="DialogRules"/> of the user config, so an unattended open, sync or close does not hang on a dialog; with
+/// <c>scope=always</c> its rules also answer the same dialogs when the user opens a model.
 /// Every dialog seen during connector work is recorded (<see cref="DialogJournal"/>, revit_get_dialog_log) and
-/// appended to %LOCALAPPDATA%\RevitMCP\dialogs.jsonl. Dialogs the user meets in their own work are never touched.
+/// appended to %LOCALAPPDATA%\RevitMCP\dialogs.jsonl. Without scope=always, dialogs in the user's own work are never touched.
 /// Some Revit windows (licensing, crash reports, add-in errors) do not raise this event and cannot be answered here.
 /// </summary>
 public static class DialogAutoAnswer
@@ -55,18 +56,38 @@ public static class DialogAutoAnswer
         try
         {
             var inWork = DialogJournal.InConnectorWork;
-            if (!inWork) return;   // the user's own dialogs: never touched, never logged
+            var rules = Current;
+            // The user's own dialogs are untouched and unlogged unless scope=always.
+            if (!inWork && !(rules.AutoAnswer && rules.AlwaysScope)) return;
 
             var dialogId = e.DialogId ?? string.Empty;
-            var decision = Current.Decide(dialogId, inWork);
+            var message = e switch
+            {
+                TaskDialogShowingEventArgs t => t.Message ?? string.Empty,
+                MessageBoxShowingEventArgs m => m.Message ?? string.Empty,
+                _ => string.Empty
+            };
+            var decision = rules.Decide(dialogId, message, inWork);
+            if (!inWork && decision.Action == DialogAction.Show) return;   // no rule matched the user's dialog
+
             var accepted = false;
+            var answered = decision.Result;
             if (decision.Action != DialogAction.Show)
             {
-                try { accepted = e.OverrideResult(decision.Result); }
-                catch { accepted = false; }
+                accepted = TryOverride(e, decision.Result);
+                if (!accepted)
+                {
+                    foreach (var fallback in DialogRules.Fallbacks(decision.Result))
+                    {
+                        if (!TryOverride(e, fallback)) continue;
+                        accepted = true;
+                        answered = fallback;
+                        break;
+                    }
+                }
             }
 
-            var (tool, requestId, client) = DialogJournal.Context;
+            var (tool, requestId, client) = inWork ? DialogJournal.Context : (string.Empty, string.Empty, "user");
             var record = new DialogRecord
             {
                 Time = DateTimeOffset.Now,
@@ -77,19 +98,15 @@ public static class DialogAutoAnswer
                     MessageBoxShowingEventArgs => "MessageBox",
                     _ => "Dialog"
                 },
-                Message = e switch
-                {
-                    TaskDialogShowingEventArgs t => t.Message ?? string.Empty,
-                    MessageBoxShowingEventArgs m => m.Message ?? string.Empty,
-                    _ => string.Empty
-                },
+                Message = message,
                 Action = decision.Action.ToString(),
-                Result = decision.Action == DialogAction.Show ? null : decision.Result,
+                Result = decision.Action == DialogAction.Show ? null : answered,
                 Accepted = accepted,
-                Reason = decision.Reason,
+                Reason = decision.Reason + (answered != decision.Result && accepted ? $" Revit refused {decision.Result}; answered {answered} instead." : string.Empty),
                 Tool = tool,
                 RequestId = requestId,
-                Client = client
+                Client = client,
+                DuringConnectorWork = inWork
             };
             DialogJournal.Record(record);
             AppendToLog(record);
@@ -98,6 +115,12 @@ public static class DialogAutoAnswer
         {
             // A failure here must never break Revit's dialog handling.
         }
+    }
+
+    private static bool TryOverride(DialogBoxShowingEventArgs e, int result)
+    {
+        try { return e.OverrideResult(result); }
+        catch { return false; }
     }
 
     private static void AppendToLog(DialogRecord record)

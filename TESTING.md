@@ -3992,3 +3992,5 @@ Rename one DWG or IFC link file of the test model so it is missing. Direct Edit 
 | 12 | Open a model yourself in Revit with a missing link while the connector is idle | The dialog appears normally and is **not** logged |
 | 13 | A job with steps open → set parameter → sync → close (`allowDestructiveSteps=true`) | One approval for the job; open, sync and close steps do not wait in Pending; the report page shows the change |
 | 14 | `"enabled": false` | Every step above goes to Pending again |
+| 15 | Open (via the connector) a model whose DWG links raise "Some entities were lost during import" and "Some numerical data … out of range" | No popup stays open; each is listed as a warning "answered 8 (Close)"; `revit_get_worker_status` shows the dialog ids — add them to `rules` if you like |
+| 16 | Set `"scope": "always"` and open the same model yourself from Revit | The two import popups close by themselves; a missing-links or save dialog is still shown to you; the log lists them with `duringConnectorWork=false` |

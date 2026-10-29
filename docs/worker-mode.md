@@ -8,7 +8,9 @@ unattended:
 
 1. **Pre-approved document operations** (`approval.worker`): open, sync, close, relinquish, reload latest and
    checkout run without a prompt for models in folders you list.
-2. **Dialog auto-answer** (`dialogs`): dialogs Revit raises *while the connector runs a tool* are answered by rules.
+2. **Dialog auto-answer** (`dialogs`): dialogs Revit raises *while the connector runs a tool* are answered by rules —
+   by dialog id or by a piece of their text. With `scope=always` the same rules also click away those dialogs when you
+   open a model yourself.
 
 Both are read from the **per-user config only** (`%APPDATA%\RKTools\MCP\user.config.json`), like
 `approval.directEditByDefault`: a company or project config cannot switch approvals off. Both are off by default.
@@ -66,24 +68,38 @@ A pre-approved call runs as if approved: it is written to the activity log, and 
   "dialogs": {
     "autoAnswer": true,
     "unknown": "show",
+    "scope": "connector",
     "rules": {
       "TaskDialog_Unresolved_References": 1002,
       "Some_Other_Dialog_Id": "show"
+    },
+    "messageRules": {
+      "Some entities were lost during import": 8
     }
   }
 }
 ```
 
-- Only dialogs raised **while the connector runs a tool or a job step** are touched. Dialogs in the user's own work
-  are never answered and never logged.
-- A rule maps a Revit dialog id to the result Revit gets: `1` OK, `2` Cancel, `6` Yes, `7` No, `8` Close, `1001`–`1004`
+- `scope`: `connector` (default) touches only dialogs raised **while the connector runs a tool or a job step**.
+  `always` also answers dialogs in your own work — but only by an explicit rule (id or message); `unknown=cancel`
+  never applies to your own dialogs. Those answers are logged with `duringConnectorWork=false`.
+- A rule (`rules`) maps a Revit dialog id to the result Revit gets: `1` OK, `2` Cancel, `6` Yes, `7` No, `8` Close, `1001`–`1004`
   the first to fourth command link of a task dialog. `"show"` leaves that dialog to the user.
+- A message rule (`messageRules`) matches a piece of the dialog's text, case-insensitive — for dialogs whose id you
+  do not know yet. An id rule wins over a message rule; a configured message rule wins over a built-in one; among
+  several matches the longest text wins.
+- When Revit refuses Close (8) the handler tries OK, then Cancel; when it refuses OK it tries Close. The log says
+  which answer was used.
 - Built-in defaults (overridable):
 
-  | Dialog id | Answer |
-  |---|---|
-  | `TaskDialog_Unresolved_References` | `1002` — Ignore and continue opening the project |
-  | `TaskDialog_Missing_Third_Party_Updater(s)` | `1001` — Continue working with the file |
+  | Dialog | Match | Answer |
+  |---|---|---|
+  | Missing links on open | id `TaskDialog_Unresolved_References` | `1002` — Ignore and continue opening the project |
+  | Missing add-in updater | id `TaskDialog_Missing_Third_Party_Updater(s)` | `1001` — Continue working with the file |
+  | "Some entities were lost during import." | message | `8` — Close |
+  | "Some numerical data within the imported file was out of range. …" | message | `8` — Close |
+
+  The last two come from DWG links and can appear many times when a model opens; each one is closed and logged.
 
 - `unknown`: `show` (default) leaves a dialog without a rule to the user — safe, but an unattended run then waits.
   `cancel` dismisses it with Cancel, so the call fails with an error instead of hanging. Use `cancel` on a dedicated

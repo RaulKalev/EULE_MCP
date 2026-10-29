@@ -41,7 +41,7 @@ public sealed class WorkerStatusTool : IRevitMcpTool
             Message = (policy.IsActive
                           ? $"Worker mode pre-approves {string.Join(", ", policy.Operations)} in {policy.Folders.Count} folder(s)."
                           : "Worker mode is off: open, sync, close and the other document operations wait for approval.") +
-                      (rules.AutoAnswer ? $" Dialog auto-answer is on ({rules.Rules.Count} rule(s), unknown={(rules.CancelUnknown ? "cancel" : "show")})." : " Dialog auto-answer is off.") +
+                      (rules.AutoAnswer ? $" Dialog auto-answer is on ({rules.Rules.Count} id and {rules.MessageRules.Count} message rule(s), unknown={(rules.CancelUnknown ? "cancel" : "show")}, scope={(rules.AlwaysScope ? "always" : "connector")})." : " Dialog auto-answer is off.") +
                       $" {dialogs.Count} dialog(s) recorded.",
             Data = new
             {
@@ -57,7 +57,9 @@ public sealed class WorkerStatusTool : IRevitMcpTool
                 {
                     autoAnswer = rules.AutoAnswer,
                     unknown = rules.CancelUnknown ? "cancel" : "show",
+                    scope = rules.AlwaysScope ? "always" : "connector",
                     rules = rules.Rules.ToDictionary(r => r.Key, r => r.Value < 0 ? "show" : $"{r.Value} ({DialogRules.Describe(r.Value)})"),
+                    messageRules = rules.MessageRules.ToDictionary(r => r.Key, r => r.Value < 0 ? "show" : $"{r.Value} ({DialogRules.Describe(r.Value)})"),
                     logFile = DialogAutoAnswer.LogPath
                 },
                 dialogs = dialogs.Select(d => new
@@ -72,7 +74,8 @@ public sealed class WorkerStatusTool : IRevitMcpTool
                     reason = d.Reason,
                     tool = d.Tool,
                     requestId = d.RequestId,
-                    client = d.Client
+                    client = d.Client,
+                    duringConnectorWork = d.DuringConnectorWork
                 }).ToList()
             },
             Warnings = warnings,
