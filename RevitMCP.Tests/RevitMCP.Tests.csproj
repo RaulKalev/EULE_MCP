@@ -309,4 +309,12 @@
     <Compile Include="..\RevitMCP.Addin\ModelState\AuditModels.cs" Link="ModelState\AuditModels.cs" />
     <Compile Include="..\RevitMCP.Addin\ModelState\AuditReportHtml.cs" Link="ModelState\AuditReportHtml.cs" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- BCF clash review and clash fixes: BCF zip reader, IFC GlobalId conversion, fix geometry (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\Coordination\Bcf\BcfModels.cs" Link="Coordination\Bcf\BcfModels.cs" />
+    <Compile Include="..\RevitMCP.Addin\Coordination\Bcf\BcfReader.cs" Link="Coordination\Bcf\BcfReader.cs" />
+    <Compile Include="..\RevitMCP.Addin\Coordination\Bcf\IfcGuid.cs" Link="Coordination\Bcf\IfcGuid.cs" />
+    <Compile Include="..\RevitMCP.Addin\Coordination\ClashFix\ClashFixMath.cs" Link="Coordination\ClashFix\ClashFixMath.cs" />
+  </ItemGroup>
 </Project>

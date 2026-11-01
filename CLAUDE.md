@@ -73,6 +73,14 @@ To work beside the user instead of in their document, open your own local: `revi
 (a background `<central>_<user>_mcp.rvt`, never activated), then pass `document=<its title>` on every call, check out
 what you edit (`revit_get_ownership`, `revit_checkout_elements`), sync, `revit_relinquish` and `revit_close_document`.
 
+## BCF clash reports
+
+For a BCF file from a clash tool (see [`docs/bcf-clashes.md`](docs/bcf-clashes.md)): `revit_bcf_read` lists its topics,
+`revit_bcf_check` matches them to host and linked elements and re-tests each clash (saving them as clash ids `BCF-0001…`
+for the clash review tools), `revit_propose_clash_fixes` finds clearing moves for movable host elements, and
+`revit_apply_clash_fixes` (approval) moves and verifies each one, undoing a move that still clashes, breaks joined runs
+or creates new clashes. Clashes it marks `manual` need a reroute by hand — say so rather than forcing a move.
+
 ## PanelSchematics plugin data
 
 The `panelschematics` group (`revit_panelschematics_*`, see [`docs/panelschematics.md`](docs/panelschematics.md))

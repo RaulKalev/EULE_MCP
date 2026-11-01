@@ -39,21 +39,21 @@ public class ClashFocusService
         // Select elements (UI-only, no transaction needed).
         var elementIds = new List<ElementId>();
 
-        var srcElem = doc.GetElement(new ElementId(clash.Source.ElementId));
-        if (srcElem != null) elementIds.Add(srcElem.Id);
+        // Either element may be in a link (a BCF clash between two linked models): select the link instance then.
+        foreach (var (reference, role) in new[] { (clash.Source, "Source"), (clash.Target, "Target") })
+        {
+            if (!reference.LinkInstanceId.HasValue)
+            {
+                var element = doc.GetElement(new ElementId(reference.ElementId));
+                if (element != null) elementIds.Add(element.Id);
+                continue;
+            }
 
-        if (!clash.Target.LinkInstanceId.HasValue)
-        {
-            var tgtElem = doc.GetElement(new ElementId(clash.Target.ElementId));
-            if (tgtElem != null) elementIds.Add(tgtElem.Id);
-        }
-        else
-        {
-            var linkInstance = doc.GetElement(new ElementId(clash.Target.LinkInstanceId.Value));
-            if (linkInstance != null)
+            var linkInstance = doc.GetElement(new ElementId(reference.LinkInstanceId.Value));
+            if (linkInstance != null && !elementIds.Contains(linkInstance.Id))
             {
                 elementIds.Add(linkInstance.Id);
-                warnings.Add($"Target element is in a linked model. Selected the link instance '{clash.Target.LinkName ?? "(unknown)"}' instead. Navigate inside the link to inspect element {clash.Target.ElementId}.");
+                warnings.Add($"{role} element is in a linked model. Selected the link instance '{reference.LinkName ?? "(unknown)"}' instead. Navigate inside the link to inspect element {reference.ElementId}.");
             }
         }
 

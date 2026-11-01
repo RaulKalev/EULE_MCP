@@ -1,0 +1,43 @@
+{
+  "Label": "bcf-clashes-before",
+  "Model": "",
+  "StartedAt": "2026-10-28 22:13:22 \u002B02:00",
+  "BridgePath": "C:\\Users\\RaulKalev\\AppData\\Local\\Temp\\claude\\C--Users-RaulKalev-Documents-AntiGravity-EULE-MCP--claude-worktrees-bcf-file-clash-fixing-c3cc80\\7453fffa-fe2f-4acf-8afb-99f3c2600665\\scratchpad\\base\\RevitMCP.Bridge\\bin\\Release\\net8.0\\RevitMCP.Bridge.exe",
+  "Schemas": [
+    {
+      "Profile": "full",
+      "ToolCount": 355,
+      "SchemaBytes": 510973,
+      "SchemaTokens": 127744,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "core",
+      "ToolCount": 21,
+      "SchemaBytes": 26617,
+      "SchemaTokens": 6655,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "query",
+      "ToolCount": 38,
+      "SchemaBytes": 46890,
+      "SchemaTokens": 11723,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "read-only",
+      "ToolCount": 224,
+      "SchemaBytes": 312972,
+      "SchemaTokens": 78243,
+      "InstructionTokens": 696,
+      "Error": null
+    }
+  ],
+  "GraphBuild": null,
+  "GraphIncremental": null,
+  "Scenarios": []
+}

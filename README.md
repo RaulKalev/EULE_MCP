@@ -44,6 +44,7 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | [Schedules](docs/schedules.md) | 8 | Read schedule definitions and displayed rows, list schedulable fields, create and edit schedules from a spec (preview first), place them on sheets next to a viewport, export CSV/TXT/XLSX |
 | [Model graph (routing layer)](docs/model-graph.md) | 4 | Per-model SQLite graph of element ids and relationships: build, freshness status, structured queries (neighbors/find/path/subtree), summary |
 | [Geometry queries](docs/geometry-queries.md) | 6 | Element geometry in mm, elements in a box or within a radius, nearest wall/ceiling/floor/roof, line of sight, clearance around a device — host and links |
+| [BCF clashes and clash fixes](docs/bcf-clashes.md) | 4 | Read BCF files, match topics to host and linked elements by IFC GlobalId, re-check each clash, propose clearing moves and apply them with verification |
 | [Model state and health audit](docs/model-state.md) | 6 | Phases, design options and worksets in queries and filters, set element and view phases, model health audit published as a page |
 
 ## Supported environment
@@ -131,6 +132,7 @@ Important repository references:
 - [`docs/project-village.md`](docs/project-village.md) — opt-in "Project Village" activity visualizer with a flyer board of query results and Show in Revit (no AI calls, no model changes)
 - [`docs/model-graph.md`](docs/model-graph.md) — per-model routing graph: find element ids cheaply before querying the live model
 - [`docs/mep-routing.md`](docs/mep-routing.md) — cable tray and conduit runs from polylines, elbows at bends, joining open ends, length summaries and open-end lists
+- [`docs/bcf-clashes.md`](docs/bcf-clashes.md) — BCF files: read, match to the model, re-check clashes, propose and apply verified clash fixes
 - [`docs/model-state.md`](docs/model-state.md) — phases, design options and worksets in queries, phase writes, and the model health audit
 - [`docs/move-elements.md`](docs/move-elements.md) — moving existing elements onto exact coordinates or by a displacement, including Detail Items and other view-specific elements
 - [`docs/copy-elements.md`](docs/copy-elements.md) — copying any element Revit can copy, within a view, across views or in the model
