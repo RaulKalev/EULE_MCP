@@ -56,6 +56,63 @@ public class AnnotationAndSheetChecksTests
     }
 
     [Fact]
+    public void ImageTransform_FromMarker_GridsPastTheCrop()
+    {
+        // Found live: a 20000 x 20000 mm crop in a 2000 x 1658 px image, 13.59 mm/px with the crop starting at
+        // px (188, 0). The share-based guess gave 12.06 mm/px. The marker runs from 10 % to 90 % of the crop.
+        const double Mm = 13.59;
+        var left = 188 + 2000 / Mm;
+        var top = 2000 / Mm;
+        var span = 16000 / Mm;
+        var marker = new PixelBox((int)Math.Round(left), (int)Math.Round(top), (int)Math.Round(span) + 1, (int)Math.Round(span) + 1);
+
+        var t = ViewImageTransform.FromMarker(2000, 1658, 20000, 20000,
+            new ImageVector(280000, 190000), new ImageVector(1, 0), new ImageVector(0, 1), 0.1, marker)!;
+
+        Assert.Equal(Mm, t.MmPerPx, 2);
+        Assert.InRange(t.ContentBoxPx.X, 187, 189);
+        Assert.InRange(t.ContentBoxPx.Y, 0, 1);
+        var (x, y) = t.ModelToPixel(new ImageVector(284000, 175000));
+        Assert.Equal(188 + 4000 / Mm, x, 0);
+        Assert.Equal(15000 / Mm, y, 0);
+    }
+
+    [Fact]
+    public void ImageTransform_FromMarker_ComparedAtASmallerSize()
+    {
+        var t = ViewImageTransform.FromMarker(8000, 8000, 10000, 10000,
+            new ImageVector(0, 0), new ImageVector(1, 0), new ImageVector(0, 1), 0.1, new PixelBox(400, 400, 3201, 3201), 2)!;
+
+        Assert.Equal(1.25 / 1, t.MmPerPx * 1.0, 3);
+        Assert.Equal(0, t.ContentBoxPx.X);
+        Assert.Equal(8000, t.ContentBoxPx.Width);
+    }
+
+    [Theory]
+    [InlineData(1, 1)]           // too small to measure
+    [InlineData(1000, 500)]      // the two directions disagree: the line was cut off
+    public void ImageTransform_FromMarker_RefusesAnUnusableMarker(int width, int height) =>
+        Assert.Null(ViewImageTransform.FromMarker(2000, 2000, 1000, 1000, default, new ImageVector(1, 0), new ImageVector(0, 1), 0.1, new PixelBox(10, 10, width, height)));
+
+    [Fact]
+    public void DifferenceBox_FindsTheChangedPixels()
+    {
+        var a = new byte[4 * 4 * 3];
+        var b = (byte[])a.Clone();
+        Assert.Null(ViewImageTransform.DifferenceBox(a, b, 4, 3));
+
+        b[(1 * 4 + 1) * 4] = 255;    // (1, 1)
+        b[(2 * 4 + 3) * 4 + 2] = 255;    // (3, 2)
+        b[0] = 10;                   // too faint to count
+
+        var box = ViewImageTransform.DifferenceBox(a, b, 4, 3)!.Value;
+        Assert.Equal(1, box.X);
+        Assert.Equal(1, box.Y);
+        Assert.Equal(3, box.Width);
+        Assert.Equal(2, box.Height);
+    }
+
+    [Fact]
     public void ImageTransform_NoSize_IsNull() =>
         Assert.Null(ViewImageTransform.Create(0, 100, 10, 10, default, new ImageVector(1, 0), new ImageVector(0, 1)));
 

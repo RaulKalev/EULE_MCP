@@ -125,6 +125,7 @@ public class GetTextNotesTool : IRevitMcpTool
                     maxX = Math.Round(box.Value.MaxX, 1),
                     maxY = Math.Round(box.Value.MaxY, 1)
                 },
+                height_mm = Math.Round(note.Height * 304.8, 1),
                 lineCount = TextNoteEditPlanner.EstimateLineCount(note.Text, note.Width * 304.8, fontSizeMm, widthFactor),
                 paragraphCount = (note.Text ?? string.Empty).TrimEnd('\r', '\n').Split('\r').Length
             });

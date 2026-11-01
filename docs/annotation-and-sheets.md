@@ -14,16 +14,18 @@ The response has `imageTransform`:
 | `coordinateSystem` | `model`, or `sheet` for a sheet (sheet mm) |
 | `originMm` | `{x, y, z}` under the top-left pixel |
 | `rightDirection`, `upDirection` | Unit vectors along the image's right and up (a rotated plan or a section is not model X and Y) |
-| `contentBoxPx` | `{x, y, width, height}`: the part of the image that shows the crop |
+| `contentBoxPx` | `{x, y, width, height}`: where the crop is in the image |
 
 `model point = originMm + rightDirection * px * mmPerPx - upDirection * py * mmPerPx`
 
-Revit does not give the PNG the crop's aspect ratio: a 24000 x 26000 mm crop at `pixelSize=2400` came back as 2400 x 3797 px
-with the lower part empty. The crop fills the width from the top-left, so `contentBoxPx` is 2400 x 2600 there. The image
-is not trimmed: the padding is Revit's and harmless once the box says where the content ends.
+The PNG does not show just the crop. Grids, levels and other annotation reaching past it make the image larger on any
+side, so the mapping cannot be worked out from the crop and the image size: on a test plan that guess was 11 % off. So the
+tool measures it: after the export it draws a temporary magenta line across the crop, exports again, compares the two images
+to find where the line landed, and rolls the line back. The second export costs about the time of the first. Images over
+4000 px are compared at 4000 px.
 
-A view without an active crop has no known extent: `imageTransform` is null, with `imageTransformNote`. Pass `bboxMm` or
-`cropToRoom` (plans), or crop the view.
+`imageTransform` is null, with `imageTransformNote`, for a view without an active crop (pass `bboxMm` or `cropToRoom` for a
+plan, or crop the view), for a 3D view, and when the line does not show, for example under a template that hides Lines.
 
 `highlightIds` is the same as `highlightElementIds`: the elements are outlined in red for this export only.
 

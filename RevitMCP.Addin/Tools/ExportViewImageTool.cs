@@ -25,9 +25,10 @@ public sealed class ExportViewImageTool : IRevitMcpTool
         "image itself. Optional cropToRoom (room number; with source/linkInstanceId/levelName) or bboxMm {minX,minY,maxX,maxY} " +
         "(host internal mm) crops a plan view, marginMm (default 1000). pixelSize (default 2000, 200-8000). " +
         "highlightElementIds[] (or highlightIds[]) are drawn red and thick. Crop and highlight are temporary — rolled back " +
-        "after the export. imageTransform maps pixels to coordinates: widthPx, heightPx, mmPerPx, originMm (the top-left " +
-        "pixel, in model mm, or sheet mm on a sheet), rightDirection, upDirection, contentBoxPx (the part of the image that " +
-        "shows the crop; Revit pads the rest). It is null, with imageTransformNote, for a view without an active crop.";
+        "after the export. imageTransform maps pixels to coordinates, measured from a temporary line in a second export: " +
+        "widthPx, heightPx, mmPerPx, originMm (the top-left pixel, in model mm, or sheet mm on a sheet), rightDirection, " +
+        "upDirection, contentBoxPx (where the crop is; grids and annotation can make the image larger on any side). It is " +
+        "null, with imageTransformNote, for a view without an active crop, a 3D view, or when it could not be measured.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Views;
 
@@ -94,6 +95,8 @@ public sealed class ExportViewImageTool : IRevitMcpTool
 
         string? exported = null;
         ImageFrame? frame = null;
+        ViewImageTransform? transform = null;
+        string? transformNote = null;
         // ExportImage needs a document without an open transaction, so the temporary setup is committed inside a group
         // that is always rolled back. The scope keeps that net-zero change out of checkpoints, plans and the graph.
         using (TemporaryModelChanges.Begin())
@@ -114,6 +117,9 @@ public sealed class ExportViewImageTool : IRevitMcpTool
                 // Never let the mapping cost the image: a view that cannot report its extent just has no transform.
                 try { frame = ImageFrame.Of(view); }
                 catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException or InvalidOperationException) { }
+                if (frame == null) transformNote = view is View3D
+                    ? "A 3D view has no flat mapping from pixels to the model."
+                    : "The view has no active crop, so its image has no known extent. Pass bboxMm or cropToRoom, or crop the view.";
 
                 var options = new ImageExportOptions
                 {
@@ -133,6 +139,19 @@ public sealed class ExportViewImageTool : IRevitMcpTool
                 exported = Directory.GetFiles(folder, Path.GetFileName(baseName) + "*.png")
                     .OrderByDescending(File.GetLastWriteTimeUtc)
                     .FirstOrDefault();
+
+                if (frame != null && exported != null)
+                {
+                    try
+                    {
+                        transform = frame.Measure(doc, view, options, exported, folder, baseName);
+                        if (transform == null) transformNote = "The temporary line did not show in the image, so it could not be measured (a template hiding Lines, for example).";
+                    }
+                    catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException or InvalidOperationException or IOException or ArgumentException)
+                    {
+                        transformNote = $"It could not be measured: {ex.Message}";
+                    }
+                }
             }
             finally
             {
@@ -143,9 +162,8 @@ public sealed class ExportViewImageTool : IRevitMcpTool
         if (exported == null)
             return Task.FromResult(RoomToolSupport.Fail(request, "Revit did not write an image file.", warnings));
 
-        var transform = frame?.TransformFor(exported);
-        if (transform == null)
-            warnings.Add("imageTransform is not available: the view has no active crop, so its image has no known extent. Pass bboxMm or cropToRoom, or crop the view.");
+        if (transform == null && transformNote != null)
+            warnings.Add("imageTransform is not available. " + transformNote);
 
         sw.Stop();
         return Task.FromResult(RoomToolSupport.Ok(request, sw,
@@ -167,7 +185,7 @@ public sealed class ExportViewImageTool : IRevitMcpTool
                     : null,
                 highlighted = highlight.Length,
                 imageTransform = transform == null ? null : Describe(transform, frame!.CoordinateSystem),
-                imageTransformNote = transform == null ? "The view has no active crop, so its image has no known extent." : null
+                imageTransformNote = transform == null ? transformNote : null
             },
             warnings));
     }
@@ -184,10 +202,12 @@ public sealed class ExportViewImageTool : IRevitMcpTool
         contentBoxPx = new { x = t.ContentBoxPx.X, y = t.ContentBoxPx.Y, width = t.ContentBoxPx.Width, height = t.ContentBoxPx.Height }
     };
 
-    /// <summary>The extent the export covers, read while the temporary crop is applied.</summary>
+    /// <summary>The extent the crop or sheet covers, read while the temporary crop is applied, and its measurement.</summary>
     private sealed class ImageFrame
     {
         private const double FeetToMm = 304.8;
+        private const double MarkerInset = 0.1;
+        private const int MaxMeasuredPixelSize = 4000;
 
         private double _widthMm;
         private double _heightMm;
@@ -214,7 +234,7 @@ public sealed class ExportViewImageTool : IRevitMcpTool
                 };
             }
 
-            if (!view.CropBoxActive) return null;
+            if (view is View3D || !view.CropBoxActive) return null;
             var box = view.CropBox;
             var topLeft = box.Transform.OfPoint(new XYZ(box.Min.X, box.Max.Y, box.Max.Z));
             return new ImageFrame
@@ -227,12 +247,99 @@ public sealed class ExportViewImageTool : IRevitMcpTool
             };
         }
 
-        public ViewImageTransform? TransformFor(string imagePath)
+        /// <summary>
+        /// Draws a line across the crop (rolled back with the export's group), exports again and finds it by comparing
+        /// the two images. A line inside the crop does not change what the image covers. Very large images are compared
+        /// at a smaller size, since the two pictures are held in memory.
+        /// </summary>
+        public ViewImageTransform? Measure(Document doc, View view, ImageExportOptions options, string exported, string folder, string baseName)
         {
-            using var stream = File.OpenRead(imagePath);
-            return ViewImageTransform.TryReadPngSize(stream, out var width, out var height)
-                ? ViewImageTransform.Create(width, height, _widthMm, _heightMm, _topLeft, _right, _up)
-                : null;
+            int finalWidth, finalHeight;
+            using (var stream = File.OpenRead(exported))
+                if (!ViewImageTransform.TryReadPngSize(stream, out finalWidth, out finalHeight)) return null;
+
+            var temporary = new List<string>();
+            try
+            {
+                var comparePath = exported;
+                if (options.PixelSize > MaxMeasuredPixelSize)
+                {
+                    options.PixelSize = MaxMeasuredPixelSize;
+                    comparePath = ExportTo(doc, options, folder, baseName + "_base");
+                    temporary.Add(comparePath);
+                }
+
+                using (var t = new Transaction(doc, "Temporary measuring line"))
+                {
+                    t.Start();
+                    var line = Line.CreateBound(
+                        PointAt(view, MarkerInset, MarkerInset),
+                        PointAt(view, 1 - MarkerInset, 1 - MarkerInset));
+                    var curve = doc.Create.NewDetailCurve(view, line);
+                    view.SetElementOverrides(curve.Id, new OverrideGraphicSettings()
+                        .SetProjectionLineColor(new Autodesk.Revit.DB.Color(255, 0, 255))
+                        .SetProjectionLineWeight(1));
+                    t.Commit();
+                }
+
+                var markedPath = ExportTo(doc, options, folder, baseName + "_marker");
+                temporary.Add(markedPath);
+
+                var (before, width, height) = ReadPixels(comparePath);
+                var (after, afterWidth, afterHeight) = ReadPixels(markedPath);
+                if (width != afterWidth || height != afterHeight) return null;
+                if (ViewImageTransform.DifferenceBox(before, after, width, height) is not { } marker) return null;
+
+                return ViewImageTransform.FromMarker(
+                    finalWidth, finalHeight, _widthMm, _heightMm, _topLeft, _right, _up,
+                    MarkerInset, marker, (double)finalWidth / width);
+            }
+            finally
+            {
+                foreach (var path in temporary)
+                {
+                    try { File.Delete(path); }
+                    catch (IOException) { }
+                }
+            }
+        }
+
+        /// <summary>The point a share of the way across the crop from its top-left, on the view's plane.</summary>
+        private XYZ PointAt(View view, double acrossShare, double downShare)
+        {
+            var across = _widthMm * acrossShare / FeetToMm;
+            var down = _heightMm * downShare / FeetToMm;
+            var point = new XYZ(
+                _topLeft.X / FeetToMm + _right.X * across - _up.X * down,
+                _topLeft.Y / FeetToMm + _right.Y * across - _up.Y * down,
+                _topLeft.Z / FeetToMm + _right.Z * across - _up.Z * down);
+            var normal = view.ViewDirection;
+            return point - normal.Multiply(normal.DotProduct(point - view.Origin));
+        }
+
+        private static string ExportTo(Document doc, ImageExportOptions options, string folder, string fileBase)
+        {
+            options.FilePath = fileBase;
+            doc.ExportImage(options);
+            return Directory.GetFiles(folder, Path.GetFileName(fileBase) + "*.png")
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .FirstOrDefault() ?? throw new IOException("Revit did not write the measuring image.");
+        }
+
+        private static (byte[] Pixels, int Width, int Height) ReadPixels(string path)
+        {
+            using var stream = File.OpenRead(path);
+            var decoder = System.Windows.Media.Imaging.BitmapDecoder.Create(
+                stream,
+                System.Windows.Media.Imaging.BitmapCreateOptions.PreservePixelFormat,
+                System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+            var converted = new System.Windows.Media.Imaging.FormatConvertedBitmap(
+                decoder.Frames[0], System.Windows.Media.PixelFormats.Bgra32, null, 0);
+            var width = converted.PixelWidth;
+            var height = converted.PixelHeight;
+            var pixels = new byte[width * height * 4];
+            converted.CopyPixels(pixels, width * 4, 0);
+            return (pixels, width, height);
         }
     }
 

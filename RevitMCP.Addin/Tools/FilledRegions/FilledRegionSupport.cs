@@ -331,6 +331,8 @@ internal static class FilledRegionSupport
 
         foreach (var dimension in new FilteredElementCollector(doc).OfClass(typeof(Dimension)).WherePasses(inView).Cast<Dimension>())
         {
+            // Every region's sketch has Automatic Sketch Dimensions of its own: Revit's, nothing anyone placed.
+            if (dimension.Category?.Id.Value != (long)BuiltInCategory.OST_Dimensions) continue;
             try
             {
                 foreach (Reference reference in dimension.References)
@@ -405,6 +407,8 @@ internal static class FilledRegionSupport
 internal sealed class RegionShapeReader
 {
     private readonly Document _doc;
+    private const double RoomGapToleranceMm = 2.0;
+
     private readonly double _joinToleranceMm = new LoopValidationOptions().JoinToleranceMm;
     private readonly Dictionary<long, List<RoomRecord>> _roomRecords = new();
 
@@ -502,6 +506,8 @@ internal sealed class RegionShapeReader
         if (loops[0].Count > 0) AddLevelWarning(view, loops[0][0].Start.Z, label, warnings);
 
         var result = RegionShapeBuilder.FromModelLoops(loops, frame, label);
+        // Revit leaves out a boundary piece too short to be a curve, so a real room can have a sub-millimetre gap.
+        foreach (var loop in result.Loops) loop.CloseGaps(RoomGapToleranceMm);
         result.Warnings.AddRange(warnings);
         return result;
     }

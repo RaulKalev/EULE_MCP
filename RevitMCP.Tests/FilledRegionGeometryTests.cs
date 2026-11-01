@@ -492,4 +492,36 @@ public class FilledRegionGeometryTests
             new List<ShapePoint> { M(2000, 0), M(3000, 0), M(3000, 1000), M(2000, 0) }), Plan, 0.5);
         Assert.Equal(RegionCodes.HoleOutsideOuter, RegionShapeFinisher.Finish(strict, 0, 0.8).Validation.Code);
     }
+
+    [Fact]
+    public void CloseGaps_ClosesARoomsSubMillimetreGap()
+    {
+        // Found live: room C1002 has a 0.5 mm gap where Revit left out a piece too short to be a curve.
+        var loop = new RegionLoop(new[]
+        {
+            new LoopSegment(new Pt2(0, 0), new Pt2(1000, 0)),
+            new LoopSegment(new Pt2(1000, 0.6), new Pt2(1000, 1000)),
+            new LoopSegment(new Pt2(1000, 1000), new Pt2(0, 0))
+        });
+
+        loop.CloseGaps(2);
+
+        Assert.Equal(0.6, loop.Segments[0].End.V, 6);
+        Assert.Null(LoopValidator.Validate(new[] { loop }, new LoopValidationOptions()).Code);
+    }
+
+    [Fact]
+    public void CloseGaps_LeavesARealGapOpen()
+    {
+        var loop = new RegionLoop(new[]
+        {
+            new LoopSegment(new Pt2(0, 0), new Pt2(1000, 0)),
+            new LoopSegment(new Pt2(1000, 50), new Pt2(1000, 1000)),
+            new LoopSegment(new Pt2(1000, 1000), new Pt2(0, 0))
+        });
+
+        loop.CloseGaps(2);
+
+        Assert.Equal(RegionCodes.LoopOpen, LoopValidator.Validate(new[] { loop }, new LoopValidationOptions()).Code);
+    }
 }

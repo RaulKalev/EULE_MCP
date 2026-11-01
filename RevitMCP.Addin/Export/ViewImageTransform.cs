@@ -35,9 +35,10 @@ public readonly struct PixelBox
 }
 
 /// <summary>
-/// Maps pixels of an image from revit_export_view_image to model mm (or sheet mm) and back (#139). Revit pads the PNG
-/// so it does not have the crop's aspect ratio: the crop fills the fit direction from the top-left corner and the rest
-/// stays empty, which <see cref="ContentBoxPx"/> marks. Pure, unit tested in RevitMCP.Tests.
+/// Maps pixels of an image from revit_export_view_image to model mm (or sheet mm) and back (#139). The PNG does not
+/// show just the crop: grids, levels and annotation reaching past it make the image larger, on any side, so the crop's
+/// place in it cannot be worked out. <see cref="FromMarker"/> measures it from a temporary line drawn across the crop,
+/// and <see cref="ContentBoxPx"/> says where the crop is. Pure, unit tested in RevitMCP.Tests.
 /// </summary>
 public sealed class ViewImageTransform
 {
@@ -76,6 +77,76 @@ public sealed class ViewImageTransform
                 Math.Min(widthPx, (int)Math.Round(cropWidthMm / mmPerPx)),
                 Math.Min(heightPx, (int)Math.Round(cropHeightMm / mmPerPx)))
         };
+    }
+
+    /// <summary>
+    /// From a marker line drawn corner to corner across the crop, inset by <paramref name="insetFraction"/> of its size
+    /// on every side. <paramref name="marker"/> is the box of the pixels it changed, in an image
+    /// <paramref name="pxScale"/> times smaller than this one. Null when the marker is too small to measure or its two
+    /// directions disagree on the scale.
+    /// </summary>
+    public static ViewImageTransform? FromMarker(
+        int widthPx, int heightPx, double cropWidthMm, double cropHeightMm,
+        ImageVector cropTopLeftMm, ImageVector rightDirection, ImageVector upDirection,
+        double insetFraction, PixelBox marker, double pxScale = 1)
+    {
+        var spanX = (marker.Width - 1) * pxScale;
+        var spanY = (marker.Height - 1) * pxScale;
+        if (widthPx <= 0 || heightPx <= 0 || spanX < 2 || spanY < 2) return null;
+
+        var markedShare = 1 - 2 * insetFraction;
+        var mmPerPxX = cropWidthMm * markedShare / spanX;
+        var mmPerPxY = cropHeightMm * markedShare / spanY;
+        // A marker cut off by something else in the picture shows up as two different scales.
+        if (Math.Abs(mmPerPxX - mmPerPxY) > 0.03 * mmPerPxX) return null;
+        var mmPerPx = (mmPerPxX + mmPerPxY) / 2;
+
+        var cropX = marker.X * pxScale - insetFraction * cropWidthMm / mmPerPx;
+        var cropY = marker.Y * pxScale - insetFraction * cropHeightMm / mmPerPx;
+        var right = -cropX * mmPerPx;
+        var up = cropY * mmPerPx;
+        var left = Math.Max(0, (int)Math.Round(cropX));
+        var top = Math.Max(0, (int)Math.Round(cropY));
+        return new ViewImageTransform
+        {
+            WidthPx = widthPx,
+            HeightPx = heightPx,
+            MmPerPx = mmPerPx,
+            OriginMm = new ImageVector(
+                cropTopLeftMm.X + rightDirection.X * right + upDirection.X * up,
+                cropTopLeftMm.Y + rightDirection.Y * right + upDirection.Y * up,
+                cropTopLeftMm.Z + rightDirection.Z * right + upDirection.Z * up),
+            RightDirection = rightDirection,
+            UpDirection = upDirection,
+            ContentBoxPx = new PixelBox(
+                left, top,
+                Math.Min(widthPx - left, (int)Math.Round(cropWidthMm / mmPerPx)),
+                Math.Min(heightPx - top, (int)Math.Round(cropHeightMm / mmPerPx)))
+        };
+    }
+
+    /// <summary>The box of the pixels that differ between two same-sized images of 4 bytes a pixel; null when none do.</summary>
+    public static PixelBox? DifferenceBox(byte[] a, byte[] b, int width, int height)
+    {
+        const int Threshold = 48;
+        var minX = int.MaxValue;
+        var minY = int.MaxValue;
+        var maxX = -1;
+        var maxY = -1;
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var i = (y * width + x) * 4;
+                var difference = Math.Abs(a[i] - b[i]) + Math.Abs(a[i + 1] - b[i + 1]) + Math.Abs(a[i + 2] - b[i + 2]);
+                if (difference < Threshold) continue;
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+            }
+        }
+        return maxX < 0 ? null : new PixelBox(minX, minY, maxX - minX + 1, maxY - minY + 1);
     }
 
     /// <summary>The model point under a pixel; pixel y grows downwards, the model's up does not.</summary>

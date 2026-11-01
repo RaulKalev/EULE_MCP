@@ -54,6 +54,18 @@ public sealed class RegionLoop
 
     public List<LoopSegment> Segments { get; }
 
+    /// <summary>Moves each piece's end onto the next piece's start where a gap up to the tolerance separates them.</summary>
+    public void CloseGaps(double toleranceMm)
+    {
+        for (var i = 0; i < Segments.Count; i++)
+        {
+            var segment = Segments[i];
+            var next = Segments[(i + 1) % Segments.Count];
+            if (segment.End.DistanceTo(next.Start) <= toleranceMm)
+                Segments[i] = segment.WithEnds(segment.Start, next.Start);
+        }
+    }
+
     /// <summary>The vertices of the loop with arcs flattened, without repeating the first point at the end.</summary>
     public List<Pt2> Polyline()
     {

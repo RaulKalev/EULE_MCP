@@ -53,9 +53,9 @@ and everything below is what they cannot show. Repeat in Revit 2026 and 2024.
 
 1. `revit_export_view_image viewId=P bboxMm={...} pixelSize=2400`: `imageTransform` has `widthPx`, `heightPx`, `mmPerPx`,
    `originMm`, `rightDirection`, `upDirection`, `contentBoxPx`. `widthPx`/`heightPx` equal the PNG's real size.
-2. **Highest risk:** take an element with a known location, compute its pixel, and look at the image. It must be there within
-   a few pixels. `contentBoxPx` must end where the empty area begins. This checks the assumption that the crop fills
-   the width from the top-left corner.
+2. **Highest risk:** draw a rectangle at known coordinates, also in a view whose grids reach past the crop, compute its
+   pixels and look at the image: it must be there within a few pixels. `contentBoxPx` must be where the crop is, not always at
+   the top-left. Nothing of the temporary line may remain, in the image or the model.
 3. Same on a rotated plan and on section `S`.
 4. A sheet: `coordinateSystem=sheet`; a viewport's location maps to its pixel.
 5. An uncropped view: `imageTransform` absent, `imageTransformNote` present, the image still exported.
