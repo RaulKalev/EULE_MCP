@@ -166,7 +166,7 @@ public class CreateLinesTool : IRevitMcpTool
         return Plane.CreateByNormalAndOrigin(normal.Normalize(), start);
     }
 
-    private static ElementId? FindLineStyleId(Document doc, CurveElement curve, string styleName)
+    internal static ElementId? FindLineStyleId(Document doc, CurveElement curve, string styleName)
     {
         foreach (var styleId in curve.GetLineStyleIds())
         {

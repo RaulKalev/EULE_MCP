@@ -39,7 +39,10 @@ public static class ToolSearchIndex
         ["loop"] = ["circuit"], ["circuits"] = ["circuit"], ["panels"] = ["panel"], ["rooms"] = ["room"], ["sheets"] = ["sheet"],
         ["views"] = ["view"], ["tags"] = ["tag"], ["devices"] = ["device"], ["elements"] = ["element"], ["parameters"] = ["parameter"],
         ["levels"] = ["level"], ["wires"] = ["wire"], ["cables"] = ["cable"], ["clashes"] = ["clash"], ["spaces"] = ["space", "room"],
-        ["space"] = ["room"], ["detector"] = ["device", "fire"], ["sounder"] = ["device", "fire"], ["excel"] = ["excel", "export"]
+        ["space"] = ["room"], ["detector"] = ["device", "fire"], ["sounder"] = ["device", "fire"], ["excel"] = ["excel", "export"],
+        ["bbox"] = ["box", "size"], ["bounding"] = ["box", "size"], ["extents"] = ["box", "size"],
+        ["outline"] = ["shape", "rectangle"], ["kontuur"] = ["shape", "rectangle"], ["piirjoon"] = ["shape", "rectangle"],
+        ["mõõdud"] = ["size", "dimension"], ["suurus"] = ["size", "dimension"], ["dwg"] = ["cad"]
     };
 
     private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)

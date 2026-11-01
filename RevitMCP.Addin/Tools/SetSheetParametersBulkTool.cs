@@ -15,7 +15,8 @@ public class SetSheetParametersBulkTool : IRevitMcpTool
         "Sets one or more parameters on multiple sheets in a single transaction. Requires approval. " +
         "Required: sheetIds (long array) OR sheetNumbers (string array), " +
         "parameters (object — key=parameterName, value=value). " +
-        "Optional: nameFilter (string).";
+        "Optional: nameFilter (string), includeTitleBlockInstance (bool: a parameter the sheet does not have is written " +
+        "to the instance of the title block on the sheet).";
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Documentation;
 
@@ -30,6 +31,7 @@ public class SetSheetParametersBulkTool : IRevitMcpTool
         var sheetNums   = ToolArguments.GetStringArray(request.Arguments, "sheetNumbers");
         var nameFilter  = ToolArguments.GetString(request.Arguments, "nameFilter");
         var paramValues = GetParamDict(request.Arguments);
+        var includeTitleBlock = ToolArguments.GetBool(request.Arguments, "includeTitleBlockInstance");
 
         if (sheetIds.Length == 0 && sheetNums.Length == 0 && string.IsNullOrWhiteSpace(nameFilter))
             return Task.FromResult(Fail(request, "Provide sheetIds, sheetNumbers, or nameFilter."));
@@ -55,19 +57,29 @@ public class SetSheetParametersBulkTool : IRevitMcpTool
         {
             cancellationToken.ThrowIfCancellationRequested();
             var setCount = 0;
+            var titleBlockSet = new List<string>();
+            var titleBlock = includeTitleBlock ? GetTitleBlockValuesTool.TitleBlocksOf(doc, sheet).FirstOrDefault() : null;
             foreach (var (pName, pVal) in paramValues)
             {
                 try
                 {
                     var p = ParameterFinder.Find(sheet, pName, out var problem);
+                    var onTitleBlock = false;
+                    if (p == null && titleBlock != null)
+                    {
+                        p = ParameterFinder.Find(titleBlock, pName, out var titleBlockProblem);
+                        onTitleBlock = p != null;
+                        if (p == null) problem = titleBlockProblem;
+                    }
                     if (p == null) { warnings.Add($"Sheet '{sheet.SheetNumber}': {problem}"); continue; }
                     if (p.IsReadOnly) { warnings.Add($"Sheet '{sheet.SheetNumber}': param '{pName}' is read-only."); continue; }
                     SetParam(p, pVal?.ToString() ?? "");
                     setCount++;
+                    if (onTitleBlock) titleBlockSet.Add(pName);
                 }
                 catch (Exception ex) { warnings.Add($"Sheet '{sheet.SheetNumber}', param '{pName}': {ex.Message}"); }
             }
-            if (setCount > 0) { updated++; results.Add(new { sheetId = sheet.Id.Value, sheetNumber = sheet.SheetNumber }); }
+            if (setCount > 0) { updated++; results.Add(new { sheetId = sheet.Id.Value, sheetNumber = sheet.SheetNumber, titleBlockParameters = titleBlockSet.Count > 0 ? titleBlockSet : null }); }
         }
         RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(t);
 

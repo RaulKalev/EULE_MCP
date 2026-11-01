@@ -69,6 +69,10 @@ model graph, model pages, memory and plans act on the active document by design 
 when needed. A UI-bound call (`useSelection`) on a non-active document returns `active_document_required`, and a
 view-based one needs `viewId` there.
 
+`revit_select_instance` pins only this session, in memory; other sessions and the plugin's button do not move it (see
+[`docs/worker-document.md`](docs/worker-document.md)). With several Revit windows open, check `revit_get_connection_status`
+before each batch of writes.
+
 To work beside the user instead of in their document, open your own local: `revit_open_document path=<central>`
 (a background `<central>_<user>_mcp.rvt`, never activated), then pass `document=<its title>` on every call, check out
 what you edit (`revit_get_ownership`, `revit_checkout_elements`), sync, `revit_relinquish` and `revit_close_document`.
@@ -88,6 +92,14 @@ reads and writes what the PanelSchematics plugin stores: panel tables, empty row
 to, and its Extensible Storage stores. Call `revit_panelschematics_guide` first. Every write has a preview, needs
 approval and is refused while the plugin's table window is open. The storage formats live in
 `RevitMCP.Addin/PanelSchematics/PanelSchematicsContract.cs` and must follow the plugin's source.
+
+## Annotation lines and checks
+
+Resize detail and model lines in place with `revit_set_line_geometry` instead of delete and redraw (ids, tags and
+dimensions stay), and draw with `revit_create_rectangle`. To place something by eye, use `imageTransform` from
+`revit_export_view_image` rather than calibrating from a known element. Check sheets with
+`revit_check_annotation_overlaps` and `revit_get_titleblock_values`. See
+[`docs/annotation-and-sheets.md`](docs/annotation-and-sheets.md).
 
 ## Shared memory
 

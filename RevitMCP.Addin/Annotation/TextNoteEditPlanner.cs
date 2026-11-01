@@ -36,6 +36,9 @@ public sealed class TextNoteEditOptions
     public bool AutoWidth { get; set; }
 
     public bool ChangesWidth => WidthMm > 0 || AutoWidth;
+
+    /// <summary>Character formatting of the edited range: keep, plain or matchFirstRun (#141).</summary>
+    public string Formatting { get; set; } = TextNoteEditPlanner.FormattingKeep;
 }
 
 /// <summary>One splice of the original text: replace [Start, Start+Length) with Replacement.</summary>
@@ -80,6 +83,54 @@ public sealed class TextNoteEditPlan
 /// </summary>
 public static class TextNoteEditPlanner
 {
+    public const string FormattingKeep = "keep";
+    public const string FormattingPlain = "plain";
+    public const string FormattingMatchFirstRun = "matchFirstRun";
+
+    /// <summary>The formatting argument normalised; null with the reason for an unknown value.</summary>
+    public static string? ParseFormatting(string? raw, out string? error)
+    {
+        error = null;
+        var value = raw?.Trim() ?? string.Empty;
+        if (value.Length == 0 || value.Equals(FormattingKeep, StringComparison.OrdinalIgnoreCase)) return FormattingKeep;
+        if (value.Equals(FormattingPlain, StringComparison.OrdinalIgnoreCase)) return FormattingPlain;
+        if (value.Equals(FormattingMatchFirstRun, StringComparison.OrdinalIgnoreCase)) return FormattingMatchFirstRun;
+        error = $"Unknown formatting '{raw}'. Use keep, plain or matchFirstRun.";
+        return null;
+    }
+
+    /// <summary>Where the inserted text of each splice sits in the new text; deletions leave nothing to format.</summary>
+    public static List<(int Start, int Length)> EditedRanges(TextNoteEditPlan plan)
+    {
+        var ranges = new List<(int Start, int Length)>();
+        var shift = 0;
+        foreach (var splice in plan.Splices)
+        {
+            if (splice.Replacement.Length > 0)
+                ranges.Add((splice.Start + shift, splice.Replacement.Length));
+            shift += splice.Replacement.Length - splice.Length;
+        }
+        return ranges;
+    }
+
+    /// <summary>
+    /// Rows the text takes in a note of this width: its paragraphs, each wrapped by the same width estimate autoWidth
+    /// uses. An estimate: the Revit API does not report wrapped lines.
+    /// </summary>
+    public static int EstimateLineCount(string? text, double noteWidthMm, double textSizeMm, double widthFactor)
+    {
+        var trimmed = (text ?? string.Empty).TrimEnd('\r', '\n');
+        if (trimmed.Length == 0) return 0;
+
+        var rows = 0;
+        foreach (var paragraph in trimmed.Replace("\r\n", "\r").Replace('\n', '\r').Split('\r'))
+        {
+            var width = EstimateWidthMm(paragraph, textSizeMm, widthFactor);
+            rows += noteWidthMm > 0 && width > noteWidthMm ? (int)Math.Ceiling(width / noteWidthMm) : 1;
+        }
+        return rows;
+    }
+
     /// <summary>Average glyph advance as a fraction of the text height (Arial-like fonts).</summary>
     public const double AverageCharWidthRatio = 0.62;
 

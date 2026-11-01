@@ -11,7 +11,7 @@ namespace RevitMCP.Addin.Tools;
 /// DESTRUCTIVE — permanently deletes sheets. Always requires manual approval.
 /// Direct Edit mode does NOT bypass this approval gate.
 /// </summary>
-public class DeleteSheetsTool : IRevitMcpTool
+public class DeleteSheetsTool : IRevitMcpTool, IApprovalRevalidatesTargets
 {
     public string Name => "revit_delete_sheets";
     public string Description =>

@@ -3963,3 +3963,33 @@ map lookup, width estimate) is covered by `TextNoteEditPlannerTests`.
 |------|------|------------|--------------|-----------------|----------|------|-------|
 | Elements | `revit_preview_set_text_notes` | RO | "Preview adding ' // Power' to every 'Toide' text note" | `{changedCount, unchangedCount, skippedCount, changed[], unchanged[], skipped[]}` | N/A | N/A | Same plan the write tool executes |
 | Elements | `revit_set_text_notes` | Approval | "Translate the rack labels with this map" | Per-note old → new text, `formattingPreserved` | Yes | One Undo | Element ids kept; worksharing-blocked notes skipped |
+
+---
+
+## 58. Instance Pin, Delete Approvals, Annotation and Sheet Checks (issues #137-#143)
+
+Unit tests: `RevitInstanceRegistryTests`, `ApprovalOutcomeTests`, `AnnotationAndSheetChecksTests`, `ToolSearchIndexTests`.
+Tools and fields are described in [`docs/annotation-and-sheets.md`](docs/annotation-and-sheets.md),
+[`docs/worker-document.md`](docs/worker-document.md) and [`docs/execution-safety.md`](docs/execution-safety.md).
+
+Manual, in Revit 2026 and 2024:
+
+1. **#137** Two Revit windows, two agent sessions. Each runs `revit_select_instance` on its own window, then
+   `revit_get_connection_status`: each sees only its own model, whichever pinned last. Click *Make This Project Active*
+   in a window: a session with a pin does not move, a new session follows the click. Close a pinned window: its session's
+   calls fail naming the pid and do not reach the other window.
+2. **#138** `revit_delete target=elements` on a test element, then make other edits in the model and run
+   `revit_export_view_image`. Approve later: the element is deleted, with a warning that the model changed. Repeat
+   approving with another project active: it runs on the original project. Delete the element by hand first: the call
+   reports it skipped. Close the project first: `approval_context_changed`.
+3. **#139** Export a cropped plan and a sheet. Pick an element with a known location: its pixel by `imageTransform` is
+   where it is on the image, and `contentBoxPx` ends where the empty area begins.
+4. **#140** `revit_set_line_geometry` on a detail line with a dimension: same id, dimension follows. Sections and sloped
+   model lines: a point off the plane is skipped. `revit_create_rectangle` in a plan, a section and a sheet, with text and
+   `asGroup=true`: 4 lines and centred text, one group.
+5. **#141** Edit a note under a bold heading with `formatting=plain`: the body is not bold, the heading stays.
+   `revit_check_annotation_overlaps` on a sheet with overlapping notes and a note across a viewport edge.
+6. **#142** `revit_get_titleblock_values` on sheets of one set: real size and ISO size correct; change a format value to a
+   wrong size and a date on one sheet: the findings say so. Write an instance parameter with `includeTitleBlockInstance=true`.
+7. **#143** `revit_get_cad_placement_points includeExtents=true` on a layer of blocks, including a rotated block: width
+   and depth match the DWG; a box drawn from the extents lines up with the block in the host view.

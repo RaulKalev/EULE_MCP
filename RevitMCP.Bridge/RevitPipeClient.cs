@@ -21,6 +21,9 @@ namespace RevitMCP.Bridge;
 /// instance is the only target, a single live instance is used, and several unpinned
 /// instances return an error asking for a selection. The legacy shared pipe name is tried
 /// only when no instance is registered, for older add-in builds.
+/// revit_select_instance pins this session only, in memory (#137), so parallel agents on one
+/// Windows account cannot redirect each other; the shared file is the default for sessions
+/// that have not chosen.
 /// </summary>
 public class RevitPipeClient
 {
@@ -37,6 +40,9 @@ public class RevitPipeClient
     public string ClientName => _clientName;
 
     private volatile string? _activePlanId;
+
+    // Boxed so the read is atomic and volatile; null = this session has not chosen a window.
+    private volatile object? _sessionProcessId;
 
     /// <summary>
     /// The plan (#99) attached to every following write request of this session; set by revit_plan_submit and
@@ -187,7 +193,7 @@ public class RevitPipeClient
 
     /// <summary>Where requests go right now (see <see cref="RevitInstanceRegistry.ResolveRoute"/>).</summary>
     public InstanceRoute ResolveRoute() =>
-        RevitInstanceRegistry.ResolveRoute(DiscoverLiveInstances(), _registry.GetActiveProcessId());
+        RevitInstanceRegistry.ResolveRoute(DiscoverLiveInstances(), SessionProcessId, _registry.GetActiveProcessId());
 
     /// <summary>
     /// Lists registered Revit instances whose process is still alive, ordered by routing
@@ -204,14 +210,17 @@ public class RevitPipeClient
                 _registry.Unregister(instance.ProcessId);
         }
 
-        return RevitInstanceRegistry.OrderByPreference(live, _registry.GetActiveProcessId());
+        return RevitInstanceRegistry.OrderByPreference(live, SessionProcessId ?? _registry.GetActiveProcessId());
     }
 
-    /// <summary>Process id of the user-selected active instance, if any.</summary>
-    public int? GetActiveProcessId() => _registry.GetActiveProcessId();
+    /// <summary>The instance this session pinned with revit_select_instance; null when it has not chosen.</summary>
+    public int? SessionProcessId => _sessionProcessId as int?;
 
-    /// <summary>Marks a registered Revit instance as the active routing target.</summary>
-    public bool SelectInstance(int processId) => _registry.SetActive(processId);
+    /// <summary>The shared default: the instance last marked with the plugin's 'Make This Project Active'.</summary>
+    public int? SharedProcessId => _registry.GetActiveProcessId();
+
+    /// <summary>Pins this session to a Revit instance, or clears its pin with null. Other sessions are not affected.</summary>
+    public void PinSession(int? processId) => _sessionProcessId = processId;
 
     private static bool IsProcessAlive(int processId)
     {

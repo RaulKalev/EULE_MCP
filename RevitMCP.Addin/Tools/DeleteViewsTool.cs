@@ -11,7 +11,7 @@ namespace RevitMCP.Addin.Tools;
 /// DESTRUCTIVE — permanently deletes views. Always requires manual approval (DestructiveRequiresManualApproval).
 /// Direct Edit mode does NOT bypass this approval gate.
 /// </summary>
-public class DeleteViewsTool : IRevitMcpTool
+public class DeleteViewsTool : IRevitMcpTool, IApprovalRevalidatesTargets
 {
     public string Name => "revit_delete_views";
     public string Description =>

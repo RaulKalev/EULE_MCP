@@ -45,6 +45,9 @@ internal sealed class CadPointExtractor
 
     public List<string> Warnings { get; } = new();
 
+    /// <summary>Also measure every block reference's line work (<see cref="CadPoint.Extents"/>). Off by default: it walks each block again.</summary>
+    public bool IncludeExtents { get; set; }
+
     /// <summary>
     /// Walks the import once, returning every candidate point and a per-layer inventory.
     /// <paramref name="layerFilter"/> limits the points that are kept; the inventory always covers
@@ -125,7 +128,8 @@ internal sealed class CadPointExtractor
                             Layer = layer,
                             Source = CadPointMath.SourceBlock,
                             RotationDegrees = CadPointMath.RotationDegreesFromBasis(
-                                composed.BasisX.X, composed.BasisX.Y)
+                                composed.BasisX.X, composed.BasisX.Y),
+                            Extents = IncludeExtents ? MeasureBlock(instance, composed) : null
                         });
                     }
                 }
@@ -143,6 +147,53 @@ internal sealed class CadPointExtractor
             }
 
             Record(obj, transform, points, layers, layerFilter, sources);
+        }
+    }
+
+    private static CadBlockExtents? MeasureBlock(GeometryInstance instance, Transform composed)
+    {
+        var points = new List<(double X, double Y)>();
+        GeometryElement? symbol;
+        try { symbol = instance.GetSymbolGeometry(); }
+        catch { return null; }
+        if (symbol != null) CollectLineWork(symbol, composed, 0, points);
+        return CadBlockExtents.FromPoints(points, ToMm(composed.Origin.X), ToMm(composed.Origin.Y), composed.BasisX.X, composed.BasisX.Y);
+    }
+
+    /// <summary>Points of a block's curves and points in host mm. Meshes and solids are DWG text, not the block's outline.</summary>
+    private static void CollectLineWork(GeometryElement geometry, Transform transform, int depth, List<(double X, double Y)> points)
+    {
+        if (depth > MaxDepth) return;
+        foreach (var obj in geometry)
+        {
+            switch (obj)
+            {
+                case GeometryInstance nested:
+                    GeometryElement? symbol = null;
+                    try { symbol = nested.GetSymbolGeometry(); }
+                    catch { }
+                    if (symbol != null) CollectLineWork(symbol, transform.Multiply(nested.Transform), depth + 1, points);
+                    break;
+                case Curve curve:
+                    try { AddPoints(curve.Tessellate(), transform, points); }
+                    catch { }
+                    break;
+                case PolyLine polyline:
+                    AddPoints(polyline.GetCoordinates(), transform, points);
+                    break;
+                case Point point:
+                    AddPoints(new[] { point.Coord }, transform, points);
+                    break;
+            }
+        }
+    }
+
+    private static void AddPoints(IEnumerable<XYZ> source, Transform transform, List<(double X, double Y)> points)
+    {
+        foreach (var p in source)
+        {
+            var placed = transform.OfPoint(p);
+            points.Add((ToMm(placed.X), ToMm(placed.Y)));
         }
     }
 

@@ -116,7 +116,8 @@ public static class ApprovalSummaryBuilder
         ?? MepApprovalSummaries.TryBuild(request)
         ?? TransformsAndGroupsApprovalSummaries.TryBuild(request)
         ?? ModelStateApprovalSummaries.TryBuild(request)
-        ?? ClashFixApprovalSummaries.TryBuild(request);
+        ?? ClashFixApprovalSummaries.TryBuild(request)
+        ?? AnnotationApprovalSummaries.TryBuild(request);
 
     private static int CountItems(McpToolRequest request, string key)
         => request.Arguments.TryGetValue(key, out var value) && value is Newtonsoft.Json.Linq.JArray array ? array.Count : 0;

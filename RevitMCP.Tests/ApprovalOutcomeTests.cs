@@ -123,4 +123,47 @@ public class ApprovalOutcomeTests
 
         Assert.Equal(ApprovalOutcome.Pending, service.GetOutcome(stillPending.ApprovalId)!.State);
     }
+
+    [Fact]
+    public void LongLivedRequest_CanBeApprovedAfterTheDefaultLifetime()
+    {
+        // #138: the user comes back an hour later.
+        var service = new ApprovalService(4, TimeSpan.FromMinutes(10));
+        var dispatched = new List<PendingApprovalRequest>();
+        service.SetRedispatch(dispatched.Add);
+        var p = Pending();
+        p.CreatedAt = DateTimeOffset.Now.AddHours(-1);
+        p.Lifetime = ApprovalService.LongLivedApprovalLifetime;
+        service.Add(p);
+
+        service.Approve(p.ApprovalId);
+
+        Assert.Single(dispatched);
+        Assert.True(p.OriginalRequest.IsApproved);
+        Assert.Equal(ApprovalOutcome.Running, service.GetOutcome(p.ApprovalId)!.State);
+    }
+
+    [Fact]
+    public void LongLivedRequest_StillExpiresAtItsOwnLifetime()
+    {
+        var service = new ApprovalService(4, TimeSpan.FromMinutes(10));
+        var dispatched = new List<PendingApprovalRequest>();
+        service.SetRedispatch(dispatched.Add);
+        var p = Pending();
+        p.CreatedAt = DateTimeOffset.Now - ApprovalService.LongLivedApprovalLifetime - TimeSpan.FromMinutes(1);
+        p.Lifetime = ApprovalService.LongLivedApprovalLifetime;
+        service.Add(p);
+
+        service.Approve(p.ApprovalId);
+
+        Assert.Empty(dispatched);
+        Assert.Equal("approval_expired", service.GetOutcome(p.ApprovalId)!.Result!.Status);
+    }
+
+    [Theory]
+    [InlineData(false, 5, 5, true)]
+    [InlineData(false, 5, 6, false)]   // an ordinary approval still dies with any model change
+    [InlineData(true, 5, 6, true)]     // a delete re-reads its targets
+    public void ModelVersionGuard(bool revalidates, long expected, long current, bool valid) =>
+        Assert.Equal(valid, ApprovalContextGuard.IsModelVersionValid(revalidates, expected, current));
 }

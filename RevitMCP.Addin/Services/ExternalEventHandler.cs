@@ -220,8 +220,10 @@ public class ExternalEventHandler : IExternalEventHandler
             }
         }
 
+        var revalidatesTargets = _tools.TryGetValue(request.ToolName, out var approvedTool) && approvedTool is IApprovalRevalidatesTargets;
+        var currentVersion = item.IsDocumentBound ? DocumentChangeTracker.Capture(item.ExpectedDocument) : 0;
         if (request.IsApproved && item.IsDocumentBound &&
-            DocumentChangeTracker.Capture(item.ExpectedDocument) != item.ExpectedDocumentVersion)
+            !ApprovalContextGuard.IsModelVersionValid(revalidatesTargets, item.ExpectedDocumentVersion, currentVersion))
         {
             var modelChanged = new McpToolResult
             {
@@ -283,6 +285,12 @@ public class ExternalEventHandler : IExternalEventHandler
             try { liveSummary = (tool as IApprovalSummaryTool)?.BuildApprovalSummary(app, request); } catch { }
             var summary = liveSummary ?? ApprovalSummaryBuilder.Build(request);
             var approvalDocument = RevitDocumentResolver.ResolveApprovalDocument(app, request);
+            var longLived = tool is IApprovalRevalidatesTargets;
+            // The user may be in another project by the time they approve: keep the request on this one.
+            if (longLived && approvalDocument != null &&
+                string.IsNullOrWhiteSpace(ToolArguments.GetString(request.Arguments, RevitDocumentResolver.ArgumentName)))
+                request.Arguments[RevitDocumentResolver.ArgumentName] =
+                    string.IsNullOrEmpty(approvalDocument.PathName) ? approvalDocument.Title : approvalDocument.PathName;
             if (approvalDocument == null && tool is not IBackgroundMcpTool &&
                 !string.IsNullOrWhiteSpace(ToolArguments.GetString(request.Arguments, RevitDocumentResolver.ArgumentName)))
             {
@@ -321,6 +329,7 @@ public class ExternalEventHandler : IExternalEventHandler
                 OriginDocumentToken = tool is IBackgroundMcpTool ? null : approvalDocument,
                 OriginDocumentTitle = tool is IBackgroundMcpTool ? string.Empty : approvalDocument?.Title ?? string.Empty,
                 OriginDocumentVersion = tool is IBackgroundMcpTool ? 0 : DocumentChangeTracker.Capture(approvalDocument),
+                Lifetime = longLived ? ApprovalService.LongLivedApprovalLifetime : null,
                 IsSelectionBound = bindSelection,
                 OriginSelectionIds = selectionIds
             };
@@ -349,6 +358,7 @@ public class ExternalEventHandler : IExternalEventHandler
                     RequestId = request.RequestId,
                     Success = false,
                     Message = $"'{summary}' is pending approval in Revit. Open the RevitMCP window and click Approve on the Pending tab to execute, or Reject to cancel. " +
+                              (longLived ? $"The request stays valid for {ApprovalService.LongLivedApprovalLifetime.TotalHours:0} hours, also if the model changes meanwhile; its targets are checked again when it runs. " : string.Empty) +
                               $"Call revit_get_approval_status with requestId '{request.RequestId}' to read the result after the decision.",
                     Data = new
                     {
@@ -374,6 +384,8 @@ public class ExternalEventHandler : IExternalEventHandler
         {
             var result = RunTool(app, tool, request, item.CancellationToken);
             if (planWarning != null) result.Warnings.Add(planWarning);
+            if (request.IsApproved && item.IsDocumentBound && currentVersion != item.ExpectedDocumentVersion)
+                result.Warnings.Add("The model changed between the request and its approval; the targets were read again when it ran.");
             tcs.TrySetResult(result);
             if (request.IsApproved)
                 _ = _activityLogger?.WriteAsync(request, result, _lastContext);

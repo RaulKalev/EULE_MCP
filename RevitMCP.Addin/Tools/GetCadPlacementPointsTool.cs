@@ -25,7 +25,10 @@ public class GetCadPlacementPointsTool : IRevitMcpTool
         "text, plus the height range each layer sits at — that is what to show the user when asking " +
         "which layers hold the locations and whether a mounting height is needed. Call it again with " +
         "layers to get the actual points, in millimetres, with the rotation carried over from block " +
-        "references. Optional: importInstanceId (required when several CAD files are present), " +
+        "references. includeExtents=true also returns each block's size: its bounding box (minX, minY, " +
+        "maxX, maxY), widthMm, depthMm and rotation, the outline size of equipment drawn as blocks. All " +
+        "coordinates are in host model mm with the link transform applied, so there is no need to open " +
+        "the DWG to compare. Optional: importInstanceId (required when several CAD files are present), " +
         "pointSources (block|point|circle), mergeToleranceMm (default 1), limit (default 200). Read-only.";
 
     public ToolPermission Permission => ToolPermission.ReadOnly;
@@ -59,7 +62,7 @@ public class GetCadPlacementPointsTool : IRevitMcpTool
         if (requestedLimit > HardLimit)
             warnings.Add($"limit {requestedLimit} exceeds the hard cap; using {HardLimit}.");
 
-        var extractor = new CadPointExtractor(doc);
+        var extractor = new CadPointExtractor(doc) { IncludeExtents = ToolArguments.GetBool(request.Arguments, "includeExtents") };
         var (raw, layerSummaries) = extractor.Extract(import, layers, sources, cancellationToken);
         warnings.AddRange(extractor.Warnings);
 
@@ -126,7 +129,19 @@ public class GetCadPlacementPointsTool : IRevitMcpTool
                         layer = p.Layer,
                         source = p.Source,
                         rotationDegrees = Math.Round(p.RotationDegrees, 2),
-                        mergedCount = p.MergedCount
+                        mergedCount = p.MergedCount,
+                        extents = p.Extents == null
+                            ? null
+                            : new
+                            {
+                                minX = Math.Round(p.Extents.MinX, 1),
+                                minY = Math.Round(p.Extents.MinY, 1),
+                                maxX = Math.Round(p.Extents.MaxX, 1),
+                                maxY = Math.Round(p.Extents.MaxY, 1),
+                                widthMm = Math.Round(p.Extents.Width, 1),
+                                depthMm = Math.Round(p.Extents.Depth, 1),
+                                rotationDegrees = Math.Round(p.RotationDegrees, 2)
+                            }
                     }).ToList()
             },
             Warnings = warnings,

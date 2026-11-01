@@ -31,6 +31,13 @@ public static class ApprovalContextGuard
         }
     }
 
+    /// <summary>
+    /// Whether the model version still allows an approved request to run. A tool that re-reads its targets at run
+    /// time (<c>IApprovalRevalidatesTargets</c>) does not depend on the model staying as it was (#138).
+    /// </summary>
+    public static bool IsModelVersionValid(bool revalidatesTargets, long expectedVersion, long currentVersion) =>
+        revalidatesTargets || expectedVersion == currentVersion;
+
     public static bool IsSelectionValid(
         bool isSelectionBound,
         IEnumerable<long> expectedSelection,

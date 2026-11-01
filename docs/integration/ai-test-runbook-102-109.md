@@ -27,7 +27,7 @@ EULE EN template models have all of this.
 
 ## Operating rules for the agent
 
-1. **Only the test copy.** Before the first write, `revit_get_connection_status` must report `localModelPath` equal to
+1. **Only the test copy.** Before each batch of writes, `revit_get_connection_status` must report `localModelPath` equal to
    `TEST_MODEL_PATH`. If it does not, stop and tell the operator. Never write to a model in a project folder
    (for example a path containing `__FAILIVAHETUS` or `1_Projektid`).
 2. **Read the schema first.** Call `revit_tools_describe` for every tool before its first use. The arguments in this

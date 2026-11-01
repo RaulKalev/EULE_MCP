@@ -103,6 +103,8 @@ Ctrl+1…4 switch pages. Window bounds, appearance and the detail level are kept
 - Pending requests are bound to the captured document, change stamp, and selection context.
 - Destructive operations remain explicitly approval-gated.
 - A [plan](docs/plans.md) replaces per-call approvals with one approval for an envelope of tools, elements and limits; calls inside it run in a transaction group that is rolled back when Revit's changes leave the envelope, and plans never cover deletes.
+- `revit_select_instance` pins only the session that calls it, so agents in different Revit windows on one account cannot redirect each other; the plugin's *Make This Project Active* is the default for sessions that have not chosen ([details](docs/worker-document.md)).
+- A delete waits for you: its approval lasts 24 hours and survives other model changes, because its targets are read again when it runs ([details](docs/execution-safety.md)).
 - A [job](docs/jobs.md) runs its steps through the same dispatcher as any client, one step per dispatch, under its plan; steps outside it wait in the Pending tab, and Emergency stop (formerly Panic Stop) cancels every job.
 - Background file, Excel, report, standards, and configuration work uses a separate serialized lane.
 
@@ -143,6 +145,7 @@ Important repository references:
 - [`docs/skills.md`](docs/skills.md) — company skills, project overrides, and the skill runner
 - [`docs/shared-memory.md`](docs/shared-memory.md) — shared company memory: notes every colleague's agent recalls, kept in sync without rebuilds, learned from users' workflows, reviewed on a page and consolidated weekly
 - [`docs/standards-lookup.md`](docs/standards-lookup.md) — offline standards indexing and retrieval
+- [`docs/annotation-and-sheets.md`](docs/annotation-and-sheets.md) — pixel-to-model mapping of exported images, editing lines in place, rectangles, text formatting on edit, annotation overlap check, title block values, block sizes from a DWG
 - [`docs/tool-consolidation.md`](docs/tool-consolidation.md) — discriminator-based tools and the old → new name mapping
 - [`docs/usage-reporting.md`](docs/usage-reporting.md) — per-user usage collection (opt-in, after telling staff), monthly HTML/Excel reports, credit cost join and estimated time saved
 - [`docs/view-alignment.md`](docs/view-alignment.md) — lining up and distributing tags, text, and elements within a view

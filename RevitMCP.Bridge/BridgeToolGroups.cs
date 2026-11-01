@@ -85,7 +85,12 @@ public static class BridgeToolGroups
             // Model state (#109)
             "revit_list_phases", "revit_list_design_options", "revit_audit_model"
         }),
-        ("tags", new[] { "revit_create_text_notes", "revit_get_text_notes", "revit_preview_set_text_notes", "revit_set_text_notes", "revit_annotate_detail_lines", "revit_preview_align_in_view", "revit_align_in_view" }),
+        ("tags", new[]
+        {
+            "revit_create_text_notes", "revit_get_text_notes", "revit_preview_set_text_notes", "revit_set_text_notes", "revit_annotate_detail_lines", "revit_preview_align_in_view", "revit_align_in_view",
+            // Lines and overlaps (#140, #141)
+            "revit_set_line_geometry", "revit_create_rectangle", "revit_check_annotation_overlaps"
+        }),
         ("ifc", new[] { "revit_query_linked_elements", "revit_select_linked_elements" }),
         // #103: "schedulable" does not contain the "schedule" keyword.
         ("views", new[] { "revit_list_schedulable_fields" }),
