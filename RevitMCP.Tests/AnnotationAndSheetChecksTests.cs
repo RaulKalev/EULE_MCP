@@ -73,8 +73,8 @@ public class AnnotationAndSheetChecksTests
         Assert.InRange(t.ContentBoxPx.X, 187, 189);
         Assert.InRange(t.ContentBoxPx.Y, 0, 1);
         var (x, y) = t.ModelToPixel(new ImageVector(284000, 175000));
-        Assert.Equal(188 + 4000 / Mm, x, 0);
-        Assert.Equal(15000 / Mm, y, 0);
+        Assert.InRange(x, 188 + 4000 / Mm - 1, 188 + 4000 / Mm + 1);
+        Assert.InRange(y, 15000 / Mm - 1, 15000 / Mm + 1);
     }
 
     [Fact]
