@@ -20,6 +20,55 @@ public sealed class CadPoint
 
     /// <summary>How many raw points were merged into this one.</summary>
     public int MergedCount { get; set; } = 1;
+
+    /// <summary>A block's size, when the caller asked for extents. Null for other sources.</summary>
+    public CadBlockExtents? Extents { get; set; }
+}
+
+/// <summary>
+/// A block reference's size in host mm (#143): the axis-aligned box around its line work, and its width and depth along
+/// the block's own axes, so a rotated unit keeps its real size.
+/// </summary>
+public sealed class CadBlockExtents
+{
+    public double MinX { get; set; }
+    public double MinY { get; set; }
+    public double MaxX { get; set; }
+    public double MaxY { get; set; }
+    public double Width { get; set; }
+    public double Depth { get; set; }
+
+    public double CenterX => (MinX + MaxX) / 2;
+    public double CenterY => (MinY + MaxY) / 2;
+
+    /// <summary>Whether two blocks cover the same box. Blocks of an exported DWG can all be inserted at one point.</summary>
+    public bool SamePlace(CadBlockExtents other, double toleranceMm) =>
+        Math.Abs(MinX - other.MinX) <= toleranceMm && Math.Abs(MinY - other.MinY) <= toleranceMm &&
+        Math.Abs(MaxX - other.MaxX) <= toleranceMm && Math.Abs(MaxY - other.MaxY) <= toleranceMm;
+
+    /// <summary>
+    /// From the line work's points in host mm. <paramref name="axisX"/> and <paramref name="axisY"/> are the block's X
+    /// axis in plan; they need not be unit length. Null without points.
+    /// </summary>
+    public static CadBlockExtents? FromPoints(IReadOnlyCollection<(double X, double Y)> points, double originX, double originY, double axisX, double axisY)
+    {
+        if (points.Count == 0) return null;
+        var length = Math.Sqrt(axisX * axisX + axisY * axisY);
+        var ux = length < 1e-12 ? 1 : axisX / length;
+        var uy = length < 1e-12 ? 0 : axisY / length;
+
+        var along = points.Select(p => (p.X - originX) * ux + (p.Y - originY) * uy).ToList();
+        var across = points.Select(p => -(p.X - originX) * uy + (p.Y - originY) * ux).ToList();
+        return new CadBlockExtents
+        {
+            MinX = points.Min(p => p.X),
+            MinY = points.Min(p => p.Y),
+            MaxX = points.Max(p => p.X),
+            MaxY = points.Max(p => p.Y),
+            Width = along.Max() - along.Min(),
+            Depth = across.Max() - across.Min()
+        };
+    }
 }
 
 /// <summary>
@@ -93,6 +142,7 @@ public static class CadPointMath
                 // The better source wins the position and the rotation too.
                 match.Source = point.Source;
                 match.RotationDegrees = point.RotationDegrees;
+                match.Extents = point.Extents;
                 match.X = point.X;
                 match.Y = point.Y;
                 match.Z = point.Z;
@@ -255,13 +305,17 @@ public static class CadPointMath
 
             foreach (var candidate in bucket)
             {
-                if (DistanceSquared(candidate, point) <= toleranceSquared)
+                if (DistanceSquared(candidate, point) <= toleranceSquared && SameBlockPlace(candidate, point, toleranceMm))
                     return candidate;
             }
         }
 
         return null;
     }
+
+    /// <summary>Two measured blocks at one insertion point are one mark only if they also cover the same box.</summary>
+    private static bool SameBlockPlace(CadPoint a, CadPoint b, double toleranceMm) =>
+        a.Extents == null || b.Extents == null || a.Extents.SamePlace(b.Extents, toleranceMm);
 
     private static double DistanceSquared(CadPoint a, CadPoint b)
     {
@@ -285,6 +339,7 @@ public static class CadPointMath
         Layer = point.Layer,
         Source = point.Source,
         RotationDegrees = point.RotationDegrees,
+        Extents = point.Extents,
         MergedCount = 1
     };
 }

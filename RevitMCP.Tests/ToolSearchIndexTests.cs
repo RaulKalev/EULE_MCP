@@ -61,6 +61,17 @@ public class ToolSearchIndexTests
     public void IntentFindsTheTool_InTheTopThree(string query, string expected) =>
         Assert.Contains(expected, Top(query));
 
+    [Theory]
+    [InlineData("CAD geometry bounding box")]
+    [InlineData("equipment outline in linked DWG")]
+    [InlineData("seadme mõõdud DWG-st")]
+    [InlineData("rectangle size from CAD")]
+    public void SizeAndOutlineQueries_FindTheCadTools(string query)
+    {
+        var top = Top(query);
+        Assert.True(top.Contains("revit_get_cad_shapes") || top.Contains("revit_get_cad_placement_points"), string.Join(", ", top));
+    }
+
     [Fact]
     public void EstonianSynonyms_MapToTheDomain()
     {

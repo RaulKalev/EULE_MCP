@@ -4,6 +4,7 @@ using Autodesk.Revit.UI;
 using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Query;
+using RevitMCP.Addin.ViewElements;
 using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Tools;
@@ -11,7 +12,7 @@ namespace RevitMCP.Addin.Tools;
 public class CountElementsTool : IRevitMcpTool
 {
     public string Name => "revit_count_elements";
-    public string Description => "Counts model elements, grouped by Category or FamilyAndType. Optionally filtered to a specific category.";
+    public string Description => "Counts model elements, grouped by Category or FamilyAndType. Optionally filtered to a specific category. view counts what a view or sheet shows (active, view id or name, sheet id, number or name), per viewport for a sheet, with scope=model|annotation|all.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Elements;
 
@@ -22,6 +23,8 @@ public class CountElementsTool : IRevitMcpTool
         var sw = Stopwatch.StartNew();
         var target = ToolDocument.Resolve(uiapp, request, out var documentFailure);
         if (target == null) return Task.FromResult(documentFailure!);
+        if (ViewElementReads.HasView(request))
+            return Task.FromResult(ViewElementReads.Count(uiapp, target, request, cancellationToken));
         var doc = target.Document;
 
         var filterCategory = ToolArguments.GetString(request.Arguments, "category");

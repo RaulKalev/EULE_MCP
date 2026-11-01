@@ -11,6 +11,12 @@ namespace RevitMCP.Addin.Approval;
 /// </summary>
 public class ApprovalService
 {
+    /// <summary>
+    /// Lifetime of a request whose tool re-reads its targets when it runs (deletes, #138): long enough for the
+    /// user to come back to it the next day. In code rather than QueryLimits: a hot-reloaded add-in keeps an older Core.
+    /// </summary>
+    public static readonly TimeSpan LongLivedApprovalLifetime = TimeSpan.FromHours(24);
+
     private readonly ConcurrentDictionary<string, PendingApprovalRequest> _pending = new();
     private readonly object _gate = new();
     private readonly int _capacity;
@@ -165,7 +171,7 @@ public class ApprovalService
     {
         if (!TryRemove(approvalId, out var request)) return;
 
-        if (DateTimeOffset.Now - request.CreatedAt > _approvalLifetime)
+        if (DateTimeOffset.Now - request.CreatedAt > (request.Lifetime ?? _approvalLifetime))
         {
             request.Completion.TrySetResult(new McpToolResult
             {

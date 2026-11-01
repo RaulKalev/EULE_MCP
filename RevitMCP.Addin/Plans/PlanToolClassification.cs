@@ -25,7 +25,11 @@ public static class PlanToolClassification
         // Transforms and groups (#108): mirror-copies and array copies are new elements.
         "revit_mirror_elements", "revit_array_elements",
         // Loading a family adds the family and its types (#102).
-        "revit_load_family"
+        "revit_load_family",
+        // Copying view filters creates the filters in the target (#134).
+        "revit_copy_view_filters",
+        // #135: a reshape creates a replacement region; a type spec can duplicate a type.
+        "revit_edit_filled_regions", "revit_set_filled_region_types"
     };
 
     private static readonly string[] ModifyingPrefixes =

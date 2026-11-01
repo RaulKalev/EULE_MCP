@@ -70,6 +70,8 @@ public class BridgeToolGroupsTests
     [InlineData("revit_place_from_cad", "cad")]
     [InlineData("revit_create_clash_review_view", "coordination")]
     [InlineData("revit_place_views_on_sheets", "views")]
+    [InlineData("revit_list_filterable_parameters", "views")]   // the name has no "view"
+    [InlineData("revit_copy_view_filters", "views")]
     [InlineData("convert_ifc_spaces_to_rooms", "ifc")]
     [InlineData("excel_read_range", "office")]
     [InlineData("revit_panelschematics_set_circuit_rows", "panelschematics")]   // contains "panel" and "circuit"

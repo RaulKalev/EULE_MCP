@@ -17,6 +17,9 @@ public class PendingApprovalRequest
     public string ClientName { get; set; } = string.Empty;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
 
+    /// <summary>How long the request can still be approved; null = the service's default lifetime.</summary>
+    public TimeSpan? Lifetime { get; set; }
+
     /// <summary>
     /// In-process identity token for the document active when approval was requested.
     /// This is deliberately typed as object so the approval model stays testable

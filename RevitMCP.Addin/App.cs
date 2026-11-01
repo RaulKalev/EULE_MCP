@@ -470,6 +470,12 @@ public class App : IExternalApplication
             RevitMCP.Addin.Tools.Families.FamiliesAndParametersToolRegistration.Register(handler); // #102 families and parameters
             RevitMCP.Addin.Tools.Schedules.SchedulesToolRegistration.Register(handler); // #103 schedules
             RevitMCP.Addin.Tools.Views.ViewCreationToolRegistration.Register(handler); // #104 view creation
+            handler.RegisterTool(new RevitMCP.Addin.Tools.SetLineGeometryTool()); // #140
+            handler.RegisterTool(new RevitMCP.Addin.Tools.CreateRectangleTool()); // #140
+            handler.RegisterTool(new RevitMCP.Addin.Tools.CheckAnnotationOverlapsTool()); // #141
+            handler.RegisterTool(new RevitMCP.Addin.Tools.GetTitleBlockValuesTool()); // #142
+            RevitMCP.Addin.Tools.ViewFilters.ViewFilterToolRegistration.Register(handler); // #134 view filters
+            RevitMCP.Addin.Tools.FilledRegions.FilledRegionToolRegistration.Register(handler); // #135 filled regions
             RevitMCP.Addin.Tools.Mep.MepToolRegistration.Register(handler); // #106 cable tray and conduit runs
             RevitMCP.Addin.Tools.Geometry.GeometryToolRegistration.Register(handler); // #107 geometry queries
             RevitMCP.Addin.Tools.TransformsAndGroupsToolRegistration.Register(handler); // #108 mirror, array, groups
@@ -629,9 +635,10 @@ public class App : IExternalApplication
 
     private static void OnDocumentChanged(object? sender, DocumentChangedEventArgs e)
     {
-        DocumentChangeTracker.MarkChanged(e.GetDocument());
-        // A read-only tool's temporary setup, always rolled back (H1): not a change to record.
+        // A read-only tool's temporary setup, always rolled back (H1): not a change to record, and no reason to
+        // invalidate pending approvals (#138: one image export killed them).
         if (RevitMCP.Addin.Checkpoints.TemporaryModelChanges.Active) return;
+        DocumentChangeTracker.MarkChanged(e.GetDocument());
         RevitMCP.Addin.Graph.GraphChangeTracker.Record(e);
         RevitMCP.Addin.Checkpoints.CheckpointChangeTracker.Record(e);
         RevitMCP.Addin.Plans.PlanChangeRecorder.Record(e);

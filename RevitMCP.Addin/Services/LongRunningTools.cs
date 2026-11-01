@@ -25,7 +25,11 @@ public static class LongRunningTools
         "revit_close_document",
         "revit_reload_latest",
         "revit_relinquish",
-        "revit_checkout_elements"
+        "revit_checkout_elements",
+        // A large delete regenerates for longer than the default timeout (#138)
+        "revit_delete_elements",
+        "revit_delete_views",
+        "revit_delete_sheets"
     };
 
     public static bool IsLongRunning(string? toolName) => toolName != null && Names.Contains(toolName);

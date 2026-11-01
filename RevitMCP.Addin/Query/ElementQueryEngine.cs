@@ -224,6 +224,37 @@ public class ElementQueryEngine
         };
     }
 
+    /// <summary>
+    /// The ids among <paramref name="ids"/> that pass <c>options.Filters</c>, for a caller that pages the matches itself
+    /// (#136, view reads). Stops at <see cref="QueryLimits.MaxScanElements"/> and says so through <paramref name="truncated"/>.
+    /// </summary>
+    public HashSet<long> MatchingIds(Document doc, IEnumerable<ElementId> ids, ElementQueryOptions options, out bool truncated, CancellationToken cancellationToken = default)
+    {
+        var matching = new HashSet<long>();
+        var reader = new ParameterReader();
+        var readOptions = CreateFilterReadOptions(options);
+        var states = ParameterFilterEvaluator.NeedsModelState(options.Filters) ? new ElementModelStateReader(doc) : null;
+        var limits = QueryLimits.Default;
+        int scanned = 0;
+        truncated = false;
+
+        foreach (var id in ids)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (QueryGuard.ShouldStopScan(scanned, isNarrowed: true, needsParamRead: true, limits))
+            {
+                truncated = true;
+                break;
+            }
+            scanned++;
+
+            var element = doc.GetElement(id);
+            if (element?.Category != null && PassesFilters(doc, element, reader, readOptions, options.Filters, states))
+                matching.Add(id.Value);
+        }
+        return matching;
+    }
+
     private static Dictionary<string, ParameterValueDto> BuildParameterMap(
         IReadOnlyList<ParameterValueDto> allParams,
         List<string> returnNames,

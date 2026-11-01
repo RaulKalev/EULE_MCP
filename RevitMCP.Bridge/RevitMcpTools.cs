@@ -52,42 +52,60 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_list_instances", ReadOnly = true),
-     Description("Lists all running Revit instances that host a RevitMCP connector (useful when several Revit windows are open, e.g. one for AI work and one for the user's own work). Shows process id, Revit version, document title, which instance is pinned, and where requests are routed. Requests never fall back to an unpinned window.")]
+     Description("Lists all running Revit instances that host a RevitMCP connector (useful when several Revit windows are open, e.g. one for AI work and one for the user's own work). Shows process id, Revit version, document title, this session's own pin (sessionProcessId, isSessionPin), the shared default from the plugin's 'Make This Project Active' (sharedProcessId, isSharedDefault), and where this session's requests go (isCurrentTarget). Requests never fall back to an unpinned window.")]
     public Task<string> ListInstances(CancellationToken cancellationToken)
     {
-        var activePid = pipeClient.GetActiveProcessId();
+        var sessionPid = pipeClient.SessionProcessId;
+        var sharedPid = pipeClient.SharedProcessId;
         var instances = pipeClient.DiscoverLiveInstances();
-        var route = RevitInstanceRegistry.ResolveRoute(instances, activePid);
+        var route = RevitInstanceRegistry.ResolveRoute(instances, sessionPid, sharedPid);
         var response = new
         {
             success = true,
-            activeProcessId = activePid,
-            routing = "only the pinned instance; without a pin, the single running instance; with several unpinned instances, nothing until one is pinned",
+            activeProcessId = sessionPid ?? sharedPid,
+            sessionProcessId = sessionPid,
+            sharedProcessId = sharedPid,
+            routing = "this session's pin (revit_select_instance) wins and is seen by no other session; without one, the shared default; without that, the single running instance; with several unpinned instances, nothing until one is pinned",
             instances = instances.Select(i => new
             {
                 processId = i.ProcessId,
                 revitVersion = i.RevitVersion,
                 documentTitle = i.DocumentTitle ?? "(unknown)",
                 pipeName = i.PipeName,
-                isActive = activePid.HasValue && i.ProcessId == activePid.Value,
+                isActive = (sessionPid ?? sharedPid) == i.ProcessId,
+                isSessionPin = sessionPid == i.ProcessId,
+                isSharedDefault = sharedPid == i.ProcessId,
                 isCurrentTarget = route.Target?.ProcessId == i.ProcessId
             }).ToList(),
             routeError = route.Error,
             message = instances.Count == 0
                 ? "No running Revit instances with an active MCP connector were found."
                 : route.Target != null
-                    ? $"{instances.Count} Revit instance(s) found. Requests go to pid {route.Target.ProcessId}."
-                    : $"{instances.Count} Revit instance(s) found. Requests are blocked until an instance is pinned with revit_select_instance."
+                    ? $"{instances.Count} Revit instance(s) found. This session's requests go to pid {route.Target.ProcessId} ({(sessionPid.HasValue ? "its own pin" : sharedPid.HasValue ? "the shared default" : "the only one running")})."
+                    : $"{instances.Count} Revit instance(s) found. This session's requests are blocked until an instance is pinned with revit_select_instance."
         };
         return Task.FromResult(JsonConvert.SerializeObject(response, ResultSerializerSettings));
     }
 
     [McpServerTool(Name = "revit_select_instance"),
-     Description("Pins the running Revit instance MCP requests are routed to, by process id (see revit_list_instances). Requests then go only to that instance and fail instead of reaching another Revit window. When several instances are running, ask the user which one is meant for AI work before pinning.")]
+     Description("Pins THIS session to a running Revit instance, by process id (see revit_list_instances). This session's requests then go only to that instance and fail instead of reaching another Revit window; other sessions and the plugin's 'Make This Project Active' button neither see nor change this pin, which lasts until the session ends. processId=0 clears it, and the session follows the shared default again. When several instances are running, ask the user which one is meant for AI work before pinning.")]
     public Task<string> SelectInstance(
-        [Description("Process id of the Revit instance to route requests to.")] int processId,
+        [Description("Process id of the Revit instance to route this session's requests to; 0 clears the session's pin.")] int processId,
         CancellationToken cancellationToken)
     {
+        if (processId == 0)
+        {
+            pipeClient.PinSession(null);
+            var shared = pipeClient.SharedProcessId;
+            return Task.FromResult(JsonConvert.SerializeObject(new
+            {
+                success = true,
+                message = shared.HasValue
+                    ? $"This session's pin is cleared: requests follow the shared default (pid {shared.Value})."
+                    : "This session's pin is cleared. No shared default is set: requests go to the only running instance, and are blocked when several run."
+            }, ResultSerializerSettings));
+        }
+
         var instances = pipeClient.DiscoverLiveInstances();
         var match = instances.FirstOrDefault(i => i.ProcessId == processId);
         if (match == null)
@@ -99,13 +117,11 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             }, ResultSerializerSettings));
         }
 
-        var ok = pipeClient.SelectInstance(processId);
+        pipeClient.PinSession(processId);
         return Task.FromResult(JsonConvert.SerializeObject(new
         {
-            success = ok,
-            message = ok
-                ? $"Pinned: requests now go only to Revit {match.RevitVersion} (pid {processId}, document: {match.DocumentTitle ?? "unknown"})."
-                : "Failed to persist the instance selection."
+            success = true,
+            message = $"Pinned for this session: requests now go only to Revit {match.RevitVersion} (pid {processId}, document: {match.DocumentTitle ?? "unknown"}). Other sessions are not affected."
         }, ResultSerializerSettings));
     }
 
@@ -409,10 +425,12 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_count_elements", ReadOnly = true),
-     Description("Counts model elements grouped by Category or FamilyAndType. Optionally filter to a specific category name. Cheap even for the whole model (no parameter reads) — good first call to discover what categories exist before running a narrower, detailed query like revit_find_elements_by_parameter.")]
+     Description("Counts model elements grouped by Category or FamilyAndType. Optionally filter to a specific category name. Cheap even for the whole model (no parameter reads) — good first call to discover what categories exist before running a narrower, detailed query like revit_find_elements_by_parameter. view counts what a view or sheet shows.")]
     public async Task<string> CountElements(
         [Description("Optional category name to filter by (e.g. 'Fire Alarm Devices'). Leave empty for all categories.")] string? category = null,
         [Description("Group results by: 'Category' (default) or 'FamilyAndType'")] string groupBy = "Category",
+        [Description(ViewArgDescription)] string? view = null,
+        [Description(ViewScopeArgDescription)] string? scope = null,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -421,6 +439,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["category"] = category ?? string.Empty,
             ["groupBy"] = string.IsNullOrEmpty(groupBy) ? "Category" : groupBy
         };
+        AddViewArgs(args, view, scope);
         args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_count_elements", args, cancellationToken);
         return FormatResult(result);
@@ -709,14 +728,14 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_find_elements_by_parameter", ReadOnly = true),
-     Description("Finds model elements matching parameter filters. Supports category/selection/IDs, paging, safety caps, summaryOnly, tags, and compact responses. Requires category, filters, elementIds, useSelection, or summaryOnly=true; call revit_count_elements first when model categories are unknown.")]
+     Description("Finds model elements matching parameter filters. Supports category/selection/IDs, paging, safety caps, summaryOnly, tags, and compact responses. Requires category, filters, elementIds, useSelection, view, or summaryOnly=true; call revit_count_elements first when model categories are unknown. view searches what a view or sheet shows and adds location, bounding box, host, owner view and tags.")]
     public async Task<string> FindElementsByParameter(
         [Description(FiltersDescription)] string? filters = null,
         [Description("Optional category name to restrict search (e.g. 'Fire Alarm Devices')")] string? category = null,
         [Description("If true, scan current Revit selection instead of category/elementIds.")] bool useSelection = false,
         [Description("Explicit element IDs to query.")] long[]? elementIds = null,
         [Description("Optional list of parameter names to include in returned elements")] string[]? returnParameters = null,
-        [Description("Include instance parameters. Default true.")] bool includeInstanceParameters = true,
+        [Description("Include instance parameters. Default true; with view, only when set or when parameter names are given.")] bool? includeInstanceParameters = null,
         [Description("Include type parameters. Heavy/repetitive per element; opt-in. Default false.")] bool includeTypeParameters = false,
         [Description("Max elements to scan/return (default 500).")] int limit = 500,
         [Description("Optional page size for paged results. Clamped by QueryLimits.MaxPageSize (500). Defaults to QueryLimits.DefaultPageSize (100) when omitted.")] int pageSize = -1,
@@ -730,6 +749,9 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Default true: a whole-category read (no elementIds, selection or filters) of 200+ elements is not run when the model graph is fresh; the result has status graph_first with the calls to make instead. False reads the whole category live.")] bool graphFirst = true,
         [Description(IncludeModelStateDescription)] bool includeModelState = false,
         [Description(IncludeOwnershipDescription)] bool includeOwnership = false,
+        [Description(ViewArgDescription)] string? view = null,
+        [Description(ViewScopeArgDescription)] string? scope = null,
+        [Description(ViewIncludeRoomArgDescription)] bool includeRoom = false,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -743,7 +765,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["useSelection"] = useSelection,
             ["elementIds"] = elementIds ?? [],
             ["returnParameters"] = returnParameters ?? [],
-            ["includeInstanceParameters"] = includeInstanceParameters,
+            ["includeInstanceParameters"] = includeInstanceParameters ?? ViewReadDefaultsToInstanceParameters(view, returnParameters),
             ["includeTypeParameters"] = includeTypeParameters,
             ["limit"] = limit,
             ["pageSize"] = pageSize,
@@ -756,6 +778,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["includeModelState"] = includeModelState,
             ["includeOwnership"] = includeOwnership
         };
+        AddViewArgs(args, view, scope, includeRoom);
         args["graphHint"] = graphHint;
         args["graphFirst"] = graphFirst;
         args["document"] = document ?? string.Empty;
@@ -764,14 +787,14 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_get_elements_info", ReadOnly = true),
-     Description("Returns structured element info and selected parameter values. Requires selection, elementIds, category, or summaryOnly=true. Supports filters, paging, safety caps, tags, and compact responses.")]
+     Description("Returns structured element info and selected parameter values. Requires selection, elementIds, category, view, or summaryOnly=true. Supports filters, paging, safety caps, tags, and compact responses. view reads what a view or sheet shows (per viewport for a sheet) and adds location, bounding box, host, owner view and tags.")]
     public async Task<string> GetElementsInfo(
         [Description("If true, use current selection.")] bool useSelection = false,
         [Description("List of element IDs to retrieve.")] long[]? elementIds = null,
         [Description("Category name filter (e.g. 'Fire Alarm Devices').")] string? category = null,
         [Description(FiltersDescription)] string? filters = null,
         [Description("Parameter names to return (partial match). Leave empty for all.")] string[]? parameterNames = null,
-        [Description("Include instance parameters. Default true.")] bool includeInstanceParameters = true,
+        [Description("Include instance parameters. Default true; with view, only when set or when parameter names are given.")] bool? includeInstanceParameters = null,
         [Description("Include type parameters. Heavy/repetitive per element; opt-in. Default false.")] bool includeTypeParameters = false,
         [Description("Max elements to scan/return (default 500).")] int limit = 500,
         [Description("Optional page size for paged results. Clamped by QueryLimits.MaxPageSize (500). Defaults to QueryLimits.DefaultPageSize (100) when omitted.")] int pageSize = -1,
@@ -785,6 +808,9 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Default true: a whole-category read (no elementIds, selection or filters) of 200+ elements is not run when the model graph is fresh; the result has status graph_first with the calls to make instead. False reads the whole category live.")] bool graphFirst = true,
         [Description(IncludeModelStateDescription)] bool includeModelState = false,
         [Description(IncludeOwnershipDescription)] bool includeOwnership = false,
+        [Description(ViewArgDescription)] string? view = null,
+        [Description(ViewScopeArgDescription)] string? scope = null,
+        [Description(ViewIncludeRoomArgDescription)] bool includeRoom = false,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -798,7 +824,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["category"] = category ?? string.Empty,
             ["filters"] = parsedFilters,
             ["parameterNames"] = parameterNames ?? [],
-            ["includeInstanceParameters"] = includeInstanceParameters,
+            ["includeInstanceParameters"] = includeInstanceParameters ?? ViewReadDefaultsToInstanceParameters(view, parameterNames),
             ["includeTypeParameters"] = includeTypeParameters,
             ["limit"] = limit,
             ["pageSize"] = pageSize,
@@ -811,6 +837,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["includeModelState"] = includeModelState,
             ["includeOwnership"] = includeOwnership
         };
+        AddViewArgs(args, view, scope, includeRoom);
         args["graphHint"] = graphHint;
         args["graphFirst"] = graphFirst;
         args["document"] = document ?? string.Empty;
@@ -1378,7 +1405,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_get_text_notes", ReadOnly = true),
-     Description("Returns text note elements (text boxes placed via the Revit Text command) from the active document. Default scope is the active view. Pass viewId=0 for all views, or a specific view element ID. Supports text content filtering and selection-based reading.")]
+     Description("Returns text note elements (text boxes placed via the Revit Text command) from the active document. Default scope is the active view. Pass viewId=0 for all views, or a specific view element ID. Supports text content filtering and selection-based reading. Each note has its boundingBox (minX, minY, maxX, maxY in view or sheet mm), lineCount (estimated rows including wrapping) and paragraphCount, to plan space before writing.")]
     public async Task<string> GetTextNotes(
         [Description("Scope: -1 or omit = active view, 0 = all views, >0 = specific view element ID.")] long viewId = -1,
         [Description("Case-insensitive substring filter on text content. Leave empty to return all.")] string? textFilter = null,
@@ -1433,13 +1460,14 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     // ── Placing Items From a DWG ──────────────────────────────────────────────
 
     [McpServerTool(Name = "revit_get_cad_placement_points", ReadOnly = true),
-     Description("Reads candidate placement locations out of an imported or linked DWG. Call WITHOUT layers first: it returns every CAD layer with counts of block inserts, points, circles, curves and text, plus the height range each sits at — show that to the user and ask which layers hold the locations, and whether a mounting height is needed. Call again WITH layers to get the points in millimetres, including the rotation carried over from block references. Read-only.")]
+     Description("Reads candidate placement locations out of an imported or linked DWG. Call WITHOUT layers first: it returns every CAD layer with counts of block inserts, points, circles, curves and text, plus the height range each sits at — show that to the user and ask which layers hold the locations, and whether a mounting height is needed. Call again WITH layers to get the points in millimetres, including the rotation carried over from block references. includeExtents=true also gives each block's size: bounding box (minX, minY, maxX, maxY), widthMm, depthMm, rotation, the outline of equipment drawn as blocks. All coordinates are in host model mm with the link transform applied, so there is no need to open the DWG to compare. Read-only.")]
     public async Task<string> GetCadPlacementPoints(
         [Description("CAD layer names to read points from; omit for the layer inventory")] string[]? layers = null,
         [Description("CAD import element ID (required when the model has several CAD files)")] long importInstanceId = 0,
         [Description("Which geometry counts as a location: block | point | circle (default: all three)")] string[]? pointSources = null,
         [Description("Merge marks closer than this into one location, in mm (default 1)")] double mergeToleranceMm = 1,
         [Description("Maximum points to return (default 200, max 2000)")] int limit = 200,
+        [Description("Also return each block's size: bounding box in host mm, width, depth, rotation")] bool includeExtents = false,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -1449,7 +1477,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["importInstanceId"] = importInstanceId,
             ["pointSources"] = pointSources ?? [],
             ["mergeToleranceMm"] = mergeToleranceMm,
-            ["limit"] = limit
+            ["limit"] = limit,
+            ["includeExtents"] = includeExtents
         };
         args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_get_cad_placement_points", args, cancellationToken);
@@ -1579,7 +1608,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     // available and shapes are identified by size.
 
     [McpServerTool(Name = "revit_get_cad_shapes", ReadOnly = true),
-     Description("Reconstructs fixtures from loose CAD line work — symbols drawn as bare lines, rectangles or circles that were never made into blocks, so revit_get_cad_placement_points finds nothing on them. Touching segments are grouped into one fixture and the smallest box around the group gives its centre and the angle it was drawn at. Call WITHOUT layers first for the layer inventory, then again WITH layers for the fixtures plus a signature table (e.g. 'rectangle 1200x200' x28) — those signatures are what revit_place_from_cad_shapes maps to family types. The Revit API cannot read DWG text, so the drawing's type marks (V11.1 and the like) are NOT available: tell the user that fixtures are identified by size, not by label. Read-only.")]
+     Description("Finds the size, outline and bounding box of equipment drawn as loose lines in a linked or imported DWG (for blocks: revit_get_cad_placement_points includeExtents=true). Coordinates are in host model mm with the link transform applied, so there is no need to open the DWG to compare. Reconstructs fixtures from loose CAD line work — symbols drawn as bare lines, rectangles or circles that were never made into blocks, so revit_get_cad_placement_points finds nothing on them. Touching segments are grouped into one fixture and the smallest box around the group gives its centre and the angle it was drawn at. Call WITHOUT layers first for the layer inventory, then again WITH layers for the fixtures plus a signature table (e.g. 'rectangle 1200x200' x28) — those signatures are what revit_place_from_cad_shapes maps to family types. The Revit API cannot read DWG text, so the drawing's type marks (V11.1 and the like) are NOT available: tell the user that fixtures are identified by size, not by label. Read-only.")]
     public async Task<string> GetCadShapes(
         [Description("CAD layer names to reconstruct fixtures from; omit for the layer inventory")] string[]? layers = null,
         [Description("CAD import element ID (required when the model has several CAD files)")] long importInstanceId = 0,
@@ -2682,19 +2711,21 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("mode=map: JSON object {\"old text\": \"new text\"}. Matched against the whole note text, trimmed; notes not in the map stay unchanged.")] string? map = null,
         [Description("Set the note width on paper in mm (applied to notes whose text changes, or to all targets when mode is omitted).")] double widthMm = 0,
         [Description("Widen notes so the longest line fits (estimate from text size and width factor; never narrows).")] bool autoWidth = false,
+        [Description("Edited range's character formatting: keep (default) | plain | matchFirstRun.")] string? formatting = null,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         if (!TryBuildSetTextNotesArgs(mode, elementIds, useSelection, viewId, textFilter, text, find, replace, matchCase, wholeWord,
                 suffix, prefix, map, widthMm, autoWidth, out var args, out var error))
             return FormatBridgeError(error!);
+        args["formatting"] = formatting ?? string.Empty;
         args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_preview_set_text_notes", args, cancellationToken);
         return FormatResult(result);
     }
 
     [McpServerTool(Name = "revit_set_text_notes"),
-     Description("Edits the content of existing text notes in place; element ids are kept. Targets: elementIds, useSelection, or viewId (-1 active, 0 all views) narrowed by textFilter. Modes: set (text), findReplace (find/replace, matchCase, wholeWord), append (suffix), prepend (prefix), map (JSON old text → new text, whole trimmed text). Optional widthMm or autoWidth. Edits are spliced into the note's formatted text, so bold/italic/underline runs outside the edited range are kept (inserted text takes the neighbouring formatting); if Revit refuses that, the plain text is replaced and formattingPreserved=false. Notes borrowed by another user or out of date with central are skipped. One transaction; requires approval; reversible via Revit Undo. Run revit_preview_set_text_notes first.")]
+     Description("Edits the content of existing text notes in place; element ids are kept. Targets: elementIds, useSelection, or viewId (-1 active, 0 all views) narrowed by textFilter. Modes: set (text), findReplace (find/replace, matchCase, wholeWord), append (suffix), prepend (prefix), map (JSON old text → new text, whole trimmed text). Optional widthMm or autoWidth. Edits are spliced into the note's formatted text, so bold/italic/underline runs outside the edited range are kept. formatting: keep (default, inserted text takes the neighbouring formatting), plain (no bold, italic or underline on the edited range), matchFirstRun (the note's first character's formatting). If Revit refuses that, the plain text is replaced and formattingPreserved=false. Notes borrowed by another user or out of date with central are skipped. One transaction; requires approval; reversible via Revit Undo. Run revit_preview_set_text_notes first.")]
     public async Task<string> SetTextNotes(
         [Description("set | findReplace | append | prepend | map. Omit to change only the width (widthMm/autoWidth).")] string? mode = null,
         [Description("Text note element IDs to edit. Takes precedence over useSelection and viewId.")] long[]? elementIds = null,
@@ -2711,12 +2742,14 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("mode=map: JSON object {\"old text\": \"new text\"}. Matched against the whole note text, trimmed; notes not in the map stay unchanged.")] string? map = null,
         [Description("Set the note width on paper in mm (applied to notes whose text changes, or to all targets when mode is omitted).")] double widthMm = 0,
         [Description("Widen notes so the longest line fits (estimate from text size and width factor; never narrows).")] bool autoWidth = false,
+        [Description("Edited range's character formatting: keep (default) | plain | matchFirstRun.")] string? formatting = null,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
         if (!TryBuildSetTextNotesArgs(mode, elementIds, useSelection, viewId, textFilter, text, find, replace, matchCase, wholeWord,
                 suffix, prefix, map, widthMm, autoWidth, out var args, out var error))
             return FormatBridgeError(error!);
+        args["formatting"] = formatting ?? string.Empty;
         args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_set_text_notes", args, cancellationToken);
         return FormatResult(result);
@@ -2772,6 +2805,86 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_create_lines", args, cancellationToken);
         return FormatResult(result);
+    }
+
+    [McpServerTool(Name = "revit_set_line_geometry"),
+     Description("Sets the start and end points of existing straight detail and model lines in place: element ids, tags and dimensions stay, so resizing needs no delete and redraw. A missing z keeps the point on the line's own sketch plane. Optional lineStyle name for all of them. Points off the line's plane, arcs, pinned lines and missing ids are skipped per line with the reason. Requires approval (Direct Edit allowed). One transaction, one undo.")]
+    public async Task<string> SetLineGeometry(
+        [Description("JSON array in mm: [{elementId, x1, y1, x2, y2, z1?, z2?}]")] string lines,
+        [Description("Line style name to apply to all of them. Omit to keep each line's style.")] string? lineStyle = null,
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryParseJsonArray(lines, "lines", out var parsedLines, out var linesError))
+            return FormatBridgeError(linesError!);
+
+        var args = new Dictionary<string, object?>
+        {
+            ["lines"] = parsedLines,
+            ["lineStyle"] = lineStyle ?? string.Empty
+        };
+        args["document"] = document ?? string.Empty;
+        return FormatResult(await pipeClient.SendAsync("revit_set_line_geometry", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_create_rectangle"),
+     Description("Draws one rectangle as 4 detail lines in a view, from minX, minY, maxX, maxY or from center, width, height and rotationDeg, in mm. In a plan, drafting view or sheet these are model (sheet) x and y; in a section or elevation they run along the view's right and up directions. Optional lineStyle, centred text (textTypeId) and asGroup=true for a detail group, so later moves and deletes are one element. Returns lineIds, textId and groupId. Requires approval (Direct Edit allowed). One transaction, one undo.")]
+    public async Task<string> CreateRectangle(
+        [Description("View element ID. Defaults to the active view.")] long viewId = 0,
+        [Description("Lowest x in mm (with minY, maxX, maxY).")] double? minX = null,
+        [Description("Lowest y in mm.")] double? minY = null,
+        [Description("Highest x in mm.")] double? maxX = null,
+        [Description("Highest y in mm.")] double? maxY = null,
+        [Description("Centre in mm: {x, y} (with width, height).")] object? center = null,
+        [Description("Width in mm, along x before rotation.")] double? width = null,
+        [Description("Height in mm, along y before rotation.")] double? height = null,
+        [Description("Rotation around the centre in degrees, counter-clockwise. Default 0.")] double rotationDeg = 0,
+        [Description("Line style name. Default style when omitted or not found.")] string? lineStyle = null,
+        [Description("Text centred in the rectangle.")] string? text = null,
+        [Description("Text note type id. Default: the document's default text type.")] long textTypeId = 0,
+        [Description("Make a detail group of the lines and the text.")] bool asGroup = false,
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["viewId"] = viewId,
+            ["rotationDeg"] = rotationDeg,
+            ["lineStyle"] = lineStyle ?? string.Empty,
+            ["text"] = text ?? string.Empty,
+            ["textTypeId"] = textTypeId,
+            ["asGroup"] = asGroup
+        };
+        if (minX != null) args["minX"] = minX;
+        if (minY != null) args["minY"] = minY;
+        if (maxX != null) args["maxX"] = maxX;
+        if (maxY != null) args["maxY"] = maxY;
+        if (center != null) args["center"] = ToJToken(center);
+        if (width != null) args["width"] = width;
+        if (height != null) args["height"] = height;
+        args["document"] = document ?? string.Empty;
+        return FormatResult(await pipeClient.SendAsync("revit_create_rectangle", args, cancellationToken));
+    }
+
+    [McpServerTool(Name = "revit_check_annotation_overlaps", ReadOnly = true),
+     Description("For a view or sheet, reports text notes whose bounding box overlaps another text note, a tag or a detail line, or crosses a viewport's edge on a sheet, with both ids and the overlap in mm (overlapXmm, overlapYmm; on a line its length inside the note), also in paper mm for a scaled view. The box is the text's, not its leaders'. A sheet also checks each view placed on it, on its own. Finds what otherwise takes exporting an image and looking at it. Title block labels are not checked: the Revit API does not expose their areas. Read-only.")]
+    public async Task<string> CheckAnnotationOverlaps(
+        [Description("View or sheet element ID. Defaults to the active view.")] long viewId = 0,
+        [Description("Sheet number, instead of viewId.")] string? sheetNumber = null,
+        [Description("Ignore overlaps smaller than this, in paper mm. Default 0.5.")] double minOverlapMm = 0.5,
+        [Description("Maximum overlaps to return, largest first. Default 200.")] int limit = 200,
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["viewId"] = viewId,
+            ["sheetNumber"] = sheetNumber ?? string.Empty,
+            ["minOverlapMm"] = minOverlapMm,
+            ["limit"] = limit
+        };
+        args["document"] = document ?? string.Empty;
+        return FormatResult(await pipeClient.SendAsync("revit_check_annotation_overlaps", args, cancellationToken));
     }
 
     [McpServerTool(Name = "revit_list_dimension_types", ReadOnly = true),
@@ -3061,7 +3174,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_export_view_image", ReadOnly = true),
-     Description("Exports a view as PNG and returns the image so you can check placements visually. viewId (default active view); cropToRoom (room number, plan views) or bboxMm {minX,minY,maxX,maxY}; marginMm (default 1000); pixelSize (default 2000); highlightElementIds drawn red. Temporary crop/highlight is rolled back.")]
+     Description("Exports a view as PNG and returns the image so you can check placements visually. viewId (default active view); cropToRoom (room number, plan views) or bboxMm {minX,minY,maxX,maxY}; marginMm (default 1000); pixelSize (default 2000); highlightElementIds or highlightIds drawn red. Temporary crop/highlight is rolled back. imageTransform maps pixels to coordinates so positions can be measured on the image; it comes from a temporary line in a second export: {widthPx, heightPx, mmPerPx, coordinateSystem (model | sheet), originMm (the top-left pixel), rightDirection, upDirection, contentBoxPx (where the crop is; grids and annotation can make the image larger on any side)}. Model point = originMm + rightDirection*px*mmPerPx - upDirection*py*mmPerPx. It is null, with imageTransformNote, for a view without an active crop, a 3D view, or when it could not be measured.")]
     public async Task<IEnumerable<ModelContextProtocol.Protocol.ContentBlock>> ExportViewImage(
         [Description("View id (default: active view)")] long viewId = 0,
         [Description("Room number to crop to (plan views)")] string? cropToRoom = null,
@@ -3069,6 +3182,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Margin around the crop (default 1000 mm)")] double marginMm = 1000,
         [Description("Image width in pixels (default 2000)")] int pixelSize = 2000,
         [Description("Element ids to highlight in red")] long[]? highlightElementIds = null,
+        [Description("Same as highlightElementIds")] long[]? highlightIds = null,
         [Description("host | link (for cropToRoom)")] string? source = null,
         [Description("Link instance id (for cropToRoom)")] long linkInstanceId = 0,
         [Description("Level name (for cropToRoom)")] string? levelName = null,
@@ -3084,6 +3198,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         args["marginMm"] = marginMm;
         args["pixelSize"] = pixelSize;
         args["highlightElementIds"] = highlightElementIds ?? [];
+        args["highlightIds"] = highlightIds ?? [];
         args["outputFolder"] = outputFolder ?? string.Empty;
 
         args["document"] = document ?? string.Empty;
@@ -4687,6 +4802,29 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
 
     // ── View / Sheet / Documentation — Phase 1 Discovery ────────────────────
 
+    [McpServerTool(Name = "revit_get_titleblock_values", ReadOnly = true),
+     Description("Reads the title block values of sheets and checks them: the title block family and type, the sheet's and the title block instance's parameter values, the real size in mm and the matching ISO size (A4...A0 and extended formats like A3x3). Warnings (also in findings with a code): the written format does not match the real size, dates or versions differ between the sheets. The format, date and version parameters are found by common English and Estonian names, or named explicitly. The Revit API does not say which parameter a label shows or how wide it is, so text overflow is not checked: use revit_export_view_image and revit_check_annotation_overlaps. Write with revit_set_parameters_bulk entity=sheets includeTitleBlockInstance=true.")]
+    public async Task<string> GetTitleBlockValues(
+        [Description("Sheet element IDs")] long[]? sheetIds = null,
+        [Description("Sheet numbers")] string[]? sheetNumbers = null,
+        [Description("Name of the parameter holding the written format, when it is not a common one")] string? formatParameter = null,
+        [Description("Name of the parameter holding the date, when it is not a common one")] string? dateParameter = null,
+        [Description("Name of the parameter holding the version, when it is not a common one")] string? versionParameter = null,
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["sheetIds"] = sheetIds ?? [],
+            ["sheetNumbers"] = sheetNumbers ?? [],
+            ["formatParameter"] = formatParameter ?? string.Empty,
+            ["dateParameter"] = dateParameter ?? string.Empty,
+            ["versionParameter"] = versionParameter ?? string.Empty
+        };
+        args["document"] = document ?? string.Empty;
+        return FormatResult(await pipeClient.SendAsync("revit_get_titleblock_values", args, cancellationToken));
+    }
+
     [McpServerTool(Name = "revit_list_titleblocks", ReadOnly = true),
      Description("Lists all title block family symbols loaded in the active document. Returns familySymbolId, familyName, typeName, isInUse. Use familySymbolId when creating sheets.")]
     public async Task<string> ListTitleBlocks(
@@ -5115,7 +5253,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_set_parameters_bulk"),
-     Description("Sets parameters on multiple views/sheets in one transaction. Requires approval. parameters = name→value map (e.g. {\"Märkus\": \"Rev A\"}). entity=views: viewIds or viewTypes+nameFilter, includeTemplates, limit. entity=sheets: sheetIds or sheetNumbers, nameFilter.")]
+     Description("Sets parameters on multiple views/sheets in one transaction. Requires approval. parameters = name→value map (e.g. {\"Märkus\": \"Rev A\"}). entity=views: viewIds or viewTypes+nameFilter, includeTemplates, limit. entity=sheets: sheetIds or sheetNumbers, nameFilter, includeTitleBlockInstance=true also writes parameters the sheet does not have to the title block instance on the sheet.")]
     public async Task<string> SetParametersBulk(
         [Description("What to update: views | sheets")] string entity,
         [Description("Parameter name→value map")] object? parameters = null,
@@ -5126,6 +5264,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("sheets only: sheet element IDs")] long[]? sheetIds = null,
         [Description("sheets only: sheet numbers")] string[]? sheetNumbers = null,
         [Description("Filter by name substring")] string? nameFilter = null,
+        [Description("sheets only: a parameter the sheet does not have is written to its title block instance (default false)")] bool includeTitleBlockInstance = false,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -5146,7 +5285,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             var sheetArgs = new Dictionary<string, object?>
             {
                 ["sheetIds"] = sheetIds ?? [], ["sheetNumbers"] = sheetNumbers ?? [],
-                ["nameFilter"] = nameFilter ?? "", ["parameters"] = ToJToken(parameters)
+                ["nameFilter"] = nameFilter ?? "", ["parameters"] = ToJToken(parameters),
+                ["includeTitleBlockInstance"] = includeTitleBlockInstance
             };
             sheetArgs["document"] = document ?? string.Empty;
             return FormatResult(await pipeClient.SendAsync("revit_set_sheet_parameters_bulk", sheetArgs, cancellationToken));

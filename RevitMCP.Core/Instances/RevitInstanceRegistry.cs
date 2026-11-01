@@ -174,6 +174,25 @@ public class RevitInstanceRegistry
         return InstanceRoute.Legacy();
     }
 
+    /// <summary>
+    /// Routing of one bridge session (#137). The session's own pin, set by revit_select_instance and held in that
+    /// bridge's memory, wins over the shared default (the plugin's 'Make This Project Active', active-instance.json),
+    /// so another session or a later click can never move this session's calls to another model. A session that has
+    /// chosen nothing follows the shared default. A pinned window that is gone fails; it never falls back.
+    /// </summary>
+    public static InstanceRoute ResolveRoute(IReadOnlyList<RevitInstanceInfo> liveInstances, int? sessionProcessId, int? sharedProcessId)
+    {
+        if (!sessionProcessId.HasValue) return ResolveRoute(liveInstances, sharedProcessId);
+
+        var pinned = liveInstances.FirstOrDefault(i => i.ProcessId == sessionProcessId.Value);
+        return pinned != null
+            ? InstanceRoute.To(pinned)
+            : InstanceRoute.Fail(
+                $"The Revit instance this session pinned (pid {sessionProcessId.Value}) is not reachable: it was closed or its MCP connector is stopped. " +
+                "Requests are not sent to other Revit windows. Restart the connector in that Revit, pin another one with revit_select_instance " +
+                "(see revit_list_instances), or pass processId=0 to follow the shared default.");
+    }
+
     private static int ParseVersion(string? version) =>
         int.TryParse(version, out var v) ? v : 0;
 }

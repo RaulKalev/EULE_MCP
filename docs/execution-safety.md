@@ -30,9 +30,24 @@ Model-related approvals capture:
 - the selected element IDs when `useSelection=true`.
 
 Approval is rejected if any captured context differs at execution time. Pending
-approvals are capped at 64 and expire after ten minutes. Filesystem, Excel,
+approvals are capped at 64 and expire after ten minutes. A read-only tool's
+temporary setup, always rolled back (the image export's crop and highlight), does
+not count as a change. Filesystem, Excel,
 configuration, standards, and report tools in the background lane are not bound
 to a Revit document.
+
+Deletes (`revit_delete_elements`, `revit_delete_views`, `revit_delete_sheets`, `revit_delete_view_filters`) are
+meant to wait for the user (#138). They read their targets by id again when they
+run and skip what is gone, so they implement `IApprovalRevalidatesTargets`:
+
+- other changes to the model do not invalidate them; the result carries a warning
+  that the model changed in between;
+- they stay valid for 24 hours;
+- without a `document` argument they bind to the document active at the request, and
+  still run there if the user has since switched to another project. A closed
+  document still rejects them.
+
+Direct Edit still does not bypass them.
 
 ## Transactions
 

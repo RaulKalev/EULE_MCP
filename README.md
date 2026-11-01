@@ -41,8 +41,11 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | [MEP routing: cable trays and conduits](docs/mep-routing.md) | 5 | Tray and conduit runs along a polyline with elbows at bends and joins to existing open ends, connecting two runs, lengths per type/size/level/workset and open-end lists |
 | [Transforms and groups](docs/transforms-and-groups.md) | 11 | Mirror across a line drawn in a view, linear and radial arrays as copies or Revit arrays, list/create/ungroup/place groups; move, rotate and copy act on whole groups |
 | [View creation](docs/view-creation.md) | 5 | Floor, ceiling, structural and area plans per level from one spec (template, scope box, view range, sheet placement, company names), sections from two plan points, callouts, 3D views with a section box around elements or a room, drafting views, legends by duplication; crop region / section box of existing views |
+| [View filters](docs/view-filters.md) | 13 | Create rule filters with any nesting of AND and OR, and selection filters; edit and delete them; add them to views and view templates with optional graphics and order (a template that controls filters takes the change, and the preview lists the views it affects); copy them between views, templates and open projects, reporting what the target does not have |
+| [Filled regions](docs/filled-regions.md) | 8 | Draw filled regions from coordinates with holes, rectangles, host or linked room boundaries, detail lines or rules (a region per room or element, type from a parameter value), read them, change type and parameters, reshape, and create and edit types |
 | [Schedules](docs/schedules.md) | 8 | Read schedule definitions and displayed rows, list schedulable fields, create and edit schedules from a spec (preview first), place them on sheets next to a viewport, export CSV/TXT/XLSX |
 | [Model graph (routing layer)](docs/model-graph.md) | 4 | Per-model SQLite graph of element ids and relationships: build, freshness status, structured queries (neighbors/find/path/subtree), summary |
+| [Elements of a view](docs/view-element-reads.md) | 3 | `view` on the count, info and find reads: what a view or sheet shows, per viewport, model or annotation, with location, bounding box, host, owner view and tags |
 | [Geometry queries](docs/geometry-queries.md) | 6 | Element geometry in mm, elements in a box or within a radius, nearest wall/ceiling/floor/roof, line of sight, clearance around a device — host and links |
 | [BCF clashes and clash fixes](docs/bcf-clashes.md) | 4 | Read BCF files, match topics to host and linked elements by IFC GlobalId, re-check each clash, propose clearing moves and apply them with verification |
 | [Model state and health audit](docs/model-state.md) | 6 | Phases, design options and worksets in queries and filters, set element and view phases, model health audit published as a page |
@@ -103,6 +106,8 @@ Ctrl+1…4 switch pages. Window bounds, appearance and the detail level are kept
 - Pending requests are bound to the captured document, change stamp, and selection context.
 - Destructive operations remain explicitly approval-gated.
 - A [plan](docs/plans.md) replaces per-call approvals with one approval for an envelope of tools, elements and limits; calls inside it run in a transaction group that is rolled back when Revit's changes leave the envelope, and plans never cover deletes.
+- `revit_select_instance` pins only the session that calls it, so agents in different Revit windows on one account cannot redirect each other; the plugin's *Make This Project Active* is the default for sessions that have not chosen ([details](docs/worker-document.md)).
+- A delete waits for you: its approval lasts 24 hours and survives other model changes, because its targets are read again when it runs ([details](docs/execution-safety.md)).
 - A [job](docs/jobs.md) runs its steps through the same dispatcher as any client, one step per dispatch, under its plan; steps outside it wait in the Pending tab, and Emergency stop (formerly Panic Stop) cancels every job.
 - Background file, Excel, report, standards, and configuration work uses a separate serialized lane.
 
@@ -126,6 +131,7 @@ Important repository references:
 - [`docs/execution-safety.md`](docs/execution-safety.md) — execution guarantees
 - [`docs/extensible-storage.md`](docs/extensible-storage.md) — reading add-in data stored on elements
 - [`docs/family-types.md`](docs/family-types.md) — duplicating, renaming, and re-parameterising family types
+- [`docs/filled-regions.md`](docs/filled-regions.md) — filled regions: coordinates in any view, room and linked room boundaries, rules with a type map, reshaping by replacement, and type management
 - [`docs/geometry-queries.md`](docs/geometry-queries.md) — element geometry, elements in a box or radius, nearest surface, line of sight and clearance, in host mm
 - [`docs/families-and-parameters.md`](docs/families-and-parameters.md) — listing, loading, reloading and purging families; creating and binding project and shared parameters
 - [`docs/mcp-performance.md`](docs/mcp-performance.md) — lower-latency queries and reduced-credit tool profiles
@@ -143,10 +149,13 @@ Important repository references:
 - [`docs/skills.md`](docs/skills.md) — company skills, project overrides, and the skill runner
 - [`docs/shared-memory.md`](docs/shared-memory.md) — shared company memory: notes every colleague's agent recalls, kept in sync without rebuilds, learned from users' workflows, reviewed on a page and consolidated weekly
 - [`docs/standards-lookup.md`](docs/standards-lookup.md) — offline standards indexing and retrieval
+- [`docs/annotation-and-sheets.md`](docs/annotation-and-sheets.md) — pixel-to-model mapping of exported images, editing lines in place, rectangles, text formatting on edit, annotation overlap check, title block values, block sizes from a DWG
 - [`docs/tool-consolidation.md`](docs/tool-consolidation.md) — discriminator-based tools and the old → new name mapping
 - [`docs/usage-reporting.md`](docs/usage-reporting.md) — per-user usage collection (opt-in, after telling staff), monthly HTML/Excel reports, credit cost join and estimated time saved
 - [`docs/view-alignment.md`](docs/view-alignment.md) — lining up and distributing tags, text, and elements within a view
+- [`docs/view-element-reads.md`](docs/view-element-reads.md) — the `view` argument on element reads: what a view or sheet shows, what is left out and why, and what is still to be confirmed in Revit
 - [`docs/view-creation.md`](docs/view-creation.md) — creating plans per level, sections, callouts, 3D views, drafting views and legends from specs, and setting view extents
+- [`docs/view-filters.md`](docs/view-filters.md) — view filters: rules and selection filters, applying them to views and templates, copying between projects
 - [`docs/integration/revit-test-plan-102-109.md`](docs/integration/revit-test-plan-102-109.md) — Revit test plan for issues #102–#109, with per-issue integration notes and deviations
 - [`docs/integration/ai-test-runbook-102-109.md`](docs/integration/ai-test-runbook-102-109.md) — step-by-step runbook for an AI agent to test #102–#109 in Revit on another machine, with expected results and a results template
 

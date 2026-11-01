@@ -38,7 +38,8 @@ public sealed class SetTextNotesTool : IRevitMcpTool
         "widthMm (paper width) or autoWidth=true (estimated widening so the longest line fits). Edits " +
         "are spliced into the note's formatted text, so bold/italic/underline runs and list formatting " +
         "outside the edited range are kept; inserted text takes the formatting of the text it replaces " +
-        "or follows. If Revit refuses the in-place edit the note's plain text is replaced instead " +
+        "or follows; formatting=plain clears bold, italic and underline on the edited range and " +
+        "formatting=matchFirstRun gives it the note's first character's formatting. If Revit refuses the in-place edit the note's plain text is replaced instead " +
         "(formattingPreserved=false). Notes owned by another user or out of date with central are " +
         "skipped. One transaction; requires approval; reversible via Revit Undo. Run " +
         "revit_preview_set_text_notes first.";
@@ -93,6 +94,10 @@ internal static class SetTextNotesExecutor
             out var optionsError);
         if (options == null)
             return Fail(request, optionsError!);
+        var formatting = TextNoteEditPlanner.ParseFormatting(ToolArguments.GetString(args, "formatting"), out var formattingError);
+        if (formatting == null)
+            return Fail(request, formattingError!);
+        options.Formatting = formatting;
 
         var warnings = new List<string>();
         var skipped = new List<object>();
@@ -182,7 +187,7 @@ internal static class SetTextNotesExecutor
                 {
                     bool? formattingPreserved = null;
                     if (work.Plan.TextChanged)
-                        formattingPreserved = ApplyText(work.Note, work.Plan);
+                        formattingPreserved = ApplyText(work.Note, work.Plan, options.Formatting);
                     if (work.WidthChanged)
                         work.Note.Width = work.NewWidthFt;
                     done.Add((work, formattingPreserved));
@@ -228,13 +233,14 @@ internal static class SetTextNotesExecutor
     /// the edited ranges). Falls back to replacing the plain text when Revit refuses or the result
     /// does not read back as planned. Returns whether formatting was preserved.
     /// </summary>
-    private static bool ApplyText(TextNote note, TextNoteEditPlan plan)
+    private static bool ApplyText(TextNote note, TextNoteEditPlan plan, string formatting)
     {
         try
         {
             var formatted = note.GetFormattedText();
             if (formatted != null && string.Equals(formatted.GetPlainText(), plan.OldText, StringComparison.Ordinal))
             {
+                var look = RunLook.For(formatted, formatting);
                 // Right to left so earlier indexes stay valid.
                 for (var i = plan.Splices.Count - 1; i >= 0; i--)
                 {
@@ -244,6 +250,9 @@ internal static class SetTextNotesExecutor
 
                 if (string.Equals(formatted.GetPlainText(), plan.NewText, StringComparison.Ordinal))
                 {
+                    if (look != null)
+                        foreach (var (start, length) in TextNoteEditPlanner.EditedRanges(plan))
+                            look.ApplyTo(formatted, new TextRange(start, length));
                     note.SetFormattedText(formatted);
                     return true;
                 }
@@ -259,6 +268,35 @@ internal static class SetTextNotesExecutor
 
         note.Text = plan.NewText;
         return false;
+    }
+
+    /// <summary>The bold, italic and underline an edited range gets; null when it keeps what Revit gave it.</summary>
+    private sealed class RunLook
+    {
+        private bool _bold;
+        private bool _italic;
+        private bool _underline;
+
+        public static RunLook? For(FormattedText formatted, string formatting)
+        {
+            if (formatting == TextNoteEditPlanner.FormattingPlain) return new RunLook();
+            if (formatting != TextNoteEditPlanner.FormattingMatchFirstRun || formatted.GetPlainText().Length == 0) return null;
+
+            var first = new TextRange(0, 1);
+            return new RunLook
+            {
+                _bold = formatted.GetBoldStatus(first) == FormatStatus.All,
+                _italic = formatted.GetItalicStatus(first) == FormatStatus.All,
+                _underline = formatted.GetUnderlineStatus(first) == FormatStatus.All
+            };
+        }
+
+        public void ApplyTo(FormattedText formatted, TextRange range)
+        {
+            formatted.SetBoldStatus(range, _bold);
+            formatted.SetItalicStatus(range, _italic);
+            formatted.SetUnderlineStatus(range, _underline);
+        }
     }
 
     private static double PlanWidth(Document doc, TextNote note, string newText, TextNoteEditOptions options, List<string> warnings)
@@ -451,6 +489,7 @@ internal static class SetTextNotesExecutor
         {
             scope,
             mode = options.Mode.ToString(),
+            formatting = options.Formatting,
             changedCount = changed.Count,
             unchangedCount,
             skippedCount = skipped.Count,

@@ -22,7 +22,8 @@ public class GetCadShapesTool : IRevitMcpTool
     public string Name => "revit_get_cad_shapes";
 
     public string Description =>
-        "Reconstructs fixtures from loose CAD line work — symbols drawn as bare lines, rectangles or " +
+        "Finds the size, outline and bounding box of equipment drawn as loose lines in a DWG (for blocks: " +
+        "revit_get_cad_placement_points includeExtents=true). Reconstructs fixtures from loose CAD line work — symbols drawn as bare lines, rectangles or " +
         "circles that were never made into blocks, so revit_get_cad_placement_points finds nothing on " +
         "them. Touching segments are grouped into one fixture, and the smallest box around each group " +
         "gives its centre and the angle it was drawn at. Call WITHOUT layers first for the layer " +
@@ -31,7 +32,8 @@ public class GetCadShapesTool : IRevitMcpTool
         "family types. Note the Revit API cannot read DWG text, so the drawing's type marks (V11.1 " +
         "and the like) are not available; shapes are identified by size, not by label. Optional: " +
         "importInstanceId, joinToleranceMm (default 2), signatureBucketMm (default 10), " +
-        "maxShapeSizeMm (default 3000), limit (default 200). Read-only.";
+        "maxShapeSizeMm (default 3000), limit (default 200). Coordinates are in host model mm with the " +
+        "link transform applied, so there is no need to open the DWG to compare. Read-only.";
 
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Elements;

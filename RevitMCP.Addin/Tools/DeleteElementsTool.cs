@@ -12,7 +12,7 @@ namespace RevitMCP.Addin.Tools;
 /// Always requires manual approval (DestructiveRequiresManualApproval).
 /// Direct Edit mode does NOT bypass this approval gate.
 /// </summary>
-public class DeleteElementsTool : IRevitMcpTool
+public class DeleteElementsTool : IRevitMcpTool, IApprovalRevalidatesTargets
 {
     public string Name => "revit_delete_elements";
     public string Description =>

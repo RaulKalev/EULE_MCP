@@ -266,6 +266,8 @@ public static class GraphRouting
         /// <summary>Parameter filters narrow by live values, which the graph does not hold: never gated.</summary>
         public bool HasFilters { get; set; }
         public bool SummaryOnly { get; set; }
+        /// <summary>#136: a read of one view is already narrowed, and the graph does not know what a view shows: never gated.</summary>
+        public bool HasView { get; set; }
         /// <summary>The caller's graphFirst argument; false is the bypass.</summary>
         public bool GraphFirst { get; set; } = true;
     }
@@ -275,7 +277,7 @@ public static class GraphRouting
     /// selection, no parameter filters, not a summary. Whether it is big enough is <see cref="GateCount"/>'s call.
     /// </summary>
     public static bool IsGateCandidate(BroadRead read) =>
-        GatedTools.Contains(read.Tool) && read.GraphFirst && !read.HasElementIds && !read.UseSelection && !read.HasFilters
+        GatedTools.Contains(read.Tool) && read.GraphFirst && !read.HasView && !read.HasElementIds && !read.UseSelection && !read.HasFilters
         && !read.SummaryOnly && !string.IsNullOrWhiteSpace(read.Category);
 
     /// <summary>

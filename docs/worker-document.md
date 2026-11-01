@@ -44,6 +44,14 @@ central path is ambiguous and refused.
 **The limit**: Revit's API thread is shared, so heavy work in the agent's document still competes with the user's own
 commands for UI time. A second Revit instance (`revit_list_instances`, `revit_select_instance`) removes that too.
 
+**Several sessions, several Revit windows** (#137): `revit_select_instance` pins only the session that calls it, in
+that bridge's memory, so two agents on one Windows account can each work in their own window. The plugin's
+'Make This Project Active' writes the shared default in `%LOCALAPPDATA%\RevitMCP\Instances\active-instance.json`, which
+a session follows until it pins a window of its own; a session's pin wins over a later click, and `processId=0` clears
+it. `revit_list_instances` shows both (`sessionProcessId`, `sharedProcessId`, and per instance `isSessionPin`,
+`isSharedDefault`, `isCurrentTarget`). A pinned window that is closed or whose connector stopped fails the call; it is
+never sent to another window. The pin ends with the session, so a new session starts on the shared default.
+
 ## `revit_open_document`
 
 - `path` — the central, or a plain `.rvt`. It must pass the FileAccessPolicy

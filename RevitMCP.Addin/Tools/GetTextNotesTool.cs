@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Annotation;
 using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Core.Models;
@@ -10,7 +11,7 @@ namespace RevitMCP.Addin.Tools;
 public class GetTextNotesTool : IRevitMcpTool
 {
     public string Name => "revit_get_text_notes";
-    public string Description => "Returns text note elements (user-placed text boxes via the Text command) from the active document. By default returns text notes in the active view. Pass viewId=0 to get text notes from all views, or a specific view element ID to scope to that view. Supports text content filtering and selection-based reading.";
+    public string Description => "Returns text note elements (user-placed text boxes via the Text command) from the active document. By default returns text notes in the active view. Pass viewId=0 to get text notes from all views, or a specific view element ID to scope to that view. Supports text content filtering and selection-based reading. Each note has its boundingBox (minX, minY, maxX, maxY in view or sheet mm) and lineCount (estimated rows including wrapping; paragraphCount is the hard line breaks), to plan space before writing.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Elements;
 
@@ -103,6 +104,9 @@ public class GetTextNotesTool : IRevitMcpTool
                     fontSizeMm = Math.Round(sizeParam.AsDouble() * 304.8, 3);
             }
 
+            var box = BoxOf(note, ownerView);
+            var widthFactor = typeElem?.get_Parameter(BuiltInParameter.TEXT_WIDTH_SCALE)?.AsDouble() ?? 1.0;
+
             results.Add(new
             {
                 elementId = note.Id.Value,
@@ -113,7 +117,17 @@ public class GetTextNotesTool : IRevitMcpTool
                 originY_mm = Math.Round(origin.Y * 304.8, 1),
                 originZ_mm = Math.Round(origin.Z * 304.8, 1),
                 width_mm = Math.Round(note.Width * 304.8, 1),
-                fontSizeMm
+                fontSizeMm,
+                boundingBox = box == null ? null : new
+                {
+                    minX = Math.Round(box.Value.MinX, 1),
+                    minY = Math.Round(box.Value.MinY, 1),
+                    maxX = Math.Round(box.Value.MaxX, 1),
+                    maxY = Math.Round(box.Value.MaxY, 1)
+                },
+                height_mm = Math.Round(note.Height * 304.8, 1),
+                lineCount = TextNoteEditPlanner.EstimateLineCount(note.Text, note.Width * 304.8, fontSizeMm, widthFactor),
+                paragraphCount = (note.Text ?? string.Empty).TrimEnd('\r', '\n').Split('\r').Length
             });
         }
 
@@ -135,6 +149,14 @@ public class GetTextNotesTool : IRevitMcpTool
             Warnings = warnings,
             DurationMs = sw.ElapsedMilliseconds
         });
+    }
+
+    /// <summary>The note's box in its view; null rather than a failed read when the view cannot report its frame.</summary>
+    private static ViewBox? BoxOf(TextNote note, View? ownerView)
+    {
+        if (ownerView == null) return null;
+        try { return new ViewPlaneFrame(ownerView).TextBoxOf(note, ownerView); }
+        catch (Autodesk.Revit.Exceptions.ApplicationException) { return null; }
     }
 
     private static McpToolResult Fail(McpToolRequest r, string msg) =>

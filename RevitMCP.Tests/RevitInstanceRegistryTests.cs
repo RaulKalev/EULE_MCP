@@ -223,6 +223,36 @@ public class RevitInstanceRegistryTests : IDisposable
     }
 
     [Fact]
+    public void ResolveRoute_SessionPin_WinsOverTheSharedDefault()
+    {
+        // Two sessions on one account: the file names one window, each session's own pin decides its route.
+        var live = new[] { Instance(1, "2026"), Instance(2, "2026") };
+
+        Assert.Equal(1, RevitInstanceRegistry.ResolveRoute(live, sessionProcessId: 1, sharedProcessId: 2).Target!.ProcessId);
+        Assert.Equal(2, RevitInstanceRegistry.ResolveRoute(live, sessionProcessId: 2, sharedProcessId: 1).Target!.ProcessId);
+    }
+
+    [Fact]
+    public void ResolveRoute_NoSessionPin_FollowsTheSharedDefault()
+    {
+        var live = new[] { Instance(1, "2026"), Instance(2, "2026") };
+
+        Assert.Equal(2, RevitInstanceRegistry.ResolveRoute(live, sessionProcessId: null, sharedProcessId: 2).Target!.ProcessId);
+        Assert.NotNull(RevitInstanceRegistry.ResolveRoute(live, sessionProcessId: null, sharedProcessId: null).Error);
+    }
+
+    [Fact]
+    public void ResolveRoute_ClosedSessionPin_FailsAndNeverFallsBack()
+    {
+        // Neither the shared default nor the only other live window may receive the call.
+        var route = RevitInstanceRegistry.ResolveRoute([Instance(2, "2026")], sessionProcessId: 1, sharedProcessId: 2);
+
+        Assert.Null(route.Target);
+        Assert.False(route.UseLegacyPipe);
+        Assert.Contains("pid 1", route.Error);
+    }
+
+    [Fact]
     public void ResolveRoute_UnpinnedNone_UsesLegacyPipe()
     {
         var route = RevitInstanceRegistry.ResolveRoute([], activeProcessId: null);

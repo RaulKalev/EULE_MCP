@@ -117,7 +117,8 @@ internal static class GeometryConvert
         try
         {
             var value = category.Id.Value;
-            return value < 0 && Enum.IsDefined(typeof(BuiltInCategory), (int)value) ? ((BuiltInCategory)(int)value).ToString() : string.Empty;
+            // The enum's underlying type is Int64: IsDefined throws for any other type.
+            return value < 0 && Enum.IsDefined(typeof(BuiltInCategory), value) ? ((BuiltInCategory)value).ToString() : string.Empty;
         }
         catch
         {
