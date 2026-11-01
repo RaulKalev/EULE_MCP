@@ -57,6 +57,8 @@ Text outside the edited range keeps its formatting in all three.
 
 `revit_check_annotation_overlaps` takes `viewId` or `sheetNumber` and reports each text note overlapping another text
 note, a tag or a detail line, or crossing a viewport's edge on a sheet. A note wholly inside a viewport is not reported.
+A sheet also checks each view placed on it, on its own, since a legend's notes belong to the legend; `checkedViews` lists
+them and each finding names its view. A note's box is its text, not its leaders.
 Overlaps are in view mm and paper mm; `minOverlapMm` (paper, default 0.5) ignores touching. Boxes come from Revit's
 bounding boxes in that view.
 
@@ -87,8 +89,11 @@ goes to the title block instance on that sheet; `results[].titleBlockParameters`
 ## Sizes from a DWG: `revit_get_cad_placement_points`, `revit_get_cad_shapes`
 
 `includeExtents=true` on `revit_get_cad_placement_points` adds `extents` to each block: `minX, minY, maxX, maxY` (the
-axis-aligned box in host mm), `widthMm`, `depthMm` (along the block's own axes, so a rotated unit keeps its size) and
-`rotationDegrees`. The box covers the block's curves and points, not its text.
+axis-aligned box in host mm), `centerX`, `centerY`, `widthMm`, `depthMm` (along the block's own axes, so a rotated unit
+keeps its size) and `rotationDegrees`. The box covers the block's curves and points, not its text.
+
+A DWG exported from Revit can insert every block at one point, so `x`, `y` are then that point for all of them and the
+centre says where each block is. Blocks at one point with different extents are not merged.
 
 `revit_get_cad_shapes` answers the same for loose line work. Both return host model mm with the link transform applied:
 there is no need to open the DWG. `revit_tools_search` finds them for bbox, outline, kontuur, piirjoon, mõõdud, suurus and dwg.

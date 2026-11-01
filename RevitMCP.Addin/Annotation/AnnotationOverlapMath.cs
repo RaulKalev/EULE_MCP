@@ -94,6 +94,29 @@ public static class AnnotationOverlapMath
             .ToList();
     }
 
+    /// <summary>
+    /// The box of a note's text from its anchor. Revit's bounding box of a note includes its leaders, which would report
+    /// everything a leader passes over. <paramref name="horizontal"/> is Left, Center or Right; <paramref name="vertical"/>
+    /// Top, Middle or Bottom.
+    /// </summary>
+    public static (double MinX, double MinY, double MaxX, double MaxY) TextBox(
+        double anchorX, double anchorY, double widthMm, double heightMm, string horizontal, string vertical)
+    {
+        var minX = horizontal switch
+        {
+            "Center" => anchorX - widthMm / 2,
+            "Right" => anchorX - widthMm,
+            _ => anchorX
+        };
+        var maxY = vertical switch
+        {
+            "Middle" => anchorY + heightMm / 2,
+            "Bottom" => anchorY + heightMm,
+            _ => anchorY
+        };
+        return (minX, maxY - heightMm, minX + widthMm, maxY);
+    }
+
     /// <summary>Length of a segment inside the note's box shrunk by the tolerance (Liang-Barsky clipping).</summary>
     public static double LengthInside(OverlapItem box, OverlapSegment line, double toleranceMm = 0)
     {

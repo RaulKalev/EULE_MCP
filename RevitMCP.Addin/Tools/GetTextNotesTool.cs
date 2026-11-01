@@ -154,7 +154,7 @@ public class GetTextNotesTool : IRevitMcpTool
     private static ViewBox? BoxOf(TextNote note, View? ownerView)
     {
         if (ownerView == null) return null;
-        try { return new ViewPlaneFrame(ownerView).BoxOf(note, ownerView); }
+        try { return new ViewPlaneFrame(ownerView).TextBoxOf(note, ownerView); }
         catch (Autodesk.Revit.Exceptions.ApplicationException) { return null; }
     }
 

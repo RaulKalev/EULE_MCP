@@ -2867,7 +2867,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_check_annotation_overlaps", ReadOnly = true),
-     Description("For a view or sheet, reports text notes whose bounding box overlaps another text note, a tag or a detail line, or crosses a viewport's edge on a sheet, with both ids and the overlap in mm (overlapXmm, overlapYmm; on a line its length inside the note), also in paper mm for a scaled view. Finds what otherwise takes exporting an image and looking at it. Title block labels are not checked: the Revit API does not expose their areas. Read-only.")]
+     Description("For a view or sheet, reports text notes whose bounding box overlaps another text note, a tag or a detail line, or crosses a viewport's edge on a sheet, with both ids and the overlap in mm (overlapXmm, overlapYmm; on a line its length inside the note), also in paper mm for a scaled view. The box is the text's, not its leaders'. A sheet also checks each view placed on it, on its own. Finds what otherwise takes exporting an image and looking at it. Title block labels are not checked: the Revit API does not expose their areas. Read-only.")]
     public async Task<string> CheckAnnotationOverlaps(
         [Description("View or sheet element ID. Defaults to the active view.")] long viewId = 0,
         [Description("Sheet number, instead of viewId.")] string? sheetNumber = null,

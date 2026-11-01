@@ -53,6 +53,22 @@ internal sealed class ViewPlaneFrame
     public (double X, double Y) FromModel(XYZ point) =>
         (point.DotProduct(_right) * FeetToMm, point.DotProduct(_up) * FeetToMm);
 
+    /// <summary>
+    /// The note's text box in this frame. Without leaders that is Revit's box; with leaders it comes from the anchor and
+    /// the note's size, unless the note is rotated in the view, where Revit's box is the only one available.
+    /// </summary>
+    public ViewBox? TextBoxOf(TextNote note, View view)
+    {
+        if (note.LeaderCount == 0 || Math.Abs(note.BaseDirection.DotProduct(_right)) < 0.999) return BoxOf(note, view);
+
+        var scale = view is ViewSheet || view.Scale <= 0 ? 1 : view.Scale;
+        var (x, y) = FromModel(note.Coord);
+        var box = AnnotationOverlapMath.TextBox(
+            x, y, note.Width * FeetToMm * scale, note.Height * FeetToMm * scale,
+            note.HorizontalAlignment.ToString(), note.VerticalAlignment.ToString());
+        return new ViewBox(box.MinX, box.MinY, box.MaxX, box.MaxY);
+    }
+
     /// <summary>The element's box in this frame; null when Revit gives the element no box in this view.</summary>
     public ViewBox? BoxOf(Element element, View view)
     {

@@ -17,10 +17,10 @@ public class CheckAnnotationOverlapsTool : IRevitMcpTool
 
     public string Name => "revit_check_annotation_overlaps";
     public string Description =>
-        "For a view or sheet (viewId, or sheetNumber; default the active view), reports text notes whose bounding box " +
-        "overlaps another text note, a tag or a detail line, or crosses a viewport's edge on a sheet, with both ids and the " +
+        "For a view or sheet (viewId, or sheetNumber; default the active view), reports text notes whose box (the text, not " +
+        "its leaders) overlaps another text note, a tag or a detail line, or crosses a viewport's edge on a sheet, with both ids and the " +
         "overlap in mm (overlapXmm, overlapYmm; on a line its length inside the note), also in paper mm for a scaled view. " +
-        "minOverlapMm (paper mm, default 0.5) ignores touching. Title block labels are not checked: the Revit API does not " +
+        "minOverlapMm (paper mm, default 0.5) ignores touching. A sheet also checks each view placed on it, on its own. Title block labels are not checked: the Revit API does not " +
         "expose their areas, use revit_get_titleblock_values and revit_export_view_image for those. Read-only.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Elements;
@@ -49,12 +49,84 @@ public class CheckAnnotationOverlapsTool : IRevitMcpTool
             if (view == null) return Task.FromResult(Fail(request, viewError!));
         }
 
-        var isSheet = view is ViewSheet;
-        var scale = isSheet || view.Scale <= 0 ? 1 : view.Scale;
         var minOverlapPaperMm = ToolArguments.GetDouble(args, "minOverlapMm", 0.5);
         var limit = ToolArguments.GetInt(args, "limit", DefaultLimit);
         if (limit <= 0) limit = DefaultLimit;
 
+        // What a sheet shows lives in its views: a legend's notes are the legend's elements, not the sheet's.
+        var isSheet = view is ViewSheet;
+        var scans = new List<Scan> { ScanView(doc, view, isSheet, minOverlapPaperMm, cancellationToken) };
+        if (isSheet)
+            foreach (var viewportId in ((ViewSheet)view).GetAllViewports())
+                if (doc.GetElement(viewportId) is Viewport viewport && doc.GetElement(viewport.ViewId) is View placed)
+                    scans.Add(ScanView(doc, placed, false, minOverlapPaperMm, cancellationToken));
+
+        var findings = scans
+            .SelectMany(scan => scan.Findings.Select(finding => (Scan: scan, Finding: finding)))
+            .OrderByDescending(f => Math.Max(f.Finding.OverlapXmm, f.Finding.OverlapYmm) / f.Scan.Scale)
+            .ToList();
+        var warnings = new List<string>();
+        if (findings.Count > limit)
+            warnings.Add($"Returned the {limit} largest of {findings.Count} overlaps. Raise limit to see the rest.");
+
+        sw.Stop();
+        return Task.FromResult(new McpToolResult
+        {
+            RequestId = request.RequestId,
+            Success = true,
+            Message = $"{findings.Count} overlap(s) in '{view.Name}': checked {scans.Sum(s => s.NoteCount)} text note(s), {scans.Sum(s => s.TagCount)} tag(s), {scans.Sum(s => s.LineCount)} detail line(s) and {scans.Sum(s => s.ViewportCount)} viewport(s) in {scans.Count} view(s).",
+            Data = new
+            {
+                viewId = view.Id.Value,
+                viewName = view.Name,
+                isSheet,
+                checkedViews = scans.Select(s => new
+                {
+                    viewId = s.View.Id.Value,
+                    viewName = s.View.Name,
+                    viewScale = s.Scale,
+                    coordinateFrame = s.View is ViewSheet ? "sheet" : s.Frame,
+                    textNotes = s.NoteCount
+                }).ToList(),
+                overlapCount = findings.Count,
+                overlaps = findings.Take(limit).Select(f => new
+                {
+                    viewId = f.Scan.View.Id.Value,
+                    viewName = f.Scan.View.Name,
+                    textNoteId = f.Finding.TextNoteId,
+                    text = f.Finding.Text,
+                    otherId = f.Finding.OtherId,
+                    otherKind = f.Finding.OtherKind,
+                    otherLabel = f.Finding.OtherLabel.Length == 0 ? null : f.Finding.OtherLabel,
+                    overlapXmm = Math.Round(f.Finding.OverlapXmm, 1),
+                    overlapYmm = Math.Round(f.Finding.OverlapYmm, 1),
+                    overlapPaperXmm = Math.Round(f.Finding.OverlapXmm / f.Scan.Scale, 2),
+                    overlapPaperYmm = Math.Round(f.Finding.OverlapYmm / f.Scan.Scale, 2)
+                }).ToList(),
+                notChecked = isSheet
+                    ? "Title block label areas: the Revit API does not expose them. Text in one viewport against another viewport's content."
+                    : null
+            },
+            Warnings = warnings,
+            DurationMs = sw.ElapsedMilliseconds
+        });
+    }
+
+    private sealed class Scan
+    {
+        public View View = null!;
+        public int Scale;
+        public string Frame = string.Empty;
+        public int NoteCount;
+        public int TagCount;
+        public int LineCount;
+        public int ViewportCount;
+        public List<OverlapFinding> Findings = new();
+    }
+
+    private static Scan ScanView(Document doc, View view, bool isSheet, double minOverlapPaperMm, CancellationToken cancellationToken)
+    {
+        var scale = isSheet || view.Scale <= 0 ? 1 : view.Scale;
         var frame = new ViewPlaneFrame(view);
         var notes = new List<OverlapItem>();
         var tags = new List<OverlapItem>();
@@ -71,11 +143,11 @@ public class CheckAnnotationOverlapsTool : IRevitMcpTool
             switch (element)
             {
                 case TextNote note:
-                    AddBox(notes, element, "textNote", note.Text?.Trim() ?? string.Empty, frame, view);
+                    AddBox(notes, note, "textNote", note.Text?.Trim() ?? string.Empty, frame.TextBoxOf(note, view));
                     break;
                 case IndependentTag:
                 case SpatialElementTag:
-                    AddBox(tags, element, "tag", string.Empty, frame, view);
+                    AddBox(tags, element, "tag", string.Empty, frame.BoxOf(element, view));
                     break;
                 case CurveElement curve when curve.ViewSpecific:
                     AddSegments(lines, curve, frame);
@@ -96,49 +168,22 @@ public class CheckAnnotationOverlapsTool : IRevitMcpTool
             }
         }
 
-        var findings = AnnotationOverlapMath.Find(notes, tags, lines, viewports, minOverlapPaperMm * scale);
-        var warnings = new List<string>();
-        if (findings.Count > limit)
-            warnings.Add($"Returned the {limit} largest of {findings.Count} overlaps. Raise limit to see the rest.");
-
-        sw.Stop();
-        return Task.FromResult(new McpToolResult
+        return new Scan
         {
-            RequestId = request.RequestId,
-            Success = true,
-            Message = $"{findings.Count} overlap(s) in '{view.Name}': checked {notes.Count} text note(s) against {notes.Count - 1 + tags.Count} other text and tag box(es), {lines.Select(l => l.Id).Distinct().Count()} detail line(s) and {viewports.Count} viewport(s).",
-            Data = new
-            {
-                viewId = view.Id.Value,
-                viewName = view.Name,
-                isSheet,
-                viewScale = scale,
-                coordinateFrame = isSheet ? "sheet" : frame.Name,
-                overlapCount = findings.Count,
-                overlaps = findings.Take(limit).Select(f => new
-                {
-                    textNoteId = f.TextNoteId,
-                    text = f.Text,
-                    otherId = f.OtherId,
-                    otherKind = f.OtherKind,
-                    otherLabel = f.OtherLabel.Length == 0 ? null : f.OtherLabel,
-                    overlapXmm = Math.Round(f.OverlapXmm, 1),
-                    overlapYmm = Math.Round(f.OverlapYmm, 1),
-                    overlapPaperXmm = Math.Round(f.OverlapXmm / scale, 2),
-                    overlapPaperYmm = Math.Round(f.OverlapYmm / scale, 2)
-                }).ToList(),
-                notChecked = isSheet
-                    ? "Title block label areas: the Revit API does not expose them."
-                    : null
-            },
-            Warnings = warnings,
-            DurationMs = sw.ElapsedMilliseconds
-        });
+            View = view,
+            Scale = scale,
+            Frame = frame.Name,
+            NoteCount = notes.Count,
+            TagCount = tags.Count,
+            LineCount = lines.Select(l => l.Id).Distinct().Count(),
+            ViewportCount = viewports.Count,
+            Findings = AnnotationOverlapMath.Find(notes, tags, lines, viewports, minOverlapPaperMm * scale)
+        };
     }
 
-    private static void AddBox(List<OverlapItem> items, Element element, string kind, string label, ViewPlaneFrame frame, View view)
+    private static void AddBox(List<OverlapItem> items, Element element, string kind, string label, ViewBox? found)
     {
-        if (frame.BoxOf(element, view) is not { } box) return;
+        if (found is not { } box) return;
         items.Add(new OverlapItem
         {
             Id = element.Id.Value,

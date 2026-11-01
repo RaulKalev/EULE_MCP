@@ -51,14 +51,15 @@ public static class ViewElementRules
         "Sketch", "SketchPlane", "SketchBase"
     };
 
-    // Reference planes and lines, weak dimensions, crop and section boxes, cameras, constraint graphics.
+    // Reference planes and lines, weak dimensions, crop and section boxes, cameras, constraint graphics, and
+    // electrical circuits, which a view's collector lists although they draw nothing.
     private static readonly HashSet<string> HelperCategories = new(StringComparer.Ordinal)
     {
         "OST_CLines", "OST_ReferenceLines", "OST_ReferencePoints", "OST_ReferencePoints_HiddenLines",
         "OST_ReferencePoints_Lines", "OST_ReferencePoints_Planes", "OST_ReferencePoints_Points",
         "OST_WeakDims", "OST_Constraints", "OST_DimLockControlLeader",
         "OST_SectionBox", "OST_CropBoundary", "OST_CropBoundarySpecial", "OST_AnnotationCrop", "OST_AnnotationCropSpecial",
-        "OST_Cameras", "OST_Camera_Lines", "OST_RenderRegions"
+        "OST_Cameras", "OST_Camera_Lines", "OST_RenderRegions", "OST_ElectricalCircuit"
     };
 
     // OST_IOS* are internal object styles, apart from these real elements.

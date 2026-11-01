@@ -38,6 +38,14 @@ public sealed class CadBlockExtents
     public double Width { get; set; }
     public double Depth { get; set; }
 
+    public double CenterX => (MinX + MaxX) / 2;
+    public double CenterY => (MinY + MaxY) / 2;
+
+    /// <summary>Whether two blocks cover the same box. Blocks of an exported DWG can all be inserted at one point.</summary>
+    public bool SamePlace(CadBlockExtents other, double toleranceMm) =>
+        Math.Abs(MinX - other.MinX) <= toleranceMm && Math.Abs(MinY - other.MinY) <= toleranceMm &&
+        Math.Abs(MaxX - other.MaxX) <= toleranceMm && Math.Abs(MaxY - other.MaxY) <= toleranceMm;
+
     /// <summary>
     /// From the line work's points in host mm. <paramref name="axisX"/> and <paramref name="axisY"/> are the block's X
     /// axis in plan; they need not be unit length. Null without points.
@@ -297,13 +305,17 @@ public static class CadPointMath
 
             foreach (var candidate in bucket)
             {
-                if (DistanceSquared(candidate, point) <= toleranceSquared)
+                if (DistanceSquared(candidate, point) <= toleranceSquared && SameBlockPlace(candidate, point, toleranceMm))
                     return candidate;
             }
         }
 
         return null;
     }
+
+    /// <summary>Two measured blocks at one insertion point are one mark only if they also cover the same box.</summary>
+    private static bool SameBlockPlace(CadPoint a, CadPoint b, double toleranceMm) =>
+        a.Extents == null || b.Extents == null || a.Extents.SamePlace(b.Extents, toleranceMm);
 
     private static double DistanceSquared(CadPoint a, CadPoint b)
     {

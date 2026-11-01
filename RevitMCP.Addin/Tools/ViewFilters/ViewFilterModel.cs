@@ -148,8 +148,9 @@ internal static class ViewFilterModel
             .ToList();
         return new
         {
-            useCount = direct.Count,
-            views = direct.Where(v => !v.IsTemplate).Select(ViewRef).ToList(),
+            // A view under a controlling template reports the template's filters as its own: it is listed once, below.
+            useCount = direct.Count(v => v.IsTemplate || inherited.All(i => i.Id != v.Id)),
+            views = direct.Where(v => !v.IsTemplate && inherited.All(i => i.Id != v.Id)).Select(ViewRef).ToList(),
             templates = templates.Select(t => new { id = t.Id.Value, name = t.Name, controlsFilters = TemplateControlsFilters(t) }).ToList(),
             viewsThroughTemplates = inherited.Select(ViewRef).ToList()
         };

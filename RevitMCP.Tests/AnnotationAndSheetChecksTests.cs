@@ -359,6 +359,31 @@ public class AnnotationAndSheetChecksTests
         Assert.Null(CadBlockExtents.FromPoints(Array.Empty<(double, double)>(), 0, 0, 1, 0));
 
     [Fact]
+    public void Merge_BlocksAtOnePointWithDifferentExtents_StaySeparate()
+    {
+        // Found live: an exported DWG inserts all its columns at (0, 0, 0), and merging left 1 of 4.
+        CadPoint Column(double x) => new()
+        {
+            Layer = "L",
+            Source = CadPointMath.SourceBlock,
+            Extents = new CadBlockExtents { MinX = x, MinY = 0, MaxX = x + 560, MaxY = 560 }
+        };
+        var merged = CadPointMath.Merge(new[] { Column(0), Column(5000), Column(10000), Column(0) }, 1);
+
+        Assert.Equal(3, merged.Count);
+        Assert.Equal(2, merged[0].MergedCount);
+        Assert.Equal(5280, merged[1].Extents!.CenterX);
+    }
+
+    [Fact]
+    public void TextBox_LeavesOutTheLeaderAndFollowsTheAnchor()
+    {
+        Assert.Equal((10d, 80d, 110d, 100d), AnnotationOverlapMath.TextBox(10, 100, 100, 20, "Left", "Top"));
+        Assert.Equal((-40d, 90d, 60d, 110d), AnnotationOverlapMath.TextBox(10, 100, 100, 20, "Center", "Middle"));
+        Assert.Equal((-90d, 100d, 10d, 120d), AnnotationOverlapMath.TextBox(10, 100, 100, 20, "Right", "Bottom"));
+    }
+
+    [Fact]
     public void Merge_KeepsTheBlocksExtents()
     {
         var extents = new CadBlockExtents();

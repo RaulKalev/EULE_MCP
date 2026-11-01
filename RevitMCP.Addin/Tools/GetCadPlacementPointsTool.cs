@@ -26,7 +26,9 @@ public class GetCadPlacementPointsTool : IRevitMcpTool
         "which layers hold the locations and whether a mounting height is needed. Call it again with " +
         "layers to get the actual points, in millimetres, with the rotation carried over from block " +
         "references. includeExtents=true also returns each block's size: its bounding box (minX, minY, " +
-        "maxX, maxY), widthMm, depthMm and rotation, the outline size of equipment drawn as blocks. All " +
+        "maxX, maxY), centerX, centerY, widthMm, depthMm and rotation, the outline size of equipment drawn as blocks. " +
+        "A DWG exported from Revit can insert every block at one point: x, y are then that point, and the centre says where " +
+        "the block is; blocks at one point with different extents are not merged. All " +
         "coordinates are in host model mm with the link transform applied, so there is no need to open " +
         "the DWG to compare. Optional: importInstanceId (required when several CAD files are present), " +
         "pointSources (block|point|circle), mergeToleranceMm (default 1), limit (default 200). Read-only.";
@@ -138,6 +140,8 @@ public class GetCadPlacementPointsTool : IRevitMcpTool
                                 minY = Math.Round(p.Extents.MinY, 1),
                                 maxX = Math.Round(p.Extents.MaxX, 1),
                                 maxY = Math.Round(p.Extents.MaxY, 1),
+                                centerX = Math.Round(p.Extents.CenterX, 1),
+                                centerY = Math.Round(p.Extents.CenterY, 1),
                                 widthMm = Math.Round(p.Extents.Width, 1),
                                 depthMm = Math.Round(p.Extents.Depth, 1),
                                 rotationDegrees = Math.Round(p.RotationDegrees, 2)
