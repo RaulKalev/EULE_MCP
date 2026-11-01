@@ -338,4 +338,10 @@
     <Compile Include="..\RevitMCP.Addin\ViewElements\ViewCropMath.cs" Link="ViewElements\ViewCropMath.cs" />
     <Compile Include="..\RevitMCP.Addin\ViewElements\ViewElementDtos.cs" Link="ViewElements\ViewElementDtos.cs" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Filled regions (#135): loop validation, rule expansion, type map, specs and summaries (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\FilledRegions\*.cs" Link="FilledRegions\%(Filename)%(Extension)" />
+    <Compile Include="..\RevitMCP.Addin\Approval\FilledRegionApprovalSummaries.cs" Link="Approval\FilledRegionApprovalSummaries.cs" />
+  </ItemGroup>
 </Project>

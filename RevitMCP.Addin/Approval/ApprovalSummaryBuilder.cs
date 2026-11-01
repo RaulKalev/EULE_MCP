@@ -114,6 +114,7 @@ public static class ApprovalSummaryBuilder
         ?? SchedulesApprovalSummaries.TryBuild(request)
         ?? ViewCreationApprovalSummaries.TryBuild(request)
         ?? ViewFilterApprovalSummaries.TryBuild(request)
+        ?? FilledRegionApprovalSummaries.TryBuild(request)
         ?? MepApprovalSummaries.TryBuild(request)
         ?? TransformsAndGroupsApprovalSummaries.TryBuild(request)
         ?? ModelStateApprovalSummaries.TryBuild(request)

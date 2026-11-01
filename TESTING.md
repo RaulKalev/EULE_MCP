@@ -3993,7 +3993,7 @@ Manual, in Revit 2026 and 2024:
    wrong size and a date on one sheet: the findings say so. Write an instance parameter with `includeTitleBlockInstance=true`.
 7. **#143** `revit_get_cad_placement_points includeExtents=true` on a layer of blocks, including a rotated block: width
    and depth match the DWG; a box drawn from the extents lines up with the block in the host view.
-## View element reads (issue #136)
+## 59. View Element Reads (issue #136)
 
 Needs a plan with a crop region, a hidden element, a view filter that hides something, tags and text; a drafting view with
 detail lines, filled regions and a group; a sheet with two or more viewports; a schedule and a view template. Pure logic
@@ -4011,6 +4011,23 @@ can answer is listed in [docs/view-element-reads.md](docs/view-element-reads.md#
 8. `view=<unknown>` returns `view_not_found` with `candidates`; a name shared by two plans returns `view_ambiguous`; a schedule `view_not_collectable`; a template `view_is_template`; `view=active document=<non-active>` `active_document_required`.
 9. A view with 200+ elements returns `status: view_large_read` with `categories` and `next`, and no elements; each `next` call then works. `revit_count_elements` on it just counts.
 10. Without `view`, all three tools return the same payload as before: compare with a build from before #136.
+## 61. Filled Regions (issue #135)
+
+Requires a floor plan and a section through a room, a drafting view, a 3D view and a schedule, a host room, a loaded Revit
+link with rooms, and at least two filled region types. Pure logic (loop validation, holes, padding, projection, rule
+expansion, the type map) is covered by `FilledRegionGeometryTests` and `FilledRegionSpecTests`. Run this in Revit 2026 and 2024.
+See `docs/filled-regions.md`.
+
+**Verify:**
+1. `revit_list_filled_region_types` lists patterns, colours, line weight, masking and `instanceCount`, with the fill patterns and line styles.
+2. `revit_create_filled_regions` makes a region with a hole from `loops` in the plan, the section (with z) and the drafting view, and from a `rectangle` in each. `revit_list_filled_regions` returns the same loops and `revitAreaM2` matches `areaM2`. One Undo removes them.
+3. A `room` spec in the plan follows the room boundary; a room with a column or island gets a hole; `paddingMm` grows it. In the section the preview returns `boundary_not_in_view_plane`.
+4. A linked room's region lines up with the room in the host plan, also after the link is moved and the region is drawn again.
+5. Four `detailLines` drawn in the section, given in any order, make a region in the section; the same ids in the plan return `boundary_not_in_view_plane`.
+6. A rule with a `typeMap` per room: the preview lists every region and every `skippedSources` entry; the write creates exactly those. An unmapped value is skipped with `value_not_mapped`, never given a type.
+7. The preview reports `loop_open` and `loop_self_intersecting` for bad loops and `view_not_supported` for the 3D view and the schedule, and nothing is written.
+8. Changing `type` and `parameters` with `revit_edit_filled_regions` keeps the id. A `boundary` returns `idMap`, keeps type, view and Comments, and lists an attached tag or dimension as lost.
+9. `revit_preview_set_filled_region_types` lists the regions of the type; the write changes all of them. `duplicateFrom` makes a new type; a taken name returns `type_name_exists`.
 
 ### Matrix rows (Section 30)
 
@@ -4019,7 +4036,7 @@ can answer is listed in [docs/view-element-reads.md](docs/view-element-reads.md#
 | Elements | `revit_count_elements` `view` | RO | "How many tags are on this plan?" | `{totalCount, groups, view, scope, excluded}` | N/A | N/A | Per viewport for a sheet; never guarded |
 | Elements | `revit_get_elements_info` `view` | RO | "List the fire alarm devices in this view with their locations" | `{totalMatched, elements[], view, scope, excluded}` | N/A | N/A | `view_large_read` from 200 unnarrowed elements |
 | Parameters | `revit_find_elements_by_parameter` `view` | RO | "Which devices on sheet E-101 have no circuit?" | `{totalMatched, sheetElements, viewports[]}` | N/A | N/A | Filters per viewport |
-## 59. View Filters (issue #134)
+## 60. View Filters (issue #134)
 
 Reference: [`docs/view-filters.md`](docs/view-filters.md). Tools: `revit_list_view_filters`, `revit_list_filterable_parameters`,
 `revit_get_view_filters`, `revit_preview_create_view_filters` / `revit_create_view_filters`,
@@ -4052,3 +4069,11 @@ without; for the copy, a second open project.
    stays out. `revit_copy_view_filters`: the others arrive with their settings, the source is unchanged, a selection filter
    arrives empty with `membersNotCopied`.
 9. Undo once after each write: everything of that call is reverted.
+| Elements | `revit_list_filled_regions` | RO | "List the filled regions in this view" | Type, loops, `areaM2`, parameters | N/A | N/A | Loops in the format the create tool takes |
+| Elements | `revit_list_filled_region_types` | RO | "What filled region types are there?" | Patterns, colours, `instanceCount` | N/A | N/A | Also patterns and line styles |
+| Elements | `revit_preview_create_filled_regions` | RO | "Preview a region per room, type by department" | `regions[]`, `skippedSources`, `unmappedValues` | N/A | N/A | Rolled-back trial by default |
+| Elements | `revit_create_filled_regions` | Approval | "Draw them" | `newRegionIds`, per region status | Yes | One Undo | Specs and rules share one path |
+| Elements | `revit_preview_edit_filled_regions` | RO | "Preview making this region bigger" | `keepsId`, `reshape.attachedAnnotations` | N/A | N/A | Lists what may be lost |
+| Elements | `revit_edit_filled_regions` | Approval | "Change its type" / "Reshape it" | Id kept / `idMap` | Yes | One Undo | A reshape replaces the element; plans refuse it |
+| Elements | `revit_preview_set_filled_region_types` | RO | "Preview making this type red" | `changes`, `affectedRegions.byView` | N/A | N/A | Every region of the type |
+| Elements | `revit_set_filled_region_types` | Approval | "Make a green copy of this type" | `newTypeIds`, changes | Yes | One Undo | Type edit changes all its regions |
