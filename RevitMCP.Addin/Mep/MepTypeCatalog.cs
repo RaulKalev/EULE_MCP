@@ -16,7 +16,6 @@ internal sealed class MepFittingAvailability
     public bool WithFittings { get; set; } = true;
 
     public bool Has(string kind) =>
-        !WithFittings && (kind == "elbow" || kind == "verticalElbow") ||
         Families.TryGetValue(kind, out var family) && family != null ||
         RoutingRules.TryGetValue(kind, out var rules) && rules;
 

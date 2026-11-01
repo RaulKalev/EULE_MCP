@@ -11,7 +11,7 @@ internal sealed partial class RevitMcpTools
     private const string ScheduleFieldsDescription =
         "Columns in order. Each is a field name as revit_list_schedulable_fields lists it (\"Mark\", \"Room: Name\") or an object " +
         "{parameter, heading?, width? (mm), hidden?, totals?, format? {units: mm|m|m2|W|kW|VA|A|V|…, accuracy: 0.1, suppressTrailingZeros}, fieldType? (instance|type|room|…)}; " +
-        "{count: true} or \"Count\" for the count column; {percentage: {of: \"<numeric field>\"}, heading}. Formula fields cannot be created through the Revit API.";
+        "{count: true} or \"Count\" for the count column. Formula and percentage fields cannot be created through the Revit API.";
 
     private const string ScheduleFiltersDescription =
         "Filters [{field, type, value}] — type: equals, notEquals, greaterThan, greaterThanOrEqual, lessThan, lessThanOrEqual, contains, notContains, " +
@@ -89,7 +89,7 @@ internal sealed partial class RevitMcpTools
             multiCategory, keySchedule, keyName, allowMissingFields, document, cancellationToken);
 
     [McpServerTool(Name = "revit_create_schedule"),
-     Description("Creates a schedule that updates with the model. Requires approval. Run revit_preview_create_schedule first (same arguments). name, category (or multiCategory / keySchedule + keyName), fields in order (names from revit_list_schedulable_fields, with headings, widths in mm, hidden, totals, number format; Count; percentages), filters, sort with group headers/footers/blank lines, itemize, grandTotal, template, phase. One transaction: a name that does not resolve or a step Revit refuses rolls everything back — no half-finished schedule — unless allowMissingFields=true. Returns scheduleId, the fields as created and rowCount.")]
+     Description("Creates a schedule that updates with the model. Requires approval. Run revit_preview_create_schedule first (same arguments). name, category (or multiCategory / keySchedule + keyName), fields in order (names from revit_list_schedulable_fields, with headings, widths in mm, hidden, totals, number format; Count), filters, sort with group headers/footers/blank lines, itemize, grandTotal, template, phase. One transaction: a name that does not resolve or a step Revit refuses rolls everything back — no half-finished schedule — unless allowMissingFields=true. Returns scheduleId, the fields as created and rowCount.")]
     public Task<string> CreateSchedule(
         [Description("Schedule name; made unique. Default: Revit's default name for the category.")] string? name = null,
         [Description("Category name (e.g. \"Electrical Fixtures\"). Not needed with multiCategory=true.")] string? category = null,

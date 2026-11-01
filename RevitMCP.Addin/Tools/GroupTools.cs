@@ -303,6 +303,7 @@ internal static class UngroupExecutor
 
         var typeIds = groups.Select(g => g.GroupType.Id).Distinct().ToList();
         var typeNames = typeIds.ToDictionary(id => id.Value, id => doc.GetElement(id)?.Name ?? string.Empty);
+        var ungroupedIds = groups.Select(g => g.Id).ToHashSet();
         var ungrouped = new List<object>();
         var deletedTypes = new List<object>();
         var keptTypes = new List<object>();
@@ -323,8 +324,9 @@ internal static class UngroupExecutor
                 foreach (var typeId in typeIds)
                 {
                     var type = doc.GetElement(typeId) as GroupType;
-                    var remaining = 0;
-                    try { remaining = type?.Groups.Size ?? 0; } catch { remaining = 0; }
+                    // GroupType.Groups still lists an instance ungrouped in this transaction, so count the live ones.
+                    var remaining = new FilteredElementCollector(doc).OfClass(typeof(Group)).Cast<Group>()
+                        .Count(g => g.GroupType.Id == typeId && !ungroupedIds.Contains(g.Id));
                     if (type == null || remaining > 0)
                     {
                         keptTypes.Add(new { groupTypeId = typeId.Value, name = typeNames[typeId.Value], remainingInstances = remaining });

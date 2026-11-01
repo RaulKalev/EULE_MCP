@@ -506,6 +506,13 @@ public static class MoveElementsMath
         $"This element is a member of group '{groupName ?? string.Empty}' (id {groupId}). Revit only {verb}s group " +
         $"members in group edit mode — pass the group id {groupId} to {verb} the whole group, or ungroup first.";
 
+    /// <summary>
+    /// Whether the constraints still apply to a plan. Revit reports group members as pinned, so a pinned member goes on to
+    /// <see cref="MoveStatus.InGroup"/>: unpinning it would not help.
+    /// </summary>
+    public static bool ConstraintsApply(MovePlan plan, bool isGroupMember) =>
+        plan.CanMove || (isGroupMember && plan.Status == MoveStatus.Pinned);
+
     /// <summary>A group member's plan: blocked as <see cref="MoveStatus.InGroup"/>, with the group id and the hint.</summary>
     public static MovePlan BlockedAsGroupMember(MovePlan plan, long groupId, string? groupName)
     {

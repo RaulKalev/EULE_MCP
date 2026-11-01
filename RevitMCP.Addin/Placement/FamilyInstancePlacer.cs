@@ -127,6 +127,29 @@ internal static class FamilyInstancePlacer
         return PlacementHelpers.NearestLevel(doc, point.Z);
     }
 
+    /// <summary>Whether <see cref="CreateInstance"/> measures the point's z from the level: Revit's level overload does.</summary>
+    public static bool MeasuresZFromLevel(FamilyPlacementType placementType, Element? host) =>
+        host == null && placementType is FamilyPlacementType.OneLevelBased or FamilyPlacementType.TwoLevelsBased;
+
+    /// <summary>
+    /// For callers that hold model elevations: regenerates once, then moves each instance onto its elevation in feet.
+    /// One that is already there is left alone.
+    /// </summary>
+    public static void MoveOntoElevations(Document doc, IReadOnlyList<(FamilyInstance Instance, double ElevationFeet)> placed)
+    {
+        if (placed.Count == 0) return;
+        doc.Regenerate();
+        foreach (var (instance, elevation) in placed)
+        {
+            if (instance.Location is not LocationPoint location) continue;
+            var delta = elevation - location.Point.Z;
+            if (Math.Abs(delta) > ElevationToleranceFeet)
+                ElementTransformUtils.MoveElement(doc, instance.Id, new XYZ(0, 0, delta));
+        }
+    }
+
+    private const double ElevationToleranceFeet = 0.001;
+
     /// <summary>Finds a level by name, or returns null when the model has no level with that name.</summary>
     public static Level? FindLevel(Document doc, string levelName) =>
         new FilteredElementCollector(doc)

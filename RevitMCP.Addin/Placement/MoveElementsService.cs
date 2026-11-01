@@ -99,7 +99,7 @@ internal static class MoveElementsService
                 plan.Reason = $"Group instance: the whole group moves, with its {MemberCount(group)} member(s).";
         }
 
-        if (plan.CanMove)
+        if (MoveElementsMath.ConstraintsApply(plan, element.GroupId != ElementId.InvalidElementId))
             plan = ApplyConstraints(doc, element, plan, ownerView, FrameOf(ownerView));
 
         return Describe(doc, element, frameView, plan, frame);

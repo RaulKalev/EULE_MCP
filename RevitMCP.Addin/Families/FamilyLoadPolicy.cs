@@ -68,6 +68,9 @@ public static class FamilyLoadPolicy
     /// <summary>Revit's own backup copies: Name.0001.rfa.</summary>
     private static readonly Regex BackupFile = new(@"\.\d{4}\.rfa$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
+    /// <summary>The OLE compound file signature every Revit family starts with. Revit stops on a modal dialog for anything else.</summary>
+    private static readonly byte[] RevitFileSignature = { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 };
+
     public static string Describe(FamilyIfExists policy) => policy switch
     {
         FamilyIfExists.Skip => "skip",
@@ -187,6 +190,8 @@ public static class FamilyLoadPolicy
 
                 if (candidate.IsValid && candidate.SizeBytes == 0)
                     Invalid(candidate, "The file is empty.");
+                if (candidate.IsValid && SignatureError(full!) is { } signatureError)
+                    Invalid(candidate, signatureError);
                 if (candidate.IsValid && seenNames.TryGetValue(candidate.FamilyName, out var first))
                 {
                     candidate.Status = "duplicate";
@@ -208,6 +213,24 @@ public static class FamilyLoadPolicy
         foreach (var dropped in selection.Files.Where(f => !f.IsValid))
             selection.Warnings.Add($"{dropped.Path}: {dropped.Reason}");
         return selection;
+    }
+
+    /// <summary>Why the file cannot be a Revit family judging by its first bytes, or null when it can.</summary>
+    private static string? SignatureError(string path)
+    {
+        try
+        {
+            var head = new byte[RevitFileSignature.Length];
+            using var stream = File.OpenRead(path);
+            var read = stream.Read(head, 0, head.Length);
+            return read == head.Length && head.SequenceEqual(RevitFileSignature)
+                ? null
+                : "The file is damaged or not a Revit family: it does not start with a Revit file signature.";
+        }
+        catch (Exception ex)
+        {
+            return $"The file cannot be read: {ex.Message}";
+        }
     }
 
     /// <summary>The family name Revit gives a file it loads: the file name without its extension.</summary>

@@ -13,7 +13,7 @@ namespace RevitMCP.Addin.Tools;
 public class PlaceFamilyInstancesTool : IRevitMcpTool
 {
     public string Name => "revit_place_family_instances";
-    public string Description => "Places instances of a loaded family type at given points (mm). Handles model components (level-based) and detail items (view-based) automatically from the family's placement type. Optional per-point rotation in degrees. Requires approval. Transaction-wrapped and reversible via Revit Undo.";
+    public string Description => "Places instances of a loaded family type at given points (mm). Handles model components (level-based) and detail items (view-based) automatically from the family's placement type. For a level-based family z is the height above the level (Elevation from Level), not a model coordinate; pointMm in the result is where each instance ended up in model coordinates. Optional per-point rotation in degrees. Requires approval. Transaction-wrapped and reversible via Revit Undo.";
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Elements;
 
@@ -76,6 +76,7 @@ public class PlaceFamilyInstancesTool : IRevitMcpTool
         }
 
         var created = new List<object>();
+        var placed = new List<(FamilyInstance Instance, JToken Token)>();
         var errors = new List<string>();
 
         var (txSuccess, diagnostics) = RevitTransactionRunner.Run(doc, "Revit MCP - Place Family Instances", () =>
@@ -107,18 +108,25 @@ public class PlaceFamilyInstancesTool : IRevitMcpTool
                         ElementTransformUtils.RotateElement(doc, instance.Id, axis, rotationDegrees * Math.PI / 180.0);
                     }
 
-                    created.Add(new
-                    {
-                        elementId = instance.Id.Value,
-                        x = PlacementHelpers.TokenDouble(token, "x"),
-                        y = PlacementHelpers.TokenDouble(token, "y"),
-                        z = PlacementHelpers.TokenDouble(token, "z")
-                    });
+                    placed.Add((instance, token));
                 }
                 catch (Exception ex)
                 {
                     errors.Add($"Placement {index}: {ex.Message}");
                 }
+            }
+
+            if (placed.Count > 0) doc.Regenerate();
+            foreach (var (instance, token) in placed)
+            {
+                created.Add(new
+                {
+                    elementId = instance.Id.Value,
+                    x = PlacementHelpers.TokenDouble(token, "x"),
+                    y = PlacementHelpers.TokenDouble(token, "y"),
+                    z = PlacementHelpers.TokenDouble(token, "z"),
+                    pointMm = ModelPointMm(instance)
+                });
             }
         });
 
@@ -156,6 +164,18 @@ public class PlaceFamilyInstancesTool : IRevitMcpTool
             },
             DurationMs = sw.ElapsedMilliseconds
         });
+    }
+
+    private static object? ModelPointMm(FamilyInstance instance)
+    {
+        if (instance.Location is not LocationPoint location) return null;
+        var point = location.Point;
+        return new
+        {
+            x = Math.Round(UnitUtils.ConvertFromInternalUnits(point.X, UnitTypeId.Millimeters), 1),
+            y = Math.Round(UnitUtils.ConvertFromInternalUnits(point.Y, UnitTypeId.Millimeters), 1),
+            z = Math.Round(UnitUtils.ConvertFromInternalUnits(point.Z, UnitTypeId.Millimeters), 1)
+        };
     }
 
     private static JArray? ToJArray(object value) =>

@@ -43,7 +43,6 @@ public enum ScheduleActionKind
 {
     AddField,
     AddCount,
-    AddPercentage,
     RemoveField,
     SetHeading,
     SetWidth,
@@ -86,9 +85,6 @@ public sealed class ScheduleAction
     public ScheduleFilterSpec? Filter { get; set; }
 
     public ScheduleSortSpec? Sort { get; set; }
-
-    /// <summary>AddPercentage: the field the percentage is of.</summary>
-    public string? OfFieldKey { get; set; }
 
     /// <summary>SetFieldOrder: every field key in the new order.</summary>
     public List<string>? Order { get; set; }
@@ -232,7 +228,6 @@ public static class SchedulePlanner
         var counter = 0;
         foreach (var field in spec.Fields)
             AddRequestedField(plan, field, catalog, ref counter, insertAt: null);
-        ResolvePercentages(plan, spec.Fields);
 
         if (spec.KeySchedule && !string.IsNullOrWhiteSpace(spec.KeyName))
             plan.Actions.Add(new ScheduleAction { Kind = ScheduleActionKind.SetKeyName, Text = spec.KeyName, Description = $"Key name '{spec.KeyName}'" });
@@ -318,7 +313,6 @@ public static class SchedulePlanner
         var counter = 0;
         foreach (var field in edit.AddFields)
             AddRequestedField(plan, field, catalog, ref counter, field.InsertAt);
-        ResolvePercentages(plan, edit.AddFields);
 
         foreach (var (name, heading) in edit.Rename)
             WithField(plan, name, "rename", field =>
@@ -397,9 +391,13 @@ public static class SchedulePlanner
             }
 
             case ScheduleFieldKind.Percentage:
-                planned = new PlannedField { Key = NewKey(ref counter), Name = spec.Heading ?? $"% {spec.PercentageOf}", FieldType = "Percentage", ParameterId = -1 };
-                plan.Actions.Add(new ScheduleAction { Kind = ScheduleActionKind.AddPercentage, FieldKey = planned.Key, Text = spec.PercentageOf, Description = $"Add a percentage of '{spec.PercentageOf}'" });
-                break;
+                plan.MissingFields.Add(new MissingField
+                {
+                    Name = spec.Label,
+                    Role = "percentage",
+                    Reason = "The Revit API cannot create percentage fields; add it in Revit's Fields dialog after the schedule is created."
+                });
+                return;
 
             default:
             {
@@ -446,29 +444,6 @@ public static class SchedulePlanner
             plan.Actions.Add(new ScheduleAction { Kind = ScheduleActionKind.SetTotals, FieldKey = field.Key, Flag = spec.Totals, Description = spec.Totals.Value ? "Calculate totals" : "No totals" });
         if (spec.Format != null)
             plan.Actions.Add(new ScheduleAction { Kind = ScheduleActionKind.SetFormat, FieldKey = field.Key, Format = spec.Format, Description = $"Format: {spec.Format}" });
-    }
-
-    /// <summary>Percentage fields name the field they are of; resolve it once every field is planned.</summary>
-    private static void ResolvePercentages(SchedulePlan plan, IEnumerable<ScheduleFieldSpec> specs)
-    {
-        foreach (var action in plan.Actions.Where(a => a.Kind == ScheduleActionKind.AddPercentage && a.OfFieldKey == null).ToList())
-        {
-            var of = FindPlanned(plan, action.Text ?? string.Empty);
-            if (of == null || of.FieldType is "Count" or "Percentage")
-            {
-                plan.MissingFields.Add(new MissingField
-                {
-                    Name = action.Text ?? string.Empty, Role = "percentage",
-                    Reason = of == null ? "A percentage needs a numeric field of this schedule to be of." : "Percentages cannot be of Count or of another percentage.",
-                    Suggestions = Suggest(action.Text ?? string.Empty, plan.Fields.Where(f => f.FieldType is not ("Count" or "Percentage")).Select(f => f.Heading ?? f.Name))
-                });
-                plan.Actions.Remove(action);
-                plan.Fields.RemoveAll(f => f.Key == action.FieldKey);
-                plan.Actions.RemoveAll(a => a.FieldKey == action.FieldKey);
-                continue;
-            }
-            action.OfFieldKey = of.Key;
-        }
     }
 
     private static SchedulableFieldInfo? ResolveCatalog(SchedulePlan plan, string name, string? fieldType, IReadOnlyList<SchedulableFieldInfo> catalog, string role)
@@ -651,7 +626,7 @@ public static class SchedulePlanner
     {
         // Existing fields in their current order, then the new fields in the order they are added.
         var natural = plan.Fields.Where(f => f.Source == "existing").OrderBy(f => f.OriginalIndex).Select(f => f.Key).ToList();
-        natural.AddRange(plan.Actions.Where(a => a.Kind is ScheduleActionKind.AddField or ScheduleActionKind.AddCount or ScheduleActionKind.AddPercentage)
+        natural.AddRange(plan.Actions.Where(a => a.Kind is ScheduleActionKind.AddField or ScheduleActionKind.AddCount)
             .Select(a => a.FieldKey).Where(k => plan.Fields.Any(f => f.Key == k)));
         var wanted = plan.Fields.Select(f => f.Key).ToList();
         if (natural.SequenceEqual(wanted, StringComparer.Ordinal)) return;

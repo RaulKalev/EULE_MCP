@@ -25,8 +25,29 @@ public class FamilyLoadPolicyTests : IDisposable
     private string Rfa(string name, int bytes = 16)
     {
         var path = Path.Combine(_folder, name);
-        File.WriteAllBytes(path, new byte[bytes]);
+        var content = new byte[bytes];
+        Array.Copy(RevitSignature, content, Math.Min(bytes, RevitSignature.Length));
+        File.WriteAllBytes(path, content);
         return path;
+    }
+
+    private static readonly byte[] RevitSignature = { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 };
+
+    [Theory]
+    [InlineData(16)]
+    [InlineData(4)]
+    public void SelectFiles_RefusesAFileWithoutTheRevitSignature(int bytes)
+    {
+        var damaged = Path.Combine(_folder, "Damaged.rfa");
+        File.WriteAllBytes(damaged, Enumerable.Repeat((byte)0x4E, bytes).ToArray());
+        var good = Rfa("Good.rfa");
+        var truncated = Rfa("Truncated.rfa", 4);
+
+        var selection = FamilyLoadPolicy.SelectFiles(new[] { damaged, good, truncated }, null, null, false, Policy());
+
+        Assert.Equal(new[] { good }, selection.Valid.Select(f => f.Path));
+        Assert.Contains(selection.Files, f => f.Path == damaged && f.Status == "invalid" && f.Reason!.Contains("signature"));
+        Assert.Contains(selection.Files, f => f.Path == truncated && f.Reason!.Contains("signature"));
     }
 
     [Theory]
@@ -125,7 +146,7 @@ public class FamilyLoadPolicyTests : IDisposable
         Directory.CreateDirectory(Path.Combine(_folder, "b"));
         var first = Rfa("Lamp.rfa");
         var second = Path.Combine(_folder, "b", "Lamp.rfa");
-        File.WriteAllBytes(second, new byte[8]);
+        File.WriteAllBytes(second, RevitSignature);
 
         var selection = FamilyLoadPolicy.SelectFiles(new[] { first, second }, null, null, false, Policy());
 
@@ -176,7 +197,7 @@ public class FamilyLoadPolicyTests : IDisposable
     public void Recursive_FindsSubfolders()
     {
         Directory.CreateDirectory(Path.Combine(_folder, "sub"));
-        File.WriteAllBytes(Path.Combine(_folder, "sub", "Deep.rfa"), new byte[4]);
+        File.WriteAllBytes(Path.Combine(_folder, "sub", "Deep.rfa"), RevitSignature);
         Assert.Empty(FamilyLoadPolicy.SelectFiles(Array.Empty<string>(), _folder, null, false, Policy()).Valid);
         Assert.Single(FamilyLoadPolicy.SelectFiles(Array.Empty<string>(), _folder, null, true, Policy()).Valid);
     }

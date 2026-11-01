@@ -200,6 +200,8 @@ internal static class SetPhaseExecutor
             Name = SafeString(() => element.Name)
         };
         if (element is ElementType || element is View) return state;
+        try { if (element.Category?.CategoryType == CategoryType.Annotation) return state; }
+        catch { }
 
         Parameter? pc = null, pd = null;
         try
@@ -210,10 +212,13 @@ internal static class SetPhaseExecutor
         catch { }
         if (pc == null || pd == null || pc.StorageType != StorageType.ElementId || pd.StorageType != StorageType.ElementId) return state;
 
+        // Tags and other unphased elements can carry the parameters with no phase in them.
+        state.Created = Lookup(pc, phases);
+        if (state.Created == null) return state;
+
         state.HasPhaseParameters = true;
         state.CreatedReadOnly = pc.IsReadOnly;
         state.DemolishedReadOnly = pd.IsReadOnly;
-        state.Created = Lookup(pc, phases);
         state.Demolished = Lookup(pd, phases);
         if (state.CreatedReadOnly || state.DemolishedReadOnly)
         {

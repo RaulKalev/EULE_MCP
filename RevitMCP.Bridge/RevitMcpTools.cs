@@ -1400,9 +1400,9 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_place_family_instances"),
-     Description("Places instances of a loaded family type at given points (millimetres). Handles model components (level-based) and detail items (view-based) automatically from the family's placement type. Pick the type via typeId, or familyName and/or typeName (partial match; ambiguity returns candidates). Optional per-point rotationDegrees, levelName, viewId (detail items), hostElementId (hosted families). Face-based families that should sit on a wall, ceiling or floor face — including faces in linked models — are placed with revit_place_on_face instead. Requires approval; reversible via Revit Undo.")]
+     Description("Places instances of a loaded family type at given points (millimetres). Handles model components (level-based) and detail items (view-based) automatically from the family's placement type. For a level-based family z is the height above the level (Elevation from Level), not a model coordinate, so pass levelName; pointMm in the result is where each instance ended up in model coordinates. Pick the type via typeId, or familyName and/or typeName (partial match; ambiguity returns candidates). Optional per-point rotationDegrees, levelName, viewId (detail items), hostElementId (hosted families). Face-based families that should sit on a wall, ceiling or floor face — including faces in linked models — are placed with revit_place_on_face instead. Requires approval; reversible via Revit Undo.")]
     public async Task<string> PlaceFamilyInstances(
-        [Description("JSON array of placement points in mm: [{x, y, z, rotationDegrees}]")] string placements,
+        [Description("JSON array of placement points in mm: [{x, y, z, rotationDegrees}]. x and y are model coordinates; z is the height above the level for level-based families.")] string placements,
         [Description("Family name to place (partial match).")] string? familyName = null,
         [Description("Type name within the family (partial match).")] string? typeName = null,
         [Description("Exact family type element ID — skips name matching.")] long typeId = 0,

@@ -76,14 +76,6 @@ internal static class ScheduleBuilder
             case ScheduleActionKind.AddCount:
                 execution.FieldIds[action.FieldKey] = definition.AddField(ScheduleFieldType.Count).FieldId;
                 return null;
-            case ScheduleActionKind.AddPercentage:
-            {
-                var of = FieldId(execution, action.OfFieldKey ?? string.Empty);
-                var field = definition.AddField(ScheduleFieldType.Percentage);
-                execution.FieldIds[action.FieldKey] = field.FieldId;
-                field.PercentageOf = of;
-                return null;
-            }
             case ScheduleActionKind.RemoveField:
                 definition.RemoveField(new ScheduleFieldId(action.ExistingFieldId ?? -1));
                 return null;

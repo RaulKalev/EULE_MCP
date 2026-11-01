@@ -74,8 +74,8 @@ The agents flagged these as uncertain. Each needs a live answer before the featu
    `SectionBoxMath.Compute`.
 2. **Schedule heading rows (#103).** Check that `revit_get_schedule` drops the column headings and the blank row
    after them, and that the data rows match what the schedule view shows.
-3. **Percentage fields (#103).** Record whether Revit accepts a percentage field added through the API.
-4. **Tray elbows (#106).** Check that elbows are created for tray types without fittings (`IsWithFitting` false), and
+3. **Percentage fields (#103).** Settled on 2026-11-01: Revit refuses them through the API, so the tools report them as missing fields.
+4. **Tray elbows (#106).** Settled on 2026-11-01: no elbow is created for a tray type without fittings and no bend family, and such a type is now listed as missing elbows. Still check
    that the vertical bend parameters are the ones Revit uses for risers.
 5. **Conduit standards (#106).** Check that the conduit standard names match `ConduitSizeSettings`, so that
    `size_not_standard` is not raised by mistake.

@@ -36,7 +36,7 @@ public sealed class CreateScheduleTool : IRevitMcpTool
         "Creates a schedule from a spec. Requires approval. name (made unique), category (or multiCategory=true, or " +
         "keySchedule=true with keyName), fields in order — names from revit_list_schedulable_fields, or objects " +
         "{parameter, heading, width (mm), hidden, totals, format {units, accuracy, suppressTrailingZeros}, fieldType}, " +
-        "{count: true}, {percentage: {of}} — filters [{field, type, value}] (" + ScheduleFilterTypeMap.AcceptedText + "), " +
+        "{count: true} — filters [{field, type, value}] (" + ScheduleFilterTypeMap.AcceptedText + "), " +
         "sort [{field, descending, header, footer, blankLine}], itemize (default true), grandTotal (" + ScheduleGrandTotal.AcceptedText + "), " +
         "template (schedule view template name), phase. A filter or sort on a field that is not a column adds it hidden. " +
         "Formula fields cannot be created through the Revit API. One transaction: a missing field or a step Revit refuses " +

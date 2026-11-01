@@ -54,8 +54,8 @@ the fallback and the only summary for `revit_connect_mep_curves`.
    horizontal bend/bend/elbow, elbow up/down for vertical bends, tee, cross, transition, union), not routing
    preferences. A fitting kind is `available` when such a parameter names a family **or**
    `RoutingPreferenceManager.GetNumberOfRules(...) > 0`. An extra kind `verticalElbow` is reported because tray bends into
-   risers use separate families. Types with `IsWithFitting == false` count elbows as available (Revit draws the bend
-   itself); to be confirmed in the manual test.
+   risers use separate families. `IsWithFitting == false` alone does not make elbows available: the Revit test of
+   2026-11-01 gave `fitting_failed` on such a tray type with no bend family.
 2. **`routing_preference_missing`** does not block the create: the preview returns it as its status with the missing kinds,
    the create warns and goes on, so the segments exist and each bend reports `fitting_failed` with Revit's message (as the
    manual test and acceptance criteria require).
@@ -101,7 +101,7 @@ Verified in both reference assemblies (2024.1 net48, 2026 net8): `CableTray.Crea
    near a connected end → `no_candidate` (never joins a connected connector).
 6. Summary totals vs. a Revit cable tray schedule (Length sum per type): equal within 1 mm per segment.
 7. Undo once: the whole run (segments, elbows, end joins) disappears.
-8. Verify for `IsWithFitting == false` tray types that elbows are created (deviation 1) and that
+8. Verify for `IsWithFitting == false` tray types with no bend family that the list and preview report missing elbows (deviation 1), and that
    `CONDUIT_STANDARD_TYPE_PARAM` matches the standard names (deviation 5).
 
 ## Not done

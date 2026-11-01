@@ -36,7 +36,7 @@ internal sealed partial class RevitMcpTools
     }
 
     [McpServerTool(Name = "revit_preview_load_family", ReadOnly = true),
-     Description("Previews loading .rfa family files WITHOUT changes. Same arguments as revit_load_family. Checks each file cheaply (exists, .rfa, file access policy, size, Revit backups are skipped) and whether a family of the same name (the file name) is already loaded, and states per file willLoad | willSkip | willOverwrite under the ifExists policy. The files are not opened.")]
+     Description("Previews loading .rfa family files WITHOUT changes. Same arguments as revit_load_family. Checks each file cheaply (exists, .rfa, file access policy, size, Revit file signature, Revit backups are skipped) and whether a family of the same name (the file name) is already loaded, and states per file willLoad | willSkip | willOverwrite under the ifExists policy. Revit does not open the files.")]
     public Task<string> PreviewLoadFamily(
         [Description("Family files (.rfa), up to 50.")] string[]? paths = null,
         [Description("Folder to load from instead of (or besides) paths.")] string? folder = null,
