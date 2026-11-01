@@ -4011,7 +4011,7 @@ can answer is listed in [docs/view-element-reads.md](docs/view-element-reads.md#
 8. `view=<unknown>` returns `view_not_found` with `candidates`; a name shared by two plans returns `view_ambiguous`; a schedule `view_not_collectable`; a template `view_is_template`; `view=active document=<non-active>` `active_document_required`.
 9. A view with 200+ elements returns `status: view_large_read` with `categories` and `next`, and no elements; each `next` call then works. `revit_count_elements` on it just counts.
 10. Without `view`, all three tools return the same payload as before: compare with a build from before #136.
-## 61. Filled Regions (issue #135)
+## 60. Filled Regions (issue #135)
 
 Requires a floor plan and a section through a room, a drafting view, a 3D view and a schedule, a host room, a loaded Revit
 link with rooms, and at least two filled region types. Pure logic (loop validation, holes, padding, projection, rule
@@ -4036,7 +4036,7 @@ See `docs/filled-regions.md`.
 | Elements | `revit_count_elements` `view` | RO | "How many tags are on this plan?" | `{totalCount, groups, view, scope, excluded}` | N/A | N/A | Per viewport for a sheet; never guarded |
 | Elements | `revit_get_elements_info` `view` | RO | "List the fire alarm devices in this view with their locations" | `{totalMatched, elements[], view, scope, excluded}` | N/A | N/A | `view_large_read` from 200 unnarrowed elements |
 | Parameters | `revit_find_elements_by_parameter` `view` | RO | "Which devices on sheet E-101 have no circuit?" | `{totalMatched, sheetElements, viewports[]}` | N/A | N/A | Filters per viewport |
-## 60. View Filters (issue #134)
+## 61. View Filters (issue #134)
 
 Reference: [`docs/view-filters.md`](docs/view-filters.md). Tools: `revit_list_view_filters`, `revit_list_filterable_parameters`,
 `revit_get_view_filters`, `revit_preview_create_view_filters` / `revit_create_view_filters`,
