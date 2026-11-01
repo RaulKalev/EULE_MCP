@@ -3,6 +3,7 @@ using Autodesk.Revit.UI;
 using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Query;
+using RevitMCP.Addin.ViewElements;
 using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Tools;
@@ -10,7 +11,7 @@ namespace RevitMCP.Addin.Tools;
 public class GetElementsInfoTool : IRevitMcpTool
 {
     public string Name => "revit_get_elements_info";
-    public string Description => "Returns structured element info and selected parameter values for selection, explicit element IDs, or category+filter queries. More controlled than revit_get_element_parameters. includeModelState=true adds phaseCreated, phaseDemolished, designOption and workset; includeOwnership=true adds ownedBy.";
+    public string Description => "Returns structured element info and selected parameter values for selection, explicit element IDs, or category+filter queries. More controlled than revit_get_element_parameters. includeModelState=true adds phaseCreated, phaseDemolished, designOption and workset; includeOwnership=true adds ownedBy. view reads what a view or sheet shows (active, view id or name, sheet id, number or name), per viewport for a sheet, with location, bounding box, host, owner view and tags; scope=model|annotation|all, includeRoom=true.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Elements;
 
@@ -45,6 +46,9 @@ public class GetElementsInfoTool : IRevitMcpTool
             IncludeModelState = ToolArguments.GetBool(request.Arguments, "includeModelState", false),
             IncludeOwnership = ToolArguments.GetBool(request.Arguments, "includeOwnership", false)
         };
+
+        if (ViewElementReads.HasView(request))
+            return Task.FromResult(ViewElementReads.List(uiapp, target, request, opts, filtersParsed.Warnings, "parameterNames", cancellationToken));
 
         if (!opts.SummaryOnly &&
             !opts.UseSelection &&

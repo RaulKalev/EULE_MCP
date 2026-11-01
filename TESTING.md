@@ -3993,3 +3993,29 @@ Manual, in Revit 2026 and 2024:
    wrong size and a date on one sheet: the findings say so. Write an instance parameter with `includeTitleBlockInstance=true`.
 7. **#143** `revit_get_cad_placement_points includeExtents=true` on a layer of blocks, including a rotated block: width
    and depth match the DWG; a box drawn from the extents lines up with the block in the host view.
+## View element reads (issue #136)
+
+Needs a plan with a crop region, a hidden element, a view filter that hides something, tags and text; a drafting view with
+detail lines, filled regions and a group; a sheet with two or more viewports; a schedule and a view template. Pure logic
+(view references, scope, exclusion rules, guard, paging, crop maths) is covered by `ViewElementReadsTests`. What only Revit
+can answer is listed in [docs/view-element-reads.md](docs/view-element-reads.md#to-be-confirmed-in-revit): write the results there.
+
+**Verify:**
+1. `revit_get_elements_info view=active pageSize=200` on a plan: select the returned ids in Revit (`revit_select_elements` or a model page) and compare with what the plan shows.
+2. Hide an element in the view. It is gone from `view=active`, `excluded.hiddenInView` went up, and the same element is returned for another view that shows it.
+3. Hide a category, turn on a filter that hides something, and use temporary hide: each shows up under its key in `excluded` (`categoryHidden`, `filterHidden`, `temporarilyHidden`).
+4. An element outside the crop region is not returned (`excluded.outsideCrop`), including with a non-rectangular crop.
+5. `revit_count_elements view=<sheet number>` gives `sheetElements` and one `viewports` entry per viewport, and the same read with `revit_get_elements_info` pages through them with `pageSize=20 page=0,1,...`.
+6. `filters`, `category`, `elementIds`, `useSelection`, `compact=true`, `summaryOnly=true` and `document=<non-active title>` all work with `view`.
+7. `scope=annotation` on the drafting view returns detail lines with `Location.Start`, `Location.End`, `LineStyle` and `PartOfGroup`; text notes and filled regions with `BoundingBox` and `Type`; no filled-region boundary lines.
+8. `view=<unknown>` returns `view_not_found` with `candidates`; a name shared by two plans returns `view_ambiguous`; a schedule `view_not_collectable`; a template `view_is_template`; `view=active document=<non-active>` `active_document_required`.
+9. A view with 200+ elements returns `status: view_large_read` with `categories` and `next`, and no elements; each `next` call then works. `revit_count_elements` on it just counts.
+10. Without `view`, all three tools return the same payload as before: compare with a build from before #136.
+
+### Matrix rows (Section 30)
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Elements | `revit_count_elements` `view` | RO | "How many tags are on this plan?" | `{totalCount, groups, view, scope, excluded}` | N/A | N/A | Per viewport for a sheet; never guarded |
+| Elements | `revit_get_elements_info` `view` | RO | "List the fire alarm devices in this view with their locations" | `{totalMatched, elements[], view, scope, excluded}` | N/A | N/A | `view_large_read` from 200 unnarrowed elements |
+| Parameters | `revit_find_elements_by_parameter` `view` | RO | "Which devices on sheet E-101 have no circuit?" | `{totalMatched, sheetElements, viewports[]}` | N/A | N/A | Filters per viewport |

@@ -425,10 +425,12 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_count_elements", ReadOnly = true),
-     Description("Counts model elements grouped by Category or FamilyAndType. Optionally filter to a specific category name. Cheap even for the whole model (no parameter reads) — good first call to discover what categories exist before running a narrower, detailed query like revit_find_elements_by_parameter.")]
+     Description("Counts model elements grouped by Category or FamilyAndType. Optionally filter to a specific category name. Cheap even for the whole model (no parameter reads) — good first call to discover what categories exist before running a narrower, detailed query like revit_find_elements_by_parameter. view counts what a view or sheet shows.")]
     public async Task<string> CountElements(
         [Description("Optional category name to filter by (e.g. 'Fire Alarm Devices'). Leave empty for all categories.")] string? category = null,
         [Description("Group results by: 'Category' (default) or 'FamilyAndType'")] string groupBy = "Category",
+        [Description(ViewArgDescription)] string? view = null,
+        [Description(ViewScopeArgDescription)] string? scope = null,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -437,6 +439,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["category"] = category ?? string.Empty,
             ["groupBy"] = string.IsNullOrEmpty(groupBy) ? "Category" : groupBy
         };
+        AddViewArgs(args, view, scope);
         args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_count_elements", args, cancellationToken);
         return FormatResult(result);
@@ -725,14 +728,14 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_find_elements_by_parameter", ReadOnly = true),
-     Description("Finds model elements matching parameter filters. Supports category/selection/IDs, paging, safety caps, summaryOnly, tags, and compact responses. Requires category, filters, elementIds, useSelection, or summaryOnly=true; call revit_count_elements first when model categories are unknown.")]
+     Description("Finds model elements matching parameter filters. Supports category/selection/IDs, paging, safety caps, summaryOnly, tags, and compact responses. Requires category, filters, elementIds, useSelection, view, or summaryOnly=true; call revit_count_elements first when model categories are unknown. view searches what a view or sheet shows and adds location, bounding box, host, owner view and tags.")]
     public async Task<string> FindElementsByParameter(
         [Description(FiltersDescription)] string? filters = null,
         [Description("Optional category name to restrict search (e.g. 'Fire Alarm Devices')")] string? category = null,
         [Description("If true, scan current Revit selection instead of category/elementIds.")] bool useSelection = false,
         [Description("Explicit element IDs to query.")] long[]? elementIds = null,
         [Description("Optional list of parameter names to include in returned elements")] string[]? returnParameters = null,
-        [Description("Include instance parameters. Default true.")] bool includeInstanceParameters = true,
+        [Description("Include instance parameters. Default true; with view, only when set or when parameter names are given.")] bool? includeInstanceParameters = null,
         [Description("Include type parameters. Heavy/repetitive per element; opt-in. Default false.")] bool includeTypeParameters = false,
         [Description("Max elements to scan/return (default 500).")] int limit = 500,
         [Description("Optional page size for paged results. Clamped by QueryLimits.MaxPageSize (500). Defaults to QueryLimits.DefaultPageSize (100) when omitted.")] int pageSize = -1,
@@ -746,6 +749,9 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Default true: a whole-category read (no elementIds, selection or filters) of 200+ elements is not run when the model graph is fresh; the result has status graph_first with the calls to make instead. False reads the whole category live.")] bool graphFirst = true,
         [Description(IncludeModelStateDescription)] bool includeModelState = false,
         [Description(IncludeOwnershipDescription)] bool includeOwnership = false,
+        [Description(ViewArgDescription)] string? view = null,
+        [Description(ViewScopeArgDescription)] string? scope = null,
+        [Description(ViewIncludeRoomArgDescription)] bool includeRoom = false,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -759,7 +765,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["useSelection"] = useSelection,
             ["elementIds"] = elementIds ?? [],
             ["returnParameters"] = returnParameters ?? [],
-            ["includeInstanceParameters"] = includeInstanceParameters,
+            ["includeInstanceParameters"] = includeInstanceParameters ?? ViewReadDefaultsToInstanceParameters(view, returnParameters),
             ["includeTypeParameters"] = includeTypeParameters,
             ["limit"] = limit,
             ["pageSize"] = pageSize,
@@ -772,6 +778,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["includeModelState"] = includeModelState,
             ["includeOwnership"] = includeOwnership
         };
+        AddViewArgs(args, view, scope, includeRoom);
         args["graphHint"] = graphHint;
         args["graphFirst"] = graphFirst;
         args["document"] = document ?? string.Empty;
@@ -780,14 +787,14 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_get_elements_info", ReadOnly = true),
-     Description("Returns structured element info and selected parameter values. Requires selection, elementIds, category, or summaryOnly=true. Supports filters, paging, safety caps, tags, and compact responses.")]
+     Description("Returns structured element info and selected parameter values. Requires selection, elementIds, category, view, or summaryOnly=true. Supports filters, paging, safety caps, tags, and compact responses. view reads what a view or sheet shows (per viewport for a sheet) and adds location, bounding box, host, owner view and tags.")]
     public async Task<string> GetElementsInfo(
         [Description("If true, use current selection.")] bool useSelection = false,
         [Description("List of element IDs to retrieve.")] long[]? elementIds = null,
         [Description("Category name filter (e.g. 'Fire Alarm Devices').")] string? category = null,
         [Description(FiltersDescription)] string? filters = null,
         [Description("Parameter names to return (partial match). Leave empty for all.")] string[]? parameterNames = null,
-        [Description("Include instance parameters. Default true.")] bool includeInstanceParameters = true,
+        [Description("Include instance parameters. Default true; with view, only when set or when parameter names are given.")] bool? includeInstanceParameters = null,
         [Description("Include type parameters. Heavy/repetitive per element; opt-in. Default false.")] bool includeTypeParameters = false,
         [Description("Max elements to scan/return (default 500).")] int limit = 500,
         [Description("Optional page size for paged results. Clamped by QueryLimits.MaxPageSize (500). Defaults to QueryLimits.DefaultPageSize (100) when omitted.")] int pageSize = -1,
@@ -801,6 +808,9 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Default true: a whole-category read (no elementIds, selection or filters) of 200+ elements is not run when the model graph is fresh; the result has status graph_first with the calls to make instead. False reads the whole category live.")] bool graphFirst = true,
         [Description(IncludeModelStateDescription)] bool includeModelState = false,
         [Description(IncludeOwnershipDescription)] bool includeOwnership = false,
+        [Description(ViewArgDescription)] string? view = null,
+        [Description(ViewScopeArgDescription)] string? scope = null,
+        [Description(ViewIncludeRoomArgDescription)] bool includeRoom = false,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -814,7 +824,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["category"] = category ?? string.Empty,
             ["filters"] = parsedFilters,
             ["parameterNames"] = parameterNames ?? [],
-            ["includeInstanceParameters"] = includeInstanceParameters,
+            ["includeInstanceParameters"] = includeInstanceParameters ?? ViewReadDefaultsToInstanceParameters(view, parameterNames),
             ["includeTypeParameters"] = includeTypeParameters,
             ["limit"] = limit,
             ["pageSize"] = pageSize,
@@ -827,6 +837,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["includeModelState"] = includeModelState,
             ["includeOwnership"] = includeOwnership
         };
+        AddViewArgs(args, view, scope, includeRoom);
         args["graphHint"] = graphHint;
         args["graphFirst"] = graphFirst;
         args["document"] = document ?? string.Empty;
