@@ -333,6 +333,8 @@ public class PlanToolClassificationTests
 
     [Theory]
     [InlineData("revit_place_tags", PlanToolKind.Creates)]
+    [InlineData("revit_copy_view_filters", PlanToolKind.Creates)]
+    [InlineData("revit_apply_view_filters", PlanToolKind.Modifies)]
     [InlineData("revit_copy_elements", PlanToolKind.Creates)]
     [InlineData("revit_create_text_notes", PlanToolKind.Creates)]
     [InlineData("revit_set_parameter", PlanToolKind.Modifies)]

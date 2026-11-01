@@ -41,6 +41,7 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | [MEP routing: cable trays and conduits](docs/mep-routing.md) | 5 | Tray and conduit runs along a polyline with elbows at bends and joins to existing open ends, connecting two runs, lengths per type/size/level/workset and open-end lists |
 | [Transforms and groups](docs/transforms-and-groups.md) | 11 | Mirror across a line drawn in a view, linear and radial arrays as copies or Revit arrays, list/create/ungroup/place groups; move, rotate and copy act on whole groups |
 | [View creation](docs/view-creation.md) | 5 | Floor, ceiling, structural and area plans per level from one spec (template, scope box, view range, sheet placement, company names), sections from two plan points, callouts, 3D views with a section box around elements or a room, drafting views, legends by duplication; crop region / section box of existing views |
+| [View filters](docs/view-filters.md) | 13 | Create rule filters with any nesting of AND and OR, and selection filters; edit and delete them; add them to views and view templates with optional graphics and order (a template that controls filters takes the change, and the preview lists the views it affects); copy them between views, templates and open projects, reporting what the target does not have |
 | [Schedules](docs/schedules.md) | 8 | Read schedule definitions and displayed rows, list schedulable fields, create and edit schedules from a spec (preview first), place them on sheets next to a viewport, export CSV/TXT/XLSX |
 | [Model graph (routing layer)](docs/model-graph.md) | 4 | Per-model SQLite graph of element ids and relationships: build, freshness status, structured queries (neighbors/find/path/subtree), summary |
 | [Elements of a view](docs/view-element-reads.md) | 3 | `view` on the count, info and find reads: what a view or sheet shows, per viewport, model or annotation, with location, bounding box, host, owner view and tags |
@@ -152,6 +153,7 @@ Important repository references:
 - [`docs/view-alignment.md`](docs/view-alignment.md) — lining up and distributing tags, text, and elements within a view
 - [`docs/view-element-reads.md`](docs/view-element-reads.md) — the `view` argument on element reads: what a view or sheet shows, what is left out and why, and what is still to be confirmed in Revit
 - [`docs/view-creation.md`](docs/view-creation.md) — creating plans per level, sections, callouts, 3D views, drafting views and legends from specs, and setting view extents
+- [`docs/view-filters.md`](docs/view-filters.md) — view filters: rules and selection filters, applying them to views and templates, copying between projects
 - [`docs/integration/revit-test-plan-102-109.md`](docs/integration/revit-test-plan-102-109.md) — Revit test plan for issues #102–#109, with per-issue integration notes and deviations
 - [`docs/integration/ai-test-runbook-102-109.md`](docs/integration/ai-test-runbook-102-109.md) — step-by-step runbook for an AI agent to test #102–#109 in Revit on another machine, with expected results and a results template
 
