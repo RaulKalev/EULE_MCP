@@ -50,6 +50,7 @@ internal static class GraphRoutingSupport
             if (!GraphRouting.BroadLiveTools.Contains(request.ToolName)) return;
             if (!ToolArguments.GetBool(request.Arguments, OptOutArg, true)) return;
             if (ToolArguments.GetBool(request.Arguments, "useSelection")) return;
+            if (!string.IsNullOrWhiteSpace(ToolArguments.GetString(request.Arguments, "view"))) return;   // #136: already narrowed to a view
             if (ToolArguments.GetLongArray(request.Arguments, "elementIds").Length > 0) return;
             if (!HintsEnabledForUser()) return;
 
@@ -115,6 +116,7 @@ internal static class GraphRoutingSupport
         {
             Tool = request.ToolName,
             Category = ToolArguments.GetString(args, "category"),
+            HasView = !string.IsNullOrWhiteSpace(ToolArguments.GetString(args, "view")),
             HasElementIds = ToolArguments.GetLongArray(args, "elementIds").Length > 0,
             UseSelection = ToolArguments.GetBool(args, "useSelection"),
             HasFilters = hasFilters,

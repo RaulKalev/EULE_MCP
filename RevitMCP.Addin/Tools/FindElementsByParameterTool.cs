@@ -4,6 +4,7 @@ using Autodesk.Revit.UI;
 using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Query;
+using RevitMCP.Addin.ViewElements;
 using RevitMCP.Core.Models;
 using RevitMCP.Core.Safety;
 
@@ -12,7 +13,7 @@ namespace RevitMCP.Addin.Tools;
 public class FindElementsByParameterTool : IRevitMcpTool
 {
     public string Name => "revit_find_elements_by_parameter";
-    public string Description => "Finds model elements matching one or more parameter filters. Supports instance/type parameters, partial name matching, and value operators (equals, contains, startsWith, isEmpty, greaterThan, etc.). Filter by type/family name with the pseudo-parameters Type, Type Name, Family, Family Name, Family and Type, and by model state with Phase Created, Phase Demolished, Design Option, Workset (names; empty = none). includeModelState=true adds those four to each element, includeOwnership=true adds ownedBy. Requires a category, filters, elementIds, useSelection, or summaryOnly=true — call revit_count_elements first if you don't know the model's categories yet.";
+    public string Description => "Finds model elements matching one or more parameter filters. Supports instance/type parameters, partial name matching, and value operators (equals, contains, startsWith, isEmpty, greaterThan, etc.). Filter by type/family name with the pseudo-parameters Type, Type Name, Family, Family Name, Family and Type, and by model state with Phase Created, Phase Demolished, Design Option, Workset (names; empty = none). includeModelState=true adds those four to each element, includeOwnership=true adds ownedBy. view searches what a view or sheet shows (active, view id or name, sheet id, number or name), per viewport for a sheet; scope=model|annotation|all, includeRoom=true. Requires a category, filters, elementIds, useSelection, view, or summaryOnly=true — call revit_count_elements first if you don't know the model's categories yet.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Parameters;
 
@@ -49,6 +50,9 @@ public class FindElementsByParameterTool : IRevitMcpTool
             IncludeModelState = ToolArguments.GetBool(request.Arguments, "includeModelState", false),
             IncludeOwnership = ToolArguments.GetBool(request.Arguments, "includeOwnership", false)
         };
+
+        if (ViewElementReads.HasView(request))
+            return Task.FromResult(ViewElementReads.List(uiapp, target, request, opts, filtersParsed.Warnings, "returnParameters", cancellationToken));
 
         // Nothing narrows the search at all — rather than scanning (and parameter-reading)
         // the entire model, give the agent a real category breakdown so it can ask the

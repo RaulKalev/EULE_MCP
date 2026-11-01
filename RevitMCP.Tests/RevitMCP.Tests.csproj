@@ -317,4 +317,13 @@
     <Compile Include="..\RevitMCP.Addin\Coordination\Bcf\IfcGuid.cs" Link="Coordination\Bcf\IfcGuid.cs" />
     <Compile Include="..\RevitMCP.Addin\Coordination\ClashFix\ClashFixMath.cs" Link="Coordination\ClashFix\ClashFixMath.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- #136 view element reads: view reference matching, scope and exclusion rules, large-view guard, paging, crop maths (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\ViewElements\ViewTargetMatcher.cs" Link="ViewElements\ViewTargetMatcher.cs" />
+    <Compile Include="..\RevitMCP.Addin\ViewElements\ViewElementRules.cs" Link="ViewElements\ViewElementRules.cs" />
+    <Compile Include="..\RevitMCP.Addin\ViewElements\ViewLargeReadGuard.cs" Link="ViewElements\ViewLargeReadGuard.cs" />
+    <Compile Include="..\RevitMCP.Addin\ViewElements\ViewResultPaging.cs" Link="ViewElements\ViewResultPaging.cs" />
+    <Compile Include="..\RevitMCP.Addin\ViewElements\ViewCropMath.cs" Link="ViewElements\ViewCropMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\ViewElements\ViewElementDtos.cs" Link="ViewElements\ViewElementDtos.cs" />
+  </ItemGroup>
 </Project>
