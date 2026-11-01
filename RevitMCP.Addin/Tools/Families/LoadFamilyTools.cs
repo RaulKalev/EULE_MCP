@@ -18,9 +18,9 @@ public sealed class PreviewLoadFamilyTool : IRevitMcpTool
     public string Description =>
         "Previews loading .rfa family files, without changing the model. Same arguments as revit_load_family: paths, or " +
         "folder + pattern (default *.rfa, recursive optional), ifExists, activateTypes. Checks each file cheaply (exists, " +
-        ".rfa, the file access policy, size, Revit backups) and whether a family of the same name (the file name) is " +
-        "already loaded, and states per file whether it would load, be skipped or overwrite the loaded family. The files " +
-        "are not opened, so a damaged file or one from a newer Revit only fails at load time.";
+        ".rfa, the file access policy, size, Revit file signature, Revit backups) and whether a family of the same name (the " +
+        "file name) is already loaded, and states per file whether it would load, be skipped or overwrite the loaded family. " +
+        "Revit does not open the files, so damage past the signature or a file from a newer Revit only fails at load time.";
 
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.FamilyCreation;
@@ -135,8 +135,8 @@ internal static class FamilyLoadExecutor
                     ifExists = FamilyLoadPolicy.Describe(policy),
                     activateTypes,
                     files,
-                    note = "The files are not opened by the preview; a damaged file, one from a newer Revit version or one " +
-                           "that is not a family fails only at load time, without undoing the others."
+                    note = "Revit does not open the files in a preview; only their signature is read. Damage past the signature, " +
+                           "or a file from a newer Revit version, fails only at load time, without undoing the others."
                 },
                 Warnings = warnings,
                 DurationMs = sw.ElapsedMilliseconds
@@ -168,10 +168,13 @@ internal static class FamilyLoadExecutor
         {
             using var transactions = ItemTransactions.Start(doc, LoadTransactionName, out var startError);
             if (transactions == null) return Fail(request, startError!, warnings);
+            using var dialogs = new ModalDialogGuard(uiapp);
             foreach (var file in toLoad)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                results.Add(LoadOne(doc, transactions, file, policy, activateTypes, loaded.ContainsKey(file.FamilyName)));
+                // A timed-out request keeps the families already loaded: one slow file must not undo the good ones.
+                results.Add(cancellationToken.IsCancellationRequested
+                    ? new FileLoadResult { Path = file.Path, Family = file.FamilyName, Status = "failed", Reason = "Not attempted: the request timed out." }
+                    : LoadOne(doc, transactions, dialogs, file, policy, activateTypes, loaded.ContainsKey(file.FamilyName)));
             }
             groupError = transactions.Finish();
             warnings.AddRange(transactions.Warnings.Select(w => "Revit: " + w));
@@ -222,10 +225,11 @@ internal static class FamilyLoadExecutor
         };
     }
 
-    private static FileLoadResult LoadOne(Document doc, ItemTransactions transactions, FamilyFileCandidate file, FamilyIfExists policy,
-        bool activateTypes, bool existedBefore)
+    private static FileLoadResult LoadOne(Document doc, ItemTransactions transactions, ModalDialogGuard dialogs, FamilyFileCandidate file,
+        FamilyIfExists policy, bool activateTypes, bool existedBefore)
     {
         var result = new FileLoadResult { Path = file.Path, Family = file.FamilyName };
+        var dialogsBefore = dialogs.Dismissed.Count;
         var options = new FamilyLoadOptions(policy);
         Family? family = null;
         var notLoaded = false;
@@ -244,6 +248,12 @@ internal static class FamilyLoadExecutor
             if (activateTypes) ActivateAll(doc, family);
             return null;
         });
+
+        var dialogText = dialogs.Dismissed.Skip(dialogsBefore).ToList();
+        if (error == null)
+            transactions.Warnings.AddRange(dialogText.Select(d => $"{file.FamilyName}: closed a dialog: {d}"));
+        else if (dialogText.Count > 0)
+            error += " Revit said: " + string.Join(" ", dialogText);
 
         if (error != null)
         {
@@ -333,7 +343,8 @@ internal static class FamilyLoadExecutor
         cancellationToken.ThrowIfCancellationRequested();
         using var transactions = ItemTransactions.Start(doc, "Revit MCP - Reload Family", out var startError);
         if (transactions == null) return Fail(request, startError!);
-        var result = LoadOne(doc, transactions, file, policy, activateTypes, existedBefore: true);
+        using var dialogs = new ModalDialogGuard(uiapp);
+        var result = LoadOne(doc, transactions, dialogs, file, policy, activateTypes, existedBefore: true);
         var groupError = transactions.Finish();
         warnings.AddRange(transactions.Warnings.Select(w => "Revit: " + w));
         if (groupError != null)

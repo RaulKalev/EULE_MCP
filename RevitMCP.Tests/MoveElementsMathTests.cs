@@ -712,4 +712,26 @@ public class MoveElementsMathTests
         plan.IsGroupInstance = true;
         Assert.True(MoveElementsMath.Blocked(plan, MoveStatus.OutOfViewPlane, "off plane").IsGroupInstance);
     }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PinnedGroupMember_ReportsInGroupNotPinned(bool skipPinned)
+    {
+        var pinned = MoveElementsMath.Build(Move(elementId: 901, x: 1000), new PointMm(0, 0, 0), true, skipPinned, Tolerance);
+        Assert.Equal(MoveStatus.Pinned, pinned.Status);
+
+        Assert.True(MoveElementsMath.ConstraintsApply(pinned, isGroupMember: true));
+        var blocked = MoveElementsMath.BlockedAsGroupMember(pinned, 77, "Group 1");
+        Assert.Equal(MoveStatus.InGroup, blocked.Status);
+        Assert.Equal(77, blocked.GroupId);
+        Assert.DoesNotContain("Unpin", blocked.Reason);
+    }
+
+    [Fact]
+    public void PinnedElementOutsideAGroup_StaysPinned()
+    {
+        var pinned = MoveElementsMath.Build(Move(elementId: 902, x: 1000), new PointMm(0, 0, 0), true, true, Tolerance);
+        Assert.False(MoveElementsMath.ConstraintsApply(pinned, isGroupMember: false));
+    }
 }

@@ -158,7 +158,7 @@ Conduits and Detail Groups. Find a room on the first level with three or more da
 | ID | Step | Pass when |
 |---|---|---|
 | W24 | `revit_preview_create_mep_run`, then `revit_create_mep_run kind=cableTray type=<a tray type with fittings> level=<first level> offsetMm=2800 widthMm=300 heightMm=60 points=[5 points, 4 straight legs, no z]` | 4 segments and 3 elbows, all `created` |
-| W25 | `revit_get_mep_run_summary runId=<W24 runId>` | 2 open ends (the run ends), 0 disconnected segments, length equals the drawn polyline within 1 mm per segment |
+| W25 | `revit_get_mep_run_summary runId=<W24 runId>` | 2 open ends (the run ends), 0 disconnected segments. `drawnLengthMm` from the create equals the drawn polyline within 1 mm per segment; the summary's length equals the create's `totalLengthMm`, which is shorter because elbows take their share out of each segment |
 | W26 | A conduit run with one 45° bend on a conduit type whose list entry says `missingElbows: true` | Segments created; that bend is `fitting_failed` with Revit's message |
 | W27 | A second tray run starting within 50 mm of W24's open end with `connectStart="auto"` | `connected` |
 | W28 | `revit_connect_mep_curves` on two conduit segments end to end in line | `connected`; on parallel offset segments, `skew_lines` |
@@ -227,7 +227,8 @@ F1–F3, W12, W14, W19, W24 and W1. Record the 2024 results in their own column.
 
 ## Known limits that are not bugs
 
-- **Formula fields** cannot be created in schedules: the Revit API has no call to set a formula.
+- **Formula and percentage fields** cannot be created in schedules: the Revit API refuses them (`fieldType is not a schedulable field type`), so the planner reports them as missing fields.
+- **`z` in `revit_place_family_instances`** is the height above the level for a level-based family, not a model coordinate. `pointMm` in the result is the model position.
 - **Legends** can only be made by duplicating an existing legend.
 - **Design option membership** cannot be changed through the API, and views per option are not reported.
 - **`source=project` parameters** are shared definitions in a connector-owned scratch file.

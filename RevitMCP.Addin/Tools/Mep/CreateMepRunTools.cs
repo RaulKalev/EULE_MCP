@@ -357,7 +357,8 @@ internal static class MepRunExecutor
             Success = created > 0,
             Status = failedFittings.Count > 0 ? MepStatus.FittingFailed : null,
             Message = $"Created a {MepKind.Label(spec.Kind)} run '{context.Type.Name}': {created} segment(s), " +
-                      $"{MepMath.ToMetres(totalMm).ToString("0.###", CultureInfo.InvariantCulture)} m, {elbows} elbow(s)" +
+                      $"{MepMath.ToMetres(totalMm).ToString("0.###", CultureInfo.InvariantCulture)} m of straight segments " +
+                      $"({MepMath.ToMetres(context.Plan.TotalLengthMm).ToString("0.###", CultureInfo.InvariantCulture)} m drawn), {elbows} elbow(s)" +
                       (failedFittings.Count > 0 ? $"; {failedFittings.Count} elbow(s) failed at bend(s) {string.Join(", ", failedFittings.Select(f => f.BendIndex))} (segments kept, unjoined)" : string.Empty) +
                       (failedSegments > 0 ? $"; {failedSegments} segment(s) refused" : string.Empty) +
                       $". {ConnectionsText(build.Connections)}Run id {runId}.",
@@ -372,6 +373,7 @@ internal static class MepRunExecutor
                 segments = segments.Select(s => new
                 {
                     index = s.Index, elementId = s.ElementId, fromMm = Point(s.From), toMm = Point(s.To),
+                    drawnLengthMm = MepMath.Round(s.From.DistanceTo(s.To)),
                     lengthMm = s.Status == MepStatus.Created ? MepMath.Round(s.LengthMm) : (double?)null, status = s.Status, error = s.Error
                 }).ToList(),
                 fittings = build.Fittings.Select(f => new
@@ -385,6 +387,8 @@ internal static class MepRunExecutor
                 }).ToList(),
                 totalLengthMm = MepMath.Round(totalMm),
                 totalLengthM = MepMath.ToMetres(totalMm),
+                drawnLengthMm = MepMath.Round(context.Plan.TotalLengthMm),
+                lengthNote = "fromMm, toMm and drawnLengthMm are the polyline as drawn. lengthMm is Revit's Length, as schedules sum it: elbows take their share out of each segment.",
                 changes = context.Plan.Changes,
                 next = "revit_get_mep_run_summary runId=" + runId + " lists the run's open ends and totals.",
                 transaction = diagnostics

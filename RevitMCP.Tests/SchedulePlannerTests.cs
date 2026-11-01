@@ -222,9 +222,9 @@ public class SchedulePlannerTests
     }
 
     [Fact]
-    public void Percentage_ResolvesItsFieldOrFails()
+    public void Percentage_IsRefusedLikeAFormula()
     {
-        var ok = new ScheduleSpec
+        var spec = new ScheduleSpec
         {
             Category = "Electrical Fixtures",
             Fields =
@@ -233,16 +233,9 @@ public class SchedulePlannerTests
                 new ScheduleFieldSpec { Kind = ScheduleFieldKind.Percentage, PercentageOf = "Apparent Load", Heading = "Share" }
             }
         };
-        var plan = SchedulePlanner.PlanCreate(ok, Catalog, new List<string>());
-        var percentage = plan.Actions.Single(a => a.Kind == ScheduleActionKind.AddPercentage);
-        Assert.Equal(plan.Fields[0].Key, percentage.OfFieldKey);
-
-        ok.Fields[1].PercentageOf = "Count";
-        ok.Fields.Add(new ScheduleFieldSpec { Kind = ScheduleFieldKind.Count });
-        var bad = SchedulePlanner.PlanCreate(ok, Catalog, new List<string>());
-        Assert.Contains(bad.MissingFields, m => m.Role == "percentage");
-        Assert.DoesNotContain(bad.Actions, a => a.Kind == ScheduleActionKind.AddPercentage);
-        Assert.Equal(2, bad.Fields.Count);
+        var plan = SchedulePlanner.PlanCreate(spec, Catalog, new List<string>());
+        Assert.Contains(plan.MissingFields, m => m.Role == "percentage" && m.Reason!.Contains("Revit API"));
+        Assert.Single(plan.Fields);
     }
 
     [Fact]

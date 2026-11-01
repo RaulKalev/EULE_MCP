@@ -175,7 +175,6 @@ A field is a name or an object:
 | `"Mark"`, `"Room: Name"` | A field by its name in `revit_list_schedulable_fields` (case and spaces, `-`, `_` ignored when there is no exact match) |
 | `{ "parameter": "Comments", "fieldType": "type" }` | `fieldType` (`instance`, `type`, `room`, `fromRoom`, …) picks among same-named fields. Without it the instance field wins, then the type field, and the choice is reported |
 | `"Count"` or `{ "count": true }` | The count column |
-| `{ "percentage": { "of": "Apparent Load" }, "heading": "Share" }` | A percentage of a numeric field of the schedule |
 | `heading` | Column heading |
 | `width` | Column width on the sheet, mm |
 | `hidden` | Hidden column (still usable by filters and sorting) |

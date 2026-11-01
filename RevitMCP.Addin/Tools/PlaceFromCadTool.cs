@@ -74,6 +74,7 @@ public class PlaceFromCadTool : IRevitMcpTool
         var created = new List<object>();
         var errors = new List<string>();
         var placed = 0;
+        var onElevation = new List<(FamilyInstance Instance, double ElevationFeet)>();
 
         cancellationToken.ThrowIfCancellationRequested();
         var (txSuccess, diagnostics) = RevitTransactionRunner.Run(doc, "Revit MCP - Place From CAD", () =>
@@ -95,6 +96,8 @@ public class PlaceFromCadTool : IRevitMcpTool
                 {
                     var instance = FamilyInstancePlacer.CreateInstance(
                         doc, uidoc, plan.Symbol, plan.PlacementType, point, plan.View, plan.Level, plan.Host);
+                    if (FamilyInstancePlacer.MeasuresZFromLevel(plan.PlacementType, plan.Host))
+                        onElevation.Add((instance, point.Z));
 
                     if (Math.Abs(placement.RotationDegrees) > 1e-9)
                     {
@@ -123,6 +126,9 @@ public class PlaceFromCadTool : IRevitMcpTool
                     errors.Add($"{placement.Point.Layer} at ({placement.Point.X:F0}, {placement.Point.Y:F0}): {ex.Message}");
                 }
             }
+
+            // ElevationMm is a model elevation.
+            FamilyInstancePlacer.MoveOntoElevations(doc, onElevation);
         });
 
         sw.Stop();
