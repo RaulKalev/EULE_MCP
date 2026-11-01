@@ -470,6 +470,7 @@ public class App : IExternalApplication
             RevitMCP.Addin.Tools.Families.FamiliesAndParametersToolRegistration.Register(handler); // #102 families and parameters
             RevitMCP.Addin.Tools.Schedules.SchedulesToolRegistration.Register(handler); // #103 schedules
             RevitMCP.Addin.Tools.Views.ViewCreationToolRegistration.Register(handler); // #104 view creation
+            RevitMCP.Addin.Tools.FilledRegions.FilledRegionToolRegistration.Register(handler); // #135 filled regions
             RevitMCP.Addin.Tools.Mep.MepToolRegistration.Register(handler); // #106 cable tray and conduit runs
             RevitMCP.Addin.Tools.Geometry.GeometryToolRegistration.Register(handler); // #107 geometry queries
             RevitMCP.Addin.Tools.TransformsAndGroupsToolRegistration.Register(handler); // #108 mirror, array, groups

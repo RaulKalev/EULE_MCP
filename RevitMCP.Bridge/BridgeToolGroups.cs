@@ -25,7 +25,7 @@ public static class BridgeToolGroups
         ["panelschematics"] = "PanelSchematics plugin (Kilbiskeemid): panel tables, empty rows, circuit row parameters, its Extensible Storage data",
         ["ifc"] = "IFC links, IFC spaces to rooms, linked-model element queries",
         ["views"] = "Views, sheets, schedules (read definitions and rows, create, edit, place on sheets, export), title blocks, revisions, view templates",
-        ["tags"] = "Tags, dimensions, text notes, detail lines, view alignment",
+        ["tags"] = "Tags, dimensions, text notes, detail lines, filled regions and their types, view alignment",
         ["coordination"] = "Clash detection, clash review, BCF files (read, match to the model, re-check), clash fix proposals and verified fixes, issue reports",
         ["cad"] = "DWG/CAD imports, overrides and placement from CAD",
         ["pages"] = "Model pages: publish a generated HTML report as a local page whose rows select elements in Revit, show live parameter values and can be edited",
@@ -86,6 +86,12 @@ public static class BridgeToolGroups
             "revit_list_phases", "revit_list_design_options", "revit_audit_model"
         }),
         ("tags", new[] { "revit_create_text_notes", "revit_get_text_notes", "revit_preview_set_text_notes", "revit_set_text_notes", "revit_annotate_detail_lines", "revit_preview_align_in_view", "revit_align_in_view" }),
+        // #135: filled region names match no keyword, and "preview" contains "view".
+        ("tags", new[]
+        {
+            "revit_list_filled_regions", "revit_list_filled_region_types", "revit_preview_create_filled_regions", "revit_create_filled_regions",
+            "revit_preview_edit_filled_regions", "revit_edit_filled_regions", "revit_preview_set_filled_region_types", "revit_set_filled_region_types"
+        }),
         ("ifc", new[] { "revit_query_linked_elements", "revit_select_linked_elements" }),
         // #103: "schedulable" does not contain the "schedule" keyword.
         ("views", new[] { "revit_list_schedulable_fields" }),

@@ -317,4 +317,10 @@
     <Compile Include="..\RevitMCP.Addin\Coordination\Bcf\IfcGuid.cs" Link="Coordination\Bcf\IfcGuid.cs" />
     <Compile Include="..\RevitMCP.Addin\Coordination\ClashFix\ClashFixMath.cs" Link="Coordination\ClashFix\ClashFixMath.cs" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Filled regions (#135): loop validation, rule expansion, type map, specs and summaries (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\FilledRegions\*.cs" Link="FilledRegions\%(Filename)%(Extension)" />
+    <Compile Include="..\RevitMCP.Addin\Approval\FilledRegionApprovalSummaries.cs" Link="Approval\FilledRegionApprovalSummaries.cs" />
+  </ItemGroup>
 </Project>

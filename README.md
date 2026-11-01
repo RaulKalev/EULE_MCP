@@ -41,6 +41,7 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | [MEP routing: cable trays and conduits](docs/mep-routing.md) | 5 | Tray and conduit runs along a polyline with elbows at bends and joins to existing open ends, connecting two runs, lengths per type/size/level/workset and open-end lists |
 | [Transforms and groups](docs/transforms-and-groups.md) | 11 | Mirror across a line drawn in a view, linear and radial arrays as copies or Revit arrays, list/create/ungroup/place groups; move, rotate and copy act on whole groups |
 | [View creation](docs/view-creation.md) | 5 | Floor, ceiling, structural and area plans per level from one spec (template, scope box, view range, sheet placement, company names), sections from two plan points, callouts, 3D views with a section box around elements or a room, drafting views, legends by duplication; crop region / section box of existing views |
+| [Filled regions](docs/filled-regions.md) | 8 | Draw filled regions from coordinates with holes, rectangles, host or linked room boundaries, detail lines or rules (a region per room or element, type from a parameter value), read them, change type and parameters, reshape, and create and edit types |
 | [Schedules](docs/schedules.md) | 8 | Read schedule definitions and displayed rows, list schedulable fields, create and edit schedules from a spec (preview first), place them on sheets next to a viewport, export CSV/TXT/XLSX |
 | [Model graph (routing layer)](docs/model-graph.md) | 4 | Per-model SQLite graph of element ids and relationships: build, freshness status, structured queries (neighbors/find/path/subtree), summary |
 | [Geometry queries](docs/geometry-queries.md) | 6 | Element geometry in mm, elements in a box or within a radius, nearest wall/ceiling/floor/roof, line of sight, clearance around a device — host and links |
@@ -126,6 +127,7 @@ Important repository references:
 - [`docs/execution-safety.md`](docs/execution-safety.md) — execution guarantees
 - [`docs/extensible-storage.md`](docs/extensible-storage.md) — reading add-in data stored on elements
 - [`docs/family-types.md`](docs/family-types.md) — duplicating, renaming, and re-parameterising family types
+- [`docs/filled-regions.md`](docs/filled-regions.md) — filled regions: coordinates in any view, room and linked room boundaries, rules with a type map, reshaping by replacement, and type management
 - [`docs/geometry-queries.md`](docs/geometry-queries.md) — element geometry, elements in a box or radius, nearest surface, line of sight and clearance, in host mm
 - [`docs/families-and-parameters.md`](docs/families-and-parameters.md) — listing, loading, reloading and purging families; creating and binding project and shared parameters
 - [`docs/mcp-performance.md`](docs/mcp-performance.md) — lower-latency queries and reduced-credit tool profiles

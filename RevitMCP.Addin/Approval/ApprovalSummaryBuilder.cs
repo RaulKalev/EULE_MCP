@@ -113,6 +113,7 @@ public static class ApprovalSummaryBuilder
         FamiliesAndParametersApprovalSummaries.TryBuild(request)
         ?? SchedulesApprovalSummaries.TryBuild(request)
         ?? ViewCreationApprovalSummaries.TryBuild(request)
+        ?? FilledRegionApprovalSummaries.TryBuild(request)
         ?? MepApprovalSummaries.TryBuild(request)
         ?? TransformsAndGroupsApprovalSummaries.TryBuild(request)
         ?? ModelStateApprovalSummaries.TryBuild(request)

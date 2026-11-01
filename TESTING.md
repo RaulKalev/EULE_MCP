@@ -3963,3 +3963,34 @@ map lookup, width estimate) is covered by `TextNoteEditPlannerTests`.
 |------|------|------------|--------------|-----------------|----------|------|-------|
 | Elements | `revit_preview_set_text_notes` | RO | "Preview adding ' // Power' to every 'Toide' text note" | `{changedCount, unchangedCount, skippedCount, changed[], unchanged[], skipped[]}` | N/A | N/A | Same plan the write tool executes |
 | Elements | `revit_set_text_notes` | Approval | "Translate the rack labels with this map" | Per-note old → new text, `formattingPreserved` | Yes | One Undo | Element ids kept; worksharing-blocked notes skipped |
+
+## 58. Filled Regions (issue #135)
+
+Requires a floor plan and a section through a room, a drafting view, a 3D view and a schedule, a host room, a loaded Revit
+link with rooms, and at least two filled region types. Pure logic (loop validation, holes, padding, projection, rule
+expansion, the type map) is covered by `FilledRegionGeometryTests` and `FilledRegionSpecTests`. Run this in Revit 2026 and 2024.
+See `docs/filled-regions.md`.
+
+**Verify:**
+1. `revit_list_filled_region_types` lists patterns, colours, line weight, masking and `instanceCount`, with the fill patterns and line styles.
+2. `revit_create_filled_regions` makes a region with a hole from `loops` in the plan, the section (with z) and the drafting view, and from a `rectangle` in each. `revit_list_filled_regions` returns the same loops and `revitAreaM2` matches `areaM2`. One Undo removes them.
+3. A `room` spec in the plan follows the room boundary; a room with a column or island gets a hole; `paddingMm` grows it. In the section the preview returns `boundary_not_in_view_plane`.
+4. A linked room's region lines up with the room in the host plan, also after the link is moved and the region is drawn again.
+5. Four `detailLines` drawn in the section, given in any order, make a region in the section; the same ids in the plan return `boundary_not_in_view_plane`.
+6. A rule with a `typeMap` per room: the preview lists every region and every `skippedSources` entry; the write creates exactly those. An unmapped value is skipped with `value_not_mapped`, never given a type.
+7. The preview reports `loop_open` and `loop_self_intersecting` for bad loops and `view_not_supported` for the 3D view and the schedule, and nothing is written.
+8. Changing `type` and `parameters` with `revit_edit_filled_regions` keeps the id. A `boundary` returns `idMap`, keeps type, view and Comments, and lists an attached tag or dimension as lost.
+9. `revit_preview_set_filled_region_types` lists the regions of the type; the write changes all of them. `duplicateFrom` makes a new type; a taken name returns `type_name_exists`.
+
+### Matrix rows (Section 30)
+
+| Area | Tool | Permission | Smoke Prompt | Expected Result | Approval | Undo | Notes |
+|------|------|------------|--------------|-----------------|----------|------|-------|
+| Elements | `revit_list_filled_regions` | RO | "List the filled regions in this view" | Type, loops, `areaM2`, parameters | N/A | N/A | Loops in the format the create tool takes |
+| Elements | `revit_list_filled_region_types` | RO | "What filled region types are there?" | Patterns, colours, `instanceCount` | N/A | N/A | Also patterns and line styles |
+| Elements | `revit_preview_create_filled_regions` | RO | "Preview a region per room, type by department" | `regions[]`, `skippedSources`, `unmappedValues` | N/A | N/A | Rolled-back trial by default |
+| Elements | `revit_create_filled_regions` | Approval | "Draw them" | `newRegionIds`, per region status | Yes | One Undo | Specs and rules share one path |
+| Elements | `revit_preview_edit_filled_regions` | RO | "Preview making this region bigger" | `keepsId`, `reshape.attachedAnnotations` | N/A | N/A | Lists what may be lost |
+| Elements | `revit_edit_filled_regions` | Approval | "Change its type" / "Reshape it" | Id kept / `idMap` | Yes | One Undo | A reshape replaces the element; plans refuse it |
+| Elements | `revit_preview_set_filled_region_types` | RO | "Preview making this type red" | `changes`, `affectedRegions.byView` | N/A | N/A | Every region of the type |
+| Elements | `revit_set_filled_region_types` | Approval | "Make a green copy of this type" | `newTypeIds`, changes | Yes | One Undo | Type edit changes all its regions |
