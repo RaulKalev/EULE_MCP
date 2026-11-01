@@ -248,5 +248,5 @@ line to the next level.
 
 ## Out of scope
 
-Elevations (`ViewSection.CreateElevation` needs an `ElevationMarker`), view filters and graphic overrides, sheet
-creation (`revit_create_sheets_from_table`), schedules, rendering settings.
+Elevations (`ViewSection.CreateElevation` needs an `ElevationMarker`), category graphic overrides, sheet
+creation (`revit_create_sheets_from_table`), schedules, rendering settings. View filters have their own tools: [`view-filters.md`](view-filters.md).

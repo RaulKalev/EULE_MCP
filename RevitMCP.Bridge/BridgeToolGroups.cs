@@ -24,7 +24,7 @@ public static class BridgeToolGroups
         ["electrical"] = "Circuits, panels, wires/cables, voltage drop, fire alarm circuits, patch panels, cable tray and conduit runs (containment)",
         ["panelschematics"] = "PanelSchematics plugin (Kilbiskeemid): panel tables, empty rows, circuit row parameters, its Extensible Storage data",
         ["ifc"] = "IFC links, IFC spaces to rooms, linked-model element queries",
-        ["views"] = "Views, sheets, schedules (read definitions and rows, create, edit, place on sheets, export), title blocks, revisions, view templates",
+        ["views"] = "Views, sheets, schedules (read definitions and rows, create, edit, place on sheets, export), title blocks, revisions, view templates, view filters",
         ["tags"] = "Tags, dimensions, text notes, detail lines, view alignment",
         ["coordination"] = "Clash detection, clash review, BCF files (read, match to the model, re-check), clash fix proposals and verified fixes, issue reports",
         ["cad"] = "DWG/CAD imports, overrides and placement from CAD",
@@ -88,7 +88,7 @@ public static class BridgeToolGroups
         ("tags", new[] { "revit_create_text_notes", "revit_get_text_notes", "revit_preview_set_text_notes", "revit_set_text_notes", "revit_annotate_detail_lines", "revit_preview_align_in_view", "revit_align_in_view" }),
         ("ifc", new[] { "revit_query_linked_elements", "revit_select_linked_elements" }),
         // #103: "schedulable" does not contain the "schedule" keyword.
-        ("views", new[] { "revit_list_schedulable_fields" }),
+        ("views", new[] { "revit_list_schedulable_fields", "revit_list_filterable_parameters" }),
         ("cad", new[] { "revit_create_panel_schematic_symbol_from_dwg" }),
         ("documents", new[]
         {

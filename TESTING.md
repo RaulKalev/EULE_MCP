@@ -3963,3 +3963,37 @@ map lookup, width estimate) is covered by `TextNoteEditPlannerTests`.
 |------|------|------------|--------------|-----------------|----------|------|-------|
 | Elements | `revit_preview_set_text_notes` | RO | "Preview adding ' // Power' to every 'Toide' text note" | `{changedCount, unchangedCount, skippedCount, changed[], unchanged[], skipped[]}` | N/A | N/A | Same plan the write tool executes |
 | Elements | `revit_set_text_notes` | Approval | "Translate the rack labels with this map" | Per-note old → new text, `formattingPreserved` | Yes | One Undo | Element ids kept; worksharing-blocked notes skipped |
+
+## 58. View Filters (issue #134)
+
+Reference: [`docs/view-filters.md`](docs/view-filters.md). Tools: `revit_list_view_filters`, `revit_list_filterable_parameters`,
+`revit_get_view_filters`, `revit_preview_create_view_filters` / `revit_create_view_filters`,
+`revit_preview_edit_view_filters` / `revit_edit_view_filters`, `revit_preview_delete_view_filters` / `revit_delete_view_filters`,
+`revit_preview_apply_view_filters` / `revit_apply_view_filters`, `revit_preview_copy_view_filters` / `revit_copy_view_filters`.
+
+Unit tests: `ViewFilterTests` (rule tree, operators per storage type, requests, matching, routing, order, approval text).
+
+Manual test in Revit 2026 and 2024, on a project with walls, one view with a template that controls V/G filters and one
+without; for the copy, a second open project.
+
+1. `revit_list_filterable_parameters categories=["Walls"]` lists Comments, with `valueKind: Text` and text operators. Without
+   categories it lists the filterable categories.
+2. `revit_preview_create_view_filters` with a nested AND/OR filter on Walls, a taken name, a bad category
+   (`"Sheets"`, `"Nope"`), a parameter that is not filterable, and `contains` on a number: each reports its own code
+   (`filter_name_exists`, `category_not_filterable`, `category_not_found`, `parameter_not_filterable`,
+   `operator_not_valid_for_type`). `revit_list_view_filters` shows nothing new.
+3. `revit_create_view_filters` with the valid nested filter. Build the same filter by hand in Manage > Filters. In a view,
+   override each with its own colour: both colour exactly the same walls.
+4. `revit_apply_view_filters views=[<view without template>] add=[<filter>]`: Visibility/Graphics > Filters shows it with no
+   overrides. Set a colour there by hand: it works, and `revit_get_view_filters` reports it.
+5. `revit_preview_apply_view_filters views=[<view under template>] add=[<filter>]`: `targets` names the template with
+   `routedToTemplate: true` and lists every view under it. Apply: the template has the filter, each of those views shows it.
+6. `revit_apply_view_filters` with graphics (colour, weight, pattern, transparency, halftone) and `order`: the dialog shows them
+   and the order. Settings of the other filters are unchanged.
+7. `revit_preview_delete_view_filters` on a used filter lists its views and templates. `revit_delete_view_filters` returns
+   `approval_required` even with Direct Edit on, and a `DESTRUCTIVE` summary. After manual approval it is gone everywhere; Undo
+   restores it.
+8. `revit_preview_copy_view_filters` to the second project with a project parameter it lacks: `unresolved` names it and the filter
+   stays out. `revit_copy_view_filters`: the others arrive with their settings, the source is unchanged, a selection filter
+   arrives empty with `membersNotCopied`.
+9. Undo once after each write: everything of that call is reverted.
