@@ -2,7 +2,7 @@
 
 EULE MCP connects Claude Code, Codex, and Antigravity CLI to a live Autodesk Revit model through the [Model Context Protocol](https://modelcontextprotocol.io). It provides local model queries, discipline workflows, controlled writes, QA, reporting, and file operations without requiring users to write Revit API scripts.
 
-The current bridge exposes **195 MCP tools** across eleven documented capability groups.
+The current bridge exposes **384 MCP tools**. The compact `core` profile is advertised by default, and `revit_tools_search` finds the rest by intent.
 
 ## Documentation
 
@@ -46,6 +46,7 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | [Schedules](docs/schedules.md) | 8 | Read schedule definitions and displayed rows, list schedulable fields, create and edit schedules from a spec (preview first), place them on sheets next to a viewport, export CSV/TXT/XLSX |
 | [Model graph (routing layer)](docs/model-graph.md) | 4 | Per-model SQLite graph of element ids and relationships: build, freshness status, structured queries (neighbors/find/path/subtree), summary |
 | [Elements of a view](docs/view-element-reads.md) | 3 | `view` on the count, info and find reads: what a view or sheet shows, per viewport, model or annotation, with location, bounding box, host, owner view and tags |
+| [Annotation lines and sheet checks](docs/annotation-and-sheets.md) | 4 | Change line endpoints in place, draw a rectangle in one call, find overlapping text in a view or sheet, read title block values and check them against the real sheet size; also pixel-to-model mapping of exported images, plain formatting on text edits and block sizes from a DWG |
 | [Geometry queries](docs/geometry-queries.md) | 6 | Element geometry in mm, elements in a box or within a radius, nearest wall/ceiling/floor/roof, line of sight, clearance around a device — host and links |
 | [BCF clashes and clash fixes](docs/bcf-clashes.md) | 4 | Read BCF files, match topics to host and linked elements by IFC GlobalId, re-check each clash, propose clearing moves and apply them with verification |
 | [Model state and health audit](docs/model-state.md) | 6 | Phases, design options and worksets in queries and filters, set element and view phases, model health audit published as a page |
@@ -156,6 +157,7 @@ Important repository references:
 - [`docs/view-element-reads.md`](docs/view-element-reads.md) — the `view` argument on element reads: what a view or sheet shows, what is left out and why, and what is still to be confirmed in Revit
 - [`docs/view-creation.md`](docs/view-creation.md) — creating plans per level, sections, callouts, 3D views, drafting views and legends from specs, and setting view extents
 - [`docs/view-filters.md`](docs/view-filters.md) — view filters: rules and selection filters, applying them to views and templates, copying between projects
+- [`docs/integration/ai-test-runbook-134-143.md`](docs/integration/ai-test-runbook-134-143.md) — step-by-step runbook for an AI agent to test #134–#143 in Revit, with expected results
 - [`docs/integration/revit-test-plan-102-109.md`](docs/integration/revit-test-plan-102-109.md) — Revit test plan for issues #102–#109, with per-issue integration notes and deviations
 - [`docs/integration/ai-test-runbook-102-109.md`](docs/integration/ai-test-runbook-102-109.md) — step-by-step runbook for an AI agent to test #102–#109 in Revit on another machine, with expected results and a results template
 
