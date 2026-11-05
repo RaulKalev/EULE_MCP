@@ -29,7 +29,10 @@ public static class LongRunningTools
         // A large delete regenerates for longer than the default timeout (#138)
         "revit_delete_elements",
         "revit_delete_views",
-        "revit_delete_sheets"
+        "revit_delete_sheets",
+        // Sheet and model export (#105): a 50-sheet PDF/DWG set, merged drawings through the ODA converter, IFC/NWC
+        "revit_export",
+        "revit_export_and_check"
     };
 
     public static bool IsLongRunning(string? toolName) => toolName != null && Names.Contains(toolName);

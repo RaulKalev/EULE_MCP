@@ -49,6 +49,7 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | [Annotation lines and sheet checks](docs/annotation-and-sheets.md) | 4 | Change line endpoints in place, draw a rectangle in one call, find overlapping text in a view or sheet, read title block values and check them against the real sheet size; also pixel-to-model mapping of exported images, plain formatting on text edits and block sizes from a DWG |
 | [Geometry queries](docs/geometry-queries.md) | 6 | Element geometry in mm, elements in a box or within a radius, nearest wall/ceiling/floor/roof, line of sight, clearance around a device — host and links |
 | [BCF clashes and clash fixes](docs/bcf-clashes.md) | 4 | Read BCF files, match topics to host and linked elements by IFC GlobalId, re-check each clash, propose clearing moves and apply them with verification |
+| [Export: PDF, DWG, DXF, IFC, NWC](docs/export.md) | 4 | Sheets to PDF/DWG/DXF as the EliteSheets plugin makes them (merged drawings `…-7-05_…--1/--2` as one combined PDF and one DXF/DWG in the template), the model to IFC/NWC, company file names, overwrite or timestamp policy, export followed by the delivery and register check |
 | [Model state and health audit](docs/model-state.md) | 6 | Phases, design options and worksets in queries and filters, set element and view phases, model health audit published as a page |
 
 ## Supported environment
@@ -135,6 +136,7 @@ Important repository references:
 - [`docs/filled-regions.md`](docs/filled-regions.md) — filled regions: coordinates in any view, room and linked room boundaries, rules with a type map, reshaping by replacement, and type management
 - [`docs/geometry-queries.md`](docs/geometry-queries.md) — element geometry, elements in a box or radius, nearest surface, line of sight and clearance, in host mm
 - [`docs/families-and-parameters.md`](docs/families-and-parameters.md) — listing, loading, reloading and purging families; creating and binding project and shared parameters
+- [`docs/export.md`](docs/export.md) — exporting sheets to PDF/DWG/DXF with the EliteSheets merge rule and settings, the model to IFC/NWC, and checking the delivery folder afterwards
 - [`docs/mcp-performance.md`](docs/mcp-performance.md) — lower-latency queries and reduced-credit tool profiles
 - [`docs/project-village.md`](docs/project-village.md) — opt-in "Project Village" activity visualizer with a flyer board of query results and Show in Revit (no AI calls, no model changes)
 - [`docs/model-graph.md`](docs/model-graph.md) — per-model routing graph: find element ids cheaply before querying the live model

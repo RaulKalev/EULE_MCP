@@ -190,6 +190,11 @@
     <!-- Issue report pure-logic files (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Reports\IssueReportService.cs" Link="Reports\IssueReportService.cs" />
     <Compile Include="..\RevitMCP.Addin\Export\ExportPathService.cs" Link="Export\ExportPathService.cs" />
+    <!-- Sheet export (#105): EliteSheets merge rule, file names, plan, EliteSheets settings -->
+    <Compile Include="..\RevitMCP.Addin\Export\Sheets\SheetMergeGrouping.cs" Link="Export\Sheets\SheetMergeGrouping.cs" />
+    <Compile Include="..\RevitMCP.Addin\Export\Sheets\ExportFileNamer.cs" Link="Export\Sheets\ExportFileNamer.cs" />
+    <Compile Include="..\RevitMCP.Addin\Export\Sheets\ExportPlanner.cs" Link="Export\Sheets\ExportPlanner.cs" />
+    <Compile Include="..\RevitMCP.Addin\Export\Sheets\EliteSheetsSettings.cs" Link="Export\Sheets\EliteSheetsSettings.cs" />
     <Compile Include="..\RevitMCP.Addin\Services\InvariantCultureScope.cs" Link="Services\InvariantCultureScope.cs" />
     <!-- Drawing Naming pure-logic files (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Skills\Tasks\DrawingNaming\Models\NamingMappingToken.cs" Link="DrawingNaming\Models\NamingMappingToken.cs" />

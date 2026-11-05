@@ -72,6 +72,12 @@
           "SQLitePCLRaw.core": "2.1.6"
         }
       },
+      "netDxf": {
+        "type": "Direct",
+        "requested": "[2023.11.10, )",
+        "resolved": "2023.11.10",
+        "contentHash": "7BFtw6P5Zfli59HJJ3INq6InaWzgNnC7qQopP+5H8CUg/7FjUX0qG63kLLPplOy1sZSjnwGzAPEjk67g1O7LuQ=="
+      },
       "Newtonsoft.Json": {
         "type": "Direct",
         "requested": "[13.0.3, )",
@@ -600,6 +606,12 @@
         "dependencies": {
           "SQLitePCLRaw.core": "2.1.6"
         }
+      },
+      "netDxf": {
+        "type": "Direct",
+        "requested": "[2023.11.10, )",
+        "resolved": "2023.11.10",
+        "contentHash": "7BFtw6P5Zfli59HJJ3INq6InaWzgNnC7qQopP+5H8CUg/7FjUX0qG63kLLPplOy1sZSjnwGzAPEjk67g1O7LuQ=="
       },
       "Newtonsoft.Json": {
         "type": "Direct",
