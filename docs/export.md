@@ -1,4 +1,4 @@
-# Export: sheets to PDF/DWG/DXF, the model to IFC/NWC
+# Export: sheets to PDF/DWG/DXF, the model to IFC
 
 Issue #105. The connector exports a delivery the same way the **EliteSheets** plugin (Jooniste Printimine,
 `RaulKalev/EliteSheets`) does, including its rule for merged drawings, so files from the connector and from the
@@ -88,10 +88,9 @@ Otherwise the new file gets a timestamp suffix (`…_2026-11-05_143015.pdf`), th
 | `dwg` | `doc.Export` with the DWG/DXF export setup `dwgSetup`. The default is the active setup, else the first by name, as the plugin's list shows it. `mergedViews=true` overrides the setup to write one DWG without view xrefs. Xrefs Revit writes beside the DWG are listed as `extraFiles`. |
 | `dxf` | DXF with the same setup, then paper space promoted to model space, as in the plugin. |
 | `ifc` | `IFCExportOptions`: `ifcVersion` IFC2x3CV2 (default) / IFC4RV / IFC4DTV, `ifcSpaceBoundaries` 0–2, `ifcBaseQuantities`, `viewId` as the filter view. Runs in a transaction that is rolled back, so the model is unchanged. A named IFC export configuration from the IFC dialog cannot be read through the API; only these options apply. |
-| `nwc` | `NavisworksExportOptions`: whole model, or the 3D view `viewId`; `nwcExportLinks`; `nwcCoordinates` shared (default) / internal. Needs the Navisworks exporter for this Revit version. |
 
-IFC and NWC export the model, not sheets. They are named `fileName` (default: the project file name) and go to
-`cadFolder`, else `folder`.
+IFC exports the model, not sheets. The file is named `fileName` (default: the project file name) and go to
+`cadFolder`, else `folder`. NWC export is not offered (not needed).
 
 A format whose exporter is missing fails before anything is written, with status `exporter_missing` and a hint.
 

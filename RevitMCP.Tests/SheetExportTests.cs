@@ -222,14 +222,14 @@ public class ExportPlannerTests
     }
 
     [Fact]
-    public void ModelFormatsNeedNoSheets()
+    public void IfcNeedsNoSheets()
     {
-        var o = Options("ifc", "nwc");
+        var o = Options("ifc");
         var plan = Plan(Array.Empty<ExportSheetInfo>(), new ExportPlanOptions
         {
             Formats = o.Formats, ModelFolder = "cad", ModelFileStem = "1626_EL_mudel", Naming = o.Naming
         });
-        Assert.Equal(new[] { "1626_EL_mudel.ifc", "1626_EL_mudel.nwc" }, plan.Files.Select(f => f.FileName));
+        Assert.Equal(new[] { "1626_EL_mudel.ifc" }, plan.Files.Select(f => f.FileName));
         Assert.All(plan.Files, f => Assert.Equal("model", f.Kind));
     }
 
@@ -265,8 +265,8 @@ public class ExportPlannerTests
     {
         Assert.Equal(new[] { "pdf", "dwg", "ifc" }, ExportFormats.Parse(new[] { "IFC", ".dwg", "pdf", "pdf" }, out var unknown));
         Assert.Empty(unknown);
-        ExportFormats.Parse(new[] { "dgn" }, out unknown);
-        Assert.Equal(new[] { "dgn" }, unknown);
+        ExportFormats.Parse(new[] { "dgn", "nwc" }, out unknown);
+        Assert.Equal(new[] { "dgn", "nwc" }, unknown);
     }
 }
 

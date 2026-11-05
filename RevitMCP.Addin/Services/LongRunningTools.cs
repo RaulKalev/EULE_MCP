@@ -30,7 +30,7 @@ public static class LongRunningTools
         "revit_delete_elements",
         "revit_delete_views",
         "revit_delete_sheets",
-        // Sheet and model export (#105): a 50-sheet PDF/DWG set, merged drawings through the ODA converter, IFC/NWC
+        // Sheet and model export (#105): a 50-sheet PDF/DWG set, merged drawings through the ODA converter, IFC
         "revit_export",
         "revit_export_and_check"
     };

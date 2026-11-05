@@ -32,7 +32,7 @@ public sealed class ListExportSetupsTool : IRevitMcpTool
 
     public string Description =>
         "Lists what revit_export can use: the document's DWG/DXF export setups (and the active one), its saved sheet sets, " +
-        "which exporters this Revit has (pdf, dwg, dxf, ifc, nwc), the EliteSheets plugin settings the export follows " +
+        "which exporters this Revit has (pdf, dwg, dxf, ifc), the EliteSheets plugin settings the export follows " +
         "(DXF template for merged drawings, convert merged drawings to DWG, this project's PDF and DWG folders), whether " +
         "the ODA File Converter is installed, and how many sheets are printable and how many form merged drawings. Read-only.";
 
@@ -120,14 +120,14 @@ public sealed class PreviewExportTool : IRevitMcpTool
         => Task.FromResult(SheetExportExecutor.Run(uiapp, request, write: false, check: false, cancellationToken));
 }
 
-/// <summary>revit_export (#105): exports sheets to PDF/DWG/DXF and the model to IFC/NWC.</summary>
+/// <summary>revit_export (#105): exports sheets to PDF/DWG/DXF and the model to IFC.</summary>
 public sealed class ExportTool : IRevitMcpTool
 {
     public string Name => "revit_export";
 
     public string Description =>
-        "Exports sheets to PDF, DWG and DXF the way the EliteSheets plugin does, and the model to IFC or NWC. Requires " +
-        "approval. formats [pdf, dwg, dxf, ifc, nwc]. Sheets: sheets (ids, sheet numbers or EL-5-01 cores), sheetSet, " +
+        "Exports sheets to PDF, DWG and DXF the way the EliteSheets plugin does, and the model to IFC. Requires " +
+        "approval. formats [pdf, dwg, dxf, ifc]. Sheets: sheets (ids, sheet numbers or EL-5-01 cores), sheetSet, " +
         "allSheets, narrowed by discipline / numberContains / nameContains; at most 500. Merge rule (merge=true, default): " +
         "sheets …-7-{group}_{title}--{order} go into one file per group — one combined PDF in merge order, and one DXF with " +
         "the sheets side by side in the EliteSheets DXF template (converted to DWG with the ODA File Converter when installed " +
@@ -187,8 +187,6 @@ internal sealed class SheetExportArgs
     public string IfcVersion { get; private init; } = string.Empty;
     public int IfcSpaceBoundaries { get; private init; }
     public bool IfcBaseQuantities { get; private init; }
-    public bool NwcExportLinks { get; private init; }
-    public bool NwcSharedCoordinates { get; private init; } = true;
     public string RegisterPath { get; private init; } = string.Empty;
     public string RegisterWorksheet { get; private init; } = string.Empty;
 
@@ -198,24 +196,17 @@ internal sealed class SheetExportArgs
         var formats = ExportFormats.Parse(ToolArguments.GetStringArray(args, "formats"), out var unknown);
         if (unknown.Count > 0)
         {
-            error = $"Unknown format(s): {string.Join(", ", unknown)}. Use pdf, dwg, dxf, ifc, nwc.";
+            error = $"Unknown format(s): {string.Join(", ", unknown)}. Use pdf, dwg, dxf, ifc.";
             return null;
         }
         if (formats.Count == 0)
         {
-            error = "formats is required: one or more of pdf, dwg, dxf, ifc, nwc.";
+            error = "formats is required: one or more of pdf, dwg, dxf, ifc.";
             return null;
         }
         var naming = ExportNaming.Parse(ToolArguments.GetString(args, "naming"), ToolArguments.GetBool(args, "includeRevision"), out error);
         if (naming == null) return null;
 
-        var nwcCoordinates = ToolArguments.GetString(args, "nwcCoordinates").Trim();
-        if (nwcCoordinates.Length > 0 && !nwcCoordinates.Equals("shared", StringComparison.OrdinalIgnoreCase) &&
-            !nwcCoordinates.Equals("internal", StringComparison.OrdinalIgnoreCase))
-        {
-            error = "nwcCoordinates must be shared (default) or internal.";
-            return null;
-        }
         var spacing = ToolArguments.GetDouble(args, "mergeSpacingMm", DxfSheetProcessing.DefaultSheetSpacingMm);
         if (spacing <= 0) spacing = DxfSheetProcessing.DefaultSheetSpacingMm;
 
@@ -248,8 +239,6 @@ internal sealed class SheetExportArgs
             IfcVersion = ToolArguments.GetString(args, "ifcVersion").Trim(),
             IfcSpaceBoundaries = Math.Max(0, Math.Min(2, ToolArguments.GetInt(args, "ifcSpaceBoundaries"))),
             IfcBaseQuantities = ToolArguments.GetBool(args, "ifcBaseQuantities"),
-            NwcExportLinks = ToolArguments.GetBool(args, "nwcExportLinks"),
-            NwcSharedCoordinates = !nwcCoordinates.Equals("internal", StringComparison.OrdinalIgnoreCase),
             RegisterPath = ToolArguments.GetString(args, "registerPath").Trim().Trim('"'),
             RegisterWorksheet = ToolArguments.GetString(args, "registerWorksheet").Trim()
         };
@@ -313,7 +302,7 @@ internal static class SheetExportExecutor
                 return Fail(request, "No sheet matches the selection." + (notes.Count > 0 ? " " + string.Join(" ", notes) : string.Empty), "nothing_to_export");
         }
 
-        // View for IFC (filter) / NWC (scope)
+        // Filter view for IFC
         if (modelFormats.Count > 0 && a.ViewId > 0 && doc.GetElement(new ElementId(a.ViewId)) is not View)
             return Fail(request, $"viewId {a.ViewId} is not a view in '{doc.Title}'.");
 
@@ -390,7 +379,6 @@ internal static class SheetExportExecutor
             naming = a.Naming.Describe(),
             overwrite = a.Overwrite,
             ifc = modelFormats.Contains(ExportFormats.Ifc) ? new { version = a.IfcVersion.Length > 0 ? a.IfcVersion : "IFC2x3CV2", spaceBoundaries = a.IfcSpaceBoundaries, baseQuantities = a.IfcBaseQuantities, filterViewId = a.ViewId > 0 ? a.ViewId : (long?)null } : null,
-            nwc = modelFormats.Contains(ExportFormats.Nwc) ? new { scope = a.ViewId > 0 ? "view" : "model", viewId = a.ViewId > 0 ? a.ViewId : (long?)null, exportLinks = a.NwcExportLinks, coordinates = a.NwcSharedCoordinates ? "shared" : "internal" } : null,
             eliteSheetsConfig = elite.Found ? elite.ConfigPath : null
         };
         if (modelFormats.Contains(ExportFormats.Ifc))
@@ -449,9 +437,7 @@ internal static class SheetExportExecutor
             IfcVersion = a.IfcVersion,
             IfcSpaceBoundaries = a.IfcSpaceBoundaries,
             IfcBaseQuantities = a.IfcBaseQuantities,
-            ViewId = a.ViewId,
-            NwcExportLinks = a.NwcExportLinks,
-            NwcSharedCoordinates = a.NwcSharedCoordinates
+            ViewId = a.ViewId
         });
         var results = runner.Run(plan, cancellationToken);
 

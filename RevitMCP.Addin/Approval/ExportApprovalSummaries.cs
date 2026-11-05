@@ -34,7 +34,7 @@ public static class ExportApprovalSummaries
         var whereText = where.Count > 0 ? string.Join(", ", where) : "the project's EliteSheets export folders";
 
         var details = new List<string>();
-        if (formats.Any(f => f != ExportFormats.Ifc && f != ExportFormats.Nwc))
+        if (formats.Any(f => f != ExportFormats.Ifc))
             details.Add(ToolArguments.GetBool(args, "merge", true) ? "merged drawings per the EliteSheets rule" : "no merging");
         var naming = ToolArguments.GetString(args, "naming").Trim();
         details.Add($"names: {(naming.Length > 0 ? naming : "sheet number")}{(ToolArguments.GetBool(args, "includeRevision") ? " + revision" : string.Empty)}");
@@ -51,7 +51,7 @@ public static class ExportApprovalSummaries
 
     private static string DescribeSelection(Dictionary<string, object?> args, List<string> formats)
     {
-        if (formats.All(f => f == ExportFormats.Ifc || f == ExportFormats.Nwc))
+        if (formats.All(f => f == ExportFormats.Ifc))
             return ToolArguments.GetLong(args, "viewId") > 0 ? $"the model (view {ToolArguments.GetLong(args, "viewId")})" : "the model";
 
         var parts = new List<string>();

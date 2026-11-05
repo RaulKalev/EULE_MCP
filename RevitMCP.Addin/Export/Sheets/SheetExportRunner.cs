@@ -18,11 +18,8 @@ public sealed class SheetExportSettings
     public string IfcVersion { get; init; } = "IFC2x3CV2";
     public int IfcSpaceBoundaries { get; init; }
     public bool IfcBaseQuantities { get; init; }
-    // IFC filter view / NWC view
+    // IFC filter view
     public long ViewId { get; init; }
-    // NWC
-    public bool NwcExportLinks { get; init; }
-    public bool NwcSharedCoordinates { get; init; } = true;
 }
 
 /// <summary>What happened to one planned file.</summary>
@@ -127,8 +124,6 @@ public sealed class SheetExportRunner
                 return ExportMerged(file, stem, result);
             case ExportFormats.Ifc:
                 return ExportIfc(dir, stem, result);
-            case ExportFormats.Nwc:
-                return ExportNwc(dir, stem, result);
             default:
                 result.Reason = $"Unknown format '{file.Format}'.";
                 return null;
@@ -266,20 +261,6 @@ public sealed class SheetExportRunner
             return null;
         }
         return Expect(dir, stem, ".ifc", result);
-    }
-
-    private string? ExportNwc(string dir, string stem, ExportFileResult result)
-    {
-        var options = new NavisworksExportOptions
-        {
-            ExportScope = _settings.ViewId > 0 ? NavisworksExportScope.View : NavisworksExportScope.Model,
-            ExportLinks = _settings.NwcExportLinks,
-            Coordinates = _settings.NwcSharedCoordinates ? NavisworksCoordinates.Shared : NavisworksCoordinates.Internal,
-            ConvertElementProperties = true
-        };
-        if (_settings.ViewId > 0) options.ViewId = new ElementId(_settings.ViewId);
-        _doc.Export(dir, stem, options);
-        return Expect(dir, stem, ".nwc", result);
     }
 
     public static IFCVersion ParseIfcVersion(string? raw) => (raw ?? string.Empty).Trim().ToUpperInvariant() switch

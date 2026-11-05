@@ -34,7 +34,7 @@ public static class BridgeToolGroups
         ["autonomy"] = "Checkpoints, Revit model warnings, what changed since a checkpoint (change diff) and rollback; plans (one approval for several write steps); jobs the connector runs by itself",
         ["skills"] = "Skill builder and skill runs",
         ["office"] = "Configuration, files, Excel, standards lookup, delivery checks, monthly usage report",
-        ["output"] = "Export sheets and views to PDF/DWG/DXF (EliteSheets merge rule and file names), the model to IFC/NWC, export setups, export followed by the delivery check"
+        ["output"] = "Export sheets and views to PDF/DWG/DXF (EliteSheets merge rule and file names), the model to IFC, export setups, export followed by the delivery check"
     };
 
     private static readonly Dictionary<string, string> Exact = Build(

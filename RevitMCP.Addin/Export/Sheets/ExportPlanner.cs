@@ -9,11 +9,10 @@ public static class ExportFormats
     public const string Dwg = "dwg";
     public const string Dxf = "dxf";
     public const string Ifc = "ifc";
-    public const string Nwc = "nwc";
 
     public static readonly string[] SheetFormats = { Pdf, Dwg, Dxf };
-    public static readonly string[] ModelFormats = { Ifc, Nwc };
-    public static readonly string[] All = { Pdf, Dwg, Dxf, Ifc, Nwc };
+    public static readonly string[] ModelFormats = { Ifc };
+    public static readonly string[] All = { Pdf, Dwg, Dxf, Ifc };
 
     /// <summary>Lower-cased, de-duplicated formats in the canonical order; unknown names go to <paramref name="unknown"/>.</summary>
     public static List<string> Parse(IEnumerable<string> raw, out List<string> unknown)
@@ -42,11 +41,11 @@ public sealed class ExportPlanOptions
     public string PdfFolder { get; init; } = string.Empty;
     /// <summary>DWG and DXF go here (EliteSheets' "DWG folder").</summary>
     public string CadFolder { get; init; } = string.Empty;
-    /// <summary>IFC and NWC go here.</summary>
+    /// <summary>IFC goes here.</summary>
     public string ModelFolder { get; init; } = string.Empty;
     /// <summary>Extension of a merged drawing requested as DWG: "dwg" when the ODA converter will convert it, else "dxf".</summary>
     public string MergedDwgExtension { get; init; } = ExportFormats.Dwg;
-    /// <summary>File name stem of the IFC/NWC model export.</summary>
+    /// <summary>File name stem of the IFC model export.</summary>
     public string ModelFileStem { get; init; } = "Model";
     public int MaxSheets { get; init; } = ExportPlanner.DefaultMaxSheets;
 }
@@ -54,9 +53,9 @@ public sealed class ExportPlanOptions
 /// <summary>One file the export will write.</summary>
 public sealed class PlannedExportFile
 {
-    /// <summary>The requested format: pdf, dwg, dxf, ifc, nwc.</summary>
+    /// <summary>The requested format: pdf, dwg, dxf, ifc.</summary>
     public string Format { get; init; } = string.Empty;
-    /// <summary>single (one sheet), merged (an EliteSheets group), model (IFC/NWC).</summary>
+    /// <summary>single (one sheet), merged (an EliteSheets group), model (IFC).</summary>
     public string Kind { get; init; } = "single";
     /// <summary>The file's extension without the dot; differs from Format for a merged DWG delivered as DXF.</summary>
     public string Extension { get; init; } = string.Empty;
