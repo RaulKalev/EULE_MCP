@@ -240,11 +240,19 @@ internal sealed partial class RevitMcpTools
 
     // ── Family creation (#147, docs/family-creation.md) ──────────────────────
 
+    private const string DetailFamilyParametersDescription =
+        "Family parameters: [{name, dataType (text, integer, number, length, area, angle, yesNo, …), group? (Data, Text, Dimensions, Identity Data, …), instance? (default type), value? (length mm, area m², angle degrees), formula?}]. " +
+        "A shared parameter: [{name or guid, shared:true, sharedGroup?, group?, instance?, value?}] - an existing definition of the shared parameter file; it is never created.";
+
+    private const string DetailFamilyLabelsDescription =
+        "Text: [{text, position:[x,y] (mm, the insertion point), size? (text height on paper, mm, default 2.5), textType? (a text type of the project to copy), alignment? (left | center | right), rotation? (degrees)}]. " +
+        "Each distinct text becomes a Generic Annotation family nested in the detail item, so it keeps its paper size at every scale.";
+
     private const string DetailFamilyGeometryDescription =
         "Millimetres on the family's reference level; the origin is the insertion point. Points are [x, y] or {x, y}.";
 
     [McpServerTool(Name = "revit_preview_create_detail_family", ReadOnly = true),
-     Description("Previews creating a Detail Item family WITHOUT changing the model or any file. Same arguments as revit_create_detail_family. Returns ready, problems (to fix first), the resolved save path and whether the file exists, the template, curve counts, each line style matched to the project (project | missing, with weight, colour, pattern) and whether the family would load.")]
+     Description("Previews creating a Detail Item family WITHOUT changing the model or any file. Same arguments as revit_create_detail_family. Returns ready, problems (to fix first), the resolved save path and whether the file exists, the template, curve counts, each line style matched to the project (project | missing, with weight, colour, pattern), each parameter resolved (shared ones against the shared parameter file), the label annotation families and whether the family would load.")]
     public Task<string> PreviewCreateDetailFamily(
         [Description("Where to save: a folder (with familyName) or the full .rfa path. Required: ask the user, there is no default.")] string? savePath = null,
         [Description("Family name (the file name). Not needed when savePath is a .rfa path.")] string? familyName = null,
@@ -258,13 +266,17 @@ internal sealed partial class RevitMcpTools
         [Description("Family template (.rft). Default: Metric Detail Item.rft from Revit's family template folder.")] string? templatePath = null,
         [Description("Load the saved family into the document.")] bool loadIntoProject = false,
         [Description("A family of the same name is already loaded: skip (default) | overwrite.")] string ifExists = "skip",
+        [Description(DetailFamilyParametersDescription)] object[]? parameters = null,
+        [Description(DetailFamilyLabelsDescription)] object[]? labels = null,
+        [Description("Shared parameter file for shared parameters. Default: parameters.sharedParameterFile in the config, else Revit's setting. Only read, never written.")] string? sharedParameterFile = null,
+        [Description("Generic Annotation template (.rft) for labels. Default: Metric Generic Annotation.rft from Revit's family template folder.")] string? annotationTemplatePath = null,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default) =>
         SendDetailFamily("revit_preview_create_detail_family", savePath, familyName, lines, rectangles, arcs, circles, lineStyle,
-            overwrite, purge, templatePath, loadIntoProject, ifExists, document, cancellationToken);
+            overwrite, purge, templatePath, loadIntoProject, ifExists, parameters, labels, sharedParameterFile, annotationTemplatePath, document, cancellationToken);
 
     [McpServerTool(Name = "revit_create_detail_family"),
-     Description("Creates a Detail Item family (.rfa) from Metric Detail Item.rft and draws it. Requires approval. savePath is required (a folder with familyName, or the full .rfa path): ask the user where the family goes, there is no default. Geometry in mm on the reference level (origin = insertion point): lines, rectangles, arcs, circles. Each lineStyle must be a line style of the project: the family gets a line style of the same name, weight, colour and pattern, which merges with the project's on load. purge (default true) removes unused elements before saving. loadIntoProject loads it (ifExists: skip | overwrite). Run revit_preview_create_detail_family first.")]
+     Description("Creates a Detail Item family (.rfa) from Metric Detail Item.rft and draws it. Requires approval. savePath is required (a folder with familyName, or the full .rfa path): ask the user where the family goes, there is no default. Geometry in mm on the reference level (origin = insertion point): lines, rectangles, arcs, circles. Each lineStyle must be a line style of the project: the family gets a line style of the same name, weight, colour and pattern, which merges with the project's on load. purge (default true) removes unused elements before saving. loadIntoProject loads it (ifExists: skip | overwrite). parameters adds family parameters, or assigns existing shared parameters from the shared parameter file (never creates one). labels places text through nested Generic Annotation families (fixed text; Revit's API cannot create parameter labels). Run revit_preview_create_detail_family first.")]
     public Task<string> CreateDetailFamily(
         [Description("Where to save: a folder (with familyName) or the full .rfa path. Required: ask the user, there is no default.")] string? savePath = null,
         [Description("Family name (the file name). Not needed when savePath is a .rfa path.")] string? familyName = null,
@@ -278,14 +290,19 @@ internal sealed partial class RevitMcpTools
         [Description("Family template (.rft). Default: Metric Detail Item.rft from Revit's family template folder.")] string? templatePath = null,
         [Description("Load the saved family into the document.")] bool loadIntoProject = false,
         [Description("A family of the same name is already loaded: skip (default) | overwrite.")] string ifExists = "skip",
+        [Description(DetailFamilyParametersDescription)] object[]? parameters = null,
+        [Description(DetailFamilyLabelsDescription)] object[]? labels = null,
+        [Description("Shared parameter file for shared parameters. Default: parameters.sharedParameterFile in the config, else Revit's setting. Only read, never written.")] string? sharedParameterFile = null,
+        [Description("Generic Annotation template (.rft) for labels. Default: Metric Generic Annotation.rft from Revit's family template folder.")] string? annotationTemplatePath = null,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default) =>
         SendDetailFamily("revit_create_detail_family", savePath, familyName, lines, rectangles, arcs, circles, lineStyle,
-            overwrite, purge, templatePath, loadIntoProject, ifExists, document, cancellationToken);
+            overwrite, purge, templatePath, loadIntoProject, ifExists, parameters, labels, sharedParameterFile, annotationTemplatePath, document, cancellationToken);
 
     private async Task<string> SendDetailFamily(string toolName, string? savePath, string? familyName, object[]? lines,
         object[]? rectangles, object[]? arcs, object[]? circles, string? lineStyle, bool overwrite, bool purge,
-        string? templatePath, bool loadIntoProject, string ifExists, string? document, CancellationToken cancellationToken)
+        string? templatePath, bool loadIntoProject, string ifExists, object[]? parameters, object[]? labels,
+        string? sharedParameterFile, string? annotationTemplatePath, string? document, CancellationToken cancellationToken)
     {
         var args = new Dictionary<string, object?>
         {
@@ -301,6 +318,10 @@ internal sealed partial class RevitMcpTools
             ["templatePath"] = templatePath ?? string.Empty,
             ["loadIntoProject"] = loadIntoProject,
             ["ifExists"] = ifExists,
+            ["parameters"] = ToJToken(parameters),
+            ["labels"] = ToJToken(labels),
+            ["sharedParameterFile"] = sharedParameterFile ?? string.Empty,
+            ["annotationTemplatePath"] = annotationTemplatePath ?? string.Empty,
             ["document"] = document ?? string.Empty
         };
         return FormatResult(await pipeClient.SendAsync(toolName, args, cancellationToken));

@@ -52,6 +52,14 @@ public sealed class DetailFamilySpec
     public bool Purge { get; set; } = true;
     public bool LoadIntoProject { get; set; }
     public string IfExists { get; set; } = "skip";
+    /// <summary>Family and shared parameters to add (#147, phase 2).</summary>
+    public List<FamilyParameterSpec> Parameters { get; } = new();
+    /// <summary>Text placed through nested Generic Annotation families (#147, phase 3).</summary>
+    public List<DetailLabelSpec> Labels { get; } = new();
+    /// <summary>The Generic Annotation template for labels; empty = Metric Generic Annotation.rft.</summary>
+    public string AnnotationTemplatePath { get; set; } = string.Empty;
+    /// <summary>Shared parameter file for shared parameters; empty = the config's, else Revit's setting.</summary>
+    public string SharedParameterFile { get; set; } = string.Empty;
 
     /// <summary>Distinct line style names the curves ask for, in first-use order.</summary>
     public List<string> LineStyleNames() => Curves
@@ -69,7 +77,7 @@ public sealed class DetailFamilySpec
 /// Reads and checks the arguments of revit_create_detail_family (#147). Geometry is in millimetres on the family's
 /// reference level. Pure: no Revit types, unit tested.
 /// </summary>
-public static class DetailFamilySpecParser
+public static partial class DetailFamilySpecParser
 {
     public const int MaxCurves = 2000;
     /// <summary>Revit's short-curve tolerance (Application.ShortCurveTolerance, about 0.78 mm), rounded up: anything shorter is refused.</summary>
@@ -88,7 +96,9 @@ public static class DetailFamilySpecParser
             TemplatePath = Str(args, "templatePath"),
             Purge = Bool(args, "purge", true),
             LoadIntoProject = Bool(args, "loadIntoProject", false),
-            IfExists = Str(args, "ifExists", "skip")
+            IfExists = Str(args, "ifExists", "skip"),
+            AnnotationTemplatePath = Str(args, "annotationTemplatePath"),
+            SharedParameterFile = Str(args, "sharedParameterFile")
         };
         var defaultStyle = Str(args, "lineStyle");
 
@@ -105,9 +115,11 @@ public static class DetailFamilySpecParser
         ReadRectangles(args, "rectangles", spec, defaultStyle, errors);
         ReadArcs(args, "arcs", spec, defaultStyle, errors);
         ReadCircles(args, "circles", spec, defaultStyle, errors);
+        ReadParameters(args, "parameters", spec, errors);
+        ReadLabels(args, "labels", spec, errors);
 
-        if (spec.Curves.Count == 0)
-            errors.Add("Nothing to draw: give lines, rectangles, arcs or circles (millimetres, on the family's reference level).");
+        if (spec.Curves.Count == 0 && spec.Labels.Count == 0)
+            errors.Add("Nothing to draw: give lines, rectangles, arcs, circles or labels (millimetres, on the family's reference level).");
         else if (spec.Curves.Count > MaxCurves)
             errors.Add($"{spec.Curves.Count} curves were requested; at most {MaxCurves} per family.");
         return spec;
@@ -167,7 +179,15 @@ public static class DetailFamilySpecParser
     /// English folder, or anywhere below it (language packs put it in a sub-folder).
     /// </summary>
     public static (string? Path, string? Error) ResolveTemplate(string explicitPath, string familyTemplateRoot,
-        Func<string, bool> fileExists, Func<string, IEnumerable<string>> findBelow)
+        Func<string, bool> fileExists, Func<string, IEnumerable<string>> findBelow) =>
+        ResolveTemplate(explicitPath, familyTemplateRoot, fileExists, findBelow, DefaultTemplateFileName);
+
+    /// <summary>
+    /// Where a template is: the explicit path, else <paramref name="fileName"/> in Revit's family template folder, its
+    /// English and Annotations folders, or anywhere below it.
+    /// </summary>
+    public static (string? Path, string? Error) ResolveTemplate(string explicitPath, string familyTemplateRoot,
+        Func<string, bool> fileExists, Func<string, IEnumerable<string>> findBelow, string fileName)
     {
         explicitPath = explicitPath.Trim();
         if (explicitPath.Length > 0)
@@ -177,14 +197,18 @@ public static class DetailFamilySpecParser
             return fileExists(explicitPath) ? (explicitPath, null) : (null, $"The family template '{explicitPath}' does not exist.");
         }
 
+        var argument = string.Equals(fileName, DefaultTemplateFileName, StringComparison.OrdinalIgnoreCase) ? "templatePath" : "annotationTemplatePath";
         if (string.IsNullOrWhiteSpace(familyTemplateRoot))
-            return (null, $"Revit has no family template folder set; pass templatePath (the {DefaultTemplateFileName} file).");
+            return (null, $"Revit has no family template folder set; pass {argument} (the {fileName} file).");
 
         foreach (var candidate in new[]
                  {
-                     Path.Combine(familyTemplateRoot, DefaultTemplateFileName),
-                     Path.Combine(familyTemplateRoot, "English", DefaultTemplateFileName),
-                     Path.Combine(familyTemplateRoot, "English_I", DefaultTemplateFileName)
+                     Path.Combine(familyTemplateRoot, fileName),
+                     Path.Combine(familyTemplateRoot, "Annotations", fileName),
+                     Path.Combine(familyTemplateRoot, "English", fileName),
+                     Path.Combine(familyTemplateRoot, "English", "Annotations", fileName),
+                     Path.Combine(familyTemplateRoot, "English_I", fileName),
+                     Path.Combine(familyTemplateRoot, "English_I", "Annotations", fileName)
                  })
         {
             if (fileExists(candidate)) return (candidate, null);
@@ -193,7 +217,7 @@ public static class DetailFamilySpecParser
         var found = findBelow(familyTemplateRoot).OrderBy(p => p.Length).ThenBy(p => p, StringComparer.OrdinalIgnoreCase).FirstOrDefault();
         return found != null
             ? (found, null)
-            : (null, $"{DefaultTemplateFileName} was not found under Revit's family template folder '{familyTemplateRoot}'; pass templatePath.");
+            : (null, $"{fileName} was not found under Revit's family template folder '{familyTemplateRoot}'; pass {argument}.");
     }
 
     // ── Geometry ─────────────────────────────────────────────────────────────
