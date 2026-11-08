@@ -26,6 +26,8 @@ public static class PlanToolClassification
         "revit_mirror_elements", "revit_array_elements",
         // Loading a family adds the family and its types (#102).
         "revit_load_family",
+        // Linking a DWG adds a CAD link type and its instance.
+        "revit_link_dwg",
         // Copying view filters creates the filters in the target (#134).
         "revit_copy_view_filters",
         // #135: a reshape creates a replacement region; a type spec can duplicate a type.
