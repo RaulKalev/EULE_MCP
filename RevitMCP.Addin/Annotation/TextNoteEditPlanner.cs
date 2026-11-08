@@ -35,7 +35,18 @@ public sealed class TextNoteEditOptions
     /// <summary>Widen notes so the longest line fits (estimate; never narrows a note).</summary>
     public bool AutoWidth { get; set; }
 
-    public bool ChangesWidth => WidthMm > 0 || AutoWidth;
+    /// <summary>
+    /// Fit the box to the text: the narrowest width at which Revit lays the note out in as few lines as an unlimited
+    /// width gives, so an over-wide box shrinks and a wrapped one widens. Measured by Revit when applied.
+    /// </summary>
+    public bool FitWidth { get; set; }
+
+    /// <summary>Absolute rotation of the note in its view, degrees counter-clockwise from the view's right; null = leave it.</summary>
+    public double? RotationDeg { get; set; }
+
+    public bool ChangesWidth => WidthMm > 0 || AutoWidth || FitWidth;
+
+    public bool ChangesRotation => RotationDeg.HasValue;
 
     /// <summary>Character formatting of the edited range: keep, plain or matchFirstRun (#141).</summary>
     public string Formatting { get; set; } = TextNoteEditPlanner.FormattingKeep;
@@ -169,9 +180,41 @@ public static class TextNoteEditPlanner
         object? rawMap,
         double widthMm,
         bool autoWidth,
+        out string? error) =>
+        ParseOptions(mode, text, find, replace, prefix, suffix, matchCase, wholeWord, rawMap, widthMm, autoWidth,
+            fitWidth: false, rotationDeg: null, out error);
+
+    /// <summary>
+    /// As above, plus fitWidth (fit the box to the text, narrowing or widening) and rotationDeg (absolute angle of the
+    /// note in its view). Width or rotation alone, without a mode, is a valid edit.
+    /// </summary>
+    public static TextNoteEditOptions? ParseOptions(
+        string? mode,
+        string? text,
+        string? find,
+        string? replace,
+        string? prefix,
+        string? suffix,
+        bool matchCase,
+        bool wholeWord,
+        object? rawMap,
+        double widthMm,
+        bool autoWidth,
+        bool fitWidth,
+        double? rotationDeg,
         out string? error)
     {
         error = null;
+        if (rotationDeg is { } r && (double.IsNaN(r) || double.IsInfinity(r)))
+        {
+            error = "rotationDeg must be a number of degrees.";
+            return null;
+        }
+        if (fitWidth && (widthMm > 0 || autoWidth))
+        {
+            error = "Pass only one of widthMm, autoWidth=true and fitWidth=true.";
+            return null;
+        }
         var parsedMode = NormalizeMode(mode);
         if (parsedMode == null)
         {
@@ -202,15 +245,17 @@ public static class TextNoteEditPlanner
             MatchCase = matchCase,
             WholeWord = wholeWord,
             WidthMm = widthMm,
-            AutoWidth = autoWidth
+            AutoWidth = autoWidth,
+            FitWidth = fitWidth,
+            RotationDeg = rotationDeg is { } deg ? TextRotationMath.Normalize(deg) : null
         };
 
         switch (options.Mode)
         {
             case TextNoteEditMode.None:
-                if (!options.ChangesWidth)
+                if (!options.ChangesWidth && !options.ChangesRotation)
                 {
-                    error = "Provide mode (set, findReplace, append, prepend or map), or widthMm / autoWidth to change only the width.";
+                    error = "Provide mode (set, findReplace, append, prepend or map), or widthMm / autoWidth / fitWidth to change only the width, or rotationDeg to turn the notes.";
                     return null;
                 }
                 break;

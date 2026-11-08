@@ -13,7 +13,7 @@ namespace RevitMCP.Addin.Tools;
 public class CreateTextNotesTool : IRevitMcpTool
 {
     public string Name => "revit_create_text_notes";
-    public string Description => "Creates text notes in a view at given positions (mm, model coordinates). Each note: {text, x, y, z, widthMm, rotationDegrees}. Uses the default text note type unless typeId or typeName is given. Requires approval. Transaction-wrapped and reversible via Revit Undo.";
+    public string Description => "Creates text notes in a view at given positions (mm, model coordinates). Each note: {text, x, y, z, widthMm, rotationDegrees}. widthMm is the box width on paper (printed mm, not model mm); omit it and the box fits the text. Uses the default text note type unless typeId or typeName is given. Requires approval. Transaction-wrapped and reversible via Revit Undo.";
     public ToolPermission Permission => ToolPermission.RequiresApproval;
     public ToolCategory Category => ToolCategory.Elements;
 
@@ -80,6 +80,10 @@ public class CreateTextNotesTool : IRevitMcpTool
                     TextNote note;
                     if (widthMm > 0)
                     {
+                        if (RevitMCP.Addin.Annotation.TextWidthUnits.LooksLikeModelWidth(widthMm, view.Scale))
+                            errors.Add($"Note {index}: widthMm {widthMm} is a paper width; at 1:{view.Scale} that box is " +
+                                       $"{widthMm * view.Scale / 1000.0:0.#} m wide in the model. For {widthMm} model mm pass " +
+                                       $"{widthMm / Math.Max(1, view.Scale):0.#}, or omit widthMm so the box fits the text.");
                         var width = PlacementHelpers.MmToFt(widthMm);
                         var min = TextNote.GetMinimumAllowedWidth(doc, textTypeId);
                         var max = TextNote.GetMaximumAllowedWidth(doc, textTypeId);
