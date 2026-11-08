@@ -2686,7 +2686,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     [McpServerTool(Name = "revit_create_text_notes"),
      Description("Creates text notes in a view at given positions (millimetres, model coordinates). Uses the view's default text note type unless typeId or typeName is given. Requires approval; reversible via Revit Undo.")]
     public async Task<string> CreateTextNotes(
-        [Description("JSON array of notes: [{text, x, y, z, widthMm, rotationDegrees}] — widthMm/rotationDegrees optional.")] string notes,
+        [Description("JSON array of notes: [{text, x, y, z, widthMm, rotationDegrees}] — x/y/z in model mm. widthMm is the box width on PAPER (printed mm, not model mm: at 1:100 a 2000 mm value is a 2 m box on the sheet); omit it and the box fits the text. rotationDegrees optional.")] string notes,
         [Description("View element ID. Defaults to the active view.")] long viewId = 0,
         [Description("Text note type element ID.")] long typeId = 0,
         [Description("Text note type name (partial match), e.g. '2.5mm Arial'.")] string? typeName = null,
@@ -2711,7 +2711,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     [McpServerTool(Name = "revit_preview_set_text_notes", ReadOnly = true),
      Description("Previews editing the content of existing text notes in place, without changing Revit. Same arguments as revit_set_text_notes. Returns old text → new text per note with its view id/name, plus changed/unchanged/skipped counts.")]
     public async Task<string> PreviewSetTextNotes(
-        [Description("set | findReplace | append | prepend | map. Omit to change only the width (widthMm/autoWidth).")] string? mode = null,
+        [Description("set | findReplace | append | prepend | map. Omit to change only the width (widthMm/autoWidth/fitWidth) or the rotation (rotationDeg).")] string? mode = null,
         [Description("Text note element IDs to edit. Takes precedence over useSelection and viewId.")] long[]? elementIds = null,
         [Description("Edit the text notes in the current Revit selection.")] bool useSelection = false,
         [Description("Scope when no elementIds/useSelection: -1 or omit = active view, 0 = all views, >0 = that view.")] long viewId = -1,
@@ -2726,6 +2726,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("mode=map: JSON object {\"old text\": \"new text\"}. Matched against the whole note text, trimmed; notes not in the map stay unchanged.")] string? map = null,
         [Description("Set the note width on paper in mm (applied to notes whose text changes, or to all targets when mode is omitted).")] double widthMm = 0,
         [Description("Widen notes so the longest line fits (estimate from text size and width factor; never narrows).")] bool autoWidth = false,
+        [Description(FitWidthDescription)] bool fitWidth = false,
+        [Description(RotationDegDescription)] double? rotationDeg = null,
         [Description("Edited range's character formatting: keep (default) | plain | matchFirstRun.")] string? formatting = null,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
@@ -2733,6 +2735,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         if (!TryBuildSetTextNotesArgs(mode, elementIds, useSelection, viewId, textFilter, text, find, replace, matchCase, wholeWord,
                 suffix, prefix, map, widthMm, autoWidth, out var args, out var error))
             return FormatBridgeError(error!);
+        args["fitWidth"] = fitWidth;
+        args["rotationDeg"] = rotationDeg;
         args["formatting"] = formatting ?? string.Empty;
         args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_preview_set_text_notes", args, cancellationToken);
@@ -2740,9 +2744,9 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_set_text_notes"),
-     Description("Edits the content of existing text notes in place; element ids are kept. Targets: elementIds, useSelection, or viewId (-1 active, 0 all views) narrowed by textFilter. Modes: set (text), findReplace (find/replace, matchCase, wholeWord), append (suffix), prepend (prefix), map (JSON old text → new text, whole trimmed text). Optional widthMm or autoWidth. Edits are spliced into the note's formatted text, so bold/italic/underline runs outside the edited range are kept. formatting: keep (default, inserted text takes the neighbouring formatting), plain (no bold, italic or underline on the edited range), matchFirstRun (the note's first character's formatting). If Revit refuses that, the plain text is replaced and formattingPreserved=false. Notes borrowed by another user or out of date with central are skipped. One transaction; requires approval; reversible via Revit Undo. Run revit_preview_set_text_notes first.")]
+     Description("Edits the content of existing text notes in place; element ids are kept. Targets: elementIds, useSelection, or viewId (-1 active, 0 all views) narrowed by textFilter. Modes: set (text), findReplace (find/replace, matchCase, wholeWord), append (suffix), prepend (prefix), map (JSON old text → new text, whole trimmed text). Optional widthMm, autoWidth or fitWidth (fit the box to the text, narrowing or widening), and rotationDeg (absolute angle in the view). Edits are spliced into the note's formatted text, so bold/italic/underline runs outside the edited range are kept. formatting: keep (default, inserted text takes the neighbouring formatting), plain (no bold, italic or underline on the edited range), matchFirstRun (the note's first character's formatting). If Revit refuses that, the plain text is replaced and formattingPreserved=false. Notes borrowed by another user or out of date with central are skipped. One transaction; requires approval; reversible via Revit Undo. Run revit_preview_set_text_notes first.")]
     public async Task<string> SetTextNotes(
-        [Description("set | findReplace | append | prepend | map. Omit to change only the width (widthMm/autoWidth).")] string? mode = null,
+        [Description("set | findReplace | append | prepend | map. Omit to change only the width (widthMm/autoWidth/fitWidth) or the rotation (rotationDeg).")] string? mode = null,
         [Description("Text note element IDs to edit. Takes precedence over useSelection and viewId.")] long[]? elementIds = null,
         [Description("Edit the text notes in the current Revit selection.")] bool useSelection = false,
         [Description("Scope when no elementIds/useSelection: -1 or omit = active view, 0 = all views, >0 = that view.")] long viewId = -1,
@@ -2757,6 +2761,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("mode=map: JSON object {\"old text\": \"new text\"}. Matched against the whole note text, trimmed; notes not in the map stay unchanged.")] string? map = null,
         [Description("Set the note width on paper in mm (applied to notes whose text changes, or to all targets when mode is omitted).")] double widthMm = 0,
         [Description("Widen notes so the longest line fits (estimate from text size and width factor; never narrows).")] bool autoWidth = false,
+        [Description(FitWidthDescription)] bool fitWidth = false,
+        [Description(RotationDegDescription)] double? rotationDeg = null,
         [Description("Edited range's character formatting: keep (default) | plain | matchFirstRun.")] string? formatting = null,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
@@ -2764,11 +2770,19 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         if (!TryBuildSetTextNotesArgs(mode, elementIds, useSelection, viewId, textFilter, text, find, replace, matchCase, wholeWord,
                 suffix, prefix, map, widthMm, autoWidth, out var args, out var error))
             return FormatBridgeError(error!);
+        args["fitWidth"] = fitWidth;
+        args["rotationDeg"] = rotationDeg;
         args["formatting"] = formatting ?? string.Empty;
         args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_set_text_notes", args, cancellationToken);
         return FormatResult(result);
     }
+
+    private const string FitWidthDescription =
+        "Fit the box to the text: Revit finds the narrowest width that keeps each paragraph on as few lines as an unlimited width (shrinks an over-wide box, widens a wrapped one). Not with widthMm or autoWidth.";
+
+    private const string RotationDegDescription =
+        "Absolute angle of the notes in their view, degrees counter-clockwise from the view's right (0 = horizontal, 90 = reads bottom to top). Turns each note about its insertion point.";
 
     private static bool TryBuildSetTextNotesArgs(
         string? mode, long[]? elementIds, bool useSelection, long viewId, string? textFilter, string? text,
@@ -3272,7 +3286,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_preview_rotate_elements", ReadOnly = true),
-     Description("Previews rotating elements about their own insertion point, no changes. rotations=[{elementId, angleDeg (absolute facing, CCW from +X) | rotateByDeg | faceToward {x,y} (host mm), expectedAngleDeg?}] or elementIds + one shared target. expectedAngleDeg is a staleness check within angleToleranceDeg (default 0.5).")]
+     Description("Previews rotating elements about their own insertion point, no changes. rotations=[{elementId, angleDeg (absolute facing, CCW from +X) | rotateByDeg | faceToward {x,y} (host mm), expectedAngleDeg?}] or elementIds + one shared target. expectedAngleDeg is a staleness check within angleToleranceDeg (default 0.5). Works on any element: family instances about their insertion point, text notes in their view about their insertion point (angleDeg = the text angle, 0 = horizontal; or use revit_set_text_notes rotationDeg), point elements about their point, lines about their midpoint, anything else about its box centre (rotateByDeg only). Every id is listed with kind and status.")]
     public async Task<string> PreviewRotateElements(
         [Description("Per-element rotations")] object[]? rotations = null,
         [Description("Elements sharing one target")] long[]? elementIds = null,
@@ -3290,7 +3304,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_rotate_elements"),
-     Description("Rotates elements about their own insertion point. A group instance id rotates the whole group about its origin. Requires approval; one undoable transaction. Same arguments as revit_preview_rotate_elements plus atomic (default true).")]
+     Description("Rotates any element: family instances and point elements about their insertion point, text notes in their view, lines about their midpoint, other elements about their box centre. A group instance id rotates the whole group about its origin. Requires approval; one undoable transaction. Same arguments as revit_preview_rotate_elements plus atomic (default true).")]
     public async Task<string> RotateElements(
         [Description("Per-element rotations")] object[]? rotations = null,
         [Description("Elements sharing one target")] long[]? elementIds = null,

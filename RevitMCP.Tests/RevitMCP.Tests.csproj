@@ -226,6 +226,7 @@
     <Compile Include="..\RevitMCP.Addin\Placement\CopyElementsMath.cs" Link="Placement\CopyElementsMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Placement\FacePlacementMath.cs" Link="Placement\FacePlacementMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Annotation\TextNoteEditPlanner.cs" Link="Annotation\TextNoteEditPlanner.cs" />
+    <Compile Include="..\RevitMCP.Addin\Annotation\TextRotationMath.cs" Link="Annotation\TextRotationMath.cs" />
     <!-- Lines, overlaps, image transform and title block checks (#139-#142, no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Annotation\LineShapePlanner.cs" Link="Annotation\LineShapePlanner.cs" />
     <Compile Include="..\RevitMCP.Addin\Annotation\AnnotationOverlapMath.cs" Link="Annotation\AnnotationOverlapMath.cs" />
