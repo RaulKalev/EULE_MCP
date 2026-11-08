@@ -186,6 +186,20 @@ warning names the link an element is in.
 - `revit_rotate_elements` turns elements about their own insertion point: `angleDeg` (absolute
   facing, counter-clockwise from +X), `rotateByDeg`, or `faceToward {x, y}`. Per element
   (`rotations=[{elementId, …, expectedAngleDeg?}]`) or shared (`elementIds` + one target).
+  It works on any element, not only devices. Each id is listed with its `kind` and status, and an unknown id is
+  reported instead of dropped.
+
+  | Kind | Turns about | `angleDeg` means |
+  |---|---|---|
+  | `device` (family instance) | Its insertion point, around Z | Facing, counter-clockwise from +X |
+  | `group` | The group origin | The group's rotation |
+  | `textNote` | Its insertion point, around its view's direction | The text angle in the view, 0 = horizontal |
+  | `point` (other point-based elements) | Its point | Its rotation, in plan views only |
+  | `curve` (detail and model lines, line-based elements) | The line's midpoint | The line's direction in the view |
+  | `bounds` (anything else) | The centre of its box | Not readable: use `rotateByDeg` |
+
+  View-specific elements turn around their own view's direction, so text and lines in a section stay in the section.
+  `faceToward` works only for elements with an insertion point in plan.
 - `revit_set_elevation` sets the elevation above the element's level
   (`elevations=[{elementId, elevationFromLevelMm, expectedElevationFromLevelMm?}]` or shared).
 - Both work like `revit_move_elements`: the optional expected value is a staleness check

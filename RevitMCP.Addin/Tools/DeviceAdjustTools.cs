@@ -19,6 +19,19 @@ internal sealed class AdjustPlanEntry
     /// <summary>A group instance the rotate tool turns as a whole about the group origin (#108).</summary>
     public Group? GroupInstance { get; set; }
 
+    /// <summary>
+    /// Any other element the rotate tool turns: a text note, a line, an annotation, an element without a device record.
+    /// It turns about <see cref="Pivot"/> around <see cref="Axis"/> (its view's direction when it is view-specific).
+    /// </summary>
+    public Element? Other { get; set; }
+    public XYZ? Pivot { get; set; }
+    public XYZ? Axis { get; set; }
+    /// <summary>device | group | textNote | point | curve | bounds | notFound.</summary>
+    public string Kind { get; set; } = "device";
+
+    /// <summary>The id the caller gave, for an element that was not found.</summary>
+    public long? RequestedId { get; set; }
+
     /// <summary>The group origin in mm, for a group-instance entry.</summary>
     public P2 GroupPoint { get; set; }
     public double GroupZMm { get; set; }
@@ -35,18 +48,23 @@ internal sealed class AdjustPlanEntry
     public string? TargetText { get; set; }
     public bool WillChange => Status == "ready";
 
-    /// <summary>The element that is changed: the group instance, or the device.</summary>
-    public Element Target => GroupInstance != null ? GroupInstance : (Element)Device.Element;
+    /// <summary>The element that is changed: the group instance, the other element, or the device.</summary>
+    public Element Target => GroupInstance != null ? GroupInstance : Other ?? (Element)Device.Element;
 
-    public long Id => GroupInstance?.Id.Value ?? Device.Id;
+    public long Id => GroupInstance?.Id.Value ?? Other?.Id.Value ?? (Device != null ? Device.Id : RequestedId ?? 0);
+
+    private bool IsDevice => GroupInstance == null && Other == null && Device != null;
 
     public object Payload(string unit, string? error = null) => new
     {
         elementId = Id,
-        deviceCode = GroupInstance != null ? null : Device.Code?.Code,
+        kind = Kind,
+        deviceCode = IsDevice ? Device.Code?.Code : null,
         point = GroupInstance != null
             ? new { x = Math.Round(GroupPoint.X, 1), y = Math.Round(GroupPoint.Y, 1), z = Math.Round(GroupZMm, 1) }
-            : Device.PointPayload(),
+            : Pivot != null
+                ? new { x = Math.Round(Pivot.X * 304.8, 1), y = Math.Round(Pivot.Y * 304.8, 1), z = Math.Round(Pivot.Z * 304.8, 1) }
+                : IsDevice ? Device.PointPayload() : null,
         isGroupInstance = GroupInstance != null,
         groupId = GroupId,
         status = error != null ? "failed" : Status,
@@ -200,8 +218,14 @@ internal static class RotatePlanner
         foreach (var (id, _) in requests)
             if (doc.GetElement(new ElementId(id)) is Group group) groups[id] = group;
 
-        var devices = DeviceAudit.Inventory(doc, null, [], requests.Select(r => r.Id).Where(id => !groups.ContainsKey(id)).ToList(), warnings)
-            .ToDictionary(d => d.Id);
+        // Family instances go through the device inventory (facing, device codes) as before. Everything else — text
+        // notes, lines, annotations — used to be dropped without a word; it now gets its own entry.
+        var instanceIds = requests.Select(r => r.Id).Distinct()
+            .Where(id => !groups.ContainsKey(id) && doc.GetElement(new ElementId(id)) is FamilyInstance)
+            .ToList();
+        var devices = instanceIds.Count == 0
+            ? new Dictionary<long, DeviceRecord>()
+            : DeviceAudit.Inventory(doc, null, [], instanceIds, warnings).ToDictionary(d => d.Id);
         var plan = new List<AdjustPlanEntry>();
 
         foreach (var (id, fields) in requests)
@@ -228,9 +252,35 @@ internal static class RotatePlanner
                     entry.CurrentText = "unknown (relative turn)";
                 }
             }
+            else if (!devices.TryGetValue(id, out var device))
+            {
+                entry = OtherEntry(doc, id);
+                plan.Add(entry);
+                if (entry.Status == "blocked") continue;
+                point = entry.Pivot == null ? default : new P2(RoomUnits.FtToMm(entry.Pivot.X), RoomUnits.FtToMm(entry.Pivot.Y));
+
+                if (fields.ContainsKey("faceToward") && DeviceAdjustSupport.Has(fields, "faceToward") &&
+                    !(entry.Kind == "point" && Math.Abs(entry.Axis!.Z) > 0.999))
+                {
+                    entry.Status = "blocked";
+                    entry.Reason = $"faceToward needs an element with an insertion point in plan; this is a {entry.Kind}. Use angleDeg or rotateByDeg.";
+                    continue;
+                }
+
+                if (entry.CurrentValue == null)
+                {
+                    if (!DeviceAdjustSupport.Has(fields, "rotateByDeg"))
+                    {
+                        entry.Status = "blocked";
+                        entry.Reason = $"Revit does not report this {entry.Kind}'s angle, so angleDeg cannot be resolved. Use rotateByDeg.";
+                        continue;
+                    }
+                    entry.CurrentValue = 0;
+                    entry.CurrentText = "unknown (relative turn)";
+                }
+            }
             else
             {
-                if (!devices.TryGetValue(id, out var device)) continue;
                 entry = new AdjustPlanEntry { Device = device, CurrentValue = device.FacingDeg };
                 plan.Add(entry);
                 point = device.Point;
@@ -288,9 +338,15 @@ internal static class RotatePlanner
                 continue;
             }
 
-            entry.Reason = entry.GroupInstance != null
-                ? $"Rotate the whole group {RoomAuditMath.DeltaDeg(current, entry.TargetValue.Value):0.##}° about its origin."
-                : $"Rotate {RoomAuditMath.DeltaDeg(current, entry.TargetValue.Value):0.##}° about its insertion point.";
+            var turn = RoomAuditMath.DeltaDeg(current, entry.TargetValue.Value);
+            entry.Reason = entry.Kind switch
+            {
+                "group" => $"Rotate the whole group {turn:0.##}° about its origin.",
+                "textNote" => $"Rotate the text {turn:0.##}° in its view about its insertion point.",
+                "curve" => $"Rotate {turn:0.##}° about the line's midpoint.",
+                "bounds" => $"Rotate {turn:0.##}° about the centre of its box.",
+                _ => $"Rotate {turn:0.##}° about its insertion point."
+            };
             DeviceAdjustSupport.CheckPinned(entry, args);
         }
 
@@ -301,9 +357,83 @@ internal static class RotatePlanner
     /// A group instance's entry (#108): its origin and its rotation (LocationPoint.Rotation, CCW from +X). A nested
     /// group is a member of its parent and is blocked with the parent's id.
     /// </summary>
+    /// <summary>
+    /// An element that is not a family instance with a device record nor a group: a text note turns in its view about
+    /// its insertion point, a point-based element about its point, a line about its midpoint, anything else about the
+    /// centre of its box. A view-specific element turns around its view's direction, a model element around Z.
+    /// </summary>
+    private static AdjustPlanEntry OtherEntry(Document doc, long id)
+    {
+        var element = doc.GetElement(new ElementId(id));
+        if (element == null)
+            return new AdjustPlanEntry { Kind = "notFound", RequestedId = id, Status = "blocked", Reason = "No element with this id in the document." };
+
+        var entry = new AdjustPlanEntry { Other = element, Kind = "bounds" };
+        if (element.GroupId != ElementId.InvalidElementId)
+        {
+            string? groupName = null;
+            try { groupName = doc.GetElement(element.GroupId)?.Name; } catch { /* courtesy only */ }
+            entry.Status = "blocked";
+            entry.GroupId = element.GroupId.Value;
+            entry.Reason = "InGroup: " + MoveElementsMath.GroupMemberReason(element.GroupId.Value, groupName, "rotate");
+            return entry;
+        }
+
+        var view = element.OwnerViewId != ElementId.InvalidElementId ? doc.GetElement(element.OwnerViewId) as View : null;
+        var right = view?.RightDirection ?? XYZ.BasisX;
+        var up = view?.UpDirection ?? XYZ.BasisY;
+        entry.Axis = view?.ViewDirection?.Normalize() ?? XYZ.BasisZ;
+
+        double AngleOf(XYZ direction) => RevitMCP.Addin.Annotation.TextRotationMath.AngleInViewDeg(direction.DotProduct(right), direction.DotProduct(up));
+
+        try
+        {
+            switch (element)
+            {
+                case TextNote note:
+                    entry.Kind = "textNote";
+                    entry.Pivot = note.Coord;
+                    entry.CurrentValue = AngleOf(note.BaseDirection);
+                    return entry;
+                case Element when element.Location is LocationPoint lp:
+                    entry.Kind = "point";
+                    entry.Pivot = lp.Point;
+                    // LocationPoint.Rotation is about Z: it is the element's angle only when it turns in plan.
+                    if (Math.Abs(entry.Axis.Z) > 0.999)
+                    {
+                        try { entry.CurrentValue = RoomGeometryMath.NormalizeDeg(lp.Rotation * 180.0 / Math.PI); }
+                        catch { entry.CurrentValue = null; }
+                    }
+                    return entry;
+                case Element when element.Location is LocationCurve lc && lc.Curve != null:
+                    entry.Kind = "curve";
+                    entry.Pivot = lc.Curve.Evaluate(0.5, true);
+                    entry.CurrentValue = AngleOf(lc.Curve.GetEndPoint(1) - lc.Curve.GetEndPoint(0));
+                    return entry;
+            }
+        }
+        catch (Exception ex)
+        {
+            entry.Status = "blocked";
+            entry.Reason = $"Revit could not read the element's position: {ex.Message}";
+            return entry;
+        }
+
+        var box = element.get_BoundingBox(view) ?? element.get_BoundingBox(null);
+        if (box == null)
+        {
+            entry.Status = "blocked";
+            entry.Reason = "The element has no location or box to rotate about.";
+            return entry;
+        }
+        entry.Pivot = (box.Min + box.Max) / 2.0;
+        entry.CurrentValue = null;
+        return entry;
+    }
+
     private static AdjustPlanEntry GroupEntry(Group group)
     {
-        var entry = new AdjustPlanEntry { GroupInstance = group };
+        var entry = new AdjustPlanEntry { GroupInstance = group, Kind = "group" };
         if (group.GroupId != ElementId.InvalidElementId)
         {
             string? parentName = null;
@@ -330,6 +460,14 @@ internal static class RotatePlanner
 
     public static void Apply(Document doc, AdjustPlanEntry entry)
     {
+        if (entry.Other != null)
+        {
+            var turn = RoomAuditMath.DeltaDeg(entry.CurrentValue!.Value, entry.TargetValue!.Value);
+            var pivot = entry.Pivot!;
+            ElementTransformUtils.RotateElement(doc, entry.Other.Id, Line.CreateBound(pivot, pivot + entry.Axis!), turn * Math.PI / 180.0);
+            return;
+        }
+
         var element = entry.Target;
         var lp = (LocationPoint)element.Location;
         var delta = RoomAuditMath.DeltaDeg(entry.CurrentValue!.Value, entry.TargetValue!.Value);
@@ -346,7 +484,11 @@ public sealed class PreviewRotateElementsTool : IRevitMcpTool
         "rotations=[{elementId, angleDeg (absolute facing, CCW from +X) | rotateByDeg | faceToward {x, y} (host mm), " +
         "expectedAngleDeg?}] or elementIds + one shared target. expectedAngleDeg is a staleness check within " +
         "angleToleranceDeg (default 0.5). skipPinned (default true). A group instance id rotates the whole group about its " +
-        "origin; a group member is blocked as InGroup with its group id.";
+        "origin; a group member is blocked as InGroup with its group id. Any element can be rotated: family instances " +
+        "about their insertion point; text notes in their view about their insertion point (angleDeg = the text's angle, " +
+        "0 = horizontal); other point elements about their point; lines about their midpoint; anything else about the " +
+        "centre of its box (rotateByDeg only). View-specific elements turn around their view's direction. Each element " +
+        "is listed with kind and status; an unknown id is reported, never dropped.";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Elements;
 

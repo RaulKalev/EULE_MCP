@@ -54,6 +54,46 @@ Both need approval, and Direct Edit allows them.
 
 Text outside the edited range keeps its formatting in all three.
 
+### Box width
+
+A text note's width is the width of its box **on paper** (printed mm), not in the model. At 1:100 a `widthMm` of 2000
+gives a 2 m box on the sheet, which is the usual reason a box is far longer than its text.
+`revit_create_text_notes` warns when `widthMm` looks like a model value. Leave `widthMm` out there and the box fits the
+text.
+
+For notes that already exist, `revit_set_text_notes` has three width options:
+
+| Option | Effect |
+|---|---|
+| `widthMm` | Sets the paper width |
+| `autoWidth=true` | Widens a note so its longest line fits, using an estimate from text size and width factor. It never narrows |
+| `fitWidth=true` | Fits the box to the text: the narrowest width at which Revit lays the note out in as few lines as at its maximum width. An over-wide box shrinks and a wrapped one widens |
+
+`fitWidth` asks Revit itself: it sets a width, regenerates and reads the note's height, narrowing in on the width where
+a line would start to wrap (to 0.25 mm). Fonts, bold runs and width factors are therefore exact, at the cost of a
+dozen or so regenerations per note. The preview reports an estimate and says the width is measured when applied. Run
+it without `mode` to fix widths only:
+
+```json
+{ "tool": "revit_set_text_notes", "arguments": { "viewId": -1, "fitWidth": true } }
+```
+
+A fitted note still has a fixed width afterwards. If its text grows later, fit it again.
+
+### Rotation
+
+`rotationDeg` on `revit_set_text_notes` sets each note's absolute angle in its view: degrees counter-clockwise from the
+view's right, so 0 is horizontal and 90 reads bottom to top. The note turns about its insertion point, around its
+view's direction. Leaders turn with it. The preview shows `oldRotationDeg` → `newRotationDeg`, and a note already at
+that angle is unchanged. Rotation alone needs no `mode`:
+
+```json
+{ "tool": "revit_set_text_notes", "arguments": { "elementIds": [123456], "rotationDeg": 90 } }
+```
+
+`revit_rotate_elements` also turns text notes (`angleDeg` is the same absolute angle, or use `rotateByDeg`), together
+with any other elements.
+
 `revit_get_text_notes` also returns `boundingBox` (`minX, minY, maxX, maxY` in view or sheet mm), `lineCount` and
 `paragraphCount`. `lineCount` is an estimate with wrapping, the same one `autoWidth` uses: the API does not report rows.
 

@@ -35,7 +35,11 @@ public sealed class SetTextNotesTool : IRevitMcpTool
         "by an optional textFilter (case-insensitive substring). Modes: set (text), findReplace (find, " +
         "replace, matchCase, wholeWord), append (suffix), prepend (prefix), map (JSON object old text → " +
         "new text, matched on the whole trimmed text; notes not in the map stay unchanged). Optional " +
-        "widthMm (paper width) or autoWidth=true (estimated widening so the longest line fits). Edits " +
+        "widthMm (paper width), autoWidth=true (estimated widening so the longest line fits, never narrows) or " +
+        "fitWidth=true (fit the box to the text: Revit finds the narrowest width that keeps every paragraph on as few " +
+        "lines as an unlimited width, so an over-wide box shrinks and a wrapped one widens). rotationDeg sets the " +
+        "note's absolute angle in its view (degrees counter-clockwise from the view's right; 0 = horizontal), turning " +
+        "it about its insertion point. Width or rotation alone needs no mode. Edits " +
         "are spliced into the note's formatted text, so bold/italic/underline runs and list formatting " +
         "outside the edited range are kept; inserted text takes the formatting of the text it replaces " +
         "or follows; formatting=plain clears bold, italic and underline on the edited range and " +
@@ -63,8 +67,15 @@ internal static class SetTextNotesExecutor
         public double OldWidthFt;
         public double NewWidthFt;
         public string ViewName = string.Empty;
+        /// <summary>fitWidth: Revit measures the fitting width when the edit is applied.</summary>
+        public bool FitPending;
+        public double? FitEstimateMm;
+        public int FitLayouts;
+        public double? OldAngleDeg;
+        public double? NewAngleDeg;
         public bool WidthChanged => Math.Abs(NewWidthFt - OldWidthFt) > 1e-6;
-        public bool Changed => Plan.TextChanged || WidthChanged;
+        public bool RotationChanged => OldAngleDeg is { } a && NewAngleDeg is { } b && Math.Abs(TextRotationMath.TurnDeg(a, b)) > 0.01;
+        public bool Changed => Plan.TextChanged || WidthChanged || FitPending || RotationChanged;
     }
 
     public static McpToolResult Execute(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken, bool previewOnly)
@@ -91,6 +102,8 @@ internal static class SetTextNotesExecutor
             rawMap,
             ToolArguments.GetDouble(args, "widthMm"),
             ToolArguments.GetBool(args, "autoWidth"),
+            ToolArguments.GetBool(args, "fitWidth"),
+            HasValue(args, "rotationDeg") ? ToolArguments.GetDouble(args, "rotationDeg") : null,
             out var optionsError);
         if (options == null)
             return Fail(request, optionsError!);
@@ -131,7 +144,24 @@ internal static class SetTextNotesExecutor
             var work = new NoteWork { Note = note, Plan = plan, ViewName = viewName, OldWidthFt = note.Width };
             work.NewWidthFt = work.OldWidthFt;
             if (options.ChangesWidth && (plan.TextChanged || options.Mode == TextNoteEditMode.None))
-                work.NewWidthFt = PlanWidth(doc, note, plan.NewText, options, warnings);
+            {
+                if (options.FitWidth)
+                {
+                    work.FitPending = true;
+                    work.FitEstimateMm = EstimateMm(doc, note, plan.NewText);
+                }
+                else
+                {
+                    work.NewWidthFt = PlanWidth(doc, note, plan.NewText, options, warnings);
+                }
+            }
+            if (options.RotationDeg is { } targetAngle)
+            {
+                work.OldAngleDeg = CurrentAngleDeg(doc, note);
+                work.NewAngleDeg = work.OldAngleDeg == null ? null : targetAngle;
+                if (work.OldAngleDeg == null)
+                    warnings.Add($"Text note {note.Id.Value}: its view's direction could not be read, so it is not rotated.");
+            }
 
             if (!work.Changed)
             {
@@ -190,6 +220,10 @@ internal static class SetTextNotesExecutor
                         formattingPreserved = ApplyText(work.Note, work.Plan, options.Formatting);
                     if (work.WidthChanged)
                         work.Note.Width = work.NewWidthFt;
+                    if (work.FitPending)
+                        FitWidth(doc, work);
+                    if (work.RotationChanged)
+                        Rotate(doc, work);
                     done.Add((work, formattingPreserved));
                 }
                 catch (Exception ex)
@@ -471,10 +505,91 @@ internal static class SetTextNotesExecutor
         newText = work.Plan.NewText,
         textChanged = work.Plan.TextChanged,
         oldWidthMm = Math.Round(work.OldWidthFt * FeetToMm, 1),
-        newWidthMm = Math.Round(work.NewWidthFt * FeetToMm, 1),
-        widthChanged = work.WidthChanged,
+        newWidthMm = work.FitPending ? (double?)null : Math.Round(work.NewWidthFt * FeetToMm, 1),
+        widthChanged = work.FitPending ? (bool?)null : work.WidthChanged,
+        fitWidth = work.FitPending
+            ? new { estimateMm = work.FitEstimateMm, note = "Revit measures the fitting width when the edit is applied." }
+            : null,
+        oldRotationDeg = work.OldAngleDeg is { } a ? Math.Round(a, 2) : (double?)null,
+        newRotationDeg = work.NewAngleDeg is { } b ? Math.Round(b, 2) : (double?)null,
+        rotationChanged = work.NewAngleDeg == null ? (bool?)null : work.RotationChanged,
         formattingPreserved
     };
+
+    private static bool HasValue(Dictionary<string, object?> args, string key) =>
+        args.TryGetValue(key, out var raw) && raw != null && !(raw is Newtonsoft.Json.Linq.JValue { Type: Newtonsoft.Json.Linq.JTokenType.Null })
+        && !(raw is string s && s.Trim().Length == 0);
+
+    /// <summary>The note's angle in its view: its base direction, counter-clockwise from the view's right.</summary>
+    private static double? CurrentAngleDeg(Document doc, TextNote note)
+    {
+        try
+        {
+            if (doc.GetElement(note.OwnerViewId) is not View view) return null;
+            var direction = note.BaseDirection;
+            return TextRotationMath.AngleInViewDeg(direction.DotProduct(view.RightDirection), direction.DotProduct(view.UpDirection));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Turns the note about its insertion point, around its view's direction (so it stays in the view plane).</summary>
+    private static void Rotate(Document doc, NoteWork work)
+    {
+        var view = (View)doc.GetElement(work.Note.OwnerViewId);
+        var origin = work.Note.Coord;
+        var axis = Line.CreateBound(origin, origin + view.ViewDirection.Normalize());
+        var turn = TextRotationMath.TurnDeg(work.OldAngleDeg!.Value, work.NewAngleDeg!.Value);
+        ElementTransformUtils.RotateElement(doc, work.Note.Id, axis, turn * Math.PI / 180.0);
+        try
+        {
+            doc.Regenerate();
+            work.NewAngleDeg = CurrentAngleDeg(doc, work.Note) ?? work.NewAngleDeg;
+        }
+        catch { /* the reported angle stays the planned one */ }
+    }
+
+    /// <summary>
+    /// fitWidth: the narrowest width at which Revit lays the note out in as few lines as at its maximum width. Revit
+    /// does the layout (the note's height after a regenerate), so fonts, bold runs and width factors are all exact.
+    /// </summary>
+    private static void FitWidth(Document doc, NoteWork work)
+    {
+        var note = work.Note;
+        var typeId = note.GetTypeId();
+        var min = TextNote.GetMinimumAllowedWidth(doc, typeId);
+        var max = TextNote.GetMaximumAllowedWidth(doc, typeId);
+        var hint = (work.FitEstimateMm ?? 0) / FeetToMm;
+        var (width, layouts) = TextFitWidthSearch.Find(min, max, hint, w =>
+        {
+            note.Width = w;
+            doc.Regenerate();
+            return note.Height;
+        }, tolerance: 0.25 / FeetToMm);
+        note.Width = width;
+        doc.Regenerate();
+        work.NewWidthFt = width;
+        work.FitLayouts = layouts;
+        work.FitPending = false;
+    }
+
+    private static double? EstimateMm(Document doc, TextNote note, string text)
+    {
+        try
+        {
+            var type = doc.GetElement(note.GetTypeId()) as TextNoteType;
+            var sizeMm = (type?.get_Parameter(BuiltInParameter.TEXT_SIZE)?.AsDouble() ?? 0) * FeetToMm;
+            var factor = type?.get_Parameter(BuiltInParameter.TEXT_WIDTH_SCALE)?.AsDouble() ?? 1.0;
+            var estimate = TextNoteEditPlanner.EstimateWidthMm(text, sizeMm, factor);
+            return estimate > 0 ? estimate : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     private static McpToolResult Result(
         McpToolRequest request, bool success, string message, string scope, TextNoteEditOptions options,
