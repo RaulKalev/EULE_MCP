@@ -77,6 +77,14 @@ To work beside the user instead of in their document, open your own local: `revi
 (a background `<central>_<user>_mcp.rvt`, never activated), then pass `document=<its title>` on every call, check out
 what you edit (`revit_get_ownership`, `revit_checkout_elements`), sync, `revit_relinquish` and `revit_close_document`.
 
+## Exporting a delivery
+
+`revit_export` (`output` group, see [`docs/export.md`](docs/export.md)) writes PDF/DWG/DXF the way the EliteSheets
+plugin does: sheets numbered `…-7-{group}_{title}--{n}` become one combined PDF and one DXF/DWG in the plugin's DXF
+template. It also reads the plugin's template, ODA and folder settings. Always `revit_preview_export` first, and prefer
+`revit_export_and_check` so the delivery check runs on what was written. Do not hand-merge or rename files the tool
+produced.
+
 ## BCF clash reports
 
 For a BCF file from a clash tool (see [`docs/bcf-clashes.md`](docs/bcf-clashes.md)): `revit_bcf_read` lists its topics,

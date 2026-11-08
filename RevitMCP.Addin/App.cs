@@ -481,6 +481,7 @@ public class App : IExternalApplication
             RevitMCP.Addin.Tools.TransformsAndGroupsToolRegistration.Register(handler); // #108 mirror, array, groups
             RevitMCP.Addin.Tools.ModelState.ModelStateToolRegistration.Register(handler); // #109 phases, options, audit
             RevitMCP.Addin.Tools.Bcf.BcfToolRegistration.Register(handler); // BCF clash review and clash fixes
+            RevitMCP.Addin.Tools.Export.SheetExportToolRegistration.Register(handler); // #105 PDF/DWG/DXF/IFC export
 
             var eventService = new ExternalEventService(handler);
 

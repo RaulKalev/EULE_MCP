@@ -33,7 +33,8 @@ public static class BridgeToolGroups
         ["documents"] = "Open documents: open your own local copy, close, activate, worksets, ownership/checkout/relinquish, reload latest, reload/remove DWG/IFC/RVT links, link visibility, save and sync with central",
         ["autonomy"] = "Checkpoints, Revit model warnings, what changed since a checkpoint (change diff) and rollback; plans (one approval for several write steps); jobs the connector runs by itself",
         ["skills"] = "Skill builder and skill runs",
-        ["office"] = "Configuration, files, Excel, standards lookup, delivery checks, monthly usage report"
+        ["office"] = "Configuration, files, Excel, standards lookup, delivery checks, monthly usage report",
+        ["output"] = "Export sheets and views to PDF/DWG/DXF (EliteSheets merge rule and file names), the model to IFC, export setups, export followed by the delivery check"
     };
 
     private static readonly Dictionary<string, string> Exact = Build(
@@ -122,6 +123,8 @@ public static class BridgeToolGroups
             "revit_get_mep_run_summary"
         }),
         ("office", new[] { "revit_usage_report" }),
+        // #105: "preview" contains "view" and the export names match no other keyword.
+        ("output", new[] { "revit_list_export_setups", "revit_preview_export", "revit_export", "revit_export_and_check" }),
         ("coordination", new[] { "revit_export_issues", "revit_merge_issue_reports", "revit_bcf_read", "revit_bcf_check" }));
 
     /// <summary>Ordered rules for everything not in the exact table: the first keyword found in the name wins.</summary>

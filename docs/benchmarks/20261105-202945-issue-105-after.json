@@ -1,0 +1,43 @@
+{
+  "Label": "issue-105-after",
+  "Model": "",
+  "StartedAt": "2026-11-05 20:29:22 \u002B00:00",
+  "BridgePath": "/home/user/EULE_MCP/RevitMCP.Bridge/bin/Release/net8.0/RevitMCP.Bridge",
+  "Schemas": [
+    {
+      "Profile": "full",
+      "ToolCount": 388,
+      "SchemaBytes": 576382,
+      "SchemaTokens": 144096,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "core",
+      "ToolCount": 21,
+      "SchemaBytes": 28407,
+      "SchemaTokens": 7102,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "query",
+      "ToolCount": 38,
+      "SchemaBytes": 49636,
+      "SchemaTokens": 12409,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "read-only",
+      "ToolCount": 244,
+      "SchemaBytes": 350196,
+      "SchemaTokens": 87549,
+      "InstructionTokens": 696,
+      "Error": null
+    }
+  ],
+  "GraphBuild": null,
+  "GraphIncremental": null,
+  "Scenarios": []
+}

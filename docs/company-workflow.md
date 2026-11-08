@@ -60,6 +60,18 @@ The skill will:
 3. Report missing files, orphaned files, and duplicates
 4. Export an Excel report and HTML dashboard
 
+### Exporting the delivery first
+
+The connector can write the delivery itself, the same way the EliteSheets plugin does (merged drawings included), and
+check it in the same call (see [export.md](export.md)):
+
+```
+revit_preview_export formats=[pdf,dwg] discipline=EL numberContains=_TP_ pdfFolder="G:\Projects\1626\Delivery\TP\PDF" cadFolder="G:\Projects\1626\Delivery\TP\DWG"
+revit_export_and_check formats=[pdf,dwg] discipline=EL numberContains=_TP_ pdfFolder=… cadFolder=… overwrite=true
+```
+
+A share needs `"AllowNetworkPaths": true` in `FileAccessPolicy.json`.
+
 ---
 
 ## 3. Parameter QA

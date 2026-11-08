@@ -55,6 +55,8 @@
          nothing native to ship, so Costura embedding keeps working unchanged. -->
     <PackageReference Include="Microsoft.Data.Sqlite.Core" />
     <PackageReference Include="SQLitePCLRaw.bundle_winsqlite3" />
+    <!-- Sheet export (#105): DXF paper-to-model promotion and merging drawings into the EliteSheets template. -->
+    <PackageReference Include="netDxf" />
   </ItemGroup>
 
   <!-- Revit SDK — TFM-conditional -->

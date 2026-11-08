@@ -16,11 +16,11 @@ public static class DeliveryFileNameParser
     // Group 2: stage (2-4 uppercase letters)
     // Group 3: sheetNumber = discipline-group-sequence
     // Group 4: discipline (1-3 uppercase letters)
-    // Group 5: group (digits)
+    // Group 5: group (digits or letters, e.g. "5" or "A")
     // Group 6: sequence (digits)
     // Group 7: remaining description (may contain underscores)
     private static readonly Regex _pattern = new(
-        @"^(\d{3,8})_([A-Z]{2,4})_(([A-Z]{1,3})-(\d{1,3})-(\d{2,4}))(?:_(.+))?$",
+        @"^(\d{3,8})_([A-Z]{2,4})_(([A-Z]{1,3})-([A-Z0-9]{1,3})-(\d{2,4}))(?:_(.+))?$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     // Revision suffix: _r01, _rev1, _R01, etc.

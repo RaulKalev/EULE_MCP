@@ -18,12 +18,12 @@ public static class RevitSheetNumberParser
 {
     // Full format: 1626_TP_EL-5-01, 73226_PP_EN-5-10_1k-ATS
     private static readonly Regex _fullPattern = new(
-        @"^(\d{3,8})_([A-Z]{2,4})_(([A-Z]{1,3})-(\d{1,3})-(\d{2,4}))(?:_(.+))?$",
+        @"^(\d{3,8})_([A-Z]{2,4})_(([A-Z]{1,3})-([A-Z0-9]{1,3})-(\d{2,4}))(?:_(.+))?$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     // Short format: EL-5-01, EL-5-01_Plaan
     private static readonly Regex _shortPattern = new(
-        @"^(([A-Z]{1,3})-(\d{1,3})-(\d{2,4}))(?:_(.+))?$",
+        @"^(([A-Z]{1,3})-([A-Z0-9]{1,3})-(\d{2,4}))(?:_(.+))?$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     /// <summary>
