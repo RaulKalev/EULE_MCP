@@ -74,6 +74,8 @@ public class App : IExternalApplication
             handler.RegisterTool(new RemoveLinksTool());
             handler.RegisterTool(new PreviewSetLinkVisibilityTool());
             handler.RegisterTool(new SetLinkVisibilityTool());
+            handler.RegisterTool(new PreviewLinkDwgTool()); // link DWG files into views
+            handler.RegisterTool(new LinkDwgTool());
             handler.RegisterTool(new SaveDocumentTool());
             handler.RegisterTool(new SyncWithCentralTool());
             // Worker document (#101): the agent's own local, worksets, ownership

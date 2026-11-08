@@ -17,6 +17,8 @@ public static class LongRunningTools
     {
         "revit_reload_links_from",
         "revit_remove_links",
+        // A large DWG takes a while to link, and a batch links up to 50
+        "revit_link_dwg",
         "revit_save_document",
         "revit_sync_with_central",
         "revit_activate_document",

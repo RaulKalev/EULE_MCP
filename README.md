@@ -2,7 +2,7 @@
 
 EULE MCP connects Claude Code, Codex, and Antigravity CLI to a live Autodesk Revit model through the [Model Context Protocol](https://modelcontextprotocol.io). It provides local model queries, discipline workflows, controlled writes, QA, reporting, and file operations without requiring users to write Revit API scripts.
 
-The current bridge exposes **390 MCP tools**. The compact `core` profile is advertised by default, and `revit_tools_search` finds the rest by intent.
+The current bridge exposes **392 MCP tools**. The compact `core` profile is advertised by default, and `revit_tools_search` finds the rest by intent.
 
 ## Documentation
 
@@ -36,6 +36,7 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | [Families and parameters](docs/families-and-parameters.md) | 11 | List, load (overwrite policy, one undo step), reload and purge unused families; list project and shared parameters, create them from the shared parameter file and bind categories |
 | [Family creation](docs/family-creation.md) | 2 | Detail Item families from a spec: lines, rectangles, arcs and circles in mm, line styles copied from the project's (same name, weight, colour, pattern), purge before saving, a save path the user chooses, optional load into the project |
 | [Worker document](docs/worker-document.md) | 9 | Open your own local copy of a central in the background, worksets, ownership, checkout and relinquish, reload latest, close; `document=` on the core and query reads |
+| [Linking DWG files](docs/link-dwg.md) | 2 | Link DWG files into views: current view only in plans, sections and drafting views, scale auto-detected with a check of the linked size, origin/center/shared placement, already-linked files skipped, one undo step |
 | [Jobs: unattended work](docs/jobs.md) | 6 | Submit a whole job of tool calls with result binding; one approval, the connector runs it step by step between your own work, stops on failures or new Revit errors, survives a restart and publishes a report page |
 | [Plans: one approval per job](docs/plans.md) | 4 | Submit a plan (tools, element ids, categories, limits), approve once, then write calls inside it run without prompts; status, close, per-session plan id |
 | [Checkpoints and change review](docs/checkpoints.md) | 6 | Revit model warnings, checkpoints before a batch of writes, what changed since (by tool or user, before/now values, moves, new warnings), compensating rollback with manual approval |
@@ -130,6 +131,7 @@ Important repository references:
 - [`TESTING.md`](TESTING.md) — Revit smoke-test matrix
 - [`docs/alignment.md`](docs/alignment.md) — moving elements against walls, ceilings, and floors, including linked IFC
 - [`docs/cad-management.md`](docs/cad-management.md) — CAD import layer visibility and graphic overrides
+- [`docs/link-dwg.md`](docs/link-dwg.md) — linking DWG files into views: current view only, auto-detected scale, placement and the size check
 - [`docs/compatibility.md`](docs/compatibility.md) — supported framework and API boundaries
 - [`docs/execution-safety.md`](docs/execution-safety.md) — execution guarantees
 - [`docs/extensible-storage.md`](docs/extensible-storage.md) — reading add-in data stored on elements
