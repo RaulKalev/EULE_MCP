@@ -1,0 +1,43 @@
+{
+  "Label": "issue-147-detail-family",
+  "Model": "",
+  "StartedAt": "2026-11-08 12:44:38 \u002B02:00",
+  "BridgePath": "C:\\Users\\mibil\\Documents\\AntigravityGit\\EULE_MCP\\.claude\\worktrees\\github-commits-dropbox-sync-a9239b\\RevitMCP.Bridge\\bin\\Release\\net8.0\\RevitMCP.Bridge.exe",
+  "Schemas": [
+    {
+      "Profile": "full",
+      "ToolCount": 390,
+      "SchemaBytes": 580912,
+      "SchemaTokens": 145228,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "core",
+      "ToolCount": 21,
+      "SchemaBytes": 28407,
+      "SchemaTokens": 7102,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "query",
+      "ToolCount": 38,
+      "SchemaBytes": 49636,
+      "SchemaTokens": 12409,
+      "InstructionTokens": 696,
+      "Error": null
+    },
+    {
+      "Profile": "read-only",
+      "ToolCount": 245,
+      "SchemaBytes": 352462,
+      "SchemaTokens": 88116,
+      "InstructionTokens": 696,
+      "Error": null
+    }
+  ],
+  "GraphBuild": null,
+  "GraphIncremental": null,
+  "Scenarios": []
+}
