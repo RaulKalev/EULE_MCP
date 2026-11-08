@@ -2,7 +2,7 @@
 
 EULE MCP connects Claude Code, Codex, and Antigravity CLI to a live Autodesk Revit model through the [Model Context Protocol](https://modelcontextprotocol.io). It provides local model queries, discipline workflows, controlled writes, QA, reporting, and file operations without requiring users to write Revit API scripts.
 
-The current bridge exposes **384 MCP tools**. The compact `core` profile is advertised by default, and `revit_tools_search` finds the rest by intent.
+The current bridge exposes **390 MCP tools**. The compact `core` profile is advertised by default, and `revit_tools_search` finds the rest by intent.
 
 ## Documentation
 
@@ -34,6 +34,7 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | [Files, Excel, and configuration](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Files-Excel-Configuration) | 16 | Policy-scoped files, standalone workbooks, scoped JSON state |
 | [Family types, creation, and IFC](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Family-IFC) | 10 | Family type duplication and editing, DWG-to-Detail-Item families, IFC Space-to-Room |
 | [Families and parameters](docs/families-and-parameters.md) | 11 | List, load (overwrite policy, one undo step), reload and purge unused families; list project and shared parameters, create them from the shared parameter file and bind categories |
+| [Family creation](docs/family-creation.md) | 2 | Detail Item families from a spec: lines, rectangles, arcs and circles in mm, line styles copied from the project's (same name, weight, colour, pattern), purge before saving, a save path the user chooses, optional load into the project |
 | [Worker document](docs/worker-document.md) | 9 | Open your own local copy of a central in the background, worksets, ownership, checkout and relinquish, reload latest, close; `document=` on the core and query reads |
 | [Jobs: unattended work](docs/jobs.md) | 6 | Submit a whole job of tool calls with result binding; one approval, the connector runs it step by step between your own work, stops on failures or new Revit errors, survives a restart and publishes a report page |
 | [Plans: one approval per job](docs/plans.md) | 4 | Submit a plan (tools, element ids, categories, limits), approve once, then write calls inside it run without prompts; status, close, per-session plan id |
@@ -136,6 +137,7 @@ Important repository references:
 - [`docs/filled-regions.md`](docs/filled-regions.md) — filled regions: coordinates in any view, room and linked room boundaries, rules with a type map, reshaping by replacement, and type management
 - [`docs/geometry-queries.md`](docs/geometry-queries.md) — element geometry, elements in a box or radius, nearest surface, line of sight and clearance, in host mm
 - [`docs/families-and-parameters.md`](docs/families-and-parameters.md) — listing, loading, reloading and purging families; creating and binding project and shared parameters
+- [`docs/family-creation.md`](docs/family-creation.md) — creating Detail Item families: geometry, line styles matched to the project, purge, save path and load
 - [`docs/export.md`](docs/export.md) — exporting sheets to PDF/DWG/DXF with the EliteSheets merge rule and settings, the model to IFC, and checking the delivery folder afterwards
 - [`docs/mcp-performance.md`](docs/mcp-performance.md) — lower-latency queries and reduced-credit tool profiles
 - [`docs/project-village.md`](docs/project-village.md) — opt-in "Project Village" activity visualizer with a flyer board of query results and Show in Revit (no AI calls, no model changes)
@@ -159,6 +161,7 @@ Important repository references:
 - [`docs/view-element-reads.md`](docs/view-element-reads.md) — the `view` argument on element reads: what a view or sheet shows, what is left out and why, and what is still to be confirmed in Revit
 - [`docs/view-creation.md`](docs/view-creation.md) — creating plans per level, sections, callouts, 3D views, drafting views and legends from specs, and setting view extents
 - [`docs/view-filters.md`](docs/view-filters.md) — view filters: rules and selection filters, applying them to views and templates, copying between projects
+- [`docs/integration/revit-test-plan-147.md`](docs/integration/revit-test-plan-147.md) — Revit test plan for #147 phase 1 (Detail Item family creation)
 - [`docs/integration/ai-test-runbook-134-143.md`](docs/integration/ai-test-runbook-134-143.md) — step-by-step runbook for an AI agent to test #134–#143 in Revit, with expected results
 - [`docs/integration/revit-test-plan-102-109.md`](docs/integration/revit-test-plan-102-109.md) — Revit test plan for issues #102–#109, with per-issue integration notes and deviations
 - [`docs/integration/ai-test-runbook-102-109.md`](docs/integration/ai-test-runbook-102-109.md) — step-by-step runbook for an AI agent to test #102–#109 in Revit on another machine, with expected results and a results template

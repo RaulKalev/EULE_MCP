@@ -19,5 +19,7 @@ public static class FamiliesAndParametersToolRegistration
         handler.RegisterTool(new PreviewCreateParametersTool());
         handler.RegisterTool(new CreateParametersTool());
         handler.RegisterTool(new BindParameterCategoriesTool());
+        handler.RegisterTool(new PreviewCreateDetailFamilyTool()); // #147
+        handler.RegisterTool(new CreateDetailFamilyTool());
     }
 }

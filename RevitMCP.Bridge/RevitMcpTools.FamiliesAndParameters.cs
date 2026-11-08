@@ -237,4 +237,72 @@ internal sealed partial class RevitMcpTools
         };
         return FormatResult(await pipeClient.SendAsync("revit_bind_parameter_categories", args, cancellationToken));
     }
+
+    // ── Family creation (#147, docs/family-creation.md) ──────────────────────
+
+    private const string DetailFamilyGeometryDescription =
+        "Millimetres on the family's reference level; the origin is the insertion point. Points are [x, y] or {x, y}.";
+
+    [McpServerTool(Name = "revit_preview_create_detail_family", ReadOnly = true),
+     Description("Previews creating a Detail Item family WITHOUT changing the model or any file. Same arguments as revit_create_detail_family. Returns ready, problems (to fix first), the resolved save path and whether the file exists, the template, curve counts, each line style matched to the project (project | missing, with weight, colour, pattern) and whether the family would load.")]
+    public Task<string> PreviewCreateDetailFamily(
+        [Description("Where to save: a folder (with familyName) or the full .rfa path. Required: ask the user, there is no default.")] string? savePath = null,
+        [Description("Family name (the file name). Not needed when savePath is a .rfa path.")] string? familyName = null,
+        [Description("Lines: [{start:[x,y], end:[x,y], lineStyle?}]. " + DetailFamilyGeometryDescription)] object[]? lines = null,
+        [Description("Rectangles: [{min:[x,y], max:[x,y], lineStyle?}] (four lines each).")] object[]? rectangles = null,
+        [Description("Arcs: [{center, radius, startAngle, endAngle, lineStyle?}] (degrees, counter-clockwise) or [{start, mid, end, lineStyle?}].")] object[]? arcs = null,
+        [Description("Circles: [{center:[x,y], radius, lineStyle?}].")] object[]? circles = null,
+        [Description("Default line style for curves without one: the name of a line style of the project.")] string? lineStyle = null,
+        [Description("Replace an existing .rfa at savePath (default false).")] bool overwrite = false,
+        [Description("Remove unused elements before saving (default true).")] bool purge = true,
+        [Description("Family template (.rft). Default: Metric Detail Item.rft from Revit's family template folder.")] string? templatePath = null,
+        [Description("Load the saved family into the document.")] bool loadIntoProject = false,
+        [Description("A family of the same name is already loaded: skip (default) | overwrite.")] string ifExists = "skip",
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default) =>
+        SendDetailFamily("revit_preview_create_detail_family", savePath, familyName, lines, rectangles, arcs, circles, lineStyle,
+            overwrite, purge, templatePath, loadIntoProject, ifExists, document, cancellationToken);
+
+    [McpServerTool(Name = "revit_create_detail_family"),
+     Description("Creates a Detail Item family (.rfa) from Metric Detail Item.rft and draws it. Requires approval. savePath is required (a folder with familyName, or the full .rfa path): ask the user where the family goes, there is no default. Geometry in mm on the reference level (origin = insertion point): lines, rectangles, arcs, circles. Each lineStyle must be a line style of the project: the family gets a line style of the same name, weight, colour and pattern, which merges with the project's on load. purge (default true) removes unused elements before saving. loadIntoProject loads it (ifExists: skip | overwrite). Run revit_preview_create_detail_family first.")]
+    public Task<string> CreateDetailFamily(
+        [Description("Where to save: a folder (with familyName) or the full .rfa path. Required: ask the user, there is no default.")] string? savePath = null,
+        [Description("Family name (the file name). Not needed when savePath is a .rfa path.")] string? familyName = null,
+        [Description("Lines: [{start:[x,y], end:[x,y], lineStyle?}]. " + DetailFamilyGeometryDescription)] object[]? lines = null,
+        [Description("Rectangles: [{min:[x,y], max:[x,y], lineStyle?}] (four lines each).")] object[]? rectangles = null,
+        [Description("Arcs: [{center, radius, startAngle, endAngle, lineStyle?}] (degrees, counter-clockwise) or [{start, mid, end, lineStyle?}].")] object[]? arcs = null,
+        [Description("Circles: [{center:[x,y], radius, lineStyle?}].")] object[]? circles = null,
+        [Description("Default line style for curves without one: the name of a line style of the project.")] string? lineStyle = null,
+        [Description("Replace an existing .rfa at savePath (default false).")] bool overwrite = false,
+        [Description("Remove unused elements before saving (default true).")] bool purge = true,
+        [Description("Family template (.rft). Default: Metric Detail Item.rft from Revit's family template folder.")] string? templatePath = null,
+        [Description("Load the saved family into the document.")] bool loadIntoProject = false,
+        [Description("A family of the same name is already loaded: skip (default) | overwrite.")] string ifExists = "skip",
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default) =>
+        SendDetailFamily("revit_create_detail_family", savePath, familyName, lines, rectangles, arcs, circles, lineStyle,
+            overwrite, purge, templatePath, loadIntoProject, ifExists, document, cancellationToken);
+
+    private async Task<string> SendDetailFamily(string toolName, string? savePath, string? familyName, object[]? lines,
+        object[]? rectangles, object[]? arcs, object[]? circles, string? lineStyle, bool overwrite, bool purge,
+        string? templatePath, bool loadIntoProject, string ifExists, string? document, CancellationToken cancellationToken)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["savePath"] = savePath ?? string.Empty,
+            ["familyName"] = familyName ?? string.Empty,
+            ["lines"] = ToJToken(lines),
+            ["rectangles"] = ToJToken(rectangles),
+            ["arcs"] = ToJToken(arcs),
+            ["circles"] = ToJToken(circles),
+            ["lineStyle"] = lineStyle ?? string.Empty,
+            ["overwrite"] = overwrite,
+            ["purge"] = purge,
+            ["templatePath"] = templatePath ?? string.Empty,
+            ["loadIntoProject"] = loadIntoProject,
+            ["ifExists"] = ifExists,
+            ["document"] = document ?? string.Empty
+        };
+        return FormatResult(await pipeClient.SendAsync(toolName, args, cancellationToken));
+    }
 }
