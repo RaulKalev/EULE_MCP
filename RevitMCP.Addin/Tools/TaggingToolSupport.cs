@@ -92,6 +92,131 @@ namespace RevitMCP.Addin.Tools
             return result;
         }
 
+        /// <summary>
+        /// Host and linked targets of revit_place_tags (#151). Host: elementIds, useSelection, or tagAllInView with
+        /// categoryId. Linked: linkInstanceId + linkedElementIds, linkedElements ("link:&lt;instance&gt;:&lt;id&gt;" or
+        /// objects), linked elements picked in the selection, or tagAllInView with categoryId and linkInstanceId (the
+        /// link's elements of that category visible in the view).
+        /// </summary>
+        public static List<TagTarget> ResolveTargets(
+            UIDocument uidoc,
+            Document doc,
+            View view,
+            Dictionary<string, object> arguments,
+            out string error)
+        {
+            error = null;
+            var targets = new List<TagTarget>();
+            var problems = new List<string>();
+            var linkedIds = LinkedTagTargetParser.Parse(arguments, problems);
+            if (problems.Count > 0)
+            {
+                error = string.Join(" ", problems);
+                return targets;
+            }
+
+            var useSelection = ToolArguments.GetBool(arguments, "useSelection");
+            var tagAllInView = ToolArguments.GetBool(arguments, "tagAllInView");
+            var linkInstanceId = ToolArguments.GetLong(arguments, "linkInstanceId");
+            var categoryIdValue = ToolArguments.GetLong(arguments, "categoryId");
+            var categoryId = categoryIdValue != 0 ? new ElementId(categoryIdValue) : ElementId.InvalidElementId;
+            var hostIds = ToolArguments.GetLongArray(arguments, "elementIds");
+
+            // Host elements, as before.
+            string hostError = null;
+            if (hostIds.Length > 0 || useSelection || (tagAllInView && linkInstanceId <= 0))
+            {
+                var hostElements = ResolveElements(uidoc, doc, view, arguments, out hostError);
+                if (hostElements == null)
+                {
+                    error = hostError;
+                    return targets;
+                }
+                targets.AddRange(hostElements.Select(TagTarget.Host));
+            }
+
+            // Linked elements picked in the selection (Tab-selected inside a link).
+            if (useSelection && uidoc != null)
+            {
+                try
+                {
+                    foreach (var reference in uidoc.Selection.GetReferences())
+                        if (reference != null && reference.LinkedElementId != ElementId.InvalidElementId)
+                            linkedIds.Add(new LinkedTagTargetId(reference.ElementId.Value, reference.LinkedElementId.Value));
+                }
+                catch
+                {
+                    // Revit gives no linked references for this selection.
+                }
+            }
+
+            // Every element of the category in the link that the view shows.
+            if (tagAllInView && linkInstanceId > 0)
+            {
+                if (categoryId == ElementId.InvalidElementId)
+                {
+                    error = "tagAllInView through a link needs categoryId.";
+                    return targets;
+                }
+                var link = ResolveLink(doc, linkInstanceId, problems);
+                if (link != null)
+                {
+                    foreach (var element in new FilteredElementCollector(doc, view.Id, link.Id)
+                                 .OfCategoryId(categoryId)
+                                 .WhereElementIsNotElementType()
+                                 .ToElements())
+                        targets.Add(TagTarget.Linked(link, element));
+                }
+            }
+
+            // Explicit linked ids.
+            foreach (var group in linkedIds.Distinct().GroupBy(id => id.LinkInstanceId))
+            {
+                var link = ResolveLink(doc, group.Key, problems);
+                var linkDoc = link?.GetLinkDocument();
+                if (link == null || linkDoc == null) continue;
+                foreach (var id in group)
+                {
+                    var element = linkDoc.GetElement(new ElementId(id.ElementId));
+                    if (element == null)
+                    {
+                        problems.Add($"Element {id.ElementId} was not found in the link '{link.Name}'.");
+                        continue;
+                    }
+                    if (categoryId != ElementId.InvalidElementId &&
+                        (element.Category == null || element.Category.Id != categoryId))
+                        continue;
+                    targets.Add(TagTarget.Linked(link, element));
+                }
+            }
+
+            var result = targets.Where(t => t != null).GroupBy(t => t.Key).Select(g => g.First()).ToList();
+            if (result.Count == 0)
+                error = problems.Count > 0
+                    ? string.Join(" ", problems)
+                    : hostError ?? "Provide elementIds, useSelection=true, tagAllInView=true with categoryId (and linkInstanceId " +
+                      "to tag through a link), linkInstanceId with linkedElementIds, or linkedElements.";
+            else if (problems.Count > 0)
+                error = string.Join(" ", problems);
+            return result;
+        }
+
+        private static RevitLinkInstance ResolveLink(Document doc, long linkInstanceId, List<string> problems)
+        {
+            var link = doc.GetElement(new ElementId(linkInstanceId)) as RevitLinkInstance;
+            if (link == null)
+            {
+                problems.Add($"{linkInstanceId} is not a Revit link instance in '{doc.Title}' (IFC links are Revit links too; DWG links cannot be tagged).");
+                return null;
+            }
+            if (link.GetLinkDocument() == null)
+            {
+                problems.Add($"The link '{link.Name}' is not loaded.");
+                return null;
+            }
+            return link;
+        }
+
         public static FamilySymbol ResolveBaseTagType(
             Document doc,
             IList<Element> elements,

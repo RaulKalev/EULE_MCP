@@ -18,6 +18,10 @@ namespace RevitMCP.Addin.Tools
         public string Description =>
             "Places SmartTags-compatible IndependentTags with the full intelligent placement pipeline. " +
             "Targets: elementIds, useSelection=true, or tagAllInView=true plus categoryId. " +
+            "Elements of a linked Revit/IFC model: linkInstanceId + linkedElementIds (ids in the linked document), " +
+            "linkedElements (\"link:<instance>:<id>\" ids from the graph), linked elements Tab-selected in the selection, " +
+            "or tagAllInView + categoryId + linkInstanceId (the link's elements the view shows); host and linked targets " +
+            "can be mixed, and tags through a link carry no SmartTags marker. " +
             "Tag type: tagTypeId, unique tagFamilyName/tagTypeName, or automatic category resolution. " +
             "Placement: direction (Right/Left/Up/Down), anchorPoint (nine positions), " +
             "attachedLengthMm, freeLengthMm, addLeader, leaderEndCondition, orientation, " +
@@ -51,18 +55,19 @@ namespace RevitMCP.Addin.Tools
             if (view == null)
                 return Task.FromResult(TaggingToolSupport.Fail(request, error));
 
-            var elements = TaggingToolSupport.ResolveElements(
+            var targets = TaggingToolSupport.ResolveTargets(
                 uidoc,
                 doc,
                 view,
                 request.Arguments,
                 out error);
-            if (elements.Count == 0)
+            if (targets.Count == 0)
                 return Task.FromResult(TaggingToolSupport.Fail(request, error));
+            var targetWarnings = error == null ? new List<string>() : new List<string> { error };
 
             var baseTagType = TaggingToolSupport.ResolveBaseTagType(
                 doc,
-                elements,
+                targets.Select(target => target.Element).ToList(),
                 request.Arguments,
                 out error);
             if (baseTagType == null)
@@ -87,7 +92,7 @@ namespace RevitMCP.Addin.Tools
                     placementResult = new SmartTagPlacementService().Place(
                         doc,
                         view,
-                        elements,
+                        targets,
                         baseTagType,
                         directionTypes,
                         options,
@@ -135,6 +140,7 @@ namespace RevitMCP.Addin.Tools
                     items = placementResult.Items
                 },
                 Errors = placementResult.Errors,
+                Warnings = targetWarnings,
                 DurationMs = stopwatch.ElapsedMilliseconds
             });
         }

@@ -17,18 +17,8 @@ namespace RevitMCP.Addin.Tagging
             FamilySymbol baseTagType,
             DirectionTagTypes directionTypes,
             SmartTagOptions options,
-            CancellationToken cancellationToken)
-        {
-            return Process(
-                doc,
-                view,
-                elements,
-                baseTagType,
-                directionTypes,
-                options,
-                true,
-                cancellationToken);
-        }
+            CancellationToken cancellationToken) =>
+            Preview(doc, view, HostTargets(elements), baseTagType, directionTypes, options, cancellationToken);
 
         public SmartTagPlacementResult Place(
             Document doc,
@@ -37,12 +27,44 @@ namespace RevitMCP.Addin.Tagging
             FamilySymbol baseTagType,
             DirectionTagTypes directionTypes,
             SmartTagOptions options,
+            CancellationToken cancellationToken) =>
+            Place(doc, view, HostTargets(elements), baseTagType, directionTypes, options, cancellationToken);
+
+        /// <summary>Host and linked targets (#151).</summary>
+        public SmartTagPlacementResult Preview(
+            Document doc,
+            View view,
+            IEnumerable<TagTarget> targets,
+            FamilySymbol baseTagType,
+            DirectionTagTypes directionTypes,
+            SmartTagOptions options,
             CancellationToken cancellationToken)
         {
             return Process(
                 doc,
                 view,
-                elements,
+                targets,
+                baseTagType,
+                directionTypes,
+                options,
+                true,
+                cancellationToken);
+        }
+
+        /// <summary>Host and linked targets (#151).</summary>
+        public SmartTagPlacementResult Place(
+            Document doc,
+            View view,
+            IEnumerable<TagTarget> targets,
+            FamilySymbol baseTagType,
+            DirectionTagTypes directionTypes,
+            SmartTagOptions options,
+            CancellationToken cancellationToken)
+        {
+            return Process(
+                doc,
+                view,
+                targets,
                 baseTagType,
                 directionTypes,
                 options,
@@ -50,10 +72,13 @@ namespace RevitMCP.Addin.Tagging
                 cancellationToken);
         }
 
+        private static IEnumerable<TagTarget> HostTargets(IEnumerable<Element> elements) =>
+            elements == null ? Enumerable.Empty<TagTarget>() : elements.Where(e => e != null).Select(TagTarget.Host);
+
         private static SmartTagPlacementResult Process(
             Document doc,
             View view,
-            IEnumerable<Element> elements,
+            IEnumerable<TagTarget> targets,
             FamilySymbol baseTagType,
             DirectionTagTypes directionTypes,
             SmartTagOptions options,
@@ -67,10 +92,10 @@ namespace RevitMCP.Addin.Tagging
                 return result;
             }
 
-            var sourceElements = elements == null
-                ? new List<Element>()
-                : elements.Where(element => element != null)
-                    .GroupBy(element => element.Id)
+            var sourceElements = targets == null
+                ? new List<TagTarget>()
+                : targets.Where(target => target != null)
+                    .GroupBy(target => target.Key)
                     .Select(group => group.First())
                     .ToList();
             result.CandidateCount = sourceElements.Count;
@@ -113,25 +138,35 @@ namespace RevitMCP.Addin.Tagging
                 cancellationToken.ThrowIfCancellationRequested();
                 var item = new SmartTagPlacementItem
                 {
-                    ElementId = element.Id.Value,
+                    ElementId = element.ElementId,
+                    LinkInstanceId = element.LinkInstanceId,
+                    LinkName = element.LinkName,
                     TagTypeId = resolvedType.Id.Value,
                     TagTypeName = resolvedType.Family.Name + " : " + resolvedType.Name,
-                    CategoryName = element.Category == null
+                    CategoryName = element.Element.Category == null
                         ? string.Empty
-                        : element.Category.Name
+                        : element.Element.Category.Name
                 };
                 result.Items.Add(item);
 
                 try
                 {
+                    var tagCategoryId = resolvedType.Category == null
+                        ? ElementId.InvalidElementId
+                        : resolvedType.Category.Id;
                     if (options.SkipAlreadyTagged &&
-                        TagDiscoveryService.IsElementTaggedInView(
-                            doc,
-                            view,
-                            element.Id,
-                            resolvedType.Category == null
-                                ? ElementId.InvalidElementId
-                                : resolvedType.Category.Id))
+                        (element.IsLinked
+                            ? TagDiscoveryService.IsLinkedElementTaggedInView(
+                                doc,
+                                view,
+                                element.Link.Id,
+                                element.Element.Id,
+                                tagCategoryId)
+                            : TagDiscoveryService.IsElementTaggedInView(
+                                doc,
+                                view,
+                                element.Element.Id,
+                                tagCategoryId)))
                     {
                         result.SkippedAlreadyTaggedCount++;
                         item.Reason = "Already tagged in the target view.";
@@ -192,7 +227,7 @@ namespace RevitMCP.Addin.Tagging
                         doc,
                         resolvedType.Id,
                         view.Id,
-                        new Reference(element),
+                        element.CreateReference(),
                         createWithLeader,
                         options.Orientation,
                         head);
@@ -209,7 +244,10 @@ namespace RevitMCP.Addin.Tagging
                         try { tag.LeaderEndCondition = options.LeaderEndCondition; }
                         catch { }
                     }
-                    SmartTagMarkerStorage.SetManagedTag(tag, element.Id);
+                    // The SmartTags marker stores a host element id; a linked element's id would point at an unrelated
+                    // host element, so tags through a link (#151) carry no marker and the retag tools leave them alone.
+                    if (!element.IsLinked)
+                        SmartTagMarkerStorage.SetManagedTag(tag, element.Element.Id);
 
                     if (detector != null)
                     {
@@ -285,7 +323,7 @@ namespace RevitMCP.Addin.Tagging
                     item.WouldPlace = false;
                     item.Reason = exception.Message;
                     result.Errors.Add(
-                        "Element " + element.Id.Value + ": " + exception.Message);
+                        (element.IsLinked ? "Linked element " + element.Key : "Element " + element.ElementId) + ": " + exception.Message);
                 }
             }
 

@@ -160,6 +160,7 @@ Important repository references:
 - [`docs/tool-consolidation.md`](docs/tool-consolidation.md) — discriminator-based tools and the old → new name mapping
 - [`docs/usage-reporting.md`](docs/usage-reporting.md) — per-user usage collection (opt-in, after telling staff), monthly HTML/Excel reports, credit cost join and estimated time saved
 - [`docs/view-alignment.md`](docs/view-alignment.md) — lining up and distributing tags, text, and elements within a view
+- [`docs/tag-linked-elements.md`](docs/tag-linked-elements.md) — tagging elements of linked Revit/IFC models with `revit_place_tags`
 - [`docs/view-element-reads.md`](docs/view-element-reads.md) — the `view` argument on element reads: what a view or sheet shows, what is left out and why, and what is still to be confirmed in Revit
 - [`docs/view-creation.md`](docs/view-creation.md) — creating plans per level, sections, callouts, 3D views, drafting views and legends from specs, and setting view extents
 - [`docs/view-filters.md`](docs/view-filters.md) — view filters: rules and selection filters, applying them to views and templates, copying between projects
