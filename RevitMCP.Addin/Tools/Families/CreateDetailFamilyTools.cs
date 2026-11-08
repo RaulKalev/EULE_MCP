@@ -20,7 +20,9 @@ public sealed class PreviewCreateDetailFamilyTool : IRevitMcpTool
         "Previews creating a Detail Item family, without changing the model or any file. Same arguments as " +
         "revit_create_detail_family. Checks the save path (required, never defaulted), the file access policy and whether " +
         "the file exists, finds the template (Metric Detail Item.rft), validates the geometry, matches every requested " +
-        "line style to the project's line styles (project | missing) and states whether the family would load.";
+        "line style to the project's line styles (project | missing), resolves each parameter (shared ones against the " +
+        "shared parameter file), checks label text types and lists the annotation families the labels need, and states " +
+        "whether the family would load.";
 
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.FamilyCreation;
@@ -42,7 +44,10 @@ public sealed class CreateDetailFamilyTool : IRevitMcpTool, IApprovalSummaryTool
         "or {start, mid, end}], circles [{center, radius}]. lineStyle (per curve, or a default for all) must be a line " +
         "style of the project: the family gets a line style of the same name, weight, colour and pattern, so it merges " +
         "with the project's on load. purge (default true) removes unused elements before saving. overwrite replaces an " +
-        "existing file. loadIntoProject loads it into the document (ifExists: skip | overwrite). Run " +
+        "existing file. loadIntoProject loads it into the document (ifExists: skip | overwrite). parameters [{name, " +
+        "dataType, group?, instance?, value?, formula?}] adds family parameters; {name or guid, shared:true} assigns an " +
+        "existing shared parameter from the shared parameter file (never creates one). labels [{text, position:[x,y], " +
+        "size? (paper mm), textType?, alignment?, rotation?}] places text through nested Generic Annotation families. Run " +
         "revit_preview_create_detail_family first.";
 
     public ToolPermission Permission => ToolPermission.RequiresApproval;
@@ -66,8 +71,13 @@ internal static class DetailFamilyExecutor
         var counts = string.Join(", ", spec.CountsByKind().Select(c => $"{c.Value} {c.Key}{(c.Value == 1 ? string.Empty : "s")}"));
         var styles = spec.LineStyleNames();
         var document = ToolArguments.GetString(request.Arguments, "document").Trim();
+        var shared = spec.Parameters.Count(p => p.Shared);
+        var parameters = spec.Parameters.Count == 0 ? string.Empty
+            : $"; {spec.Parameters.Count} parameter(s){(shared > 0 ? $", {shared} of them shared (existing definitions only)" : string.Empty)}";
+        var labels = spec.Labels.Count == 0 ? string.Empty
+            : $"; {spec.Labels.Count} label(s) as nested Generic Annotation families";
         return $"Create Detail Item family '{spec.FamilyName}' ({(counts.Length > 0 ? counts : "no geometry")}" +
-               $"{(styles.Count > 0 ? $"; line styles {string.Join(", ", styles)}" : string.Empty)}) and save it to " +
+               $"{(styles.Count > 0 ? $"; line styles {string.Join(", ", styles)}" : string.Empty)}{parameters}{labels}) and save it to " +
                $"'{spec.SavePath}'{(spec.Overwrite ? ", replacing an existing file" : string.Empty)}" +
                $"{(spec.Purge ? ", purged" : string.Empty)}" +
                $"{(spec.LoadIntoProject ? $"; then load it into {(document.Length > 0 ? $"'{document}'" : "the active document")} (ifExists={spec.IfExists})" : string.Empty)}.";
@@ -113,6 +123,30 @@ internal static class DetailFamilyExecutor
                          $"'{doc.Title}'{(suggestions.Count > 0 ? $"; did you mean {string.Join(", ", suggestions.Select(s => $"'{s}'"))}?" : ".")}");
         }
 
+        // Phase 2: parameters, against the running Revit and the shared parameter file.
+        var parameters = DetailFamilyExtrasRevit.ResolveParameters(uiapp.Application, doc, spec, problems, warnings);
+
+        // Phase 3: labels, as nested Generic Annotation families.
+        var labelGroups = DetailFamilySpecParser.GroupLabels(spec, problems);
+        string? annotationTemplate = null;
+        var projectTextTypes = new Dictionary<string, ProjectTextTypeInfo>(StringComparer.OrdinalIgnoreCase);
+        if (spec.Labels.Count > 0)
+        {
+            string? annotationError;
+            (annotationTemplate, annotationError) = DetailFamilySpecParser.ResolveTemplate(spec.AnnotationTemplatePath, SafeTemplateRoot(uiapp),
+                File.Exists, root => SafeFind(root, DetailFamilySpecParser.DefaultAnnotationTemplateFileName),
+                DetailFamilySpecParser.DefaultAnnotationTemplateFileName);
+            if (annotationError != null) problems.Add(annotationError);
+
+            projectTextTypes = DetailFamilyExtrasRevit.ReadProjectTextTypes(doc);
+            foreach (var name in DetailFamilySpecParser.LabelTextTypeNames(spec).Where(n => !projectTextTypes.ContainsKey(n)))
+            {
+                var suggestions = DetailFamilyExtrasRevit.SuggestTextTypes(name, projectTextTypes.Keys);
+                problems.Add($"Text type '{name}' is not a text type of '{doc.Title}'" +
+                             $"{(suggestions.Count > 0 ? $"; did you mean {string.Join(", ", suggestions.Select(s => $"'{s}'"))}?" : ".")}");
+            }
+        }
+
         var loadedFamilies = FamilyInventory.LoadedByName(doc);
         var alreadyLoaded = spec.FamilyName.Length > 0 && loadedFamilies.ContainsKey(spec.FamilyName);
         var overwriteLoaded = string.Equals(spec.IfExists, "overwrite", StringComparison.OrdinalIgnoreCase);
@@ -126,7 +160,10 @@ internal static class DetailFamilyExecutor
                 RequestId = request.RequestId,
                 Success = true,
                 Message = problems.Count == 0
-                    ? $"Preview: ready to create '{spec.FamilyName}' with {spec.Curves.Count} curve(s) at '{spec.SavePath}'."
+                    ? $"Preview: ready to create '{spec.FamilyName}' with {spec.Curves.Count} curve(s)" +
+                      $"{(spec.Parameters.Count > 0 ? $", {spec.Parameters.Count} parameter(s)" : string.Empty)}" +
+                      $"{(spec.Labels.Count > 0 ? $", {spec.Labels.Count} label(s) in {labelGroups.Count} annotation famil{(labelGroups.Count == 1 ? "y" : "ies")}" : string.Empty)}" +
+                      $" at '{spec.SavePath}'."
                     : $"Preview: {problems.Count} problem(s) to fix before creating the family.",
                 Data = new
                 {
@@ -147,6 +184,25 @@ internal static class DetailFamilyExecutor
                         pattern = s.Project == null ? null : s.Project.Pattern.Length > 0 ? s.Project.Pattern : "Solid",
                         usedBy = s.UsedBy
                     }).ToList(),
+                    parameters = parameters.Items.Select(DetailFamilyExtrasRevit.DescribePlan).ToList(),
+                    sharedParameterFile = parameters.SharedFilePath,
+                    sharedParameterFileSource = parameters.SharedFileSource,
+                    labels = spec.Labels.Count == 0 ? null : new
+                    {
+                        count = spec.Labels.Count,
+                        annotationTemplate,
+                        families = labelGroups.Select(g => new
+                        {
+                            name = g.FamilyName,
+                            text = g.Template.Text,
+                            textType = g.Template.TextType.Length > 0 ? g.Template.TextType : null,
+                            sizeMm = g.Template.SizeMm
+                                     ?? (g.Template.TextType.Length > 0 && projectTextTypes.TryGetValue(g.Template.TextType, out var t) ? t.SizeMm : null)
+                                     ?? DetailFamilySpecParser.DefaultLabelSizeMm,
+                            alignment = g.Template.Alignment,
+                            instances = g.Instances.Count
+                        }).ToList()
+                    },
                     purge = spec.Purge,
                     load = new { status = loadStatus, documentTitle = doc.Title, ifExists = spec.IfExists }
                 },
@@ -226,7 +282,7 @@ internal static class DetailFamilyExecutor
                     }
                 }
 
-                if (drawn == 0)
+                if (drawn == 0 && spec.Curves.Count > 0)
                 {
                     tx.RollBack();
                     familyDoc.Close(false);
@@ -255,7 +311,39 @@ internal static class DetailFamilyExecutor
                 }));
             }
 
-            // 2. Purge, before saving.
+            // 2. Parameters (phase 2): one transaction.
+            var parameterResults = new List<object>();
+            if (parameters.Items.Count > 0)
+            {
+                using var tx = new Transaction(familyDoc, "Revit MCP - Family parameters");
+                tx.Start();
+                parameterResults = DetailFamilyExtrasRevit.AddParameters(uiapp.Application, familyDoc, spec, parameters, protectedIds, warnings);
+                TransactionCommitGuard.CommitOrThrow(tx);
+            }
+
+            // 3. Labels (phase 3): a Generic Annotation family per distinct text, loaded and placed in one transaction.
+            var labelResults = new List<object>();
+            if (labelGroups.Count > 0)
+            {
+                var annotationFolder = Path.Combine(tempFolder, "Labels");
+                Directory.CreateDirectory(annotationFolder);
+                var annotationFamilies = new List<(DetailLabelGroup Group, string Path)>();
+                foreach (var group in labelGroups)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var annotationPath = DetailFamilyExtrasRevit.CreateAnnotationFamily(uiapp.Application, annotationTemplate!, group,
+                        projectTextTypes, annotationFolder, spec.Purge,
+                        (annotationDoc, keep) => Purge(annotationDoc, keep, warnings, cancellationToken), warnings);
+                    annotationFamilies.Add((group, annotationPath));
+                }
+
+                using var tx = new Transaction(familyDoc, "Revit MCP - Place labels");
+                tx.Start();
+                labelResults = DetailFamilyExtrasRevit.PlaceLabels(familyDoc, view, annotationFamilies, protectedIds, warnings);
+                TransactionCommitGuard.CommitOrThrow(tx);
+            }
+
+            // 4. Purge, before saving.
             var purged = spec.Purge ? Purge(familyDoc, protectedIds, warnings, cancellationToken) : new Dictionary<string, int>();
 
             // 3. Save to a temporary file of the final name (the file name is the family name), then copy into place.
@@ -283,7 +371,9 @@ internal static class DetailFamilyExecutor
             {
                 RequestId = request.RequestId,
                 Success = true,
-                Message = $"Created '{spec.FamilyName}' ({drawn} of {spec.Curves.Count} curve(s)) at '{spec.SavePath}'" +
+                Message = $"Created '{spec.FamilyName}' ({drawn} of {spec.Curves.Count} curve(s)" +
+                          $"{(parameterResults.Count > 0 ? $", {parameterResults.Count} parameter(s)" : string.Empty)}" +
+                          $"{(labelResults.Count > 0 ? $", {spec.Labels.Count} label(s)" : string.Empty)}) at '{spec.SavePath}'" +
                           $"{(spec.Purge ? $", purged {purged.Values.Sum()} unused element(s)" : string.Empty)}" +
                           $"{(spec.LoadIntoProject ? $"; load: {LoadStatusOf(loadResult)}" : string.Empty)}.",
                 Data = new
@@ -295,6 +385,9 @@ internal static class DetailFamilyExecutor
                     curvesDrawn = drawn,
                     curvesFailed = curveFailures,
                     lineStyles = styleResults,
+                    parameters = parameterResults,
+                    sharedParameterFile = parameters.AnyShared ? parameters.SharedFilePath : null,
+                    labels = labelResults,
                     purged,
                     load = loadResult
                 },
@@ -579,12 +672,12 @@ internal static class DetailFamilyExecutor
         catch { return string.Empty; }
     }
 
-    private static IEnumerable<string> SafeFind(string root)
+    private static IEnumerable<string> SafeFind(string root, string fileName = DetailFamilySpecParser.DefaultTemplateFileName)
     {
         try
         {
             return Directory.Exists(root)
-                ? Directory.EnumerateFiles(root, DetailFamilySpecParser.DefaultTemplateFileName, SearchOption.AllDirectories).Take(20).ToList()
+                ? Directory.EnumerateFiles(root, fileName, SearchOption.AllDirectories).Take(20).ToList()
                 : Enumerable.Empty<string>();
         }
         catch { return Enumerable.Empty<string>(); }

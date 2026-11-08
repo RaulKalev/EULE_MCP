@@ -1,8 +1,7 @@
 # Family creation
 
-The connector creates Detail Item families from a short spec (#147). Phase 1 covers geometry, line styles that match
-the project, purge, save and load. Phase 2 will add family and shared parameters, and phase 3 text through a nested
-Generic Annotation family.
+The connector creates Detail Item families from a short spec (#147): geometry, line styles that match the project,
+family and shared parameters, text through nested Generic Annotation families, purge, save and load.
 
 Both tools are in the `edit` group (`--tool-groups edit`, or find them with `revit_tools_search`).
 
@@ -58,11 +57,61 @@ If the template does not let detail curves use *Lines* subcategories, the tool f
 subcategory with the same name, weight, colour and pattern. The result says so (`kind: detailItems`) and adds a
 warning. Such a subcategory appears under Detail Items in Object Styles rather than as a line style.
 
+## Parameters
+
+`parameters` adds parameters to the family. A **family parameter** names its data type:
+
+| Field | Notes |
+|---|---|
+| `name` | Required. No `\ : { } [ ] ; < > ? ~`, pipe or backtick: Revit refuses them |
+| `dataType` | `text`, `multilineText`, `url`, `integer`, `number`, `length`, `area`, `volume`, `angle`, `yesNo`, `material`, … (as in `revit_create_parameters`) |
+| `group` | Where it shows in Properties: `Data`, `Text`, `Dimensions`, `Identity Data`, `Graphics`, `Electrical`, … Default: `Text` for text, `Dimensions` for sizes and angles, `Graphics` for yes/no, `Data` otherwise |
+| `instance` | `true` for an instance parameter; default is a type parameter |
+| `value` | The family type's value: lengths in mm, areas in m², volumes in m³, angles in degrees, yes/no as `true`/`false` |
+| `formula` | A Revit formula instead of a value, for example `"Laius / 2"` |
+
+A **shared parameter** is an existing definition of the shared parameter file: `{ "name": "EULE_Tähis", "shared": true }`,
+or `{ "guid": "…" }`. `sharedGroup` picks the group when several groups of the file hold the name. It takes its data
+type from the definition; a `dataType` given as well must match it. `group`, `instance`, `value` and `formula` work as
+for family parameters.
+
+**The tool never creates a shared parameter.** It reads the file and only assigns definitions that are already there.
+A name that is not in the file is a problem in the preview, with close names suggested. The file is
+`sharedParameterFile` when given, else `parameters.sharedParameterFile` from the project, user or company config, else
+Revit's own setting, which is restored after the call. Use `revit_list_shared_parameters` to see what the file holds.
+
+Values and formulas are set on the family's type. When the template has no type, the tool creates one named after
+the family, which is what Revit would create on load anyway. A parameter the template already has is kept, and only
+its value or formula is set (`status: existing`).
+
+## Labels (text)
+
+`labels` places text in the family through nested **Generic Annotation** families, so the text keeps its size on
+paper at every view scale while it stays anchored to the symbol:
+
+| Field | Notes |
+|---|---|
+| `text` | Required |
+| `position` | `[x, y]` in mm on the reference level: the text's insertion point |
+| `size` | Text height on paper in mm. Default: the text type's, else 2.5 |
+| `textType` | A text type of the project to copy (font, size, width factor, bold, italic, underline, background, colour) |
+| `alignment` | `left` (default), `center` or `right`: where the insertion point sits on the text. Vertically it is centred |
+| `rotation` | Degrees counter-clockwise |
+
+Each distinct combination of text, size, text type and alignment becomes one annotation family named
+`{familyName}_Text1`, `_Text2`, … and every label using it is an instance of that family. The annotation families are
+built from `Metric Generic Annotation.rft` (found in Revit's family template folder, including its `Annotations`
+sub-folder; `annotationTemplatePath` names another), have the template's own sample text removed, are purged with the
+detail item, and live only inside the saved `.rfa`: no separate annotation files are written.
+
+**Limitation:** the text is fixed. Revit's API cannot create *labels* (text bound to a parameter) in a family, so text
+that should show a parameter's value has to be turned into a label by hand in the Family Editor.
+
 ## Purge
 
 With `purge=true` (the default), the tool deletes what Revit lists as unused (`Document.GetUnusedElements`) before
 saving. It repeats the pass up to five times, because deleting can leave more elements unused. The line styles and
-patterns the spec uses are never deleted. An element Revit refuses to delete is skipped. The result counts the
+patterns the spec uses, the parameters and the label families and text types are never deleted. An element Revit refuses to delete is skipped. The result counts the
 deleted elements by kind.
 
 ## Loading into the project
@@ -91,6 +140,12 @@ not Detail Items gives a warning but is used.
     "rectangles": [ { "min": [-10, -6], "max": [10, 6] } ],
     "lines": [ { "start": [-10, -6], "end": [10, 6], "lineStyle": "EL_Kaabel" } ],
     "circles": [ { "center": [0, 0], "radius": 2 } ],
+    "parameters": [
+      { "name": "Kilbi tähis", "dataType": "text", "value": "K1" },
+      { "name": "Laius", "dataType": "length", "value": 20, "instance": true },
+      { "name": "EULE_Tähis", "shared": true }
+    ],
+    "labels": [ { "text": "K1", "position": [0, 9], "alignment": "center", "textType": "2.5mm Arial" } ],
     "loadIntoProject": true
 } }
 ```
