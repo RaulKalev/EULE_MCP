@@ -2,7 +2,7 @@
 
 EULE MCP connects Claude Code, Codex, and Antigravity CLI to a live Autodesk Revit model through the [Model Context Protocol](https://modelcontextprotocol.io). It provides local model queries, discipline workflows, controlled writes, QA, reporting, and file operations without requiring users to write Revit API scripts.
 
-The current bridge exposes **390 MCP tools**. The compact `core` profile is advertised by default, and `revit_tools_search` finds the rest by intent.
+The current bridge exposes **392 MCP tools**. The compact `core` profile is advertised by default, and `revit_tools_search` finds the rest by intent.
 
 ## Documentation
 
