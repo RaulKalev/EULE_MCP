@@ -2268,7 +2268,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_preview_place_tags", ReadOnly = true),
-     Description("Read-only preview of the SmartTags-compatible batch placement pipeline. Supports IDs, current selection, or all elements of one category; nine anchors; direction-specific tag types; leaders; rotation; duplicate skipping; and collision avoidance.")]
+     Description("Read-only preview of the SmartTags-compatible batch placement pipeline. Supports IDs, current selection, or all elements of one category, in the host or in a linked Revit/IFC model (linkInstanceId + linkedElementIds, linkedElements, or tagAllInView with linkInstanceId); nine anchors; direction-specific tag types; leaders; rotation; duplicate skipping; and collision avoidance.")]
     public async Task<string> PreviewPlaceTags(
         [Description("Element IDs to tag.")] long[]? elementIds = null,
         [Description("Use the current Revit selection as targets.")] bool useSelection = false,
@@ -2296,6 +2296,9 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Optional Up tag type ID.")] long upTagTypeId = 0,
         [Description("Optional Down tag type ID.")] long downTagTypeId = 0,
         [Description("Optional keyword for automatic directional type discovery.")] string? directionKeyword = null,
+        [Description(LinkInstanceIdTagDescription)] long linkInstanceId = 0,
+        [Description("Element ids in the linked document (with linkInstanceId), e.g. from revit_query_linked_elements.")] long[]? linkedElementIds = null,
+        [Description("Linked elements as graph ids \"link:<linkInstanceId>:<elementId>\".")] string[]? linkedElements = null,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -2307,6 +2310,9 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             enableCollisionDetection, collisionGapMm, minimumOffsetMm,
             skipAlreadyTagged, leftTagTypeId, rightTagTypeId, upTagTypeId,
             downTagTypeId, directionKeyword);
+        args["linkInstanceId"] = linkInstanceId;
+        args["linkedElementIds"] = linkedElementIds ?? [];
+        args["linkedElements"] = linkedElements ?? [];
         args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync(
             "revit_preview_place_tags",
@@ -2316,7 +2322,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_place_tags"),
-     Description("Places SmartTags-compatible IndependentTags using IDs, current selection, or all visible elements of one category. Supports nine anchors, direction-specific tag types, leader/orientation/rotation settings, host rotation detection, duplicate skipping, two-pass collision avoidance, and managed-tag metadata. Requires approval and is reversible with one Revit Undo.")]
+     Description("Places SmartTags-compatible IndependentTags using IDs, current selection, or all visible elements of one category. Also tags elements of a linked Revit/IFC model: linkInstanceId + linkedElementIds (ids in the linked document), linkedElements (graph ids \"link:<instance>:<id>\"), linked elements Tab-selected in Revit, or tagAllInView + categoryId + linkInstanceId; host and linked targets can be mixed, and tags through a link carry no managed-tag metadata. Supports nine anchors, direction-specific tag types, leader/orientation/rotation settings, host rotation detection, duplicate skipping, two-pass collision avoidance, and managed-tag metadata. Requires approval and is reversible with one Revit Undo.")]
     public async Task<string> PlaceTags(
         [Description("Element IDs to tag.")] long[]? elementIds = null,
         [Description("Use the current Revit selection as targets.")] bool useSelection = false,
@@ -2344,6 +2350,9 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Optional Up tag type ID.")] long upTagTypeId = 0,
         [Description("Optional Down tag type ID.")] long downTagTypeId = 0,
         [Description("Optional keyword for automatic directional type discovery.")] string? directionKeyword = null,
+        [Description(LinkInstanceIdTagDescription)] long linkInstanceId = 0,
+        [Description("Element ids in the linked document (with linkInstanceId), e.g. from revit_query_linked_elements.")] long[]? linkedElementIds = null,
+        [Description("Linked elements as graph ids \"link:<linkInstanceId>:<elementId>\".")] string[]? linkedElements = null,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
@@ -2355,6 +2364,9 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             enableCollisionDetection, collisionGapMm, minimumOffsetMm,
             skipAlreadyTagged, leftTagTypeId, rightTagTypeId, upTagTypeId,
             downTagTypeId, directionKeyword);
+        args["linkInstanceId"] = linkInstanceId;
+        args["linkedElementIds"] = linkedElementIds ?? [];
+        args["linkedElements"] = linkedElements ?? [];
         args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync(
             "revit_place_tags",
@@ -2549,6 +2561,9 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             cancellationToken);
         return FormatResult(result);
     }
+
+    private const string LinkInstanceIdTagDescription =
+        "Tag elements of a linked Revit/IFC model: the link instance id in the host (revit_list_open_documents). Use with linkedElementIds, or with tagAllInView + categoryId to tag the link's elements the view shows.";
 
     private static Dictionary<string, object?> BuildTagPlacementArgs(
         long[]? elementIds,

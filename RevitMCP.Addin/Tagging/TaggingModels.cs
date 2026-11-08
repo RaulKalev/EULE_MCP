@@ -94,7 +94,11 @@ namespace RevitMCP.Addin.Tagging
 
     public sealed class SmartTagPlacementItem
     {
+        /// <summary>The element id; for a linked target (#151) the id in the linked document.</summary>
         public long ElementId { get; set; }
+        /// <summary>The link instance the element was tagged through; null for a host element.</summary>
+        public long? LinkInstanceId { get; set; }
+        public string LinkName { get; set; }
         public long TagId { get; set; }
         public long TagTypeId { get; set; }
         public string TagTypeName { get; set; } = string.Empty;

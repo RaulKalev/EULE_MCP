@@ -11,32 +11,36 @@ namespace RevitMCP.Addin.Tagging
             Element element,
             View view,
             TagAnchorPoint anchorType,
+            out XYZ anchor) =>
+            TryGetAnchorPoint(TagTarget.Host(element), view, anchorType, out anchor);
+
+        /// <summary>The anchor in host coordinates; works for host and linked targets (#151).</summary>
+        public static bool TryGetAnchorPoint(
+            TagTarget target,
+            View view,
+            TagAnchorPoint anchorType,
             out XYZ anchor)
         {
             anchor = null;
-            if (element == null || view == null)
+            if (target == null || view == null)
                 return false;
 
-            var bounds = element.get_BoundingBox(view);
+            var bounds = target.GetBounds(view);
             if (bounds != null)
             {
                 anchor = CalculateAnchor(bounds, view, anchorType);
                 return true;
             }
 
-            var point = element.Location as LocationPoint;
-            if (point != null)
+            if (target.TryGetLocationPoint(out var point))
             {
-                anchor = point.Point;
+                anchor = point;
                 return true;
             }
 
-            var locationCurve = element.Location as LocationCurve;
-            if (locationCurve == null || locationCurve.Curve == null)
+            if (!target.TryGetLocationCurveEnds(out var start, out var end))
                 return false;
 
-            var start = locationCurve.Curve.GetEndPoint(0);
-            var end = locationCurve.Curve.GetEndPoint(1);
             switch (anchorType)
             {
                 case TagAnchorPoint.TopLeft:
@@ -80,6 +84,15 @@ namespace RevitMCP.Addin.Tagging
             Element element,
             double baseAngle,
             bool detectElementRotation,
+            bool directionTypeOverride) =>
+            ResolveOffsetDirection(baseDirection, view, TagTarget.Host(element), baseAngle, detectElementRotation, directionTypeOverride);
+
+        public static XYZ ResolveOffsetDirection(
+            XYZ baseDirection,
+            View view,
+            TagTarget element,
+            double baseAngle,
+            bool detectElementRotation,
             bool directionTypeOverride)
         {
             if (baseDirection == null || view == null)
@@ -98,6 +111,15 @@ namespace RevitMCP.Addin.Tagging
         public static double ResolveTagRotation(
             View view,
             Element element,
+            XYZ offsetDirection,
+            double baseAngle,
+            bool detectElementRotation,
+            bool directionTypeOverride) =>
+            ResolveTagRotation(view, TagTarget.Host(element), offsetDirection, baseAngle, detectElementRotation, directionTypeOverride);
+
+        public static double ResolveTagRotation(
+            View view,
+            TagTarget element,
             XYZ offsetDirection,
             double baseAngle,
             bool detectElementRotation,
@@ -125,10 +147,16 @@ namespace RevitMCP.Addin.Tagging
         public static double GetSafeMinimumOffsetFeet(
             Element element,
             View view,
+            double minimumOffsetMillimeters) =>
+            GetSafeMinimumOffsetFeet(TagTarget.Host(element), view, minimumOffsetMillimeters);
+
+        public static double GetSafeMinimumOffsetFeet(
+            TagTarget element,
+            View view,
             double minimumOffsetMillimeters)
         {
             var elementRadius = 0.5;
-            var bounds = element == null ? null : element.get_BoundingBox(view);
+            var bounds = element == null ? null : element.GetBounds(view);
             if (bounds != null)
                 elementRadius = (bounds.Max - bounds.Min).GetLength() / 2.0;
 
@@ -233,7 +261,7 @@ namespace RevitMCP.Addin.Tagging
         }
 
         private static bool TryGetElementRotationAngle(
-            Element element,
+            TagTarget element,
             View view,
             out double angle)
         {
@@ -241,31 +269,7 @@ namespace RevitMCP.Addin.Tagging
             if (element == null || view == null)
                 return false;
 
-            XYZ direction = null;
-            var family = element as FamilyInstance;
-            if (family != null)
-            {
-                direction = family.HandOrientation;
-                if (direction == null || direction.GetLength() < 1e-6)
-                    direction = family.FacingOrientation;
-            }
-
-            var curve = element.Location as LocationCurve;
-            if (direction == null && curve != null && curve.Curve != null)
-                direction = curve.Curve.GetEndPoint(1) - curve.Curve.GetEndPoint(0);
-
-            var point = element.Location as LocationPoint;
-            if (direction == null && point != null)
-            {
-                var axis = view.ViewDirection;
-                if (axis != null && axis.GetLength() > 1e-9)
-                    direction = Transform.CreateRotationAtPoint(
-                            axis.Normalize(),
-                            point.Rotation,
-                            XYZ.Zero)
-                        .OfVector(view.RightDirection);
-            }
-
+            var direction = element.GetDirection(view);
             return direction != null &&
                    direction.GetLength() >= 1e-6 &&
                    TryGetSignedAngleInView(view, direction, out angle);

@@ -184,7 +184,8 @@ namespace RevitMCP.Addin.Tools
         public string Name => "revit_preview_place_tags";
 
         public string Description =>
-            "Previews revit_place_tags without modifying the model. Accepts the same targets, " +
+            "Previews revit_place_tags without modifying the model. Accepts the same targets, including " +
+            "elements of linked models (linkInstanceId + linkedElementIds, linkedElements, or tagAllInView with linkInstanceId), " +
             "tag type, direction overrides, anchor, leader, rotation, duplicate-skip, and " +
             "collision settings. Returns proposed tag type and head coordinates for every element.";
 
@@ -211,17 +212,18 @@ namespace RevitMCP.Addin.Tools
                 out var error);
             if (view == null)
                 return Task.FromResult(TaggingToolSupport.Fail(request, error));
-            var elements = TaggingToolSupport.ResolveElements(
+            var targets = TaggingToolSupport.ResolveTargets(
                 uidoc,
                 doc,
                 view,
                 request.Arguments,
                 out error);
-            if (elements.Count == 0)
+            if (targets.Count == 0)
                 return Task.FromResult(TaggingToolSupport.Fail(request, error));
+            var targetWarnings = error == null ? new List<string>() : new List<string> { error };
             var tagType = TaggingToolSupport.ResolveBaseTagType(
                 doc,
-                elements,
+                targets.Select(target => target.Element).ToList(),
                 request.Arguments,
                 out error);
             if (tagType == null)
@@ -235,7 +237,7 @@ namespace RevitMCP.Addin.Tools
             var result = new SmartTagPlacementService().Preview(
                 doc,
                 view,
-                elements,
+                targets,
                 tagType,
                 TaggingToolSupport.ResolveDirectionTypes(
                     doc,
@@ -265,6 +267,7 @@ namespace RevitMCP.Addin.Tools
                     items = result.Items
                 },
                 Errors = result.Errors,
+                Warnings = targetWarnings,
                 DurationMs = stopwatch.ElapsedMilliseconds
             });
         }
