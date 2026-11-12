@@ -369,11 +369,11 @@
   <ItemGroup>
     <!-- Line and fill patterns: segment and grid parsing, validation, comparison and summaries (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Patterns\PatternDefinitions.cs" Link="Patterns\PatternDefinitions.cs" />
-
+  </ItemGroup>
   <ItemGroup>
     <!-- Object styles, style usage and delete planning (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Styles\*.cs" Link="Styles\%(Filename)%(Extension)" />
-
+  </ItemGroup>
   <ItemGroup>
     <!-- Legends and keynotes: type matching, grid, labels, clearExisting; keynote search, file parsing, diff, usage (no Revit API).
          LegendPlanning uses FuzzyNameMatcher, which the schedules group already links. -->
