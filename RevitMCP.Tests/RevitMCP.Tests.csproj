@@ -359,4 +359,8 @@
     <Compile Include="..\RevitMCP.Addin\FilledRegions\*.cs" Link="FilledRegions\%(Filename)%(Extension)" />
     <Compile Include="..\RevitMCP.Addin\Approval\FilledRegionApprovalSummaries.cs" Link="Approval\FilledRegionApprovalSummaries.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Line and fill patterns: segment and grid parsing, validation, comparison and summaries (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\Patterns\PatternDefinitions.cs" Link="Patterns\PatternDefinitions.cs" />
+  </ItemGroup>
 </Project>
