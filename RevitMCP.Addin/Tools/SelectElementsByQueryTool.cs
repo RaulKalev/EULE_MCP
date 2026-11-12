@@ -70,7 +70,7 @@ public class SelectElementsByQueryTool : IRevitMcpTool
         if (zoomToSelection && validIds.Count > 0)
         {
             try { uidoc.ShowElements(validIds); }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
 
         var warnings = result.Warnings.Concat(filtersParsed.Warnings).ToList();

@@ -41,7 +41,7 @@ public class GetCircuitLoadSummaryTool : IRevitMcpTool
             if (cancellationToken.IsCancellationRequested) break;
             var panel = CircuitDtoBuilder.TryGetPanel(c);
             var wt = CircuitDtoBuilder.GetWireTypeName(doc, c);
-            double load = 0; try { load = c.ApparentLoad; } catch { }
+            double load = 0; try { load = c.ApparentLoad; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             rows.Add((panel?.Name ?? "(No Panel)", c.SystemType.ToString(), string.IsNullOrEmpty(wt) ? "(No Cable Type)" : wt, load, c.Id.Value, c.CircuitNumber ?? ""));
         }
 

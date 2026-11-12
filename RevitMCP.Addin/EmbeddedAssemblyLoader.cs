@@ -61,7 +61,7 @@ internal static class EmbeddedAssemblyLoader
                 return;
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         _earlierHandlers = "unknown (could not prepend)";
         domain.AssemblyResolve += handler;
@@ -161,7 +161,7 @@ internal static class EmbeddedAssemblyLoader
             var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RevitMCP_startup.log");
             File.AppendAllText(path, $"[{DateTime.Now:HH:mm:ss.fff}] {message}{Environment.NewLine}");
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
     }
 
     private static byte[]? ReadEmbedded(string assemblyName)

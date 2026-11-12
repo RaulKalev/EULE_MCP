@@ -79,7 +79,7 @@ public class CheckCircuitHealthTool : IRevitMcpTool
             bool missingCable = CircuitCableCheck.IsMissing(resolvedWireType);
 
             string loadName = "";
-            try { loadName = circuit.LookupParameter("Load Name")?.AsString() ?? ""; } catch { }
+            try { loadName = circuit.LookupParameter("Load Name")?.AsString() ?? ""; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             var circIssues = new List<string>();
 
@@ -117,7 +117,7 @@ public class CheckCircuitHealthTool : IRevitMcpTool
                             elements.Add(new { elementId = e.Id.Value, category = e.Category?.Name ?? "", type = e.Name });
                     }
                 }
-                catch { }
+                catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
                 if (activeChecks.Contains("NoConnectedElements") && noElems)
                 { circIssues.Add("NoConnectedElements"); counts["NoConnectedElements"]++; }
@@ -156,7 +156,7 @@ public class CheckCircuitHealthTool : IRevitMcpTool
                 string resolvedWireType2 = CircuitDtoBuilder.GetWireTypeName(doc, circuit);
                 bool missingCable2 = CircuitCableCheck.IsMissing(resolvedWireType2);
                 string loadName2 = "";
-                try { loadName2 = circuit.LookupParameter("Load Name")?.AsString() ?? ""; } catch { }
+                try { loadName2 = circuit.LookupParameter("Load Name")?.AsString() ?? ""; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
                 foreach (var checkType in activeChecks)
                 {

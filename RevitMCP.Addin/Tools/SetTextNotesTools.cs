@@ -235,10 +235,10 @@ internal static class SetTextNotesExecutor
 
             // Revit re-fits a note's width to new text only when it regenerates, so the width read before that is
             // stale (M21: reported 51.9 → 51.9 while the note became 57.4 mm). Report what Revit ended up with.
-            try { doc.Regenerate(); } catch { }
+            try { doc.Regenerate(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             foreach (var (work, formattingPreserved) in done)
             {
-                try { work.NewWidthFt = work.Note.Width; } catch { }
+                try { work.NewWidthFt = work.Note.Width; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
                 applied.Add(Describe(work, formattingPreserved));
             }
         });

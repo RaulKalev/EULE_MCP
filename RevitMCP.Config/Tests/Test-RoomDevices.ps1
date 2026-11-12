@@ -14,7 +14,7 @@
     every 2 s, up to -ApprovalTimeoutSec) and verifies the result. Undo the changes in Revit afterwards
     (or close without saving).
 
-    Matching manual checklist: TESTING.md sections 53-56.
+    Matching manual checklist: docs\testing\10-room-devices.md sections 53-56.
 
 .EXAMPLE
     .\Test-RoomDevices.ps1 -LinkInstanceId 123456 -RoomNumber "1.12" -CorridorNumber "1.01"

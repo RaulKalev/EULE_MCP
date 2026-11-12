@@ -170,7 +170,7 @@ internal sealed class ViewAlignmentService
                         return true;
                     }
                 }
-                catch { }
+                catch (Exception swallowed) { Swallowed.Note(swallowed); }
                 return false;
 
             case TextNote note:
@@ -182,7 +182,7 @@ internal sealed class ViewAlignmentService
                         return true;
                     }
                 }
-                catch { }
+                catch (Exception swallowed) { Swallowed.Note(swallowed); }
                 return false;
 
             default:
@@ -204,7 +204,7 @@ internal sealed class ViewAlignmentService
                     return viewport.GetBoxCenter();
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         try
         {
@@ -216,7 +216,7 @@ internal sealed class ViewAlignmentService
                     return curve.Curve.Evaluate(0.5, true);
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         try
         {
@@ -224,7 +224,7 @@ internal sealed class ViewAlignmentService
             if (box?.Min != null && box.Max != null)
                 return box.Transform.OfPoint((box.Min + box.Max) * 0.5);
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         return null;
     }
@@ -243,7 +243,7 @@ internal sealed class ViewAlignmentService
             if (!string.IsNullOrWhiteSpace(name))
                 return name;
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return element.Category?.Name ?? "Element";
     }
 }

@@ -358,7 +358,7 @@ public sealed class PlanService
             if (element.OwnerViewId is { } view && view != ElementId.InvalidElementId) facts.OwnerViewId = view.Value;
             if (doc.IsWorkshared)
             {
-                try { facts.Workset = doc.GetWorksetTable().GetWorkset(element.WorksetId)?.Name; } catch { }
+                try { facts.Workset = doc.GetWorksetTable().GetWorkset(element.WorksetId)?.Name; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             }
             return facts;
         }
@@ -374,7 +374,7 @@ public sealed class PlanService
         {
             if (group.GetStatus() == TransactionStatus.Started) group.RollBack();
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
     }
 
     private static string Shorten(string name) => name.Length <= 120 ? name : name.Substring(0, 120);

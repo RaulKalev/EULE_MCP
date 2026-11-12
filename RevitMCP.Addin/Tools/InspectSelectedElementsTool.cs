@@ -168,7 +168,7 @@ public class InspectSelectedElementsTool : IRevitMcpTool
                     boundingBoxMm = new { min = bbox.Min, max = bbox.Max, size = bbox.SizeMm, center = bbox.CenterMm };
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         // ── Parameters preview ────────────────────────────────────────────────
         Dictionary<string, string?>? parametersPreview = null;
@@ -232,7 +232,7 @@ public class InspectSelectedElementsTool : IRevitMcpTool
                 hasGeometry = solidCount > 0 || meshCount > 0 || curveCount > 0;
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         // Convert cubic feet → cubic millimetres (1 ft^3 = 28_316_846.6 mm^3)
         double volumeMm3 = Math.Round(totalVolumeFeet3 * 28_316_846.592, 0);

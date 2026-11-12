@@ -63,7 +63,7 @@ public static class CableResistanceProfileService
                 if (loaded?.Profiles?.Count > 0)
                     return loaded;
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
         return BuiltInDefaults;
     }
@@ -81,7 +81,7 @@ public static class CableResistanceProfileService
             var json = JsonSerializer.Serialize(BuiltInDefaults, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(ConfigPath, json);
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
     }
 
     /// <summary>

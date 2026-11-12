@@ -21,4 +21,13 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <!-- .NET analyzers on every target (they are off by default for net48/netstandard2.0).
+         Default mode only; the few correctness rules raised to warnings are listed in .editorconfig.
+         Warnings never fail the build. -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
 </Project>

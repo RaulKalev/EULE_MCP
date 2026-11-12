@@ -185,13 +185,13 @@ public class ClashCandidateCollector
             type = elementType?.Name ?? string.Empty;
             family = el is FamilyInstance fi ? fi.Symbol?.FamilyName ?? string.Empty : elementType?.FamilyName ?? string.Empty;
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         try
         {
             if (el.LevelId != null && el.LevelId != ElementId.InvalidElementId)
                 level = doc.GetElement(el.LevelId)?.Name;
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return (family, type, level);
     }
 

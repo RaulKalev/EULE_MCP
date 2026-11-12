@@ -125,7 +125,7 @@ A call with `view` is never answered `graph_first` and gets no routing hint: the
 ## To be confirmed in Revit
 
 This was built without a running Revit. The code assumes the following; each item says what to check and what to change
-if it does not hold. Test steps are in [TESTING.md](../TESTING.md).
+if it does not hold. Test steps are in [testing/11-annotation-and-views.md](testing/11-annotation-and-views.md).
 
 1. **Crop region.** Assumed: the collector may pass elements outside the crop (the API says so), so `outsideCrop` removes those
    whose box misses the crop. Check that a device outside a cropped plan is gone from the read and counted, including for a

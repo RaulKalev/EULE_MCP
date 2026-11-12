@@ -182,7 +182,7 @@ internal static class FamilyTypeDuplicationPlanner
             if (type is FamilySymbol symbol && symbol.Family != null)
                 return "family:" + symbol.Family.Id.Value;
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         return "class:" + type.GetType().FullName + "|category:" + (type.Category?.Id.Value.ToString() ?? "none");
     }

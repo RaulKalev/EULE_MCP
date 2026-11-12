@@ -57,7 +57,7 @@ internal static class ProjectConfigLocator
                 dir = Path.GetDirectoryName(dir);
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return null;
     }
 
@@ -319,11 +319,11 @@ internal static class RoomAnalysis
 
         info.WallId = element.Id.Value;
         info.Category = element.Category?.Name;
-        try { info.TypeName = doc.GetElement(element.GetTypeId())?.Name; } catch { }
+        try { info.TypeName = doc.GetElement(element.GetTypeId())?.Name; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         if (element is Wall wall)
         {
-            try { info.ThicknessMm = Math.Round(RoomUnits.FtToMm(wall.Width), 0); } catch { }
+            try { info.ThicknessMm = Math.Round(RoomUnits.FtToMm(wall.Width), 0); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             if (wall.Location is LocationCurve lc)
             {
                 var c = lc.Curve;

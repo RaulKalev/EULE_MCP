@@ -89,7 +89,7 @@ public class SelectUncircuitedElementsTool : IRevitMcpTool
         var existing = replaceSelection ? new List<ElementId>() : uidoc.Selection.GetElementIds().ToList();
         var merged = existing.Union(uncircuitedIds).ToList();
         uidoc.Selection.SetElementIds(merged);
-        if (zoomToSelection) try { uidoc.ShowElements(merged); } catch { }
+        if (zoomToSelection) try { uidoc.ShowElements(merged); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         sw.Stop();
         return Task.FromResult(new McpToolResult

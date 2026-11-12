@@ -56,7 +56,7 @@ public class ExportCircuitHealthToExcelTool : IRevitMcpTool
             var pName = panel?.Name ?? "";
             var cn = c.CircuitNumber ?? "";
             var wt = CircuitDtoBuilder.GetWireTypeName(doc, c);
-            string ln = ""; try { ln = c.LookupParameter("Load Name")?.AsString() ?? ""; } catch { }
+            string ln = ""; try { ln = c.LookupParameter("Load Name")?.AsString() ?? ""; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             if (panel == null) issues.Add((pName, c.Id.Value, cn, "MissingPanel"));
             if (string.IsNullOrWhiteSpace(cn)) issues.Add((pName, c.Id.Value, cn, "EmptyCircuitNumber"));

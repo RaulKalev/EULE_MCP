@@ -67,7 +67,7 @@ public sealed class JobJournalStore
                         foreach (var step in job.Steps.Where(s => s.State is JobStepState.Running or JobStepState.WaitingApproval))
                             step.State = JobStepState.Pending;
                         job.PlanId = null;
-                        try { File.WriteAllText(file, JsonConvert.SerializeObject(job, Formatting.None), new UTF8Encoding(false)); } catch { }
+                        try { File.WriteAllText(file, JsonConvert.SerializeObject(job, Formatting.None), new UTF8Encoding(false)); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
                     }
                     jobs.Add(job);
                 }
@@ -126,7 +126,7 @@ public sealed class JobJournalStore
             .Take(files.Length - MaxPerModel);
         foreach (var x in removable)
         {
-            try { File.Delete(x.File); } catch { }
+            try { File.Delete(x.File); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
     }
 }

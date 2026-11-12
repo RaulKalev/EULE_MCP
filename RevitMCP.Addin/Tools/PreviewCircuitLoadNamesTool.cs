@@ -43,7 +43,7 @@ public class PreviewCircuitLoadNamesTool : IRevitMcpTool
         foreach (var circuit in filtered)
         {
             if (cancellationToken.IsCancellationRequested) break;
-            string oldName = ""; try { oldName = circuit.LookupParameter("Load Name")?.AsString() ?? ""; } catch { }
+            string oldName = ""; try { oldName = circuit.LookupParameter("Load Name")?.AsString() ?? ""; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             string newName = !string.IsNullOrWhiteSpace(template)
                 ? FillTemplate(doc, circuit, template, source)
@@ -101,7 +101,7 @@ public class PreviewCircuitLoadNamesTool : IRevitMcpTool
             var p = circuit.LookupParameter(paramName);
             if (p != null) return p.AsString() ?? p.AsValueString() ?? "";
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return "";
     }
 
@@ -127,7 +127,7 @@ public class PreviewCircuitLoadNamesTool : IRevitMcpTool
                 break; // use first element only
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return "";
     }
 
@@ -139,7 +139,7 @@ public class PreviewCircuitLoadNamesTool : IRevitMcpTool
                 foreach (Element e in circuit.Elements)
                     return e.Category?.Name ?? e.Name;
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return "";
     }
 

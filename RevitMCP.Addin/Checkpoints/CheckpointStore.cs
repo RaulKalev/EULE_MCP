@@ -232,7 +232,7 @@ public sealed class CheckpointStore : IDisposable
         SaveDirty();
         Task[] pending;
         lock (_writes) pending = _writes.ToArray();
-        try { Task.WaitAll(pending); } catch { }
+        try { Task.WaitAll(pending); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
     }
 
     public void Dispose()
@@ -336,8 +336,8 @@ public sealed class CheckpointStore : IDisposable
 
     private void DeleteFiles(string modelId, string id)
     {
-        try { File.Delete(MetaPath(modelId, id)); } catch { }
-        try { File.Delete(SnapshotPath(modelId, id)); } catch { }
+        try { File.Delete(MetaPath(modelId, id)); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+        try { File.Delete(SnapshotPath(modelId, id)); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
     }
 
     private static void WriteAtomic(string path, string content)

@@ -261,7 +261,7 @@ internal static class CadPlacementPlanner
                     Z = CadPlacementRequest.FtToMm(location.Point.Z)
                 });
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
         return existing;
     }

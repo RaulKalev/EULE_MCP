@@ -282,7 +282,7 @@ public class ExternalEventHandler : IExternalEventHandler
         if (needsApproval)
         {
             string? liveSummary = null;
-            try { liveSummary = (tool as IApprovalSummaryTool)?.BuildApprovalSummary(app, request); } catch { }
+            try { liveSummary = (tool as IApprovalSummaryTool)?.BuildApprovalSummary(app, request); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             var summary = liveSummary ?? ApprovalSummaryBuilder.Build(request);
             var approvalDocument = RevitDocumentResolver.ResolveApprovalDocument(app, request);
             var longLived = tool is IApprovalRevalidatesTargets;

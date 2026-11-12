@@ -165,7 +165,7 @@ internal static class DeviceAudit
             var f = instance.FacingOrientation;
             if (f != null && Math.Abs(f.X) + Math.Abs(f.Y) > 1e-6) return new P2(f.X, f.Y).Normalized();
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         try { return new P2(Math.Cos(lp.Rotation), Math.Sin(lp.Rotation)); }
         catch { return null; }
     }

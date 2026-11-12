@@ -186,7 +186,7 @@ internal static class ViewElementCollector
             {
                 foreach (var id in sketch.GetAllElements()) members.Add(id.Value);
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
         return members;
     }
@@ -217,7 +217,7 @@ internal sealed class ViewVisibility
     public ViewVisibility(Document doc, View view)
     {
         _view = view;
-        try { TemporaryHideActive = view.IsTemporaryHideIsolateActive(); } catch { }
+        try { TemporaryHideActive = view.IsTemporaryHideIsolateActive(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
         LoadFilters(doc);
         if (TryCrop(out var toCrop, out var loops))
         {
@@ -232,7 +232,7 @@ internal sealed class ViewVisibility
         {
             if (element.IsHidden(_view)) return ViewElementRules.ReasonHiddenInView;
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         if (IsCategoryHidden(element.Category)) return ViewElementRules.ReasonCategoryHidden;
         if (IsHiddenByFilter(element)) return ViewElementRules.ReasonFilterHidden;
@@ -244,7 +244,7 @@ internal sealed class ViewVisibility
                 if (!_view.IsElementVisibleInTemporaryViewMode(TemporaryViewMode.TemporaryHideIsolate, element.Id))
                     return ViewElementRules.ReasonTemporarilyHidden;
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
 
         return IsOutsideCrop(element) ? ViewElementRules.ReasonOutsideCrop : null;
@@ -275,7 +275,7 @@ internal sealed class ViewVisibility
                 case CategoryType.AnalyticalModel: return _view.AreAnalyticalModelCategoriesHidden;
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return false;
     }
 
@@ -316,7 +316,7 @@ internal sealed class ViewVisibility
             {
                 if (filter == null || filter.PassesFilter(element)) return true;
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
         return false;
     }

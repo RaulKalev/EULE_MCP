@@ -96,7 +96,7 @@ public class TraceCircuitTool : IRevitMcpTool
                     foundCircuit = true;
                 }
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             if (!foundCircuit)
                 uncircuitedIds.Add(eid.Value);
@@ -123,10 +123,10 @@ public class TraceCircuitTool : IRevitMcpTool
     private static object BuildCircuitDto(Document doc, ElectricalSystem circuit, bool includeElements)
     {
         var panel = CircuitDtoBuilder.TryGetPanel(circuit);
-        string loadName = ""; try { loadName = circuit.LookupParameter("Load Name")?.AsString() ?? ""; } catch { }
-        double apparentLoad = 0; try { apparentLoad = circuit.ApparentLoad; } catch { }
-        double voltage = 0; try { voltage = circuit.Voltage; } catch { }
-        int poles = 0; try { poles = circuit.PolesNumber; } catch { }
+        string loadName = ""; try { loadName = circuit.LookupParameter("Load Name")?.AsString() ?? ""; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+        double apparentLoad = 0; try { apparentLoad = circuit.ApparentLoad; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+        double voltage = 0; try { voltage = circuit.Voltage; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+        int poles = 0; try { poles = circuit.PolesNumber; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
         string wireType = CircuitDtoBuilder.GetWireTypeName(doc, circuit);
 
         List<object>? elements = null;
@@ -140,7 +140,7 @@ public class TraceCircuitTool : IRevitMcpTool
                     foreach (Element e in es)
                         elements.Add(new { elementId = e.Id.Value, category = e.Category?.Name ?? "", type = e.Name });
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
 
         return new

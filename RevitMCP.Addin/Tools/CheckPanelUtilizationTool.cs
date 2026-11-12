@@ -52,11 +52,11 @@ public class CheckPanelUtilizationTool : IRevitMcpTool
 
             foreach (var c in panelCircuits)
             {
-                double load = 0; try { load = c.ApparentLoad; } catch { }
+                double load = 0; try { load = c.ApparentLoad; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
                 totalLoad += load;
                 var wt = CircuitDtoBuilder.GetWireTypeName(doc, c);
                 if (string.IsNullOrEmpty(wt)) missingCableType++;
-                string ln = ""; try { ln = c.LookupParameter("Load Name")?.AsString() ?? ""; } catch { }
+                string ln = ""; try { ln = c.LookupParameter("Load Name")?.AsString() ?? ""; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
                 if (string.IsNullOrWhiteSpace(ln)) missingLoadName++;
                 if (string.IsNullOrWhiteSpace(c.CircuitNumber)) emptyCircNum++;
                 circuitDetails?.Add(new { circuitId = c.Id.Value, circuitNumber = c.CircuitNumber ?? "", apparentLoad = $"{load:F0} VA", wireType = wt });

@@ -50,7 +50,7 @@ public class GetAvailablePanelsTool : IRevitMcpTool
                     level = levelElem?.Name ?? "";
                 }
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             return new
             {

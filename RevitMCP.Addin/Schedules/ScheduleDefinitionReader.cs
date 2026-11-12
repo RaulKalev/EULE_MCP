@@ -117,7 +117,7 @@ internal static class ScheduleDefinitionReader
         else if (filter.IsDoubleValue)
         {
             ForgeTypeId? spec = null;
-            try { spec = definition.GetField(filter.FieldId).GetSpecTypeId(); } catch { }
+            try { spec = definition.GetField(filter.FieldId).GetSpecTypeId(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             var (converted, u) = ScheduleFieldValues.FromInternal(doc, filter.GetDoubleValue(), spec);
             value = converted;
             unit = u;

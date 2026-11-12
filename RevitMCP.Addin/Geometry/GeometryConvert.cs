@@ -83,7 +83,7 @@ internal static class GeometryConvert
                 return element.get_BoundingBox(view);
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return null;
     }
 
@@ -100,7 +100,7 @@ internal static class GeometryConvert
                 return t.OfPoint((box.Min + box.Max) * 0.5);
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return null;
     }
 

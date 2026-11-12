@@ -69,7 +69,7 @@ public class SetCircuitPathModeTool : IRevitMcpTool
                         foreach (var sys in parentCircuits)
                             if (seenIds.Add(sys.Id.Value)) circuits.Add(sys);
                     }
-                    catch { }
+                    catch (Exception swallowed) { Swallowed.Note(swallowed); }
                 }
             }
 

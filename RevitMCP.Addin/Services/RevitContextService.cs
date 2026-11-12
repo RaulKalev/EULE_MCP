@@ -41,7 +41,7 @@ public static class RevitContextService
                 var wsInfo = doc.GetWorksharingCentralModelPath();
                 centralPath = ModelPathUtils.ConvertModelPathToUserVisiblePath(wsInfo);
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
 
         var selectedCount = uiapp.ActiveUIDocument?.Selection?.GetElementIds()?.Count ?? 0;

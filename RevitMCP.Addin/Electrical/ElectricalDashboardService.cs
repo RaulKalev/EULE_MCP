@@ -51,8 +51,8 @@ public static class ElectricalDashboardService
             if (isWorkshared)
                 centralPath = ModelPathUtils.ConvertModelPathToUserVisiblePath(doc.GetWorksharingCentralModelPath());
         }
-        catch { }
-        try { revitUser = doc.Application?.Username ?? ""; } catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
+        try { revitUser = doc.Application?.Username ?? ""; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         var modelInfo = new { title, isWorkshared, centralPath, revitUser };
 
@@ -97,7 +97,7 @@ public static class ElectricalDashboardService
             var circNum = c.CircuitNumber ?? "";
             var wt = CircuitDtoBuilder.GetWireTypeName(doc, c);
             string loadName = "";
-            try { loadName = c.LookupParameter("Load Name")?.AsString() ?? ""; } catch { }
+            try { loadName = c.LookupParameter("Load Name")?.AsString() ?? ""; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             var stName = c.SystemType.ToString();
 
             // Panel tracking
@@ -105,7 +105,7 @@ public static class ElectricalDashboardService
                 panelMap[pName] = new PanelData { PanelId = pId };
             var pd = panelMap[pName];
             pd.CircuitCount++;
-            if (includeLoadSummary) { try { pd.TotalApparentLoad += c.ApparentLoad; } catch { } }
+            if (includeLoadSummary) { try { pd.TotalApparentLoad += c.ApparentLoad; } catch (Exception swallowed) { Swallowed.Note(swallowed); } }
 
             // System type tracking
             systemTypeCircuits[stName] = systemTypeCircuits.TryGetValue(stName, out int sc) ? sc + 1 : 1;
@@ -124,7 +124,7 @@ public static class ElectricalDashboardService
             if (string.IsNullOrWhiteSpace(loadName)) { circIssues.Add("MissingLoadName"); circuitsMissingLoadName++; }
 
             int elemSize = 0;
-            try { elemSize = c.Elements?.Size ?? 0; } catch { }
+            try { elemSize = c.Elements?.Size ?? 0; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             if (elemSize == 0) { circIssues.Add("NoConnectedElements"); circuitsWithoutConnectedElements++; }
 
             foreach (var issue in circIssues)
@@ -157,7 +157,7 @@ public static class ElectricalDashboardService
                             circuitedIds.Add(e.Id.Value);
                         }
                     }
-                    catch { }
+                    catch (Exception swallowed) { Swallowed.Note(swallowed); }
                 }
                 connectedElementCount = circuitedIds.Count;
 
@@ -185,7 +185,7 @@ public static class ElectricalDashboardService
             foreach (var pd in panelMap.Values) totalLoad += pd.TotalApparentLoad;
             foreach (var c in circuits)
             {
-                double load = 0; try { load = c.ApparentLoad; } catch { }
+                double load = 0; try { load = c.ApparentLoad; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
                 if (load > 0) circuitsWithLoad++; else circuitsMissingLoad++;
             }
         }
@@ -299,7 +299,7 @@ public static class ElectricalDashboardService
             var pId = panel?.Id?.Value ?? 0L;
             var circNum = c.CircuitNumber ?? "";
             var wt = CircuitDtoBuilder.GetWireTypeName(doc, c);
-            string ln = ""; try { ln = c.LookupParameter("Load Name")?.AsString() ?? ""; } catch { }
+            string ln = ""; try { ln = c.LookupParameter("Load Name")?.AsString() ?? ""; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             if (!panelMap.ContainsKey(pName))
             {
@@ -308,7 +308,7 @@ public static class ElectricalDashboardService
             }
             var pd = panelMap[pName];
             pd.CircuitCount++;
-            try { pd.TotalApparentLoad += c.ApparentLoad; } catch { }
+            try { pd.TotalApparentLoad += c.ApparentLoad; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             var circIssues = new List<string>();
             if (panel == null) { circIssues.Add("MissingPanel"); pd.IssueCounts["MissingPanel"] = pd.IssueCounts.TryGetValue("MissingPanel", out int v0) ? v0 + 1 : 1; }

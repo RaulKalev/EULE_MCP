@@ -75,7 +75,7 @@ public class GetSheetViewportsTool : IRevitMcpTool
                     });
                 }
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             resultSheets.Add(new
             {

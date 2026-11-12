@@ -66,10 +66,10 @@ public class ParameterReader
 
                     result.Add(BuildDto(p, scope, typeElementId));
                 }
-                catch { }
+                catch (Exception swallowed) { Swallowed.Note(swallowed); }
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return result;
     }
 
@@ -135,7 +135,7 @@ public class ParameterReader
             if (p.Id.Value < 0)
                 builtInName = ((BuiltInParameter)p.Id.Value).ToString();
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         return new ParameterValueDto
         {

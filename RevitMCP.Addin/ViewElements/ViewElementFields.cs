@@ -68,7 +68,7 @@ internal sealed class ViewElementFields
                     return CurveLocation(curve.Curve);
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return null;
     }
 
@@ -159,7 +159,7 @@ internal sealed class ViewElementFields
                     return new List<long> { areaTag.Area.Id.Value };
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return null;
     }
 

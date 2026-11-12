@@ -110,7 +110,7 @@ public sealed class SetViewPhaseTool : IRevitMcpTool
             var row = new Row { Id = id };
             rows.Add(row);
             View? view = null;
-            try { view = doc.GetElement(new ElementId(id)) as View; } catch { }
+            try { view = doc.GetElement(new ElementId(id)) as View; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             if (view == null) { row.Status = "not_found"; row.Reason = "No view with this id."; continue; }
             row.Name = view.Name ?? string.Empty;
             row.ViewType = view.ViewType.ToString();
@@ -229,7 +229,7 @@ public sealed class SetViewPhaseTool : IRevitMcpTool
             foreach (var id in template.GetTemplateParameterIds())
                 if (!notControlled.Contains(id)) result.Add(id);
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return result;
     }
 

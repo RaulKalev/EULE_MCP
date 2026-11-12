@@ -37,7 +37,7 @@ internal sealed class CadLayerResolver
             if (_doc.GetElement(styleId) is GraphicsStyle style)
                 name = style.GraphicsStyleCategory?.Name;
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         if (string.IsNullOrEmpty(name))
             return null;

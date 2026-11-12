@@ -52,8 +52,8 @@ public class GetCircuitRouteAssumptionsTool : IRevitMcpTool
         // Circuit info
         string wireType = CircuitDtoBuilder.GetWireTypeName(doc, circuit);
         double voltage = 0, apparentLoad = 0;
-        try { voltage = circuit.Voltage; } catch { }
-        try { apparentLoad = circuit.ApparentLoad; } catch { }
+        try { voltage = circuit.Voltage; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+        try { apparentLoad = circuit.ApparentLoad; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
         var circuitDto = new
         {
             circuitNumber = circuit.CircuitNumber ?? "",
@@ -96,7 +96,7 @@ public class GetCircuitRouteAssumptionsTool : IRevitMcpTool
                     }
                 }
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
 
         sw.Stop();

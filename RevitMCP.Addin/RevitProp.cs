@@ -5,7 +5,7 @@ namespace RevitMCP.Addin;
 /// <summary>
 /// Helpers for reading Revit API properties that can throw on certain element/system types.
 /// Centralizes the "best-effort read, fall back to default" pattern that is otherwise repeated
-/// as inline <c>try { x = expr; } catch { }</c> blocks across the DTO builders.
+/// as inline <c>try { x = expr; } catch (Exception swallowed) { Swallowed.Note(swallowed); }</c> blocks across the DTO builders.
 /// </summary>
 public static class RevitProp
 {

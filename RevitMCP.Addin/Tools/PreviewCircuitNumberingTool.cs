@@ -42,7 +42,7 @@ public class PreviewCircuitNumberingTool : IRevitMcpTool
         var sorted = sortBy.Equals("LoadName", StringComparison.OrdinalIgnoreCase)
             ? circuits.OrderBy(c =>
             {
-                string ln = ""; try { ln = c.LookupParameter("Load Name")?.AsString() ?? ""; } catch { } return ln;
+                string ln = ""; try { ln = c.LookupParameter("Load Name")?.AsString() ?? ""; } catch (Exception swallowed) { Swallowed.Note(swallowed); } return ln;
             }).ThenBy(c => c.CircuitNumber, CircuitNumberComparer.Instance).ThenBy(c => c.Id.Value).ToList()
             : circuits.OrderBy(c => c.CircuitNumber, CircuitNumberComparer.Instance).ThenBy(c => c.Id.Value).ToList();
 

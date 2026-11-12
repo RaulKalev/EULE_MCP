@@ -85,7 +85,7 @@ public sealed class ListWorksetsTool : IRevitMcpTool
             if (count)
             {
                 try { elements = new FilteredElementCollector(doc).WherePasses(new ElementWorksetFilter(w.Id)).GetElementCount(); }
-                catch { }
+                catch (Exception swallowed) { Swallowed.Note(swallowed); }
             }
             rows.Add(WorksharingSupport.Describe(w, active, elements));
         }

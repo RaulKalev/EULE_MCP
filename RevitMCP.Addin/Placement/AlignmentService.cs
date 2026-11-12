@@ -259,7 +259,7 @@ internal sealed class AlignmentService
                     return ToVec(facing);
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return null;
     }
 

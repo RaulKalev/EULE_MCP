@@ -395,6 +395,6 @@ public class GraphBuildTool : IRevitMcpTool
 
     private static void TryDelete(string path)
     {
-        try { if (File.Exists(path)) File.Delete(path); } catch { }
+        try { if (File.Exists(path)) File.Delete(path); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
     }
 }

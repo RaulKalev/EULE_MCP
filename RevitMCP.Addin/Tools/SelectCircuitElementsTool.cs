@@ -51,7 +51,7 @@ public class SelectCircuitElementsTool : IRevitMcpTool
         uidoc.Selection.SetElementIds(merged);
 
         if (zoomToSelection)
-            try { uidoc.ShowElements(merged); } catch { }
+            try { uidoc.ShowElements(merged); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         sw.Stop();
         return Task.FromResult(new McpToolResult

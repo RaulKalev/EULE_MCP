@@ -218,7 +218,7 @@ internal static class CreateViewsExecutor
         {
             // Names and ids after commit (Revit may have adjusted a name).
             try { view.CreatedName = view.Created!.Name; }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
 
         var created = views.Count(v => v.Status == ViewCreateStatus.Created);

@@ -63,7 +63,7 @@ public static class ParameterResolver
                 builtIn = internalDefinition.BuiltInParameter.ToString();
 
             string? guid = null;
-            try { if (p.IsShared) guid = p.GUID.ToString(); } catch { }
+            try { if (p.IsShared) guid = p.GUID.ToString(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             into.Add(new ParameterCandidate
             {

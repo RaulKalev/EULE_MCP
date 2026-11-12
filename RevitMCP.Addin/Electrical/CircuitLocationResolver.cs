@@ -40,7 +40,7 @@ public static class CircuitLocationResolver
                           (bb.Min.Y + bb.Max.Y) / 2.0,
                           (bb.Min.Z + bb.Max.Z) / 2.0), "BoundingBox center");
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         return null;
     }

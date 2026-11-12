@@ -67,7 +67,7 @@ public class FindCircuitsByElementParameterTool : IRevitMcpTool
                     circuitMap[sys.Id.Value].Add(elemDto.ElementId);
                 }
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
 
         var circuits = new List<object>();

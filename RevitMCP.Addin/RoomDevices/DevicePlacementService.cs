@@ -721,7 +721,7 @@ internal static class DevicePlacementService
                 if (instance.Location is LocationPoint after && Math.Abs(RoomUnits.FtToMm(after.Point.Z) - targetZMm) < 0.5)
                     return;
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
 
         if (instance.Location is LocationPoint again)

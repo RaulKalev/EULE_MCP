@@ -59,7 +59,7 @@ public class GetCircuitsForSelectedElementsTool : IRevitMcpTool
                                 foreach (Element e in sys.Elements)
                                     elements.Add(new { elementId = e.Id.Value, category = e.Category?.Name ?? "", type = e.Name });
                         }
-                        catch { }
+                        catch (Exception swallowed) { Swallowed.Note(swallowed); }
                     }
                     circuits.Add(new
                     {
@@ -73,7 +73,7 @@ public class GetCircuitsForSelectedElementsTool : IRevitMcpTool
                     });
                 }
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
             if (!found) noCircuit.Add(eid.Value);
         }
 

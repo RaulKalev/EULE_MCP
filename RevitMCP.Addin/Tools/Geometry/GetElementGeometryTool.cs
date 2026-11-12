@@ -57,7 +57,7 @@ public sealed class GetElementGeometryTool : IRevitMcpTool
 
         var includeSolids = ToolArguments.GetBool(args, "includeSolidsSummary");
         Phase? phase = null;
-        try { phase = model.Doc.Phases.Cast<Phase>().LastOrDefault(); } catch { }
+        try { phase = model.Doc.Phases.Cast<Phase>().LastOrDefault(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         var elements = new List<object>();
         var missing = new List<long>();
@@ -132,7 +132,7 @@ public sealed class GetElementGeometryTool : IRevitMcpTool
             {
                 case LocationPoint lp:
                     double? rotation = null;
-                    try { rotation = lp.Rotation * 180.0 / Math.PI; } catch { }
+                    try { rotation = lp.Rotation * 180.0 / Math.PI; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
                     // A link's rotation about Z adds to the element's own.
                     if (rotation.HasValue && toHost != null)
                         rotation += Math.Atan2(toHost.BasisX.Y, toHost.BasisX.X) * 180.0 / Math.PI;
@@ -153,7 +153,7 @@ public sealed class GetElementGeometryTool : IRevitMcpTool
                     };
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return new { kind = "none" };
     }
 
@@ -177,7 +177,7 @@ public sealed class GetElementGeometryTool : IRevitMcpTool
             if (host is RevitLinkInstance link)
             {
                 Reference? face = null;
-                try { face = instance.HostFace; } catch { }
+                try { face = instance.HostFace; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
                 if (face != null && face.LinkedElementId != ElementId.InvalidElementId)
                 {
                     var linked = link.GetLinkDocument()?.GetElement(face.LinkedElementId);
@@ -230,7 +230,7 @@ public sealed class GetElementGeometryTool : IRevitMcpTool
                 }
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         if (room == null) return null;
         return new
         {

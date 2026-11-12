@@ -55,17 +55,17 @@ public class GetVoltageDropPrecheckTool : IRevitMcpTool
 
             // Voltage
             double voltage = 0; bool hasVoltage = false;
-            try { voltage = circuit.Voltage; hasVoltage = voltage > 0; } catch { }
+            try { voltage = circuit.Voltage; hasVoltage = voltage > 0; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             // Load
             double load = 0; bool hasLoad = false;
-            try { load = circuit.ApparentLoad; hasLoad = load > 0; } catch { }
+            try { load = circuit.ApparentLoad; hasLoad = load > 0; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             // Cable/wire type
             var wireType = CircuitDtoBuilder.GetWireTypeName(doc, circuit);
             bool hasCableType = false;
 #if !REVIT2024
-            try { var id = circuit.CableType; hasCableType = id != null && id != ElementId.InvalidElementId; } catch { }
+            try { var id = circuit.CableType; hasCableType = id != null && id != ElementId.InvalidElementId; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 #endif
             bool hasWireType = !string.IsNullOrEmpty(wireType);
 
@@ -84,7 +84,7 @@ public class GetVoltageDropPrecheckTool : IRevitMcpTool
                         if (CircuitLocationResolver.Resolve(e) != null) elemWithLoc++;
                     }
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
             bool hasElementLocations = elemWithLoc > 0;
             bool canEstimateLength = hasPanelLocation && hasElementLocations;
 

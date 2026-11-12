@@ -74,7 +74,7 @@ public sealed class JobService
             foreach (var job in _journal.LoadAll())
                 _jobs.TryAdd(job.Id, job);
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
     }
 
     /// <summary>Registers a job whose plan was activated and starts running it.</summary>
@@ -401,7 +401,7 @@ public sealed class JobService
     private static JObject ToJson(McpToolResult result)
     {
         JToken? data = null;
-        try { data = result.Data == null ? null : JToken.FromObject(result.Data); } catch { }
+        try { data = result.Data == null ? null : JToken.FromObject(result.Data); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return new JObject
         {
             ["success"] = result.Success,

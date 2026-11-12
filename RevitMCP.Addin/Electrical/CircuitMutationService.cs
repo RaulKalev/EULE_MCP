@@ -327,7 +327,7 @@ public static class CircuitMutationService
                 }
                 catch (Exception ex)
                 {
-                    try { if (sub.GetStatus() == TransactionStatus.Started) sub.RollBack(); } catch { }
+                    try { if (sub.GetStatus() == TransactionStatus.Started) sub.RollBack(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
                     rejected.Add((eid.Value, ex.Message));
                 }
             }

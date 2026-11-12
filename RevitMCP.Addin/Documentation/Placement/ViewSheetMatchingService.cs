@@ -154,7 +154,7 @@ public static class ViewSheetMatchingService
             var p = element.LookupParameter(paramName);
             if (p != null) return p.AsValueString() ?? p.AsString();
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return null;
     }
 }

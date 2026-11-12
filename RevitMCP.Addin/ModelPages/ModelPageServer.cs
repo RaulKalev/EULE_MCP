@@ -199,12 +199,12 @@ public sealed class ModelPageServer : IDisposable
             catch (SocketException ex)
             {
                 Log($"port {port} unavailable: {ex.SocketErrorCode}");
-                try { listener.Stop(); } catch { }
+                try { listener.Stop(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             }
             catch (Exception ex)
             {
                 Log($"listener error: {ex.GetType().Name}: {ex.Message}");
-                try { listener.Stop(); } catch { }
+                try { listener.Stop(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
                 break;
             }
         }
@@ -217,8 +217,8 @@ public sealed class ModelPageServer : IDisposable
         var listener = _listener;
         _cts = null;
         _listener = null;
-        try { cts?.Cancel(); } catch { }
-        try { listener?.Stop(); } catch { }
+        try { cts?.Cancel(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+        try { listener?.Stop(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
     }
 
     public void Dispose() => Stop();
@@ -316,7 +316,7 @@ public sealed class ModelPageServer : IDisposable
         }
         finally
         {
-            try { socket.Close(); } catch { }
+            try { socket.Close(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
     }
 
@@ -727,6 +727,6 @@ public sealed class ModelPageServer : IDisposable
 
     private void Log(string message)
     {
-        try { _log?.Invoke("[model-pages] " + message); } catch { }
+        try { _log?.Invoke("[model-pages] " + message); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
     }
 }
