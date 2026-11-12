@@ -146,16 +146,17 @@ public static class GraphRouting
         {
             case "room":
                 plan.Summary = plan.Category == null
-                    ? "Room/space → devices in it: find the space node, follow located_in edges, read the devices live by id."
-                    : $"Room/space → its '{plan.Category}': find the space node, follow located_in edges, keep the '{plan.Category}' " +
-                      "neighbours, read those live by id.";
+                    ? "Room/space → devices in it: find the space node, then follow located_in edges with read=[…] for their live values."
+                    : $"Room/space → its '{plan.Category}': find the space node, then follow located_in edges with read=[…]; keep the " +
+                      $"'{plan.Category}' neighbours (each carries its category).";
                 plan.Steps.Add(Step("revit_graph_query", "Find the room/space id.",
                     Args(("operation", "find"), ("kind", "space"), ("nameContains", plan.NameHint), ("level", plan.Level), ("pageSize", 20))));
-                plan.Steps.Add(Step("revit_graph_query", "Everything located in it.",
-                    Args(("operation", "neighbors"), ("id", "<space id>"), ("rel", "located_in"), ("direction", "in"), ("link", "host"))));
-                plan.Steps.Add(LiveRead(plan.Category == null
-                    ? "Read live values only for those ids."
-                    : $"Read live values only for the '{plan.Category}' ids among them (each neighbour carries its category).", plan.Category));
+                plan.Steps.Add(Step("revit_graph_query", plan.Category == null
+                        ? "Everything located in it, with the live values you need (live.values by element id)."
+                        : $"Everything located in it, with the live values you need (live.values by element id); use the '{plan.Category}' neighbours.",
+                    Args(("operation", "neighbors"), ("id", "<space id>"), ("rel", "located_in"), ("direction", "in"), ("link", "host"),
+                        (GraphLiveRead.Arg, ReadPlaceholder))));
+                plan.Notes.Add(ReadNote);
                 plan.Notes.Add("Linked-model elements in the room: the same neighbors call with link=links; their ids (link:<instance>:<id>) " +
                                "are read with revit_query_linked_elements, not the host tools.");
                 break;
@@ -191,14 +192,14 @@ public static class GraphRouting
             case "category":
             case "level":
                 plan.Summary = plan.Category != null
-                    ? $"Category '{plan.Category}'{(plan.Level != null ? $" on '{plan.Level}'" : "")}: get ids from the graph, then read only those live."
+                    ? $"Category '{plan.Category}'{(plan.Level != null ? $" on '{plan.Level}'" : "")}: ids from the graph and, with read=[…], their live values in the same call."
                     : $"Level '{plan.Level}': orient with the summary, then narrow by category and level.";
                 if (plan.Category == null)
                     plan.Steps.Add(Step("revit_graph_summary", "Which categories exist on that level.", Args(("topN", 15))));
-                plan.Steps.Add(Step("revit_graph_query", "Host-model ids without reading parameters.",
+                plan.Steps.Add(Step("revit_graph_query", "Host-model ids with the live values you need (live.values by element id); page through large sets.",
                     Args(("operation", "find"), ("kind", "element"), ("category", plan.Category ?? "<category>"), ("level", plan.Level),
-                        ("link", "host"), ("pageSize", 200))));
-                plan.Steps.Add(LiveRead("Read live values for the ids you need (page through large sets).", plan.Category));
+                        ("link", "host"), ("pageSize", 200), (GraphLiveRead.Arg, ReadPlaceholder))));
+                plan.Notes.Add(ReadNote);
                 if (state.LinkedCount(plan.Category) > 0)
                     plan.Notes.Add($"The graph also holds {state.LinkedCount(plan.Category)} '{plan.Category}' elements from linked models: " +
                                    "find with link=links, read them with revit_query_linked_elements.");
@@ -207,9 +208,10 @@ public static class GraphRouting
             default:
                 plan.Summary = "Orient first: the summary lists categories, levels and panels; then narrow ids with find/subtree/neighbors.";
                 plan.Steps.Add(Step("revit_graph_summary", "Cheap overview of the model.", Args(("topN", 15))));
-                plan.Steps.Add(Step("revit_graph_query", "Narrow to the ids you need.",
-                    Args(("operation", "find"), ("kind", "element"), ("category", "<category>"), ("link", "host"), ("pageSize", 100))));
-                plan.Steps.Add(LiveRead("Read live values by id.", null));
+                plan.Steps.Add(Step("revit_graph_query", "Narrow to the ids you need, with their live values (live.values by element id).",
+                    Args(("operation", "find"), ("kind", "element"), ("category", "<category>"), ("link", "host"), ("pageSize", 100),
+                        (GraphLiveRead.Arg, ReadPlaceholder))));
+                plan.Notes.Add(ReadNote);
                 break;
         }
 
@@ -310,9 +312,11 @@ public static class GraphRouting
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private static RouteStep LiveRead(string why, string? category) =>
-        Step("revit_get_elements_info", why, Args(("elementIds", "<ids from the previous step>"), ("compact", true),
-            ("parameterNames", "<only the parameters you need>")));
+    private const string ReadPlaceholder = "<only the parameter names you need>";
+
+    private const string ReadNote =
+        "read=[…] returns live values in the same call; leave it out for ids only. Tags, type/family names or parameter " +
+        "metadata: revit_get_elements_info with elementIds and parameterNames.";
 
     private static RouteStep Step(string tool, string why, Dictionary<string, object?> args) =>
         new() { Tool = tool, Why = why, Args = args };

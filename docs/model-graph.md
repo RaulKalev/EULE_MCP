@@ -46,6 +46,7 @@ revit_graph_query operation=subtree id=123456 rel=fed_by depth=2        # everyt
 revit_graph_query operation=neighbors id=234567 rel=located_in direction=out
 revit_graph_query operation=path fromId=234567 toId=123456 maxHops=4
 revit_graph_query operation=find kind=element category="Lighting Fixtures" level="2. korrus" page=0 pageSize=200
+revit_graph_query operation=find kind=element category="Lighting Fixtures" link=host read=["Mark","Level"]   # ids + live values in one call
 revit_graph_query operation=find param="Loop number" paramValue=L1 link=host   # needs graph.routingParameters
 revit_graph_query operation=find kind=element category="Electrical Fixtures" phase=Uus option=none   # new, main model
 ```

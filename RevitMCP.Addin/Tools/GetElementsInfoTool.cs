@@ -42,7 +42,7 @@ public class GetElementsInfoTool : IRevitMcpTool
             TruncateStringLength = ToolArguments.GetInt(request.Arguments, "truncateStringLength", 0),
             SummaryOnly = ToolArguments.GetBool(request.Arguments, "summaryOnly", false),
             IncludeTags = ToolArguments.GetBool(request.Arguments, "includeTags", false),
-            CompactResponse = ToolArguments.GetBool(request.Arguments, "compact", false),
+            CompactResponse = ToolArguments.GetBool(request.Arguments, "compact", true),
             IncludeModelState = ToolArguments.GetBool(request.Arguments, "includeModelState", false),
             IncludeOwnership = ToolArguments.GetBool(request.Arguments, "includeOwnership", false)
         };

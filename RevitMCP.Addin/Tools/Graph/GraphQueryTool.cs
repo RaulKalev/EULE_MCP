@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Autodesk.Revit.UI;
 using RevitMCP.Addin.Graph;
 using RevitMCP.Addin.Interfaces;
+using RevitMCP.Addin.Query;
 using RevitMCP.Core.Models;
 using RevitMCP.Core.Safety;
 
@@ -24,6 +25,8 @@ public class GraphQueryTool : IRevitMcpTool
 
     private static readonly string[] Operations = { "neighbors", "find", "path", "subtree" };
 
+    private static readonly ElementQueryEngine Engine = new();
+
     public string Name => "revit_graph_query";
     public string Description =>
         "Structured queries against the model graph (build it first with revit_graph_build). operation: " +
@@ -37,7 +40,8 @@ public class GraphQueryTool : IRevitMcpTool
         "Rels: fed_by, located_in, hosted_on, type_of, tagged_in, on_sheet, in_workset, on_level, in_link. " +
         "Linked-model nodes have ids link:<linkInstanceId>:<linkedElementId> and a linkInstanceId field; host tools cannot " +
         "read them by id (use revit_query_linked_elements) — pass link=host before reading results live by id. " +
-        "Returns ids and structure only — fetch live values by id afterwards.";
+        "Returns ids and structure only — fetch live values by id afterwards, or pass read=[parameter names] (find, neighbors, subtree) " +
+        "to get the live values of those parameters for the host elements of the result in the same call (live.values, by element id).";
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Elements;
 
@@ -79,6 +83,8 @@ public class GraphQueryTool : IRevitMcpTool
             object payload;
             string message;
             var warnings = new List<string>();
+            // Node ids of the result, for read=[…] (find, neighbors, subtree).
+            var resultIds = new List<string>();
             switch (operation)
             {
                 case "neighbors":
@@ -92,6 +98,7 @@ public class GraphQueryTool : IRevitMcpTool
                     var limit = GraphToolSupport.Clamp(ToolArguments.GetInt(args, "limit", DefaultNeighborLimit), 1, MaxNeighborLimit);
                     var neighborLink = ToolArguments.GetString(args, "link");
                     var neighbors = opened.Database.Neighbors(id, rel.Length > 0 ? rel : null, direction, limit, NullIfEmpty(neighborLink));
+                    resultIds.AddRange(neighbors.Select(n => n.Node.Id));
                     payload = new
                     {
                         operation,
@@ -138,6 +145,7 @@ public class GraphQueryTool : IRevitMcpTool
                         NullIfEmpty(kind), NullIfEmpty(category), NullIfEmpty(level), NullIfEmpty(workset), NullIfEmpty(nameContains),
                         page, pageSize, NullIfEmpty(link), NullIfEmpty(param), NullIfEmpty(paramValue), NullIfEmpty(paramContains),
                         NullIfEmpty(phase), NullIfEmpty(option));
+                    resultIds.AddRange(result.Items.Select(n => n.Id));
                     if ((NullIfEmpty(phase) ?? NullIfEmpty(option)) != null && (opened.Meta.SchemaVersion ?? 0) < 3)
                         warnings.Add("This graph was built before phase/option hints existed (schema < 3): rebuild it with revit_graph_build.");
                     var paramFilter = NullIfEmpty(param) ?? NullIfEmpty(paramValue) ?? NullIfEmpty(paramContains);
@@ -228,6 +236,7 @@ public class GraphQueryTool : IRevitMcpTool
                     var result = opened.Database.Subtree(id, rel, depth, direction, maxNodes);
                     if (result.Root == null)
                         return Task.FromResult(GraphToolSupport.Fail(request, $"Node '{id}' is not in the graph. Rebuild the graph if the element is new.", "validation_failed"));
+                    resultIds.AddRange(result.Nodes.Select(n => n.Node.Id));
 
                     payload = new
                     {
@@ -258,19 +267,77 @@ public class GraphQueryTool : IRevitMcpTool
                 }
             }
 
+            var data = GraphToolSupport.WithEnvelope(payload, opened.Meta, opened.Freshness);
+            var readNames = GraphLiveRead.Names(ToolArguments.GetStringArray(args, GraphLiveRead.Arg));
+            if (readNames.Count > 0)
+            {
+                if (operation == "path")
+                    warnings.Add("read is ignored for path; it applies to find, neighbors and subtree.");
+                else
+                    message += " " + ReadLive(doc, resultIds, readNames, data, warnings, cancellationToken);
+            }
+
             sw.Stop();
             return Task.FromResult(new McpToolResult
             {
                 RequestId = request.RequestId,
                 Success = true,
                 Message = message,
-                Data = GraphToolSupport.WithEnvelope(payload, opened.Meta, opened.Freshness),
+                Data = data,
                 Warnings = opened.Freshness.Stale
                     ? new List<string> { "Graph is stale: " + opened.Freshness.Reason + " Re-verify ids against the live model." }.Concat(warnings).ToList()
                     : warnings,
                 DurationMs = sw.ElapsedMilliseconds
             });
         }
+    }
+
+    /// <summary>
+    /// read=[…]: live values of the named parameters for the host elements of the result, added to the response
+    /// as <c>live</c>. The graph part of the response is unchanged; a failed live read becomes a warning, not a failure.
+    /// </summary>
+    private static string ReadLive(Autodesk.Revit.DB.Document doc, List<string> resultIds, List<string> names,
+        Newtonsoft.Json.Linq.JObject data, List<string> warnings, CancellationToken cancellationToken)
+    {
+        var selection = GraphLiveRead.Select(resultIds);
+        var values = new Dictionary<long, Dictionary<string, string>>();
+        if (selection.HostIds.Count > 0)
+        {
+            ElementQueryResult live;
+            try
+            {
+                live = Engine.Query(doc, null, new ElementQueryOptions
+                {
+                    ElementIds = selection.HostIds,
+                    ReturnParameters = names,
+                    IncludeInstanceParameters = true,
+                    IncludeTypeParameters = true,
+                    Limit = GraphLiveRead.MaxElements,
+                    PageSize = GraphLiveRead.MaxElements
+                }, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                warnings.Add("read: the live read failed (" + ex.Message + "); the graph result is complete. Read the ids with revit_get_elements_info.");
+                return "Live read failed.";
+            }
+
+            if (!live.Success)
+            {
+                warnings.Add("read: the live read failed (" + live.Message + "); the graph result is complete. Read the ids with revit_get_elements_info.");
+                return "Live read failed.";
+            }
+            foreach (var element in live.Elements)
+                values[element.ElementId] = ElementQueryResponseFormatter.CompactParameters(element);
+        }
+
+        data["live"] = GraphLiveRead.Block(selection, names, values);
+        warnings.AddRange(GraphLiveRead.Warnings(selection, values.Count));
+        return $"Live values read for {values.Count} element(s).";
     }
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;

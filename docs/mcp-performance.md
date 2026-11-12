@@ -114,14 +114,44 @@ add-in functionality; switching back to `full` restores the complete catalog.
 
 ## Compact element results
 
-`revit_find_elements_by_parameter` and `revit_get_elements_info` accept
-`compact=true`.
+`revit_find_elements_by_parameter` and `revit_get_elements_info` return compact results
+by default (`compact=true`): element identity fields and parameters as simple name/value
+pairs. This is the default both in the bridge and in the add-in, so job steps and
+`revit_tools_call` behave the same way.
 
-Full mode (the default) returns parameter metadata such as storage type, scope,
-read-only state, shared-parameter GUID, parameter ID, and raw value. Compact mode keeps
-element identity fields and returns parameters as simple name/value pairs. Use compact
-mode for discovery, counting, and agent reasoning; use full mode when parameter metadata
-is needed for a write or audit.
+Full mode (`compact=false`) adds parameter metadata such as storage type, scope,
+read-only state, shared-parameter GUID, parameter ID, and raw value. Ask for it only when
+that metadata is needed for a write or an audit. Before this change full mode was the
+default; a caller that reads `parameters.<name>.value` from the full DTO must now pass
+`compact=false`.
+
+Compact mode alone still returns every parameter (up to `maxParametersPerElement`), which
+is where most result tokens go: name the parameters you need.
+
+## One call instead of two: `revit_graph_query read=[…]`
+
+`revit_graph_query` (`find`, `neighbors`, `subtree`) takes `read`, a list of parameter
+names (partial match, as `parameterNames`). The graph part of the response is unchanged;
+a `live` block is added with the values read from the model now:
+
+```json
+"live": {
+  "parameters": ["Mark", "Level"],
+  "read": 2,
+  "values": { "2123366": { "Mark": "A1", "Level": "1. korrus" }, "2123367": { "Mark": "A2", "Level": "1. korrus" } }
+}
+```
+
+- Only host-model elements are read, at most 500 per call. `linkedSkipped`,
+  `nonElementSkipped`, `truncated` and `notRead` (ids in the graph that the live model no
+  longer has) appear only when they apply, each with a warning.
+- `live.values` are live facts. The graph fields next to them (name, level, extra) stay
+  routing hints.
+- A failed live read is a warning; the graph result is still returned.
+- `revit_graph_route` plans use it, so a typical "find these and tell me their X" is one
+  graph call instead of a graph call plus `revit_get_elements_info`.
+- For tags, type and family names or parameter metadata, read by id with
+  `revit_get_elements_info`.
 
 Also prefer:
 

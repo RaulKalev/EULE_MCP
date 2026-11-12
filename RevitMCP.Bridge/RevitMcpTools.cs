@@ -744,7 +744,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Maximum string length for parameter values. 0 uses the safety default (500 chars).")] int truncateStringLength = 0,
         [Description("If true, return category/family summary counts only without building element DTOs. Allows broad model scans.")] bool summaryOnly = false,
         [Description("If true, list the annotation tags attached to each returned element (tag text, tag family/type, owner view). An element can carry multiple tags; an empty list means it has none.")] bool includeTags = false,
-        [Description("If true, return identity fields and parameter name/value pairs only, omitting verbose parameter metadata. Default false preserves the full response.")] bool compact = false,
+        [Description("Default true: identity fields and parameter name/value pairs only. False adds per-parameter metadata (storage type, scope, read-only, GUID, parameter id, raw value) — needed only for a write or an audit.")] bool compact = true,
         [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
         [Description("Default true: a whole-category read (no elementIds, selection or filters) of 200+ elements is not run when the model graph is fresh; the result has status graph_first with the calls to make instead. False reads the whole category live.")] bool graphFirst = true,
         [Description(IncludeModelStateDescription)] bool includeModelState = false,
@@ -803,7 +803,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("Maximum string length for parameter values. 0 uses the safety default (500 chars).")] int truncateStringLength = 0,
         [Description("If true, return category/family summary counts only without element DTOs. Allows broad model scans without category/selection scope.")] bool summaryOnly = false,
         [Description("If true, list the annotation tags attached to each returned element (tag text, tag family/type, owner view). An element can carry multiple tags; an empty list means it has none.")] bool includeTags = false,
-        [Description("If true, return identity fields and parameter name/value pairs only, omitting verbose parameter metadata. Default false preserves the full response.")] bool compact = false,
+        [Description("Default true: identity fields and parameter name/value pairs only. False adds per-parameter metadata (storage type, scope, read-only, GUID, parameter id, raw value) — needed only for a write or an audit.")] bool compact = true,
         [Description("Attach a graph-first routing hint when this broad query matches many elements (default true). False silences it.")] bool graphHint = true,
         [Description("Default true: a whole-category read (no elementIds, selection or filters) of 200+ elements is not run when the model graph is fresh; the result has status graph_first with the calls to make instead. False reads the whole category live.")] bool graphFirst = true,
         [Description(IncludeModelStateDescription)] bool includeModelState = false,
@@ -6867,7 +6867,8 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
                  "subtree (id, rel, depth?, direction? in|out, maxNodes?) e.g. everything fed_by a panel. " +
                  "Kinds: element, type, panel, circuit, space, level, workset, sheet, view. " +
                  "Rels: fed_by, located_in, hosted_on, type_of, tagged_in, on_sheet, in_workset, on_level. " +
-                 "Every response carries built_at, central_version, stale and a routing-only note — never quote graph values as facts.")]
+                 "Every response carries built_at, central_version, stale and a routing-only note — never quote graph values as facts. " +
+                 "read=[parameter names] adds the live values of those parameters for the host elements found (live.values by element id): one call instead of a query plus a live read.")]
     public async Task<string> GraphQuery(
         [Description("neighbors | find | path | subtree")] string operation,
         [Description("Node id for neighbors/subtree (Revit element id as string; worksets use ws:<id>).")] string? id = null,
@@ -6892,6 +6893,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
         [Description("path only: maximum hops (1-10). Default 6.")] int maxHops = 6,
         [Description("subtree only: traversal depth (1-10). Default 3.")] int depth = 3,
         [Description("subtree only: maximum nodes returned (1-2000). Default 500.")] int maxNodes = 500,
+        [Description("find/neighbors/subtree: parameter names (partial match) to read live for the host elements of the result, up to 500 elements. These values are live facts; the graph fields stay routing hints.")] string[]? read = null,
         [Description("Optional shared folder root overriding the graph.sharedFolder config for this call.")] string? sharedFolder = null,
         [Description("Optional explicit database file path overriding folder resolution entirely.")] string? dbPath = null,
         CancellationToken cancellationToken = default)
@@ -6921,6 +6923,7 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
             ["maxHops"]      = maxHops,
             ["depth"]        = depth,
             ["maxNodes"]     = maxNodes,
+            ["read"]         = read ?? [],
             ["sharedFolder"] = sharedFolder ?? string.Empty,
             ["dbPath"]       = dbPath ?? string.Empty
         };

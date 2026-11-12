@@ -56,12 +56,14 @@ public class GraphRoutingTests
     }
 
     [Fact]
-    public void RoomPlan_FindsSpace_ThenLocatedIn_ThenLiveRead()
+    public void RoomPlan_FindsSpace_ThenLocatedInWithLiveRead()
     {
         var plan = GraphRouting.Plan("which devices are in room 1.12?", Fresh());
         Assert.Equal("room", plan.Route);
         Assert.Equal("1.12", plan.NameHint);
-        Assert.Equal(new[] { "revit_graph_query", "revit_graph_query", "revit_get_elements_info" }, plan.Steps.Select(s => s.Tool));
+        Assert.Equal(new[] { "revit_graph_query", "revit_graph_query" }, plan.Steps.Select(s => s.Tool));
+        Assert.True(plan.Steps[1].Args.ContainsKey("read"));
+        Assert.False(plan.Steps[0].Args.ContainsKey("read"));
         Assert.Equal("space", plan.Steps[0].Args["kind"]);
         Assert.Equal("located_in", plan.Steps[1].Args["rel"]);
         Assert.True(plan.GraphUsable);
