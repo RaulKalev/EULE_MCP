@@ -105,7 +105,10 @@ public static class BridgeToolGroups
             "revit_list_fill_patterns", "revit_preview_set_fill_patterns", "revit_set_fill_patterns",
             // Text types and dimension types.
             "revit_list_text_types", "revit_preview_set_text_types", "revit_set_text_types",
-            "revit_preview_set_dimension_types", "revit_set_dimension_types"
+            "revit_preview_set_dimension_types", "revit_set_dimension_types",
+            // Object styles, and what uses a line style or filled region type before it is deleted.
+            "revit_list_object_styles", "revit_preview_set_object_styles", "revit_set_object_styles",
+            "revit_get_style_usage", "revit_preview_delete_styles", "revit_delete_styles"
         }),
         ("ifc", new[] { "revit_query_linked_elements", "revit_select_linked_elements" }),
         // #103: "schedulable" does not contain the "schedule" keyword.

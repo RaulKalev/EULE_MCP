@@ -37,7 +37,9 @@ public static class PlanToolClassification
         // A pattern the document does not have is created.
         "revit_set_line_patterns", "revit_set_fill_patterns",
         // A text or dimension type the document does not have is created by duplicating.
-        "revit_set_text_types", "revit_set_dimension_types"
+        "revit_set_text_types", "revit_set_dimension_types",
+        // A subcategory the category does not have is created.
+        "revit_set_object_styles"
     };
 
     private static readonly string[] ModifyingPrefixes =
