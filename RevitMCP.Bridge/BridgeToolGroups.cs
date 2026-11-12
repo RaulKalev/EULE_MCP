@@ -100,7 +100,10 @@ public static class BridgeToolGroups
             "revit_list_line_styles", "revit_preview_set_line_styles", "revit_set_line_styles",
             // Line and fill patterns of a project or a family document.
             "revit_list_line_patterns", "revit_preview_set_line_patterns", "revit_set_line_patterns",
-            "revit_list_fill_patterns", "revit_preview_set_fill_patterns", "revit_set_fill_patterns"
+            "revit_list_fill_patterns", "revit_preview_set_fill_patterns", "revit_set_fill_patterns",
+            // Text types and dimension types.
+            "revit_list_text_types", "revit_preview_set_text_types", "revit_set_text_types",
+            "revit_preview_set_dimension_types", "revit_set_dimension_types"
         }),
         ("ifc", new[] { "revit_query_linked_elements", "revit_select_linked_elements" }),
         // #103: "schedulable" does not contain the "schedule" keyword.
