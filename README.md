@@ -2,7 +2,7 @@
 
 EULE MCP connects Claude Code, Codex, and Antigravity CLI to a live Autodesk Revit model through the [Model Context Protocol](https://modelcontextprotocol.io). It provides local model queries, discipline workflows, controlled writes, QA, reporting, and file operations without requiring users to write Revit API scripts.
 
-The current bridge exposes **395 MCP tools**. The compact `core` profile is advertised by default, and `revit_tools_search` finds the rest by intent.
+The current bridge exposes **429 MCP tools**. The compact `core` profile is advertised by default, and `revit_tools_search` finds the rest by intent.
 
 ## Documentation
 
@@ -34,8 +34,15 @@ The [EULE MCP Wiki](https://github.com/RaulKalev/EULE_MCP/wiki) is the main docu
 | [Files, Excel, and configuration](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Files-Excel-Configuration) | 16 | Policy-scoped files, standalone workbooks, scoped JSON state |
 | [Family types, creation, and IFC](https://github.com/RaulKalev/EULE_MCP/wiki/Tool-Reference-Family-IFC) | 10 | Family type duplication and editing, DWG-to-Detail-Item families, IFC Space-to-Room |
 | [Families and parameters](docs/families-and-parameters.md) | 11 | List, load (overwrite policy, one undo step), reload and purge unused families; list project and shared parameters, create them from the shared parameter file and bind categories |
-| [Line styles](docs/line-styles.md) | 3 | List, create and edit line styles (name, weight, colour, pattern) in a project or an open family |
-| [Family creation](docs/family-creation.md) | 2 | Detail Item families from a spec: lines, rectangles, arcs and circles in mm, line styles copied from the project's (same name, weight, colour, pattern) or defined in the spec, filled regions with types copied from the project or defined in the spec, family parameters and existing shared parameters (never created), visibility parameters, text and parameter labels through nested Generic Annotation families, purge before saving, a save path the user chooses, optional load into the project |
+| [Line styles](docs/line-styles.md) | 3 | List, create, edit and rename line styles (name, weight, colour, pattern) in a project or an open family |
+| [Object styles and style usage](docs/object-styles.md) | 6 | Object styles and subcategories of any category; where line styles and filled region types are used; deleting them, with a replacement for their users |
+| [Line and fill patterns](docs/patterns.md) | 6 | List, create and replace line patterns (dash, space, dot) and fill patterns (simple, crosshatch or custom grids) |
+| [Text and dimension types](docs/annotation-types.md) | 5 | List, create by duplicating, edit and rename text types and dimension types |
+| [View templates](docs/view-templates.md) | 5 | Inspect a template, create one from a view or by duplicating, edit what it controls and sets |
+| [Legends and keynotes](docs/legends-and-keynotes.md) | 6 | Fill a legend with one symbol and label per family type; read and reload the keynote table |
+| [Label families](docs/label-families.md) | 3 | Find Generic Annotation families usable as label families and make variants of a seed |
+| [Family contents](docs/family-contents.md) | 1 | Read what is inside a family, optionally as a spec the create tool accepts |
+| [Family creation](docs/family-creation.md) | 4 | Detail Item families from a spec: lines, rectangles, arcs and circles in mm, line styles copied from the project's (same name, weight, colour, pattern) or defined in the spec, filled regions with types copied from the project or defined in the spec, family parameters and existing shared parameters (never created), visibility parameters, text and parameter labels through nested Generic Annotation families, several types per family, editing an existing family (add, remove, save or reload), purge before saving, a save path the user chooses, optional load into the project |
 | [Worker document](docs/worker-document.md) | 9 | Open your own local copy of a central in the background, worksets, ownership, checkout and relinquish, reload latest, close; `document=` on the core and query reads |
 | [Linking DWG files](docs/link-dwg.md) | 2 | Link DWG files into views: current view only in plans, sections and drafting views, scale auto-detected with a check of the linked size, origin/center/shared placement, already-linked files skipped, one undo step |
 | [Jobs: unattended work](docs/jobs.md) | 6 | Submit a whole job of tool calls with result binding; one approval, the connector runs it step by step between your own work, stops on failures or new Revit errors, survives a restart and publishes a report page |
@@ -140,6 +147,9 @@ Important repository references:
 - [`docs/filled-regions.md`](docs/filled-regions.md) — filled regions: coordinates in any view, room and linked room boundaries, rules with a type map, reshaping by replacement, and type management
 - [`docs/geometry-queries.md`](docs/geometry-queries.md) — element geometry, elements in a box or radius, nearest surface, line of sight and clearance, in host mm
 - [`docs/families-and-parameters.md`](docs/families-and-parameters.md) — listing, loading, reloading and purging families; creating and binding project and shared parameters
+- [`docs/line-styles.md`](docs/line-styles.md), [`docs/object-styles.md`](docs/object-styles.md), [`docs/patterns.md`](docs/patterns.md), [`docs/annotation-types.md`](docs/annotation-types.md) — line styles, object styles and style usage, line and fill patterns, text and dimension types
+- [`docs/view-templates.md`](docs/view-templates.md), [`docs/legends-and-keynotes.md`](docs/legends-and-keynotes.md) — view templates; legends and the keynote table
+- [`docs/label-families.md`](docs/label-families.md), [`docs/family-contents.md`](docs/family-contents.md) — label families for parameter labels; reading a family back
 - [`docs/family-creation.md`](docs/family-creation.md) — creating Detail Item families: geometry, line styles matched to the project, parameters, text labels, purge, save path and load
 - [`docs/export.md`](docs/export.md) — exporting sheets to PDF/DWG/DXF with the EliteSheets merge rule and settings, the model to IFC, and checking the delivery folder afterwards
 - [`docs/mcp-performance.md`](docs/mcp-performance.md) — lower-latency queries and reduced-credit tool profiles

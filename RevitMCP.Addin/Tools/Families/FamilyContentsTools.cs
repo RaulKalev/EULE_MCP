@@ -235,10 +235,11 @@ internal static class FamilyContentsExecutor
 
         try
         {
-            var doc = project.EditFamily(family);
+            var doc = FamilyDocumentGuard.EditFamily(project, family, out var owned);
             if (doc == null) return UseOpen($"Revit could not open '{family.Name}'.");
             result.Document = doc;
-            result.Owned = true;
+            // Not ours when Revit handed back the document open in the Family Editor: it is read, never closed.
+            result.Owned = owned;
             return result;
         }
         catch (Exception ex)
@@ -557,9 +558,10 @@ internal static class FamilyContentsExecutor
             if (!family.IsEditable) { nested.Reason = "Revit does not let it be opened"; continue; }
             cancellationToken.ThrowIfCancellationRequested();
             Document? nestedDoc = null;
+            var nestedOwned = false;
             try
             {
-                nestedDoc = doc.EditFamily(family);
+                nestedDoc = FamilyDocumentGuard.EditFamily(doc, family, out nestedOwned);
                 if (nestedDoc == null) { nested.Reason = "Revit could not open it"; continue; }
                 foreach (var text in new FilteredElementCollector(nestedDoc).OfClass(typeof(TextNote)).Cast<TextNote>().Take(20))
                 {
@@ -578,7 +580,7 @@ internal static class FamilyContentsExecutor
             }
             finally
             {
-                try { nestedDoc?.Close(false); } catch { /* already closed */ }
+                FamilyDocumentGuard.CloseIfOwned(nestedDoc, nestedOwned);
             }
         }
     }

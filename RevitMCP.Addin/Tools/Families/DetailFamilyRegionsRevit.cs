@@ -485,17 +485,20 @@ internal static class DetailFamilyRegionsRevit
     {
         if (source.Path != null) return source.Path;
         Document? opened = null;
+        var owned = false;
         try
         {
-            opened = projectDoc.EditFamily(source.Family!)
+            opened = FamilyDocumentGuard.EditFamily(projectDoc, source.Family!, out owned)
                      ?? throw new InvalidOperationException($"Revit could not open the family '{source.Name}'.");
+            // SaveAs would repoint the user's open document at the temp file: only ever save our own copy.
+            if (!owned) throw new InvalidOperationException(FamilyDocumentGuard.OpenInEditorMessage(source.Name));
             var path = Path.Combine(folder, source.Name + ".rfa");
             opened.SaveAs(path, new SaveAsOptions { OverwriteExistingFile = true });
             return path;
         }
         finally
         {
-            try { opened?.Close(false); } catch { /* already closed */ }
+            FamilyDocumentGuard.CloseIfOwned(opened, owned);
         }
     }
 

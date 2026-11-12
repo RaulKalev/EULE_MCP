@@ -162,15 +162,16 @@ internal static class LabelFamilyExecutor
                 else
                 {
                     Document? opened = null;
+                    var owned = false;
                     try
                     {
-                        opened = doc.EditFamily(family);
+                        opened = FamilyDocumentGuard.EditFamily(doc, family, out owned);
                         if (opened != null) { contents = Read(opened); inspected.Add(name); }
                     }
                     catch (Exception ex) { warnings.Add($"'{name}' could not be opened: {ex.Message}"); }
                     finally
                     {
-                        try { opened?.Close(false); } catch { /* already closed */ }
+                        FamilyDocumentGuard.CloseIfOwned(opened, owned);
                     }
                 }
             }
@@ -467,10 +468,11 @@ internal static class LabelFamilyExecutor
             return (null, "project", $"seed '{family.Name}' cannot be opened for editing.");
         try
         {
-            var opened = doc.EditFamily(family);
-            return opened == null
-                ? (null, "project", $"Revit could not open the family '{family.Name}'.")
-                : (opened, "project", null);
+            var opened = FamilyDocumentGuard.EditFamily(doc, family, out var owned);
+            if (opened == null) return (null, "project", $"Revit could not open the family '{family.Name}'.");
+            // The caller edits, saves and closes the seed copy: never do that to the document open in the Family Editor.
+            if (!owned) return (null, "project", "seed " + FamilyDocumentGuard.OpenInEditorMessage(family.Name));
+            return (opened, "project", null);
         }
         catch (Exception ex)
         {
