@@ -55,7 +55,7 @@ public class CheckCircuitParameterCompletenessTool : IRevitMcpTool
                             ? (p.AsElementId() != ElementId.InvalidElementId ? "set" : "")
                             : p.AsString() ?? p.AsValueString() ?? "";
                 }
-                catch { }
+                catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
                 bool isEmpty = treatWsEmpty ? string.IsNullOrWhiteSpace(val) : string.IsNullOrEmpty(val);
                 (isEmpty ? emptyIds : filledIds)[paramName].Add(circuit.Id.Value);

@@ -31,6 +31,16 @@ dotnet_style_qualification_for_event = false:silent
 # Prefer braces
 csharp_prefer_braces = when_multiline:silent
 
+# Analyzer rules raised to warnings: likely bugs only. They do not fail the build.
+dotnet_diagnostic.CA1001.severity = warning   # type owns disposable fields but is not disposable
+dotnet_diagnostic.CA1068.severity = warning   # CancellationToken parameter must come last
+dotnet_diagnostic.CA2011.severity = warning   # property setter assigns itself
+dotnet_diagnostic.CA2012.severity = warning   # ValueTask used incorrectly
+dotnet_diagnostic.CA2013.severity = warning   # ReferenceEquals on value types
+dotnet_diagnostic.CA2016.severity = warning   # CancellationToken not forwarded
+dotnet_diagnostic.CA2200.severity = warning   # rethrow loses the stack trace
+dotnet_diagnostic.CA2245.severity = warning   # property assigned to itself
+
 # Project / config files
 [*.{csproj,props,targets,slnx}]
 indent_size = 2

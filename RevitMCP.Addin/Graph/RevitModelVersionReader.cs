@@ -25,9 +25,9 @@ public static class RevitModelVersionReader
     public static ModelVersionSignal Read(UIApplication uiapp, Document doc)
     {
         var signal = new ModelVersionSignal();
-        try { signal.RevitVersion = uiapp.Application.VersionNumber; } catch { }
-        try { signal.Username = uiapp.Application.Username; } catch { }
-        try { signal.IsWorkshared = doc.IsWorkshared; } catch { }
+        try { signal.RevitVersion = uiapp.Application.VersionNumber; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+        try { signal.Username = uiapp.Application.Username; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+        try { signal.IsWorkshared = doc.IsWorkshared; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         var centralUserPath = string.Empty;
         if (signal.IsWorkshared)
@@ -38,11 +38,11 @@ public static class RevitModelVersionReader
                 if (modelPath != null)
                     centralUserPath = ModelPathUtils.ConvertModelPathToUserVisiblePath(modelPath) ?? string.Empty;
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
 
         var localPath = string.Empty;
-        try { localPath = doc.PathName ?? string.Empty; } catch { }
+        try { localPath = doc.PathName ?? string.Empty; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         signal.ModelPath = centralUserPath.Length > 0 ? centralUserPath : localPath;
         signal.ModelName = DeriveModelName(doc, centralUserPath, localPath);
@@ -111,7 +111,7 @@ public static class RevitModelVersionReader
                     "DocumentVersion (NumberOfSaves + VersionGUID" + suffix + ")");
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         return (string.Empty, "unavailable (document has not been saved yet)");
     }
@@ -141,7 +141,7 @@ public static class RevitModelVersionReader
             var stem = Path.GetFileNameWithoutExtension(path);
             if (!string.IsNullOrWhiteSpace(stem)) return stem;
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         // Cloud/server paths may contain characters .NET Framework rejects — fall back to a manual split.
         var slash = path.LastIndexOfAny(new[] { '/', '\\' });

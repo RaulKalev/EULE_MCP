@@ -240,7 +240,7 @@ internal static class AlignmentRequest
                     "for an isometric 3D view if targets go missing.");
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         WarnAboutHiddenLinks(doc, view, warnings);
         return view;

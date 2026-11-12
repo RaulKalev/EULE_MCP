@@ -171,12 +171,12 @@ internal sealed class CadPointExtractor
                 case GeometryInstance nested:
                     GeometryElement? symbol = null;
                     try { symbol = nested.GetSymbolGeometry(); }
-                    catch { }
+                    catch (Exception swallowed) { Swallowed.Note(swallowed); }
                     if (symbol != null) CollectLineWork(symbol, transform.Multiply(nested.Transform), depth + 1, points);
                     break;
                 case Curve curve:
                     try { AddPoints(curve.Tessellate(), transform, points); }
-                    catch { }
+                    catch (Exception swallowed) { Swallowed.Note(swallowed); }
                     break;
                 case PolyLine polyline:
                     AddPoints(polyline.GetCoordinates(), transform, points);

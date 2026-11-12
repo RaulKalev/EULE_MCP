@@ -150,8 +150,8 @@ public sealed class ModelPageStore
         lock (_gate)
         {
             var found = File.Exists(MetaPath(id)) || File.Exists(HtmlPath(id));
-            try { File.Delete(MetaPath(id)); } catch { }
-            try { File.Delete(HtmlPath(id)); } catch { }
+            try { File.Delete(MetaPath(id)); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+            try { File.Delete(HtmlPath(id)); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             return found;
         }
     }
@@ -187,8 +187,8 @@ public sealed class ModelPageStore
         foreach (var old in pages.Skip(MaxPages))
         {
             if (old.Id == keepId) continue;
-            try { File.Delete(MetaPath(old.Id)); } catch { }
-            try { File.Delete(HtmlPath(old.Id)); } catch { }
+            try { File.Delete(MetaPath(old.Id)); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+            try { File.Delete(HtmlPath(old.Id)); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
     }
 }

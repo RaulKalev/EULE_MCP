@@ -238,7 +238,7 @@ public static class ApprovalSummaryBuilder
     {
         var changes = ToolArguments.GetString(request.Arguments, "changes");
         int count = 0;
-        try { count = Newtonsoft.Json.Linq.JArray.Parse(changes).Count; } catch { }
+        try { count = Newtonsoft.Json.Linq.JArray.Parse(changes).Count; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return $"Apply circuit number changes to {count} circuit{(count == 1 ? "" : "s")}. Runs in transaction, supports Undo.";
     }
 
@@ -246,7 +246,7 @@ public static class ApprovalSummaryBuilder
     {
         var changes = ToolArguments.GetString(request.Arguments, "changes");
         int count = 0;
-        try { count = Newtonsoft.Json.Linq.JArray.Parse(changes).Count; } catch { }
+        try { count = Newtonsoft.Json.Linq.JArray.Parse(changes).Count; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return $"Apply load name changes to {count} circuit{(count == 1 ? "" : "s")}. Runs in transaction, supports Undo.";
     }
 
@@ -256,7 +256,7 @@ public static class ApprovalSummaryBuilder
         var panelName = ToolArguments.GetString(request.Arguments, "panelName");
         var parameters = ToolArguments.GetString(request.Arguments, "parameters");
         int paramCount = 0;
-        try { paramCount = Newtonsoft.Json.Linq.JArray.Parse(parameters).Count; } catch { }
+        try { paramCount = Newtonsoft.Json.Linq.JArray.Parse(parameters).Count; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
         var target = circuitIds.Length > 0
             ? $"{circuitIds.Length} circuit{(circuitIds.Length == 1 ? "" : "s")}"
             : !string.IsNullOrWhiteSpace(panelName) ? $"all circuits on panel '{panelName}'"

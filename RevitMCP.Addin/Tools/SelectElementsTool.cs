@@ -75,7 +75,7 @@ public class SelectElementsTool : IRevitMcpTool
         if (zoomToSelection && validIds.Count > 0)
         {
             try { uidoc.ShowElements(validIds); }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
 
         var warnings = new List<string>();

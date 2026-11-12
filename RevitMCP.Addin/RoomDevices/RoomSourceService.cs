@@ -354,13 +354,13 @@ internal sealed class RoomSourceService
             var height = room.UnboundedHeight;
             if (height > 0) record.HeightMm = Math.Round(RoomUnits.FtToMm(height), 0);
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         // Floor elevation: the room's level in the source model, moved into host coordinates.
         var levelZ = room.Level != null ? room.Level.ProjectElevation : 0.0;
         double baseOffset = 0;
         try { baseOffset = room.get_Parameter(BuiltInParameter.ROOM_LOWER_OFFSET)?.AsDouble() ?? 0; }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         record.FloorZMm = _source.ToHostZMm(new XYZ(0, 0, levelZ + baseOffset));
         AssignHostLevel(record);
 
@@ -520,7 +520,7 @@ internal sealed class RoomSourceService
         var bounds = _source.HostBounds(element);
         var record = new OpeningRecord { Id = element.Id.Value, Kind = kind, Element = element };
         try { record.TypeName = element.Document.GetElement(element.GetTypeId())?.Name ?? string.Empty; }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         if (element is FamilyInstance fi)
         {
@@ -531,11 +531,11 @@ internal sealed class RoomSourceService
             else
                 return null;
 
-            try { record.Facing = _source.ToHostDirection(fi.FacingOrientation); } catch { }
-            try { record.Hand = _source.ToHostDirection(fi.HandOrientation); } catch { }
-            try { record.FromRoomId = fi.FromRoom?.Id.Value; } catch { }
-            try { record.ToRoomId = fi.ToRoom?.Id.Value; } catch { }
-            try { record.HostWallId = fi.Host?.Id.Value; } catch { }
+            try { record.Facing = _source.ToHostDirection(fi.FacingOrientation); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+            try { record.Hand = _source.ToHostDirection(fi.HandOrientation); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+            try { record.FromRoomId = fi.FromRoom?.Id.Value; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+            try { record.ToRoomId = fi.ToRoom?.Id.Value; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+            try { record.HostWallId = fi.Host?.Id.Value; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             var widthParam = kind == "door" ? BuiltInParameter.DOOR_WIDTH : BuiltInParameter.WINDOW_WIDTH;
             var heightParam = kind == "door" ? BuiltInParameter.DOOR_HEIGHT : BuiltInParameter.WINDOW_HEIGHT;
@@ -583,7 +583,7 @@ internal sealed class RoomSourceService
                 if (p is { StorageType: StorageType.Double } && p.AsDouble() > 0)
                     return Math.Round(RoomUnits.FtToMm(p.AsDouble()), 1);
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
             foreach (var name in names)
             {
                 try
@@ -592,7 +592,7 @@ internal sealed class RoomSourceService
                     if (p is { StorageType: StorageType.Double } && p.AsDouble() > 0)
                         return Math.Round(RoomUnits.FtToMm(p.AsDouble()), 1);
                 }
-                catch { }
+                catch (Exception swallowed) { Swallowed.Note(swallowed); }
             }
         }
         return null;
@@ -685,7 +685,7 @@ internal sealed class RoomSourceService
                 if (!RoomGeometryMath.Contains(room.Polygon, c)) continue;
 
                 string typeName = string.Empty;
-                try { typeName = e.Document.GetElement(e.GetTypeId())?.Name ?? string.Empty; } catch { }
+                try { typeName = e.Document.GetElement(e.GetTypeId())?.Name ?? string.Empty; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
                 result.Add(new LinkedElementInRoom
                 {

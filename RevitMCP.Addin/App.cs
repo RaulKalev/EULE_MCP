@@ -42,12 +42,12 @@ public class App : IExternalApplication
 
     private static void DiagLog(string msg)
     {
-        try { System.IO.File.AppendAllText(DiagLogPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); } catch { }
+        try { System.IO.File.AppendAllText(DiagLogPath, $"[{DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
     }
 
     public Result OnStartup(UIControlledApplication application)
     {
-        try { System.IO.File.WriteAllText(DiagLogPath, $"=== RevitMCP OnStartup {DateTime.Now} ===\r\n"); } catch { }
+        try { System.IO.File.WriteAllText(DiagLogPath, $"=== RevitMCP OnStartup {DateTime.Now} ===\r\n"); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
         DiagLog($"Assembly: {typeof(App).Assembly.Location}");
         try
         {
@@ -55,6 +55,7 @@ public class App : IExternalApplication
             DiagLog("Creating ActivityLogger");
             // Build services
             var logger = new ActivityLogger();
+            Swallowed.LogDirectory = logger.LogDirectory;
             var handler = new ExternalEventHandler();
             handler.RegisterTool(new GetConnectionStatusTool());
             handler.RegisterTool(new GetSelectedElementsTool());
@@ -627,10 +628,10 @@ public class App : IExternalApplication
     public Result OnShutdown(UIControlledApplication application)
     {
         application.ControlledApplication.DocumentChanged -= OnDocumentChanged;
-        try { _village?.Dispose(); } catch { }
-        try { _modelPages?.Dispose(); } catch { }
-        try { _memory?.Dispose(); } catch { }
-        try { RevitMCP.Addin.Checkpoints.CheckpointChangeTracker.Store?.Dispose(); } catch { }
+        try { _village?.Dispose(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+        try { _modelPages?.Dispose(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+        try { _memory?.Dispose(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+        try { RevitMCP.Addin.Checkpoints.CheckpointChangeTracker.Store?.Dispose(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
         RevitMCP.Addin.Checkpoints.CheckpointChangeTracker.Store = null;
         _connector?.PanicStop();
         return Result.Succeeded;
@@ -651,7 +652,7 @@ public class App : IExternalApplication
     {
         const string tabName = "RK Tools";
 
-        try { application.CreateRibbonTab(tabName); } catch { }
+        try { application.CreateRibbonTab(tabName); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         var panel = application.GetRibbonPanels(tabName).FirstOrDefault(p => p.Name == "MCP")
                     ?? application.CreateRibbonPanel(tabName, "MCP");

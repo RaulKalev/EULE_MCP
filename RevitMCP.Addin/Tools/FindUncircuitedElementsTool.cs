@@ -151,7 +151,7 @@ public class FindUncircuitedElementsTool : IRevitMcpTool
                    ?? element.get_Parameter(BuiltInParameter.INSTANCE_SCHEDULE_ONLY_LEVEL_PARAM);
             if (lvl != null) level = doc.GetElement(lvl.AsElementId())?.Name ?? "";
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         Dictionary<string, string>? parameters = null;
         if (returnParams.Length > 0)

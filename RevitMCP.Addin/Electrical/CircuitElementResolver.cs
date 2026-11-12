@@ -110,7 +110,7 @@ public class CircuitElementResolver
                     }
                 }
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             if (!hasElectricalConnector)
             {
@@ -130,7 +130,7 @@ public class CircuitElementResolver
                     .Select(c => c.Id.Value)
                     .ToList();
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             // The panel that feeds the target circuit cannot also be one of its loads (M13).
             if (targetCircuit != null && CircuitDtoBuilder.TryGetPanel(targetCircuit)?.Id == element.Id)

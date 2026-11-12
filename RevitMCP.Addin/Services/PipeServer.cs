@@ -18,7 +18,7 @@ public class PipeServer
 
     private static void DiagLog(string msg)
     {
-        try { File.AppendAllText(DiagLogPath, $"[PIPE {DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); } catch { }
+        try { File.AppendAllText(DiagLogPath, $"[PIPE {DateTime.Now:HH:mm:ss.fff}] {msg}{Environment.NewLine}"); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
     }
 
     private readonly string _pipeName;

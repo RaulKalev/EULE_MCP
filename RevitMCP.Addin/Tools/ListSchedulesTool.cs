@@ -35,7 +35,7 @@ public class ListSchedulesTool : IRevitMcpTool
                     for (int i = 0; i < def.GetFieldCount(); i++)
                         fields.Add(def.GetField(i).GetName());
                 }
-                catch { }
+                catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
                 return new
                 {

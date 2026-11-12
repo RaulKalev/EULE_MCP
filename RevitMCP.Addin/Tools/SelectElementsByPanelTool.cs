@@ -82,7 +82,7 @@ public class SelectElementsByPanelTool : IRevitMcpTool
         uidoc.Selection.SetElementIds(merged);
 
         if (zoomToSelection)
-            try { uidoc.ShowElements(merged); } catch { }
+            try { uidoc.ShowElements(merged); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         var warnings = new List<string>();
         if (circuitsWithNoElements > 0)

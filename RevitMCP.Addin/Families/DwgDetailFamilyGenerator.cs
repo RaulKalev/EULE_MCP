@@ -209,8 +209,8 @@ public static class DwgDetailFamilyGenerator
         }
         catch (Exception ex)
         {
-            try { familyDoc?.Close(false); } catch { }
-            try { if (File.Exists(finalPath)) File.Delete(finalPath); } catch { }
+            try { familyDoc?.Close(false); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+            try { if (File.Exists(finalPath)) File.Delete(finalPath); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             return new DwgFamilyGenerateResult
             {
                 Success    = false,
@@ -260,8 +260,8 @@ public static class DwgDetailFamilyGenerator
     private static DwgFamilyGenerateResult FailAndCleanup(
         string presetName, string error, string filePath, Document? doc, Stopwatch sw)
     {
-        try { doc?.Close(false); } catch { }
-        try { if (File.Exists(filePath)) File.Delete(filePath); } catch { }
+        try { doc?.Close(false); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+        try { if (File.Exists(filePath)) File.Delete(filePath); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return Fail(presetName, error, sw);
     }
 }

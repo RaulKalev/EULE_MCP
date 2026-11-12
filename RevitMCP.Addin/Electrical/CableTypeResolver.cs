@@ -76,7 +76,7 @@ public static class CableTypeResolver
                     return (types, warnings);
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         // Secondary: scan circuit parameters for a cable-type text field
         var circuits = new FilteredElementCollector(doc)

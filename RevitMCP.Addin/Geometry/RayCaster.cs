@@ -314,7 +314,7 @@ internal sealed class RayCaster
     public object DescribeView()
     {
         var sectionBox = false;
-        try { sectionBox = View.IsSectionBoxActive; } catch { }
+        try { sectionBox = View.IsSectionBoxActive; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return new { id = View.Id.Value, name = View.Name, sectionBoxActive = sectionBox };
     }
 

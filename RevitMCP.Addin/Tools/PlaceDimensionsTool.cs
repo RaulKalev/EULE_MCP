@@ -329,7 +329,7 @@ public class PlaceDimensionsTool : IRevitMcpTool
                         // "Distance from element": pull the dimension text outward from the arc.
                         var mid = arc.Evaluate(0.5, true);
                         var outward = (mid - arc.Center).Normalize();
-                        try { createdDimension.TextPosition = arc.Center + outward * (arc.Radius + offsetFt); } catch { }
+                        try { createdDimension.TextPosition = arc.Center + outward * (arc.Radius + offsetFt); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
                         if (subTransaction.Commit() != TransactionStatus.Committed)
                             throw new InvalidOperationException("The radial dimension subtransaction did not commit.");

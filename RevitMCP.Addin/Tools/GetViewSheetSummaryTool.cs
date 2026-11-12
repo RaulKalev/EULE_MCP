@@ -60,7 +60,7 @@ public class GetViewSheetSummaryTool : IRevitMcpTool
                     .Any();
                 if (!hasTb) sheetsWithoutTb++;
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
 
         sw.Stop();

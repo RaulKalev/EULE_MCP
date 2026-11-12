@@ -57,8 +57,8 @@ public class ExportVoltageDropInputToExcelTool : IRevitMcpTool
         // Model info
         string title = doc.Title ?? "";
         bool isWorkshared = false; string centralPath = "", revitUser = "";
-        try { isWorkshared = doc.IsWorkshared; if (isWorkshared) centralPath = ModelPathUtils.ConvertModelPathToUserVisiblePath(doc.GetWorksharingCentralModelPath()); } catch { }
-        try { revitUser = doc.Application?.Username ?? ""; } catch { }
+        try { isWorkshared = doc.IsWorkshared; if (isWorkshared) centralPath = ModelPathUtils.ConvertModelPathToUserVisiblePath(doc.GetWorksharingCentralModelPath()); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+        try { revitUser = doc.Application?.Username ?? ""; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         // Compute rows
         var vdRows = new List<VdRow>();
@@ -73,10 +73,10 @@ public class ExportVoltageDropInputToExcelTool : IRevitMcpTool
             var pName = panel?.Name ?? "";
             var circNum = c.CircuitNumber ?? "";
             var wireType = CircuitDtoBuilder.GetWireTypeName(doc, c);
-            string loadName = ""; try { loadName = c.LookupParameter("Load Name")?.AsString() ?? ""; } catch { }
+            string loadName = ""; try { loadName = c.LookupParameter("Load Name")?.AsString() ?? ""; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             double voltage = 0, load = 0;
-            try { voltage = c.Voltage; } catch { }
-            try { load = c.ApparentLoad; } catch { }
+            try { voltage = c.Voltage; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+            try { load = c.ApparentLoad; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             double currentEst = voltage > 0 ? Math.Round(load / voltage, 2) : 0;
             var stName = c.SystemType.ToString();
 
@@ -104,7 +104,7 @@ public class ExportVoltageDropInputToExcelTool : IRevitMcpTool
                         elements.Add((e.Id.Value, r?.Pt, e));
                     }
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             int missingLoc = elements.Count(e => !e.Loc.HasValue);
             var located = elements.Select(e => (e.Id, e.Loc)).ToList();
@@ -140,7 +140,7 @@ public class ExportVoltageDropInputToExcelTool : IRevitMcpTool
                     : 0;
 
                 string levelName = "";
-                try { var lvlId = elem.LevelId; if (lvlId != null && lvlId != ElementId.InvalidElementId) levelName = (doc.GetElement(lvlId) as Level)?.Name ?? ""; } catch { }
+                try { var lvlId = elem.LevelId; if (lvlId != null && lvlId != ElementId.InvalidElementId) levelName = (doc.GetElement(lvlId) as Level)?.Name ?? ""; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
                 elementRows.Add(new ElemRow
                 {

@@ -100,8 +100,8 @@ internal sealed class CheckpointSnapshotReader
     {
         string? text = null;
         double? width = null;
-        try { text = note.Text; } catch { }
-        try { width = note.Width; } catch { }
+        try { text = note.Text; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+        try { width = note.Width; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
         TextNoteSnapshot.Add(snapshot, text, width);
     }
 
@@ -119,8 +119,8 @@ internal sealed class CheckpointSnapshotReader
 
     private void FillIdentity(Element element, ElementIdentity into)
     {
-        try { into.Category = element.Category?.Name; } catch { }
-        try { into.Name = element.Name; } catch { }
+        try { into.Category = element.Category?.Name; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+        try { into.Name = element.Name; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
         try
         {
             var typeId = element.GetTypeId();
@@ -134,7 +134,7 @@ internal sealed class CheckpointSnapshotReader
                 into.TypeName = typeName;
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         try
         {
             var levelId = element.LevelId;
@@ -148,7 +148,7 @@ internal sealed class CheckpointSnapshotReader
                 into.Level = levelName;
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
     }
 
     private static void ReadLocation(Element element, ElementSnapshot snapshot)
@@ -162,7 +162,7 @@ internal sealed class CheckpointSnapshotReader
                     try { snapshot.RotationRad = point.Rotation; } catch { /* not every point location has a rotation */ }
                     if (element is FamilyInstance instance)
                     {
-                        try { snapshot.FacingRad = Math.Atan2(instance.FacingOrientation.Y, instance.FacingOrientation.X); } catch { }
+                        try { snapshot.FacingRad = Math.Atan2(instance.FacingOrientation.Y, instance.FacingOrientation.X); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
                     }
                     break;
                 case LocationCurve curve when curve.Curve != null && curve.Curve.IsBound:
@@ -172,7 +172,7 @@ internal sealed class CheckpointSnapshotReader
                     break;
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
     }
 
     private void ReadParameters(Element element, IReadOnlyCollection<string>? parameterNames, ElementSnapshot snapshot)
@@ -206,7 +206,7 @@ internal sealed class CheckpointSnapshotReader
                 var candidate = new SnapshotParameterCandidate(name, p.IsReadOnly, p.HasValue && ParameterResolver.DisplayValue(p) is { Length: > 0 });
                 parameterOf[candidate] = p;
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
         foreach (var c in SnapshotParameterSelection.Select(parameterOf.Keys, _maxParameters))
             Add(parameterOf[c], c.Name, snapshot);
@@ -247,7 +247,7 @@ internal sealed class CheckpointSnapshotReader
             };
             if (raw != null) snapshot.Raw[name] = raw;
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
     }
 
     private static double[] ToMm(XYZ p) => new[] { p.X * MmPerFoot, p.Y * MmPerFoot, p.Z * MmPerFoot };

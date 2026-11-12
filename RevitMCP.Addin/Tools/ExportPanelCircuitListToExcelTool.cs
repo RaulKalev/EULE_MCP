@@ -47,8 +47,8 @@ public class ExportPanelCircuitListToExcelTool : IRevitMcpTool
 
         string modelName = doc.Title ?? "";
         string centralPath = "";
-        try { centralPath = doc.IsWorkshared ? doc.GetWorksharingCentralModelPath()?.CentralServerPath ?? "" : doc.PathName; } catch { }
-        string revitUser = ""; try { revitUser = uiapp.Application.Username; } catch { }
+        try { centralPath = doc.IsWorkshared ? doc.GetWorksharingCentralModelPath()?.CentralServerPath ?? "" : doc.PathName; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+        string revitUser = ""; try { revitUser = uiapp.Application.Username; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         using (var wb = new XLWorkbook())
         {
@@ -102,12 +102,12 @@ public class ExportPanelCircuitListToExcelTool : IRevitMcpTool
             var circuit = circuits[r];
             var panel = CircuitDtoBuilder.TryGetPanel(circuit);
             var wireType = CircuitDtoBuilder.GetWireTypeName(doc, circuit);
-            string loadName = ""; try { loadName = circuit.LookupParameter("Load Name")?.AsString() ?? ""; } catch { }
-            double apparentLoad = 0; try { apparentLoad = circuit.ApparentLoad; } catch { }
-            double voltage = 0; try { voltage = circuit.Voltage; } catch { }
-            int poles = 0; try { poles = circuit.PolesNumber; } catch { }
-            int elemCount = 0; try { elemCount = circuit.Elements?.Size ?? 0; } catch { }
-            string comments = ""; try { comments = circuit.LookupParameter("Comments")?.AsString() ?? ""; } catch { }
+            string loadName = ""; try { loadName = circuit.LookupParameter("Load Name")?.AsString() ?? ""; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+            double apparentLoad = 0; try { apparentLoad = circuit.ApparentLoad; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+            double voltage = 0; try { voltage = circuit.Voltage; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+            int poles = 0; try { poles = circuit.PolesNumber; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+            int elemCount = 0; try { elemCount = circuit.Elements?.Size ?? 0; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+            string comments = ""; try { comments = circuit.LookupParameter("Comments")?.AsString() ?? ""; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             ws.Cell(r + 2, 1).Value = panel?.Name ?? "";
             ws.Cell(r + 2, 2).Value = circuit.CircuitNumber ?? "";
@@ -151,7 +151,7 @@ public class ExportPanelCircuitListToExcelTool : IRevitMcpTool
                                ?? e.get_Parameter(BuiltInParameter.INSTANCE_SCHEDULE_ONLY_LEVEL_PARAM);
                         if (lvl != null) level = doc.GetElement(lvl.AsElementId())?.Name ?? "";
                     }
-                    catch { }
+                    catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
                     ws.Cell(row, 1).Value = panelName;
                     ws.Cell(row, 2).Value = circuitNum;
@@ -204,7 +204,7 @@ public class ExportPanelCircuitListToExcelTool : IRevitMcpTool
                 if (circuit.Elements == null || circuit.Elements.IsEmpty)
                     issues.Add((pName, circuit.Id.Value, cn, "NoConnectedElements"));
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
 
         var ws = wb.Worksheets.Add("Health Issues");

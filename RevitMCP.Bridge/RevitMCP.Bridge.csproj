@@ -21,6 +21,7 @@
   <!-- Pure timeout table shared with the add-in (#90); kept out of Core so hot-reloaded add-ins see it. -->
   <ItemGroup>
     <Compile Include="..\RevitMCP.Addin\Services\LongRunningTools.cs" Link="Shared\LongRunningTools.cs" />
+    <Compile Include="..\RevitMCP.Addin\Diagnostics\Swallowed.cs" Link="Shared\Swallowed.cs" />
   </ItemGroup>
 
   <!-- Shared memory consolidation runs in the bridge on plain files, so it needs no Revit open (no Revit API in these). -->

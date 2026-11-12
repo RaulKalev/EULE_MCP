@@ -407,7 +407,7 @@ public class IfcSpaceGeometryExtractor
                 var box = solid.GetBoundingBox();
                 z = Math.Min(z, box.Transform.OfPoint(box.Min).Z);
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
         foreach (var mesh in meshes)
             foreach (var v in mesh.Vertices)

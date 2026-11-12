@@ -114,7 +114,7 @@ internal static class DimensionReferenceResolver
         foreach (var options in OptionVariants(view))
         {
             GeometryElement? geometry = null;
-            try { geometry = element.get_Geometry(options); } catch { }
+            try { geometry = element.get_Geometry(options); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             if (geometry == null) continue;
 
             var match = FindCurve(geometry, wantArc);

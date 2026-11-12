@@ -36,7 +36,7 @@ public class ActivityLogger
                 var shared = UsageSettings().SharedFolder;
                 if (shared != null) _share.CatchUp(shared, Environment.UserName, Environment.MachineName);
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         });
     }
 

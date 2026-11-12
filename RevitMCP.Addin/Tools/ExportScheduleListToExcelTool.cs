@@ -65,7 +65,7 @@ public class ExportScheduleListToExcelTool : IRevitMcpTool
                             fields.Add(field.GetName());
                     }
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             string catName = string.Empty;
             try
@@ -74,7 +74,7 @@ public class ExportScheduleListToExcelTool : IRevitMcpTool
                 if (catId != null && catId != ElementId.InvalidElementId)
                     catName = Autodesk.Revit.DB.Category.GetCategory(doc, catId)?.Name ?? string.Empty;
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             ws.Cell(row, 1).Value = s.Id.Value;
             ws.Cell(row, 2).Value = s.Name;

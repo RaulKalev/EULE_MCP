@@ -88,7 +88,7 @@ public class SelectLinkedElementsTool : IRevitMcpTool
             {
                 var hostEl = doc.GetElement(hostId);
                 if (hostEl != null)
-                    try { TryAddStable(existing, doc, new Reference(hostEl)); } catch { }
+                    try { TryAddStable(existing, doc, new Reference(hostEl)); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             }
             foreach (var r in references)
                 TryAddStable(existing, doc, r);

@@ -94,6 +94,8 @@
     <Compile Include="..\RevitMCP.Addin\PanelSchematics\PanelSchematicsPayloads.cs" Link="PanelSchematics\PanelSchematicsPayloads.cs" />
     <Compile Include="..\RevitMCP.Addin\PanelSchematics\PanelSchematicsSymbols.cs" Link="PanelSchematics\PanelSchematicsSymbols.cs" />
     <Compile Include="..\RevitMCP.Addin\Services\LongRunningTools.cs" Link="Services\LongRunningTools.cs" />
+    <!-- Ignored-exception diagnostics used by the linked add-in files -->
+    <Compile Include="..\RevitMCP.Addin\Diagnostics\Swallowed.cs" Link="Diagnostics\Swallowed.cs" />
     <Compile Include="..\RevitMCP.Addin\Approval\DirectEditDefault.cs" Link="Approval\DirectEditDefault.cs" />
     <Compile Include="..\RevitMCP.Bridge\ToolSearchIndex.cs" Link="Bridge\ToolSearchIndex.cs" />
     <Compile Include="..\RevitMCP.Bridge\ToolArgumentCoercion.cs" Link="Bridge\ToolArgumentCoercion.cs" />

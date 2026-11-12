@@ -52,10 +52,10 @@ public sealed partial class MemoryService
             while (!_stopped && _queue.TryDequeue(out var call))
             {
                 try { ProcessObserved(call); }
-                catch { }
+                catch (Exception swallowed) { Swallowed.Note(swallowed); }
             }
             try { FlushObserver(); }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
             Interlocked.Exchange(ref _draining, 0);
             if (_stopped || _queue.IsEmpty || Interlocked.CompareExchange(ref _draining, 1, 0) != 0) return;
         }
@@ -261,6 +261,6 @@ public sealed partial class MemoryService
     {
         _stopped = true;
         try { FlushObserver(); }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
     }
 }

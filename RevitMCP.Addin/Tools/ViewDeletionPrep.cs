@@ -54,7 +54,7 @@ internal static class ViewDeletionPrep
         {
             if (undeletable.Contains(uv.ViewId))
                 continue;
-            try { uv.Close(); } catch { }
+            try { uv.Close(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
 
         return undeletable;

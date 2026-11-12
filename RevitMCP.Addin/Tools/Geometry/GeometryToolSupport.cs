@@ -65,7 +65,7 @@ internal static class GeometryToolSupport
         if (hostDoc.GetElement(new ElementId(linkInstanceId)) is RevitLinkInstance link)
         {
             Document? linkDoc = null;
-            try { linkDoc = link.GetLinkDocument(); } catch { }
+            try { linkDoc = link.GetLinkDocument(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             var transform = GeometryConvert.LinkTransform(link);
             if (linkDoc != null && transform != null)
                 return new GeometryModel { Doc = linkDoc, Link = link, ToHost = transform };
@@ -93,7 +93,7 @@ internal static class GeometryToolSupport
             if (linkNameFilters.Count > 0 && !linkNameFilters.Any(f => name.IndexOf(f.Trim(), StringComparison.OrdinalIgnoreCase) >= 0))
                 continue;
             Document? linkDoc = null;
-            try { linkDoc = link.GetLinkDocument(); } catch { }
+            try { linkDoc = link.GetLinkDocument(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             var transform = GeometryConvert.LinkTransform(link);
             if (linkDoc == null || transform == null)
             {
@@ -258,13 +258,13 @@ internal static class GeometryToolSupport
         {
             foreach (var id in element.GetDependentElements(null)) set.Add(id.Value);
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         try
         {
             if (element is FamilyInstance instance)
                 foreach (var id in instance.GetSubComponentIds()) set.Add(id.Value);
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return set;
     }
 

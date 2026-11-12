@@ -91,7 +91,7 @@ public class ListSheetsTool : IRevitMcpTool
                     tbName = $"{tb.Symbol.FamilyName} : {tb.Symbol.Name}";
                 }
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             List<object>? viewportDetails = null;
             if (includeViewports)
@@ -113,7 +113,7 @@ public class ListSheetsTool : IRevitMcpTool
                         }
                     }
                 }
-                catch { }
+                catch (Exception swallowed) { Swallowed.Note(swallowed); }
             }
 
             Dictionary<string, string?>? extraParams = null;

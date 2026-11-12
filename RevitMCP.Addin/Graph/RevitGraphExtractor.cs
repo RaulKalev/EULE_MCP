@@ -258,7 +258,7 @@ public static class RevitGraphExtractor
                 foreach (var viewId in sheet.GetAllPlacedViews())
                     AddEdge(Id(viewId), id, GraphSchema.Rels.OnSheet, owner: id);
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
 
         private void CollectViews()
@@ -297,7 +297,7 @@ public static class RevitGraphExtractor
                         levelName = SafeName(genLevel);
                     }
                 }
-                catch { }
+                catch (Exception swallowed) { Swallowed.Note(swallowed); }
             }
 
             AddNode(new GraphNode
@@ -338,7 +338,7 @@ public static class RevitGraphExtractor
                 var level = spatial.Level;
                 if (level != null) { levelId = level.Id; levelName = SafeName(level); }
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             AttachParams(AddNode(new GraphNode
             {
@@ -557,13 +557,13 @@ public static class RevitGraphExtractor
                 if (host != null && host is not Level && host.Id != ElementId.InvalidElementId)
                     AddEdge(id, Id(host.Id), GraphSchema.Rels.HostedOn, owner: id);
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             ElementId? spaceId = null;
-            try { spaceId = fi.Room?.Id; } catch { }
+            try { spaceId = fi.Room?.Id; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             if (spaceId == null)
             {
-                try { spaceId = fi.Space?.Id; } catch { }
+                try { spaceId = fi.Space?.Id; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             }
             if (spaceId != null && spaceId != ElementId.InvalidElementId)
                 AddEdge(id, Id(spaceId), GraphSchema.Rels.LocatedIn, owner: id);
@@ -771,8 +771,8 @@ public static class RevitGraphExtractor
                 if (fi != null)
                 {
                     ElementId? linkedSpace = null;
-                    try { linkedSpace = fi.Room?.Id; } catch { }
-                    if (linkedSpace == null) { try { linkedSpace = fi.Space?.Id; } catch { } }
+                    try { linkedSpace = fi.Room?.Id; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+                    if (linkedSpace == null) { try { linkedSpace = fi.Space?.Id; } catch (Exception swallowed) { Swallowed.Note(swallowed); } }
                     if (linkedSpace != null && linkedSpace != ElementId.InvalidElementId)
                         AddEdge(id, link.IdOf(linkedSpace), GraphSchema.Rels.LocatedIn, owner: id);
                 }
@@ -824,7 +824,7 @@ public static class RevitGraphExtractor
                     if (space != null) return Id(space.Id);
                 }
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
             return null;
         }
 
@@ -844,7 +844,7 @@ public static class RevitGraphExtractor
         private static string LinkedLevelName(LinkScope link, Element element)
         {
             ElementId? levelId = null;
-            try { levelId = element.LevelId; } catch { }
+            try { levelId = element.LevelId; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             if (levelId == null || levelId == ElementId.InvalidElementId)
             {
                 foreach (var bip in new[] { BuiltInParameter.FAMILY_LEVEL_PARAM, BuiltInParameter.RBS_START_LEVEL_PARAM, BuiltInParameter.SCHEDULE_LEVEL_PARAM })
@@ -856,7 +856,7 @@ public static class RevitGraphExtractor
                         var candidate = p.AsElementId();
                         if (candidate != null && candidate != ElementId.InvalidElementId) { levelId = candidate; break; }
                     }
-                    catch { }
+                    catch (Exception swallowed) { Swallowed.Note(swallowed); }
                 }
             }
             if (levelId == null || levelId == ElementId.InvalidElementId) return string.Empty;
@@ -910,7 +910,7 @@ public static class RevitGraphExtractor
                     _ => null
                 };
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
             if (taggedId == null || taggedId == ElementId.InvalidElementId) return;
             AddEdge(Id(taggedId), viewId, GraphSchema.Rels.TaggedIn, Id(tag.Id));
         }
@@ -1031,7 +1031,7 @@ public static class RevitGraphExtractor
                 if (_userWorksetIds.Contains(worksetId))
                     AddEdge(id, worksetId, GraphSchema.Rels.InWorkset, owner: id);
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
 
         private string WorksetName(Element element) => _isWorkshared ? _worksets.NameOf(element) : string.Empty;
@@ -1046,7 +1046,7 @@ public static class RevitGraphExtractor
         private (string Name, ElementId? Id) LevelOf(Element element)
         {
             ElementId? levelId = null;
-            try { levelId = element.LevelId; } catch { }
+            try { levelId = element.LevelId; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             if (levelId == null || levelId == ElementId.InvalidElementId)
             {
                 foreach (var bip in new[] { BuiltInParameter.FAMILY_LEVEL_PARAM, BuiltInParameter.RBS_START_LEVEL_PARAM, BuiltInParameter.SCHEDULE_LEVEL_PARAM, BuiltInParameter.LEVEL_PARAM })
@@ -1058,7 +1058,7 @@ public static class RevitGraphExtractor
                         var candidate = p.AsElementId();
                         if (candidate != null && candidate != ElementId.InvalidElementId) { levelId = candidate; break; }
                     }
-                    catch { }
+                    catch (Exception swallowed) { Swallowed.Note(swallowed); }
                 }
             }
             if (levelId == null || levelId == ElementId.InvalidElementId) return (string.Empty, null);

@@ -58,7 +58,7 @@ public sealed class MeasureClearanceTool : IRevitMcpTool
         if (element is FamilyInstance instance)
         {
             try { facing = GeometryConvert.ToVec(instance.FacingOrientation); hand = GeometryConvert.ToVec(instance.HandOrientation); }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
         args.TryGetValue("directions", out var rawDirections);
         var directions = ClearanceMath.Resolve(rawDirections, ClearanceMath.SetAxes, 8, facing, hand, out var directionError);

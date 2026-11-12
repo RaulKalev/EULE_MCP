@@ -85,7 +85,7 @@ public class ExportUncircuitedElementsToExcelTool : IRevitMcpTool
                            ?? element.get_Parameter(BuiltInParameter.INSTANCE_SCHEDULE_ONLY_LEVEL_PARAM);
                     if (lvl != null) level = doc.GetElement(lvl.AsElementId())?.Name ?? "";
                 }
-                catch { }
+                catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
                 var paramDict = new Dictionary<string, string>();
                 if (returnParams.Length > 0)

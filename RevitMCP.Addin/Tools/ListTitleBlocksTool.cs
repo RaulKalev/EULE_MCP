@@ -37,7 +37,7 @@ public class ListTitleBlocksTool : IRevitMcpTool
                     .FirstOrDefault();
                 if (tb != null) inUseIds.Add(tb.GetTypeId());
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
 
         var titleblocks = new FilteredElementCollector(doc)

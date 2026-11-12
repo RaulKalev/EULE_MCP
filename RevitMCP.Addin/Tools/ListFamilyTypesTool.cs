@@ -183,10 +183,10 @@ public class ListFamilyTypesTool : IRevitMcpTool
                         value = FamilyTypeSupport.ReadDisplayValue(parameter)
                     });
                 }
-                catch { }
+                catch (Exception swallowed) { Swallowed.Note(swallowed); }
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return results;
     }
 

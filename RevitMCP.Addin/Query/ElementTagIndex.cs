@@ -67,7 +67,7 @@ public class ElementTagIndex
                     _ => null
                 };
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             if (taggedId == null || taggedId == ElementId.InvalidElementId) continue;
             Add(map, taggedId.Value, BuildInfo(doc, tag, GetTagText(tag), viewNames));

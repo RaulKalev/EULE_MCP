@@ -167,11 +167,11 @@ public sealed class VillageService : IDisposable
     {
         lock (_gate)
         {
-            try { _registry.Unregister(_processId); } catch { }
-            try { _server?.Stop(); } catch { }
+            try { _registry.Unregister(_processId); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+            try { _server?.Stop(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             _server = null;
-            try { Hub.Stop(); } catch { }
-            try { Flyers.Flush(); } catch { }
+            try { Hub.Stop(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+            try { Flyers.Flush(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             Log("stopped");
         }
     }
@@ -253,7 +253,7 @@ public sealed class VillageService : IDisposable
             if (string.Equals(name, _registeredProject, StringComparison.Ordinal)) return;
             RegisterInstance();
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
     }
 
     private string LoadViewerHtml()
@@ -435,6 +435,6 @@ public sealed class VillageService : IDisposable
             !message.StartsWith("created", StringComparison.Ordinal) && !message.StartsWith("stopped", StringComparison.Ordinal) &&
             !message.StartsWith("No free", StringComparison.Ordinal))
             return;
-        try { File.AppendAllText(DiagLogPath, $"[VILLAGE {DateTime.Now:HH:mm:ss.fff}] {message}{Environment.NewLine}"); } catch { }
+        try { File.AppendAllText(DiagLogPath, $"[VILLAGE {DateTime.Now:HH:mm:ss.fff}] {message}{Environment.NewLine}"); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
     }
 }

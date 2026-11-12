@@ -472,7 +472,7 @@ public class McpWindowViewModel : BaseViewModel
         if (url != null)
         {
             try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); return; }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
         // No report yet (or it moved): publish it now and open it.
         SendJobRequest(RevitMCP.Addin.Jobs.JobService.ReportTool, jobId, approved: false, open: true);

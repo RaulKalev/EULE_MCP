@@ -132,7 +132,7 @@ public sealed class AuditCollectors
                 if (typeId != null && typeId != ElementId.InvalidElementId) scan.UsedTypeIds.Add(typeId.Value);
 
                 Category? category = null;
-                try { category = element.Category; } catch { }
+                try { category = element.Category; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
                 if (category == null) continue;
                 var name = category.Name ?? string.Empty;
                 scan.Categories[name] = scan.Categories.TryGetValue(name, out var n) ? n + 1 : 1;
@@ -293,7 +293,7 @@ public sealed class AuditCollectors
         var placed = new HashSet<long>();
         foreach (var sheet in new FilteredElementCollector(_doc).OfClass(typeof(ViewSheet)).Cast<ViewSheet>())
         {
-            try { foreach (var id in sheet.GetAllPlacedViews()) placed.Add(id.Value); } catch { }
+            try { foreach (var id in sheet.GetAllPlacedViews()) placed.Add(id.Value); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
         return placed;
     }
@@ -352,7 +352,7 @@ public sealed class AuditCollectors
                 if (target == null) continue;
                 foreach (var id in warning.GetFailingElements()) target.Add(id.Value);
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
 
         var unplaced = rooms.Where(r => r.Location == null).ToList();

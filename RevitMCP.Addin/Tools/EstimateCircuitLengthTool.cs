@@ -71,7 +71,7 @@ public class EstimateCircuitLengthTool : IRevitMcpTool
                 }
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         var (rawFeet, farthestId) = CircuitLengthEstimator.Estimate(panelPt, elements, method);
         double rawMeters = LengthUnitHelper.RoundMeters(LengthUnitHelper.ToMeters(rawFeet));

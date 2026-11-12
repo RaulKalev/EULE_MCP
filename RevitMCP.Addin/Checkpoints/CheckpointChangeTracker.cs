@@ -69,7 +69,7 @@ internal static class CheckpointChangeTracker
                 Modified = WithoutInternal(doc, e.GetModifiedElementIds()),
                 Deleted = e.GetDeletedElementIds().Select(id => id.Value).ToArray()
             };
-            try { batch.TransactionNames = e.GetTransactionNames().ToList(); } catch { }
+            try { batch.TransactionNames = e.GetTransactionNames().ToList(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             if (batch.IdCount == 0) return;
 
             Dictionary<long, ElementIdentity>? identities = null;

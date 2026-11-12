@@ -108,9 +108,9 @@ public class RenameSheetsTool : IRevitMcpTool
             {
                 warnings.Add($"Failed to rename sheet '{oldNumber}': {ex.Message}");
                 // Attempt rollback of partial change
-                try { if (newName != null) s.Name = oldName; } catch { }
-                try { if (newNumber != null) s.SheetNumber = oldNumber; } catch { }
-                try { if (newParameterValue != null) SheetNamingService.SetTargetValue(s, parameterName, oldParameterValue ?? string.Empty); } catch { }
+                try { if (newName != null) s.Name = oldName; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+                try { if (newNumber != null) s.SheetNumber = oldNumber; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
+                try { if (newParameterValue != null) SheetNamingService.SetTargetValue(s, parameterName, oldParameterValue ?? string.Empty); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             }
         }
         RevitMCP.Addin.TransactionCommitGuard.CommitOrThrow(t);

@@ -478,7 +478,7 @@ public partial class McpWindow : Window
                 Directory.CreateDirectory(Path.GetDirectoryName(SuppressFilePath)!);
                 File.WriteAllText(SuppressFilePath, string.Empty);
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
 
         DirectEditSheet.Visibility = Visibility.Collapsed;
@@ -497,7 +497,7 @@ public partial class McpWindow : Window
             if (File.Exists(WindowStatePath) && JsonNode.Parse(File.ReadAllText(WindowStatePath)) is JsonObject state)
                 return state;
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return new JsonObject();
     }
 
@@ -533,7 +533,7 @@ public partial class McpWindow : Window
             Width = restored.Width;
             Height = restored.Height;
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         // The window always opens expanded, even when it was closed collapsed (the user's call, 2026-10-25): the bounds
         // above are the full window standing on the strip, which is where expanding the strip would have put it.
@@ -564,6 +564,6 @@ public partial class McpWindow : Window
             Directory.CreateDirectory(Path.GetDirectoryName(WindowStatePath)!);
             File.WriteAllText(WindowStatePath, state.ToJsonString());
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
     }
 }

@@ -112,7 +112,7 @@ public static class FireAlarmCircuitPresetService
                     foreach (Element e in circuit.Elements)
                         elementToCircuit.TryAdd(e.Id.Value, circuit);
                 }
-                catch { }
+                catch (Exception swallowed) { Swallowed.Note(swallowed); }
             }
         }
 
@@ -199,7 +199,7 @@ public static class FireAlarmCircuitPresetService
                                     lengthMeters = LengthUnitHelper.RoundMeters(LengthUnitHelper.ToMeters(lenFt));
                             }
                         }
-                        catch { }
+                        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
                         circInfo = new CircuitInfo
                         {
@@ -273,7 +273,7 @@ public static class FireAlarmCircuitPresetService
             if (typeId != null && typeId != ElementId.InvalidElementId)
                 return doc.GetElement(typeId);
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return null;
     }
 
@@ -285,7 +285,7 @@ public static class FireAlarmCircuitPresetService
             if (levelId != null && levelId != ElementId.InvalidElementId)
                 return (doc.GetElement(levelId) as Level)?.Name ?? "";
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return "";
     }
 
@@ -315,10 +315,10 @@ public static class FireAlarmCircuitPresetService
                         _ => p.AsValueString() ?? ""
                     };
                 }
-                catch { }
+                catch (Exception swallowed) { Swallowed.Note(swallowed); }
             }
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         // Type parameters
         if (typeElem != null)
@@ -340,10 +340,10 @@ public static class FireAlarmCircuitPresetService
                             _ => p.AsValueString() ?? ""
                         };
                     }
-                    catch { }
+                    catch (Exception swallowed) { Swallowed.Note(swallowed); }
                 }
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
 
         return "";

@@ -169,7 +169,7 @@ public class GetSelectedElementsTool : IRevitMcpTool
             if (bb != null)
                 bbSummary = $"({bb.Min.X * mm:F0}, {bb.Min.Y * mm:F0}, {bb.Min.Z * mm:F0}) → ({bb.Max.X * mm:F0}, {bb.Max.Y * mm:F0}, {bb.Max.Z * mm:F0}) mm";
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         return new
         {

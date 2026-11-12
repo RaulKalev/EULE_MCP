@@ -175,7 +175,7 @@ public static class ParameterCompletenessChecker
             if (lvlId != null && lvlId != ElementId.InvalidElementId)
                 return (doc.GetElement(lvlId) as Level)?.Name ?? string.Empty;
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         return string.Empty;
     }
 

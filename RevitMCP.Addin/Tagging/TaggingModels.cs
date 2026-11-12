@@ -144,18 +144,18 @@ namespace RevitMCP.Addin.Tagging
             if (TagHeadPosition != null)
             {
                 try { tag.TagHeadPosition = TagHeadPosition; }
-                catch { }
+                catch (Exception swallowed) { Swallowed.Note(swallowed); }
             }
 
             try { tag.HasLeader = HasLeader; }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
             if (HasLeader)
             {
                 try { tag.LeaderEndCondition = LeaderEndCondition; }
-                catch { }
+                catch (Exception swallowed) { Swallowed.Note(swallowed); }
             }
             try { tag.TagOrientation = Orientation; }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
         }
     }
 

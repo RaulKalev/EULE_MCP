@@ -94,9 +94,9 @@ public static class CircuitDtoBuilder
                 return doc.GetElement(cableTypeId)?.Name ?? "";
 #endif
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 #pragma warning disable CS0618
-        try { return circuit.WireType?.Name ?? ""; } catch { }
+        try { return circuit.WireType?.Name ?? ""; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 #pragma warning restore CS0618
         return "";
     }

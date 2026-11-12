@@ -48,7 +48,7 @@ public static class DesignOptionReader
                 var p = option.get_Parameter(BuiltInParameter.OPTION_SET_ID);
                 if (p != null && p.StorageType == StorageType.ElementId) setId = p.AsElementId()?.Value ?? -1;
             }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             if (!sets.TryGetValue(setId, out var set))
             {
@@ -57,7 +57,7 @@ public static class DesignOptionReader
             }
 
             var row = new DesignOptionRow { Id = option.Id.Value, Name = SafeName(option) };
-            try { row.IsPrimary = option.IsPrimary; } catch { }
+            try { row.IsPrimary = option.IsPrimary; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             if (countElements)
             {
                 try

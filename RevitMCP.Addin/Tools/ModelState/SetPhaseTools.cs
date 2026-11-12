@@ -201,7 +201,7 @@ internal static class SetPhaseExecutor
         };
         if (element is ElementType || element is View) return state;
         try { if (element.Category?.CategoryType == CategoryType.Annotation) return state; }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
         Parameter? pc = null, pd = null;
         try
@@ -209,7 +209,7 @@ internal static class SetPhaseExecutor
             pc = element.get_Parameter(BuiltInParameter.PHASE_CREATED);
             pd = element.get_Parameter(BuiltInParameter.PHASE_DEMOLISHED);
         }
-        catch { }
+        catch (Exception swallowed) { Swallowed.Note(swallowed); }
         if (pc == null || pd == null || pc.StorageType != StorageType.ElementId || pd.StorageType != StorageType.ElementId) return state;
 
         // Tags and other unphased elements can carry the parameters with no phase in them.
@@ -223,7 +223,7 @@ internal static class SetPhaseExecutor
         if (state.CreatedReadOnly || state.DemolishedReadOnly)
         {
             ElementId? groupId = null;
-            try { groupId = element.GroupId; } catch { }
+            try { groupId = element.GroupId; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
             state.ReadOnlyReason = groupId != null && groupId != ElementId.InvalidElementId
                 ? $"The element is a member of group {groupId.Value}: change the phase of the group instead."
                 : "Revit keeps this element's phase read-only (it follows its host or another element).";

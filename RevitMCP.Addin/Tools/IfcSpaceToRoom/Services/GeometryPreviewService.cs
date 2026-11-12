@@ -268,7 +268,7 @@ public class GeometryPreviewService
             }
 
             double perimeter = 0;
-            try { perimeter = loop.GetExactLength() * 304.8; } catch { }
+            try { perimeter = loop.GetExactLength() * 304.8; } catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
             result.Add(new IfcGeometryLoopInfo
             {

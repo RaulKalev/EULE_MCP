@@ -78,7 +78,7 @@ public static class ViewExtentService
             }
             BoundingBoxXYZ? box = null;
             try { box = element.get_BoundingBox(null); }
-            catch { }
+            catch (Exception swallowed) { Swallowed.Note(swallowed); }
             if (box == null)
             {
                 warnings.Add($"Element {id} ({element.Category?.Name ?? element.GetType().Name}) has no model bounding box; it does not count towards the extent.");

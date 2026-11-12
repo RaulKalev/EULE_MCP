@@ -88,7 +88,7 @@ public class ExternalEventService
         // it will drain our queued item too. TimedOut means Revit can't process events at all.
         var status = _externalEvent.Raise();
         var raiseLog = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RevitMCP_startup.log");
-        try { System.IO.File.AppendAllText(raiseLog, $"[EVNT {DateTime.Now:HH:mm:ss.fff}] Raise() returned {status} for {request.ToolName}{Environment.NewLine}"); } catch { }
+        try { System.IO.File.AppendAllText(raiseLog, $"[EVNT {DateTime.Now:HH:mm:ss.fff}] Raise() returned {status} for {request.ToolName}{Environment.NewLine}"); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
         if (status == ExternalEventRequest.TimedOut)
             AbandonIfNotStarted(item);
 

@@ -24,7 +24,7 @@ internal static class RevitWarningReader
                 {
                     foreach (var id in message.GetAdditionalElements()) ids.Add(id.Value);
                 }
-                catch { }
+                catch (Exception swallowed) { Swallowed.Note(swallowed); }
 
                 result.Add(new WarningKey
                 {

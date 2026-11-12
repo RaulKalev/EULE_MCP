@@ -242,7 +242,7 @@ namespace RevitMCP.Addin.Tagging
                     if (options.HasLeader)
                     {
                         try { tag.LeaderEndCondition = options.LeaderEndCondition; }
-                        catch { }
+                        catch (Exception swallowed) { Swallowed.Note(swallowed); }
                     }
                     // The SmartTags marker stores a host element id; a linked element's id would point at an unrelated
                     // host element, so tags through a link (#151) carry no marker and the retag tools leave them alone.
@@ -305,7 +305,7 @@ namespace RevitMCP.Addin.Tagging
                     if (!options.HasLeader)
                     {
                         try { tag.HasLeader = false; }
-                        catch { }
+                        catch (Exception swallowed) { Swallowed.Note(swallowed); }
                     }
 
                     item.TagId = tag.Id.Value;

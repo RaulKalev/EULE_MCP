@@ -123,7 +123,7 @@ public sealed class GraphDatabase : IDisposable
 
     public void Dispose()
     {
-        try { _connection.Close(); } catch { }
+        try { _connection.Close(); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
         _connection.Dispose();
     }
 
@@ -1145,6 +1145,6 @@ public sealed class GraphDatabase : IDisposable
 
     private static void DeleteIfExists(string path)
     {
-        try { if (File.Exists(path)) File.Delete(path); } catch { }
+        try { if (File.Exists(path)) File.Delete(path); } catch (Exception swallowed) { Swallowed.Note(swallowed); }
     }
 }
