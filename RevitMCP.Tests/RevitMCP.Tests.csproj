@@ -317,6 +317,11 @@
     <Compile Include="..\RevitMCP.Addin\ViewFilters\ViewFilterMatching.cs" Link="ViewFilters\ViewFilterMatching.cs" />
     <Compile Include="..\RevitMCP.Addin\Approval\ViewFilterApprovalSummaries.cs" Link="Approval\ViewFilterApprovalSummaries.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- View templates: request parsing, from/to planning, approval texts (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\ViewTemplates\ViewTemplateRequests.cs" Link="ViewTemplates\ViewTemplateRequests.cs" />
+    <Compile Include="..\RevitMCP.Addin\ViewTemplates\ViewTemplatePlanner.cs" Link="ViewTemplates\ViewTemplatePlanner.cs" />
+  </ItemGroup>
 
   <!-- #103 Schedules: spec parsing, planner, filter-type map, placement geometry, table paging/export names,
        approval summaries (no Revit API). FuzzyNameMatcher feeds the planner's suggestions; if another branch links it
