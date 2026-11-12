@@ -108,11 +108,15 @@ public static class BridgeToolGroups
             "revit_preview_set_dimension_types", "revit_set_dimension_types",
             // Object styles, and what uses a line style or filled region type before it is deleted.
             "revit_list_object_styles", "revit_preview_set_object_styles", "revit_set_object_styles",
-            "revit_get_style_usage", "revit_preview_delete_styles", "revit_delete_styles"
+            "revit_get_style_usage", "revit_preview_delete_styles", "revit_delete_styles",
+            // Keynotes: the table behind keynote tags ("preview" contains "view").
+            "revit_get_keynotes", "revit_preview_reload_keynote_table", "revit_reload_keynote_table"
         }),
         ("ifc", new[] { "revit_query_linked_elements", "revit_select_linked_elements" }),
         // #103: "schedulable" does not contain the "schedule" keyword.
         ("views", new[] { "revit_list_schedulable_fields", "revit_list_filterable_parameters" }),
+        // Legends: "legend" matches no keyword.
+        ("views", new[] { "revit_list_legends", "revit_preview_populate_legend", "revit_populate_legend" }),
         ("cad", new[] { "revit_create_panel_schematic_symbol_from_dwg" }),
         ("documents", new[]
         {

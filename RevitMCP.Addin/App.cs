@@ -484,6 +484,7 @@ public class App : IExternalApplication
             RevitMCP.Addin.Tools.AnnotationTypes.AnnotationTypeToolRegistration.Register(handler); // text types and dimension types
             RevitMCP.Addin.Tools.Families.LabelFamilyToolRegistration.Register(handler); // label families (variants of a seed)
             RevitMCP.Addin.Tools.ViewTemplates.ViewTemplateToolRegistration.Register(handler); // view templates: inspect, create, edit
+            RevitMCP.Addin.Tools.Legends.LegendKeynoteToolRegistration.Register(handler); // legends and keynotes
             RevitMCP.Addin.Tools.Mep.MepToolRegistration.Register(handler); // #106 cable tray and conduit runs
             RevitMCP.Addin.Tools.Geometry.GeometryToolRegistration.Register(handler); // #107 geometry queries
             RevitMCP.Addin.Tools.TransformsAndGroupsToolRegistration.Register(handler); // #108 mirror, array, groups

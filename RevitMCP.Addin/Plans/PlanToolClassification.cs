@@ -39,7 +39,9 @@ public static class PlanToolClassification
         // A text or dimension type the document does not have is created by duplicating.
         "revit_set_text_types", "revit_set_dimension_types",
         // A subcategory the category does not have is created.
-        "revit_set_object_styles"
+        "revit_set_object_styles",
+        // Copies legend components and adds text notes and detail items to a legend.
+        "revit_populate_legend"
     };
 
     private static readonly string[] ModifyingPrefixes =
