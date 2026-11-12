@@ -95,7 +95,9 @@ public static class BridgeToolGroups
             "revit_set_line_geometry", "revit_create_rectangle", "revit_check_annotation_overlaps",
             // #135: filled region names match no keyword, and "preview" contains "view".
             "revit_list_filled_regions", "revit_list_filled_region_types", "revit_preview_create_filled_regions", "revit_create_filled_regions",
-            "revit_preview_edit_filled_regions", "revit_edit_filled_regions", "revit_preview_set_filled_region_types", "revit_set_filled_region_types"
+            "revit_preview_edit_filled_regions", "revit_edit_filled_regions", "revit_preview_set_filled_region_types", "revit_set_filled_region_types",
+            // Line styles of a project or a family document.
+            "revit_list_line_styles", "revit_preview_set_line_styles", "revit_set_line_styles"
         }),
         ("ifc", new[] { "revit_query_linked_elements", "revit_select_linked_elements" }),
         // #103: "schedulable" does not contain the "schedule" keyword.

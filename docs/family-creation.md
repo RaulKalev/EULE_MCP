@@ -1,7 +1,8 @@
 # Family creation
 
 The connector creates Detail Item families from a short spec (#147): geometry, line styles that match the project,
-family and shared parameters, text through nested Generic Annotation families, purge, save and load.
+filled regions and their types, family and shared parameters, visibility parameters, text and parameter labels through
+nested Generic Annotation families, purge, save and load.
 
 Both tools are in the `edit` group (`--tool-groups edit`, or find them with `revit_tools_search`).
 
@@ -44,9 +45,28 @@ and collinear three-point arcs are refused in the preview. A spec may hold up to
 
 ## Line styles
 
-Every `lineStyle` must be a line style of the project (a subcategory of *Lines*), matched without regard to case.
-A name the project does not have is a problem in the preview, with the closest names suggested. The tool never
-invents a style.
+Every `lineStyle` must be a line style of the project (a subcategory of *Lines*), matched without regard to case,
+or one defined in `lineStyles` (below). A name that is neither is a problem in the preview, with the closest names
+suggested. The tool never invents a style.
+
+`lineStyles` defines styles of the family itself:
+
+```json
+"lineStyles": [ { "name": "EL_Sümbol", "weight": 2, "color": "#0000FF", "pattern": "Dash" } ]
+```
+
+| Field | Notes |
+|---|---|
+| `name` | Required |
+| `weight` | Revit's line weight number, 1 to 16 (not millimetres) |
+| `color` | `"#RRGGBB"`, `"r,g,b"` or `[r, g, b]` |
+| `pattern` | A line pattern **of the project** (copied into the family), or `solid` |
+
+A field left out comes from the project's style of the same name, else weight 1, black and solid. A defined style is
+created in the family even when no curve uses it, and when the template already has the name its values are set
+(`action: edited`). If the project later has a style of the same name, the project's settings apply to the loaded
+family, as for copied styles. To add a style to the project itself, use `revit_set_line_styles`
+([line-styles.md](line-styles.md)).
 
 In the family, the tool reuses a *Lines* subcategory of that name if the template has one. Otherwise it creates one
 with the project style's projection weight, colour and line pattern, copying the pattern when the template lacks
@@ -56,6 +76,51 @@ loads, and in the project the project's settings apply.
 If the template does not let detail curves use *Lines* subcategories, the tool falls back to a *Detail Items*
 subcategory with the same name, weight, colour and pattern. The result says so (`kind: detailItems`) and adds a
 warning. Such a subcategory appears under Detail Items in Object Styles rather than as a line style.
+
+## Filled regions
+
+`filledRegions` draws filled regions on the reference level, in millimetres like the curves:
+
+| Field | Notes |
+|---|---|
+| `points` | `[[x, y], …]`, three or more corners in order. A closing point that repeats the first is dropped |
+| `min`, `max` | A rectangle from two opposite corners, instead of `points` |
+| `center`, `radius` | A circle, instead of `points` |
+| `holes` | Inner boundaries: each a point list, or `{min, max}` or `{center, radius}`. A hole must lie inside the outer boundary and must not overlap another hole |
+| `type` | The filled region type. Without it the family's default type is used |
+| `lineStyle` | The boundary's line style: a line style of the project, as for curves. The top-level `lineStyle` default does **not** apply to regions; without one the boundary keeps the type's line |
+| `visibleParameter` | See *Visibility parameters* |
+
+The preview refuses a boundary with fewer than three points, a side shorter than 0.8 mm, sides that cross or touch,
+or no area. A spec may hold up to 200 regions of up to 500 points each. A region Revit refuses at creation is
+reported in `filledRegions` with `status: failed` and a warning; the others are still drawn.
+
+### Filled region types
+
+A family keeps its own filled region types: they are not merged with the project's on load, so what the family's
+type looks like is what the region looks like in the project. A region's `type` is resolved in this order:
+
+1. A name defined in `filledRegionTypes`: the type is created in the family, or edited when the template already
+   has that name.
+2. Otherwise a filled region type **of the project** with that name: it is copied into the family with its patterns,
+   colours, line weight and masking.
+3. Otherwise it is a problem in the preview, with close names suggested.
+
+`filledRegionTypes` items:
+
+| Field | Notes |
+|---|---|
+| `name` | Required |
+| `copyFrom` | A filled region type of the project to start from. Default: the project's type of the same name, if there is one |
+| `foregroundPattern`, `backgroundPattern` | A fill pattern of the project by name, `solid`, or `none`. A named pattern the family lacks is copied from the project. A background pattern must be a drafting pattern |
+| `foregroundColor`, `backgroundColor` | `"#RRGGBB"`, `"r,g,b"` or `[r, g, b]` |
+| `lineWeight` | 1 to 16 |
+| `isMasking` | `true` hides what is behind the region |
+
+A field that is left out takes `copyFrom`'s value; with no `copyFrom` either, it stays as the family's default type
+has it. Types listed in `filledRegionTypes` are created even when no region uses them, and survive the purge. The
+result lists each type with `action: created | edited` and the values Revit holds afterwards; a single value Revit
+refuses is a warning.
 
 ## Parameters
 
@@ -104,14 +169,57 @@ built from `Metric Generic Annotation.rft` (found in Revit's family template fol
 sub-folder; `annotationTemplatePath` names another), have the template's own sample text removed, are purged with the
 detail item, and live only inside the saved `.rfa`: no separate annotation files are written.
 
-**Limitation:** the text is fixed. Revit's API cannot create *labels* (text bound to a parameter) in a family, so text
-that should show a parameter's value has to be turned into a label by hand in the Family Editor.
+### Labels that show a parameter
+
+Revit's API cannot create a *label* (text bound to a parameter), and a Detail Item family cannot hold one at all:
+labels live in annotation families. So a label that shows a parameter is an instance of **your own label family**, a
+Generic Annotation family that already holds a label, nested in the detail item with its label parameter linked to
+the detail family's parameter:
+
+| Field | Notes |
+|---|---|
+| `parameter` | Required instead of `text`: a parameter listed in `parameters` |
+| `position`, `rotation` | As for text |
+| `labelFamily` | The label family: a Generic Annotation family loaded in the project (by name), or a `.rfa` path. The top-level `labelFamily` is the default for labels without one |
+| `labelType` | The label family's type to place. Default: its first type by name |
+| `labelParameter` | The label family's parameter that its label shows. Needed only when several of its parameters fit |
+
+Make the label family once: a Generic Annotation with one label, bound to an **instance** parameter of the data type
+you want to show (text for most uses), and a type per text size. The tool then:
+
+1. takes the family from the `.rfa`, or saves a copy of the loaded one to a temporary file,
+2. loads it into the detail family and places an instance at `position`,
+3. finds the instance's parameter to link (`labelParameter`, else its only editable, user-defined parameter of the
+   same data type as `parameter`) and links it to the detail family's parameter.
+
+The label then shows whatever value the parameter has, per type or per instance as the parameter is defined.
+`size`, `textType` and `alignment` do not apply: the label family decides how its text looks.
+
+The preview checks that the label family exists, is a Generic Annotation and has the `labelType`. The label
+parameter is matched when the label is placed, because that needs the family open; a label whose parameter cannot be
+linked is removed again and reported in `parameterLabels` with `status: failed` and the reason (no parameter of that
+data type, several that fit, a type parameter already linked to another parameter).
+
+## Visibility parameters
+
+`visibleParameter` on a line, rectangle, arc, circle, filled region or label names a **yes/no** parameter listed in
+`parameters`. The element's *Visible* property is linked to it, so the parameter switches the element on and off per
+type or per instance:
+
+```json
+"parameters": [ { "name": "Näita täidet", "dataType": "yesNo", "value": true, "instance": true } ],
+"filledRegions": [ { "min": [-10, -6], "max": [10, 6], "type": "Solid Black", "visibleParameter": "Näita täidet" } ]
+```
+
+A name that is not in `parameters`, or a parameter that is not yes/no, is a problem in the preview. A link Revit
+refuses at creation is a warning and the element stays always visible; `visibility` in the result counts the linked
+and failed elements per parameter.
 
 ## Purge
 
 With `purge=true` (the default), the tool deletes what Revit lists as unused (`Document.GetUnusedElements`) before
 saving. It repeats the pass up to five times, because deleting can leave more elements unused. The line styles and
-patterns the spec uses, the parameters and the label families and text types are never deleted. An element Revit refuses to delete is skipped. The result counts the
+patterns the spec uses, the filled region types and their fill patterns, the parameters and the label families and text types are never deleted. An element Revit refuses to delete is skipped. The result counts the
 deleted elements by kind.
 
 ## Loading into the project
@@ -145,7 +253,12 @@ not Detail Items gives a warning but is used.
       { "name": "Laius", "dataType": "length", "value": 20, "instance": true },
       { "name": "EULE_Tähis", "shared": true }
     ],
-    "labels": [ { "text": "K1", "position": [0, 9], "alignment": "center", "textType": "2.5mm Arial" } ],
+    "filledRegionTypes": [ { "name": "EL_Täide", "foregroundPattern": "solid", "foregroundColor": "#C0C0C0", "isMasking": true } ],
+    "filledRegions": [ { "center": [0, 0], "radius": 2, "type": "EL_Täide" } ],
+    "labels": [
+      { "text": "K1", "position": [0, 9], "alignment": "center", "textType": "2.5mm Arial" },
+      { "parameter": "Kilbi tähis", "position": [0, -9], "labelFamily": "EULE_Silt", "labelType": "2.5 mm" }
+    ],
     "loadIntoProject": true
 } }
 ```

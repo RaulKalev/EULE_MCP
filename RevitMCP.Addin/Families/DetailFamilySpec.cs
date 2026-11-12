@@ -38,6 +38,8 @@ public sealed class DetailCurveSpec
     public double EndAngle { get; set; }
     /// <summary>Line style name; empty = the family's default (the category's own line).</summary>
     public string LineStyle { get; set; } = string.Empty;
+    /// <summary>A yes/no family parameter that switches the curve on and off; empty = always visible.</summary>
+    public string VisibleParameter { get; set; } = string.Empty;
 }
 
 /// <summary>Everything revit_create_detail_family is asked to do (#147, phase 1: geometry, line styles, purge, save, load).</summary>
@@ -60,13 +62,32 @@ public sealed class DetailFamilySpec
     public string AnnotationTemplatePath { get; set; } = string.Empty;
     /// <summary>Shared parameter file for shared parameters; empty = the config's, else Revit's setting.</summary>
     public string SharedParameterFile { get; set; } = string.Empty;
+    /// <summary>Line styles defined in the request: created in the family with these values, whether or not the project has them.</summary>
+    public List<LineStyleDefinition> LineStyles { get; set; } = new();
+    /// <summary>Filled regions drawn in the family.</summary>
+    public List<DetailRegionSpec> FilledRegions { get; } = new();
+    /// <summary>Filled region types created (or edited) in the family.</summary>
+    public List<DetailRegionTypeSpec> FilledRegionTypes { get; } = new();
 
-    /// <summary>Distinct line style names the curves ask for, in first-use order.</summary>
+    /// <summary>Labels with fixed text: nested Generic Annotation families the tool builds.</summary>
+    public IEnumerable<DetailLabelSpec> TextLabels => Labels.Where(l => l.Parameter.Length == 0);
+    /// <summary>Labels that show a family parameter: instances of a label family the user supplies.</summary>
+    public IEnumerable<DetailLabelSpec> ParameterLabels => Labels.Where(l => l.Parameter.Length > 0);
+
+    /// <summary>Distinct line style names the curves and filled region boundaries ask for, in first-use order.</summary>
     public List<string> LineStyleNames() => Curves
         .Select(c => c.LineStyle)
+        .Concat(FilledRegions.Select(r => r.LineStyle))
         .Where(n => n.Length > 0)
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .ToList();
+
+    /// <summary>Everything that names a visibility parameter: (where it is in the request, the parameter name).</summary>
+    public IEnumerable<(string Source, string Name)> VisibilityReferences() =>
+        Curves.Where(c => c.VisibleParameter.Length > 0).Select(c => (c.Source, c.VisibleParameter))
+            .Concat(FilledRegions.Where(r => r.VisibleParameter.Length > 0).Select(r => (r.Source, r.VisibleParameter)))
+            .Concat(Labels.Where(l => l.VisibleParameter.Length > 0).Select(l => (l.Source, l.VisibleParameter)))
+            .Distinct();
 
     public Dictionary<string, int> CountsByKind() => Curves
         .GroupBy(c => c.Kind)
@@ -115,11 +136,15 @@ public static partial class DetailFamilySpecParser
         ReadRectangles(args, "rectangles", spec, defaultStyle, errors);
         ReadArcs(args, "arcs", spec, defaultStyle, errors);
         ReadCircles(args, "circles", spec, defaultStyle, errors);
+        spec.LineStyles = ReadLineStyleDefinitions(args, "lineStyles", errors);
+        ReadFilledRegionTypes(args, "filledRegionTypes", spec, errors);
+        ReadFilledRegions(args, "filledRegions", spec, defaultStyle, errors);
         ReadParameters(args, "parameters", spec, errors);
-        ReadLabels(args, "labels", spec, errors);
+        ReadLabels(args, "labels", spec, Str(args, "labelFamily"), errors);
+        CheckParameterReferences(spec, errors);
 
-        if (spec.Curves.Count == 0 && spec.Labels.Count == 0)
-            errors.Add("Nothing to draw: give lines, rectangles, arcs, circles or labels (millimetres, on the family's reference level).");
+        if (spec.Curves.Count == 0 && spec.Labels.Count == 0 && spec.FilledRegions.Count == 0)
+            errors.Add("Nothing to draw: give lines, rectangles, arcs, circles, filledRegions or labels (millimetres, on the family's reference level).");
         else if (spec.Curves.Count > MaxCurves)
             errors.Add($"{spec.Curves.Count} curves were requested; at most {MaxCurves} per family.");
         return spec;
@@ -236,7 +261,7 @@ public static partial class DetailFamilySpecParser
                 errors.Add($"{source} is shorter than Revit's minimum curve length ({MinCurveLengthMm} mm).");
                 continue;
             }
-            spec.Curves.Add(new DetailCurveSpec { Kind = "line", Source = source, Start = start.Value, End = end.Value, LineStyle = Style(item, defaultStyle) });
+            spec.Curves.Add(new DetailCurveSpec { Kind = "line", Source = source, Start = start.Value, End = end.Value, LineStyle = Style(item, defaultStyle), VisibleParameter = Visible(item) });
         }
     }
 
@@ -259,7 +284,7 @@ public static partial class DetailFamilySpecParser
             var style = Style(item, defaultStyle);
             var corners = new[] { new DetailPoint(x0, y0), new DetailPoint(x1, y0), new DetailPoint(x1, y1), new DetailPoint(x0, y1) };
             for (var i = 0; i < 4; i++)
-                spec.Curves.Add(new DetailCurveSpec { Kind = "line", Source = source, Start = corners[i], End = corners[(i + 1) % 4], LineStyle = style });
+                spec.Curves.Add(new DetailCurveSpec { Kind = "line", Source = source, Start = corners[i], End = corners[(i + 1) % 4], LineStyle = style, VisibleParameter = Visible(item) });
         }
     }
 
@@ -281,7 +306,7 @@ public static partial class DetailFamilySpecParser
                     errors.Add($"{source}: start, mid and end are on one line or too close together for an arc.");
                     continue;
                 }
-                spec.Curves.Add(new DetailCurveSpec { Kind = "arc", Source = source, Start = start.Value, Mid = mid.Value, End = end.Value, LineStyle = Style(item, defaultStyle) });
+                spec.Curves.Add(new DetailCurveSpec { Kind = "arc", Source = source, Start = start.Value, Mid = mid.Value, End = end.Value, LineStyle = Style(item, defaultStyle), VisibleParameter = Visible(item) });
                 continue;
             }
 
@@ -298,7 +323,7 @@ public static partial class DetailFamilySpecParser
             spec.Curves.Add(new DetailCurveSpec
             {
                 Kind = "arc", Source = source, Center = center.Value, Radius = radius.Value,
-                StartAngle = startAngle.Value, EndAngle = endAngle.Value, LineStyle = Style(item, defaultStyle)
+                StartAngle = startAngle.Value, EndAngle = endAngle.Value, LineStyle = Style(item, defaultStyle), VisibleParameter = Visible(item)
             });
         }
     }
@@ -314,7 +339,7 @@ public static partial class DetailFamilySpecParser
             if (center == null) continue;
             if (radius == null || radius <= 0) { errors.Add($"{source}.radius must be a positive number (mm)."); continue; }
             if (radius.Value * 2 * Math.PI < MinCurveLengthMm) { errors.Add($"{source} is smaller than Revit's minimum curve length."); continue; }
-            spec.Curves.Add(new DetailCurveSpec { Kind = "circle", Source = source, Center = center.Value, Radius = radius.Value, LineStyle = Style(item, defaultStyle) });
+            spec.Curves.Add(new DetailCurveSpec { Kind = "circle", Source = source, Center = center.Value, Radius = radius.Value, LineStyle = Style(item, defaultStyle), VisibleParameter = Visible(item) });
         }
     }
 
@@ -439,7 +464,10 @@ public sealed class ProjectLineStyleInfo
 public sealed class LineStylePlanItem
 {
     public string Requested { get; set; } = string.Empty;
-    /// <summary>project (copied from the project's style of that name) | missing (the project has no such style).</summary>
+    /// <summary>
+    /// project (copied from the project's style of that name) | defined (lineStyles gives its values; fields left out
+    /// come from the project's style of that name, else the defaults) | missing (neither).
+    /// </summary>
     public string Status { get; set; } = string.Empty;
     public ProjectLineStyleInfo? Project { get; set; }
     public List<string> UsedBy { get; set; } = new();
@@ -453,16 +481,24 @@ public static class DetailFamilyLineStylePlanner
         var byName = projectStyles
             .GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-        return spec.LineStyleNames().Select(name =>
+        var definitions = spec.LineStyles
+            .GroupBy(d => d.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        // Defined styles are made even when nothing uses them yet.
+        var names = spec.LineStyleNames().Concat(spec.LineStyles.Select(d => d.Name)).Distinct(StringComparer.OrdinalIgnoreCase);
+        return names.Select(name =>
         {
             byName.TryGetValue(name, out var style);
+            var defined = definitions.TryGetValue(name, out var definition);
+            if (defined) style = DetailFamilySpecParser.MergeLineStyle(definition!, style);
             return new LineStylePlanItem
             {
-                Requested = name,
-                Status = style != null ? "project" : "missing",
+                Requested = defined ? definition!.Name : name,
+                Status = defined ? "defined" : style != null ? "project" : "missing",
                 Project = style,
-                UsedBy = spec.Curves.Where(c => string.Equals(c.LineStyle, name, StringComparison.OrdinalIgnoreCase))
-                    .Select(c => c.Source).Distinct().Take(10).ToList()
+                UsedBy = spec.Curves.Where(c => string.Equals(c.LineStyle, name, StringComparison.OrdinalIgnoreCase)).Select(c => c.Source)
+                    .Concat(spec.FilledRegions.Where(r => string.Equals(r.LineStyle, name, StringComparison.OrdinalIgnoreCase)).Select(r => r.Source))
+                    .Distinct().Take(10).ToList()
             };
         }).ToList();
     }

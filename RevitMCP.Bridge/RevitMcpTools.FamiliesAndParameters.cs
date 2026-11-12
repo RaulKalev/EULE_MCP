@@ -246,7 +246,25 @@ internal sealed partial class RevitMcpTools
 
     private const string DetailFamilyLabelsDescription =
         "Text: [{text, position:[x,y] (mm, the insertion point), size? (text height on paper, mm, default 2.5), textType? (a text type of the project to copy), alignment? (left | center | right), rotation? (degrees)}]. " +
-        "Each distinct text becomes a Generic Annotation family nested in the detail item, so it keeps its paper size at every scale.";
+        "Each distinct text becomes a Generic Annotation family nested in the detail item, so it keeps its paper size at every scale. " +
+        "A label that shows a parameter instead: [{parameter (a name in parameters), position, labelFamily? (else the labelFamily argument), labelType?, labelParameter? (the label family's parameter its label shows; needed when several fit), rotation?}]. " +
+        "visibleParameter (a yesNo parameter of parameters) switches a label on and off; lines, rectangles, arcs, circles and filledRegions take it too.";
+
+    private const string DetailFamilyLineStylesDescription =
+        "Line styles of the family itself: [{name, weight? (Revit line weight number 1-16), color? (#RRGGBB), pattern? (a line pattern of the project, or solid)}]. " +
+        "A curve's or region's lineStyle may then name one of these instead of a line style of the project. Fields left out come from the project's style of the same name, else weight 1, black, solid.";
+
+    private const string DetailFamilyFilledRegionsDescription =
+        "Filled regions: [{points:[[x,y],…] | min,max (rectangle) | center,radius (circle), holes? ([[x,y],…] or {min,max} or {center,radius} each), type?, lineStyle?, visibleParameter?}] in mm. " +
+        "type is a filled region type of the project (copied into the family) or a name defined in filledRegionTypes; without it the family's default type is used. lineStyle is the boundary's line style (a line style of the project).";
+
+    private const string DetailFamilyFilledRegionTypesDescription =
+        "Filled region types to create in the family (or edit, when the template has the name): [{name, copyFrom? (a filled region type of the project to start from; default: the project's type of the same name), " +
+        "foregroundPattern?, backgroundPattern? (a fill pattern of the project, solid or none), foregroundColor?, backgroundColor? (#RRGGBB), lineWeight? (1-16), isMasking?}].";
+
+    private const string DetailFamilyLabelFamilyDescription =
+        "Default label family for labels that show a parameter (labels[].parameter): a Generic Annotation family that already holds a label, loaded in the project or a .rfa path. " +
+        "Revit's API cannot create a label, so this family is nested and its label parameter linked to the detail family's parameter.";
 
     private const string DetailFamilyGeometryDescription =
         "Millimetres on the family's reference level; the origin is the insertion point. Points are [x, y] or {x, y}.";
@@ -270,10 +288,15 @@ internal sealed partial class RevitMcpTools
         [Description(DetailFamilyLabelsDescription)] object[]? labels = null,
         [Description("Shared parameter file for shared parameters. Default: parameters.sharedParameterFile in the config, else Revit's setting. Only read, never written.")] string? sharedParameterFile = null,
         [Description("Generic Annotation template (.rft) for labels. Default: Metric Generic Annotation.rft from Revit's family template folder.")] string? annotationTemplatePath = null,
+        [Description(DetailFamilyFilledRegionsDescription)] object[]? filledRegions = null,
+        [Description(DetailFamilyFilledRegionTypesDescription)] object[]? filledRegionTypes = null,
+        [Description(DetailFamilyLabelFamilyDescription)] string? labelFamily = null,
+        [Description(DetailFamilyLineStylesDescription)] object[]? lineStyles = null,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default) =>
         SendDetailFamily("revit_preview_create_detail_family", savePath, familyName, lines, rectangles, arcs, circles, lineStyle,
-            overwrite, purge, templatePath, loadIntoProject, ifExists, parameters, labels, sharedParameterFile, annotationTemplatePath, document, cancellationToken);
+            overwrite, purge, templatePath, loadIntoProject, ifExists, parameters, labels, sharedParameterFile, annotationTemplatePath,
+            filledRegions, filledRegionTypes, labelFamily, lineStyles, document, cancellationToken);
 
     [McpServerTool(Name = "revit_create_detail_family"),
      Description("Creates a Detail Item family (.rfa) from Metric Detail Item.rft and draws it. Requires approval. savePath is required (a folder with familyName, or the full .rfa path): ask the user where the family goes, there is no default. Geometry in mm on the reference level (origin = insertion point): lines, rectangles, arcs, circles. Each lineStyle must be a line style of the project: the family gets a line style of the same name, weight, colour and pattern, which merges with the project's on load. purge (default true) removes unused elements before saving. loadIntoProject loads it (ifExists: skip | overwrite). parameters adds family parameters, or assigns existing shared parameters from the shared parameter file (never creates one). labels places text through nested Generic Annotation families (fixed text; Revit's API cannot create parameter labels). Run revit_preview_create_detail_family first.")]
@@ -294,15 +317,21 @@ internal sealed partial class RevitMcpTools
         [Description(DetailFamilyLabelsDescription)] object[]? labels = null,
         [Description("Shared parameter file for shared parameters. Default: parameters.sharedParameterFile in the config, else Revit's setting. Only read, never written.")] string? sharedParameterFile = null,
         [Description("Generic Annotation template (.rft) for labels. Default: Metric Generic Annotation.rft from Revit's family template folder.")] string? annotationTemplatePath = null,
+        [Description(DetailFamilyFilledRegionsDescription)] object[]? filledRegions = null,
+        [Description(DetailFamilyFilledRegionTypesDescription)] object[]? filledRegionTypes = null,
+        [Description(DetailFamilyLabelFamilyDescription)] string? labelFamily = null,
+        [Description(DetailFamilyLineStylesDescription)] object[]? lineStyles = null,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default) =>
         SendDetailFamily("revit_create_detail_family", savePath, familyName, lines, rectangles, arcs, circles, lineStyle,
-            overwrite, purge, templatePath, loadIntoProject, ifExists, parameters, labels, sharedParameterFile, annotationTemplatePath, document, cancellationToken);
+            overwrite, purge, templatePath, loadIntoProject, ifExists, parameters, labels, sharedParameterFile, annotationTemplatePath,
+            filledRegions, filledRegionTypes, labelFamily, lineStyles, document, cancellationToken);
 
     private async Task<string> SendDetailFamily(string toolName, string? savePath, string? familyName, object[]? lines,
         object[]? rectangles, object[]? arcs, object[]? circles, string? lineStyle, bool overwrite, bool purge,
         string? templatePath, bool loadIntoProject, string ifExists, object[]? parameters, object[]? labels,
-        string? sharedParameterFile, string? annotationTemplatePath, string? document, CancellationToken cancellationToken)
+        string? sharedParameterFile, string? annotationTemplatePath, object[]? filledRegions, object[]? filledRegionTypes,
+        string? labelFamily, object[]? lineStyles, string? document, CancellationToken cancellationToken)
     {
         var args = new Dictionary<string, object?>
         {
@@ -322,6 +351,10 @@ internal sealed partial class RevitMcpTools
             ["labels"] = ToJToken(labels),
             ["sharedParameterFile"] = sharedParameterFile ?? string.Empty,
             ["annotationTemplatePath"] = annotationTemplatePath ?? string.Empty,
+            ["filledRegions"] = ToJToken(filledRegions),
+            ["filledRegionTypes"] = ToJToken(filledRegionTypes),
+            ["labelFamily"] = labelFamily ?? string.Empty,
+            ["lineStyles"] = ToJToken(lineStyles),
             ["document"] = document ?? string.Empty
         };
         return FormatResult(await pipeClient.SendAsync(toolName, args, cancellationToken));

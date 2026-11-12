@@ -21,8 +21,9 @@ public sealed class PreviewCreateDetailFamilyTool : IRevitMcpTool
         "revit_create_detail_family. Checks the save path (required, never defaulted), the file access policy and whether " +
         "the file exists, finds the template (Metric Detail Item.rft), validates the geometry, matches every requested " +
         "line style to the project's line styles (project | missing), resolves each parameter (shared ones against the " +
-        "shared parameter file), checks label text types and lists the annotation families the labels need, and states " +
-        "whether the family would load.";
+        "shared parameter file), checks label text types and lists the annotation families the labels need, resolves " +
+        "filled region types and their fill patterns against the project, finds the label families of parameter labels, " +
+        "and states whether the family would load.";
 
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.FamilyCreation;
@@ -44,10 +45,19 @@ public sealed class CreateDetailFamilyTool : IRevitMcpTool, IApprovalSummaryTool
         "or {start, mid, end}], circles [{center, radius}]. lineStyle (per curve, or a default for all) must be a line " +
         "style of the project: the family gets a line style of the same name, weight, colour and pattern, so it merges " +
         "with the project's on load. purge (default true) removes unused elements before saving. overwrite replaces an " +
-        "existing file. loadIntoProject loads it into the document (ifExists: skip | overwrite). parameters [{name, " +
+        "existing file. lineStyles [{name, weight? (1-16), color? (#RRGGBB), pattern? (a line pattern of the project, or " +
+        "solid)}] defines line styles of the family itself: such a name need not exist in the project. loadIntoProject " +
+        "loads it into the document (ifExists: skip | overwrite). parameters [{name, " +
         "dataType, group?, instance?, value?, formula?}] adds family parameters; {name or guid, shared:true} assigns an " +
         "existing shared parameter from the shared parameter file (never creates one). labels [{text, position:[x,y], " +
-        "size? (paper mm), textType?, alignment?, rotation?}] places text through nested Generic Annotation families. Run " +
+        "size? (paper mm), textType?, alignment?, rotation?}] places text through nested Generic Annotation families. " +
+        "filledRegions [{points:[[x,y],…] | min,max | center,radius, holes?, type?, lineStyle?}] draws filled regions; a type is " +
+        "a filled region type of the project (copied into the family) or one defined in filledRegionTypes [{name, copyFrom?, " +
+        "foregroundPattern?, foregroundColor?, backgroundPattern?, backgroundColor?, lineWeight?, isMasking?}] (patterns: a fill " +
+        "pattern of the project, solid or none). A label that shows a parameter: labels [{parameter, position, labelFamily, " +
+        "labelType?, labelParameter?}], where labelFamily is a Generic Annotation family that already holds a label (loaded in " +
+        "the project, or a .rfa path): it is nested and its label parameter linked to the family's parameter. visibleParameter " +
+        "on a curve, filled region or label names a yesNo parameter of parameters that switches it on and off. Run " +
         "revit_preview_create_detail_family first.";
 
     public ToolPermission Permission => ToolPermission.RequiresApproval;
@@ -69,15 +79,23 @@ internal static class DetailFamilyExecutor
         var errors = new List<string>();
         var spec = DetailFamilySpecParser.Parse(request.Arguments, errors);
         var counts = string.Join(", ", spec.CountsByKind().Select(c => $"{c.Value} {c.Key}{(c.Value == 1 ? string.Empty : "s")}"));
-        var styles = spec.LineStyleNames();
+        var styles = spec.LineStyleNames().Concat(spec.LineStyles.Select(d => d.Name)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var document = ToolArguments.GetString(request.Arguments, "document").Trim();
         var shared = spec.Parameters.Count(p => p.Shared);
         var parameters = spec.Parameters.Count == 0 ? string.Empty
             : $"; {spec.Parameters.Count} parameter(s){(shared > 0 ? $", {shared} of them shared (existing definitions only)" : string.Empty)}";
-        var labels = spec.Labels.Count == 0 ? string.Empty
-            : $"; {spec.Labels.Count} label(s) as nested Generic Annotation families";
-        return $"Create Detail Item family '{spec.FamilyName}' ({(counts.Length > 0 ? counts : "no geometry")}" +
-               $"{(styles.Count > 0 ? $"; line styles {string.Join(", ", styles)}" : string.Empty)}{parameters}{labels}) and save it to " +
+        var textLabels = spec.TextLabels.Count();
+        var parameterLabels = spec.ParameterLabels.ToList();
+        var labels = (textLabels == 0 ? string.Empty : $"; {textLabels} text label(s) as nested Generic Annotation families") +
+                     (parameterLabels.Count == 0 ? string.Empty
+                         : $"; {parameterLabels.Count} parameter label(s) through {string.Join(", ", parameterLabels.Select(l => DetailFamilySpecParser.LabelFamilyName(l.LabelFamily)).Where(n => n.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).Select(n => $"'{n}'"))}");
+        var regions = spec.FilledRegions.Count == 0 && spec.FilledRegionTypes.Count == 0 ? string.Empty
+            : $"; {spec.FilledRegions.Count} filled region(s)" +
+              $"{(spec.FilledRegionTypes.Count > 0 ? $", filled region types {string.Join(", ", spec.FilledRegionTypes.Select(t => t.Name))}" : string.Empty)}";
+        var visibility = spec.VisibilityReferences().Select(v => v.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var visible = visibility.Count == 0 ? string.Empty : $"; visibility by {string.Join(", ", visibility)}";
+        return $"Create Detail Item family '{spec.FamilyName}' ({(counts.Length > 0 ? counts : "no curves")}" +
+               $"{(styles.Count > 0 ? $"; line styles {string.Join(", ", styles)}" : string.Empty)}{regions}{parameters}{labels}{visible}) and save it to " +
                $"'{spec.SavePath}'{(spec.Overwrite ? ", replacing an existing file" : string.Empty)}" +
                $"{(spec.Purge ? ", purged" : string.Empty)}" +
                $"{(spec.LoadIntoProject ? $"; then load it into {(document.Length > 0 ? $"'{document}'" : "the active document")} (ifExists={spec.IfExists})" : string.Empty)}.";
@@ -116,11 +134,29 @@ internal static class DetailFamilyExecutor
 
         var projectStyles = ReadProjectLineStyles(doc);
         var stylePlan = DetailFamilyLineStylePlanner.Plan(spec, projectStyles.Values.Select(s => s.Info).ToList());
+        // A style defined in lineStyles is made from the request: its pattern is a line pattern of the project, copied by name.
+        foreach (var defined in stylePlan.Where(s => s.Status == "defined"))
+        {
+            LinePattern? pattern = null;
+            if (defined.Project!.Pattern.Length > 0)
+            {
+                var element = LinePatternElement.GetLinePatternElementByName(doc, defined.Project.Pattern);
+                if (element == null)
+                    problems.Add($"lineStyles: '{defined.Project.Pattern}' (pattern of '{defined.Requested}') is not a line pattern of '{doc.Title}': use a line pattern name or solid.");
+                else
+                {
+                    defined.Project.Pattern = element.Name;
+                    pattern = element.GetLinePattern();
+                }
+            }
+            projectStyles[defined.Requested] = new ProjectStyle { Info = defined.Project, Pattern = pattern, Defined = true };
+        }
         foreach (var missing in stylePlan.Where(s => s.Status == "missing"))
         {
             var suggestions = DetailFamilyLineStylePlanner.Suggest(missing.Requested, projectStyles.Values.Select(s => s.Info));
             problems.Add($"Line style '{missing.Requested}' (used by {string.Join(", ", missing.UsedBy)}) is not a line style of " +
-                         $"'{doc.Title}'{(suggestions.Count > 0 ? $"; did you mean {string.Join(", ", suggestions.Select(s => $"'{s}'"))}?" : ".")}");
+                         $"'{doc.Title}'{(suggestions.Count > 0 ? $"; did you mean {string.Join(", ", suggestions.Select(s => $"'{s}'"))}?" : ".")} " +
+                         "To make a new style in the family, define it in lineStyles.");
         }
 
         // Phase 2: parameters, against the running Revit and the shared parameter file.
@@ -130,7 +166,9 @@ internal static class DetailFamilyExecutor
         var labelGroups = DetailFamilySpecParser.GroupLabels(spec, problems);
         string? annotationTemplate = null;
         var projectTextTypes = new Dictionary<string, ProjectTextTypeInfo>(StringComparer.OrdinalIgnoreCase);
-        if (spec.Labels.Count > 0)
+        var textLabelCount = spec.TextLabels.Count();
+        var parameterLabelCount = spec.ParameterLabels.Count();
+        if (textLabelCount > 0)
         {
             string? annotationError;
             (annotationTemplate, annotationError) = DetailFamilySpecParser.ResolveTemplate(spec.AnnotationTemplatePath, SafeTemplateRoot(uiapp),
@@ -145,6 +183,17 @@ internal static class DetailFamilyExecutor
                 problems.Add($"Text type '{name}' is not a text type of '{doc.Title}'" +
                              $"{(suggestions.Count > 0 ? $"; did you mean {string.Join(", ", suggestions.Select(s => $"'{s}'"))}?" : ".")}");
             }
+        }
+
+        // Filled region types against the project, label families of parameter labels, and what visibility needs.
+        var regionTypes = DetailFamilyRegionsRevit.PlanTypes(doc, spec, problems);
+        var labelFamilies = DetailFamilyRegionsRevit.ResolveLabelFamilies(doc, spec, problems);
+        foreach (var (source, name) in spec.VisibilityReferences())
+        {
+            // A family parameter's type was checked with the spec; a shared one is only known from the file.
+            var resolved = parameters.Items.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (resolved is { Shared: not null } && resolved.Friendly != "yesNo")
+                problems.Add($"{source}.visibleParameter '{name}' is a {resolved.DataTypeLabel} shared parameter; visibility needs a yes/no parameter.");
         }
 
         var loadedFamilies = FamilyInventory.LoadedByName(doc);
@@ -162,7 +211,9 @@ internal static class DetailFamilyExecutor
                 Message = problems.Count == 0
                     ? $"Preview: ready to create '{spec.FamilyName}' with {spec.Curves.Count} curve(s)" +
                       $"{(spec.Parameters.Count > 0 ? $", {spec.Parameters.Count} parameter(s)" : string.Empty)}" +
-                      $"{(spec.Labels.Count > 0 ? $", {spec.Labels.Count} label(s) in {labelGroups.Count} annotation famil{(labelGroups.Count == 1 ? "y" : "ies")}" : string.Empty)}" +
+                      $"{(spec.FilledRegions.Count > 0 ? $", {spec.FilledRegions.Count} filled region(s)" : string.Empty)}" +
+                      $"{(textLabelCount > 0 ? $", {textLabelCount} text label(s) in {labelGroups.Count} annotation famil{(labelGroups.Count == 1 ? "y" : "ies")}" : string.Empty)}" +
+                      $"{(parameterLabelCount > 0 ? $", {parameterLabelCount} parameter label(s)" : string.Empty)}" +
                       $" at '{spec.SavePath}'."
                     : $"Preview: {problems.Count} problem(s) to fix before creating the family.",
                 Data = new
@@ -179,6 +230,7 @@ internal static class DetailFamilyExecutor
                     {
                         name = s.Requested,
                         status = s.Status,
+                        note = s.Status == "defined" && s.UsedBy.Count == 0 ? "Defined but not used by any curve or region; it is created anyway." : null,
                         weight = s.Project?.Weight,
                         color = s.Project?.Color,
                         pattern = s.Project == null ? null : s.Project.Pattern.Length > 0 ? s.Project.Pattern : "Solid",
@@ -187,9 +239,38 @@ internal static class DetailFamilyExecutor
                     parameters = parameters.Items.Select(DetailFamilyExtrasRevit.DescribePlan).ToList(),
                     sharedParameterFile = parameters.SharedFilePath,
                     sharedParameterFileSource = parameters.SharedFileSource,
-                    labels = spec.Labels.Count == 0 ? null : new
+                    filledRegions = spec.FilledRegions.Count == 0 && regionTypes.Count == 0 ? null : new
                     {
-                        count = spec.Labels.Count,
+                        count = spec.FilledRegions.Count,
+                        types = regionTypes.Select(DetailFamilyRegionsRevit.DescribePlan).ToList(),
+                        defaultType = spec.FilledRegions.Count(r => r.Type.Length == 0) is var untyped and > 0
+                            ? $"{untyped} region(s) without a type use the family's default filled region type."
+                            : null
+                    },
+                    parameterLabels = parameterLabelCount == 0 ? null : new
+                    {
+                        count = parameterLabelCount,
+                        families = labelFamilies.Values.Select(f => new
+                        {
+                            name = f.Name,
+                            source = f.Kind,
+                            path = f.Path,
+                            types = f.Types.Count > 0 ? f.Types : null
+                        }).ToList(),
+                        labels = spec.ParameterLabels.Select(l => new
+                        {
+                            parameter = l.Parameter,
+                            family = DetailFamilySpecParser.LabelFamilyName(l.LabelFamily),
+                            type = l.LabelType.Length > 0 ? l.LabelType : null,
+                            labelParameter = l.LabelParameter.Length > 0 ? l.LabelParameter : null
+                        }).ToList(),
+                        note = "The label family's own label parameter is matched when the label is placed: it must have the same data type as the parameter it shows."
+                    },
+                    visibility = spec.VisibilityReferences().GroupBy(v => v.Name, StringComparer.OrdinalIgnoreCase)
+                        .Select(g => new { parameter = g.Key, elements = g.Count() }).ToList() is { Count: > 0 } visibilityPlan ? visibilityPlan : null,
+                    labels = textLabelCount == 0 ? null : new
+                    {
+                        count = textLabelCount,
                         annotationTemplate,
                         families = labelGroups.Select(g => new
                         {
@@ -245,6 +326,7 @@ internal static class DetailFamilyExecutor
             var curveFailures = new List<string>();
             var drawn = 0;
             var protectedIds = new HashSet<ElementId>();
+            var visibilityLinks = new List<VisibilityLink>();
             using (var tx = new Transaction(familyDoc, "Revit MCP - Draw detail family"))
             {
                 tx.Start();
@@ -270,6 +352,8 @@ internal static class DetailFamilyExecutor
                     {
                         var curve = familyDoc.FamilyCreate.NewDetailCurve(view, BuildCurve(curveSpec));
                         drawn++;
+                        if (curveSpec.VisibleParameter.Length > 0)
+                            visibilityLinks.Add(new VisibilityLink { ElementId = curve.Id, Parameter = curveSpec.VisibleParameter, Source = curveSpec.Source });
                         if (curveSpec.LineStyle.Length == 0) continue;
                         var style = styles[curveSpec.LineStyle];
                         var applied = ApplyStyle(familyDoc, curve, style, projectStyles[curveSpec.LineStyle], warnings);
@@ -311,6 +395,19 @@ internal static class DetailFamilyExecutor
                 }));
             }
 
+            // 1b. Filled region types and filled regions: one transaction.
+            var regionTypeResults = new List<object>();
+            var regionResults = new List<object>();
+            var regionsDrawn = 0;
+            if (regionTypes.Count > 0 || spec.FilledRegions.Count > 0)
+            {
+                using var tx = new Transaction(familyDoc, "Revit MCP - Filled regions");
+                tx.Start();
+                (regionTypeResults, regionResults, regionsDrawn) = DetailFamilyRegionsRevit.DrawRegions(familyDoc, view, spec, regionTypes,
+                    protectedIds, visibilityLinks, warnings, cancellationToken);
+                TransactionCommitGuard.CommitOrThrow(tx);
+            }
+
             // 2. Parameters (phase 2): one transaction.
             var parameterResults = new List<object>();
             if (parameters.Items.Count > 0)
@@ -339,7 +436,37 @@ internal static class DetailFamilyExecutor
 
                 using var tx = new Transaction(familyDoc, "Revit MCP - Place labels");
                 tx.Start();
-                labelResults = DetailFamilyExtrasRevit.PlaceLabels(familyDoc, view, annotationFamilies, protectedIds, warnings);
+                labelResults = DetailFamilyExtrasRevit.PlaceLabels(familyDoc, view, annotationFamilies, protectedIds, visibilityLinks, warnings);
+                TransactionCommitGuard.CommitOrThrow(tx);
+            }
+
+            // 3b. Parameter labels: nest the label families and link their label parameter to the family's parameter.
+            var parameterLabelResults = new List<object>();
+            if (parameterLabelCount > 0)
+            {
+                var labelFamilyFolder = Path.Combine(tempFolder, "LabelFamilies");
+                Directory.CreateDirectory(labelFamilyFolder);
+                var labelFamilyFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var source in labelFamilies.Values)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    try { labelFamilyFiles[source.Reference] = DetailFamilyRegionsRevit.LabelFamilyFile(doc, source, labelFamilyFolder); }
+                    catch (Exception ex) { warnings.Add($"The label family '{source.Name}' could not be prepared: {ex.Message}"); }
+                }
+
+                using var tx = new Transaction(familyDoc, "Revit MCP - Parameter labels");
+                tx.Start();
+                parameterLabelResults = DetailFamilyRegionsRevit.PlaceParameterLabels(familyDoc, view, spec, labelFamilyFiles, protectedIds, visibilityLinks, warnings);
+                TransactionCommitGuard.CommitOrThrow(tx);
+            }
+
+            // 3c. Visibility parameters: link each element's Visible parameter, now that the parameters exist.
+            var visibilityResults = new List<object>();
+            if (visibilityLinks.Count > 0)
+            {
+                using var tx = new Transaction(familyDoc, "Revit MCP - Visibility parameters");
+                tx.Start();
+                visibilityResults = DetailFamilyRegionsRevit.LinkVisibility(familyDoc, visibilityLinks, warnings);
                 TransactionCommitGuard.CommitOrThrow(tx);
             }
 
@@ -373,7 +500,9 @@ internal static class DetailFamilyExecutor
                 Success = true,
                 Message = $"Created '{spec.FamilyName}' ({drawn} of {spec.Curves.Count} curve(s)" +
                           $"{(parameterResults.Count > 0 ? $", {parameterResults.Count} parameter(s)" : string.Empty)}" +
-                          $"{(labelResults.Count > 0 ? $", {spec.Labels.Count} label(s)" : string.Empty)}) at '{spec.SavePath}'" +
+                          $"{(spec.FilledRegions.Count > 0 ? $", {regionsDrawn} of {spec.FilledRegions.Count} filled region(s)" : string.Empty)}" +
+                          $"{(labelResults.Count > 0 ? $", {textLabelCount} text label(s)" : string.Empty)}" +
+                          $"{(parameterLabelResults.Count > 0 ? $", {parameterLabelResults.Count(r => StatusOf(r) == "placed")} of {parameterLabelCount} parameter label(s)" : string.Empty)}) at '{spec.SavePath}'" +
                           $"{(spec.Purge ? $", purged {purged.Values.Sum()} unused element(s)" : string.Empty)}" +
                           $"{(spec.LoadIntoProject ? $"; load: {LoadStatusOf(loadResult)}" : string.Empty)}.",
                 Data = new
@@ -387,7 +516,11 @@ internal static class DetailFamilyExecutor
                     lineStyles = styleResults,
                     parameters = parameterResults,
                     sharedParameterFile = parameters.AnyShared ? parameters.SharedFilePath : null,
+                    filledRegionTypes = regionTypeResults,
+                    filledRegions = regionResults,
                     labels = labelResults,
+                    parameterLabels = parameterLabelResults,
+                    visibility = visibilityResults,
                     purged,
                     load = loadResult
                 },
@@ -416,12 +549,14 @@ internal static class DetailFamilyExecutor
     {
         public ProjectLineStyleInfo Info { get; set; } = new();
         public LinePattern? Pattern { get; set; }
+        /// <summary>From lineStyles: the family's style gets exactly these values, also when the template already has the name.</summary>
+        public bool Defined { get; set; }
     }
 
     private sealed class FamilyStyle
     {
         public Category? Category { get; set; }
-        /// <summary>reused (the template had it) | created.</summary>
+        /// <summary>reused (the template had it) | edited (the template had it; lineStyles set its values) | created.</summary>
         public string Action { get; set; } = string.Empty;
         /// <summary>lines (a Lines subcategory, merges with the project's style on load) | detailItems (fallback).</summary>
         public string Kind { get; set; } = "lines";
@@ -462,6 +597,11 @@ internal static class DetailFamilyExecutor
         foreach (Category sub in lines.SubCategories)
         {
             if (!string.Equals(sub.Name, project.Info.Name, StringComparison.OrdinalIgnoreCase)) continue;
+            if (project.Defined)
+            {
+                CopyStyle(familyDoc, sub, project, warnings);
+                return new FamilyStyle { Category = sub, Action = "edited", Kind = "lines" };
+            }
             var weight = sub.GetLineWeight(GraphicsStyleType.Projection);
             if (weight != project.Info.Weight)
                 warnings.Add($"The template's line style '{sub.Name}' has weight {weight}, the project's {project.Info.Weight}; in the project the project's settings apply.");
@@ -661,8 +801,10 @@ internal static class DetailFamilyExecutor
         };
     }
 
-    private static string LoadStatusOf(object? load) =>
-        load?.GetType().GetProperty("status")?.GetValue(load)?.ToString() ?? "none";
+    private static string LoadStatusOf(object? load) => StatusOf(load) ?? "none";
+
+    private static string? StatusOf(object? result) =>
+        result?.GetType().GetProperty("status")?.GetValue(result)?.ToString();
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
