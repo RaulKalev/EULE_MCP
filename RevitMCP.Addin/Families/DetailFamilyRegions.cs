@@ -384,24 +384,47 @@ public static partial class DetailFamilySpecParser
     /// parameter of <c>parameters</c>, and a label's parameter must be listed there too and comes with a label family.
     /// A shared parameter's data type is only known from the file, so its type is checked on the Revit side.
     /// </summary>
-    public static void CheckParameterReferences(DetailFamilySpec spec, List<string> errors)
+    public static void CheckParameterReferences(DetailFamilySpec spec, List<string> errors) => CheckParameterReferences(spec, errors, null, null);
+
+    /// <summary>
+    /// As <see cref="CheckParameterReferences(DetailFamilySpec, List{string})"/>, for an edit: a name may also be a
+    /// parameter the family already has (<paramref name="existing"/>), unless the same edit removes it
+    /// (<paramref name="removed"/>) without adding it again.
+    /// </summary>
+    public static void CheckParameterReferences(DetailFamilySpec spec, List<string> errors,
+        IReadOnlyDictionary<string, KnownFamilyParameter>? existing, ISet<string>? removed)
     {
         var byName = spec.Parameters.Where(p => p.Name.Length > 0)
             .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        KnownFamilyParameter? Existing(string name) =>
+            existing != null && existing.TryGetValue(name, out var known) && removed?.Contains(name) != true ? known : null;
+        var where = existing == null ? "parameters" : "parameters or the family";
 
         foreach (var (source, name) in spec.VisibilityReferences())
         {
-            if (!byName.TryGetValue(name, out var parameter))
+            if (byName.TryGetValue(name, out var parameter))
+            {
+                if (parameter.Spec?.Friendly != null && parameter.Spec.Friendly != "yesNo")
+                    errors.Add($"{source}.visibleParameter '{name}' is a {parameter.Spec.Friendly} parameter; visibility needs a yesNo parameter.");
+            }
+            else if (Existing(name) is { } known)
+            {
+                if (known.Friendly != "yesNo")
+                    errors.Add($"{source}.visibleParameter '{name}' is a {known.DataTypeLabel} parameter of the family; visibility needs a yes/no parameter.");
+            }
+            else if (existing == null)
                 errors.Add($"{source}.visibleParameter '{name}' is not in parameters: add it there as a yesNo parameter.");
-            else if (parameter.Spec?.Friendly != null && parameter.Spec.Friendly != "yesNo")
-                errors.Add($"{source}.visibleParameter '{name}' is a {parameter.Spec.Friendly} parameter; visibility needs a yesNo parameter.");
+            else
+                errors.Add($"{source}.visibleParameter '{name}' is not in {where}: add it to parameters as a yesNo parameter" +
+                           $"{RemovedNote(name, removed)}.");
         }
 
         foreach (var label in spec.ParameterLabels)
         {
-            if (!byName.ContainsKey(label.Parameter))
-                errors.Add($"{label.Source}.parameter '{label.Parameter}' is not in parameters: add the parameter the label shows there.");
+            if (!byName.ContainsKey(label.Parameter) && Existing(label.Parameter) == null)
+                errors.Add($"{label.Source}.parameter '{label.Parameter}' is not in {where}: add the parameter the label shows " +
+                           $"{(existing == null ? "there" : "to parameters")}{RemovedNote(label.Parameter, removed)}.");
             if (label.LabelFamily.Length == 0)
                 errors.Add($"{label.Source} shows a parameter, which needs labelFamily: a Generic Annotation family that already holds a label " +
                            "(a family loaded in the project, or a .rfa path). Revit's API cannot create a label, so the tool nests yours and links its parameter.");

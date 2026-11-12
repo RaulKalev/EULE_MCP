@@ -72,7 +72,10 @@ public static class BridgeToolGroups
             "revit_preview_purge_unused", "revit_purge_unused", "revit_list_project_parameters", "revit_list_shared_parameters",
             "revit_preview_create_parameters", "revit_create_parameters", "revit_bind_parameter_categories",
             // Family creation (#147)
-            "revit_preview_create_detail_family", "revit_create_detail_family",
+            "revit_preview_create_detail_family", "revit_create_detail_family", "revit_get_family_contents",
+            "revit_preview_edit_detail_family", "revit_edit_detail_family",
+            // Label families
+            "revit_list_label_families", "revit_preview_create_label_family", "revit_create_label_family",
             // Model state (#109)
             "revit_preview_set_phase", "revit_set_phase", "revit_set_view_phase"
         }),
@@ -97,11 +100,24 @@ public static class BridgeToolGroups
             "revit_list_filled_regions", "revit_list_filled_region_types", "revit_preview_create_filled_regions", "revit_create_filled_regions",
             "revit_preview_edit_filled_regions", "revit_edit_filled_regions", "revit_preview_set_filled_region_types", "revit_set_filled_region_types",
             // Line styles of a project or a family document.
-            "revit_list_line_styles", "revit_preview_set_line_styles", "revit_set_line_styles"
+            "revit_list_line_styles", "revit_preview_set_line_styles", "revit_set_line_styles",
+            // Line and fill patterns of a project or a family document.
+            "revit_list_line_patterns", "revit_preview_set_line_patterns", "revit_set_line_patterns",
+            "revit_list_fill_patterns", "revit_preview_set_fill_patterns", "revit_set_fill_patterns",
+            // Text types and dimension types.
+            "revit_list_text_types", "revit_preview_set_text_types", "revit_set_text_types",
+            "revit_preview_set_dimension_types", "revit_set_dimension_types",
+            // Object styles, and what uses a line style or filled region type before it is deleted.
+            "revit_list_object_styles", "revit_preview_set_object_styles", "revit_set_object_styles",
+            "revit_get_style_usage", "revit_preview_delete_styles", "revit_delete_styles",
+            // Keynotes: the table behind keynote tags ("preview" contains "view").
+            "revit_get_keynotes", "revit_preview_reload_keynote_table", "revit_reload_keynote_table"
         }),
         ("ifc", new[] { "revit_query_linked_elements", "revit_select_linked_elements" }),
         // #103: "schedulable" does not contain the "schedule" keyword.
         ("views", new[] { "revit_list_schedulable_fields", "revit_list_filterable_parameters" }),
+        // Legends: "legend" matches no keyword.
+        ("views", new[] { "revit_list_legends", "revit_preview_populate_legend", "revit_populate_legend" }),
         ("cad", new[] { "revit_create_panel_schematic_symbol_from_dwg" }),
         ("documents", new[]
         {

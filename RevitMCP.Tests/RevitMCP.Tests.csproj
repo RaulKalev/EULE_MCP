@@ -298,6 +298,12 @@
     <Compile Include="..\RevitMCP.Addin\Families\DetailFamilyExtras.cs" Link="Families\DetailFamilyExtras.cs" />
     <Compile Include="..\RevitMCP.Addin\Families\DetailFamilyRegions.cs" Link="Families\DetailFamilyRegions.cs" />
     <Compile Include="..\RevitMCP.Addin\Families\DetailFamilyLineStyles.cs" Link="Families\DetailFamilyLineStyles.cs" />
+    <Compile Include="..\RevitMCP.Addin\AnnotationTypes\AnnotationTypeSpec.cs" Link="AnnotationTypes\AnnotationTypeSpec.cs" />
+    <Compile Include="..\RevitMCP.Addin\Families\LabelFamilyVariant.cs" Link="Families\LabelFamilyVariant.cs" />
+    <Compile Include="..\RevitMCP.Addin\Families\FamilyContents.cs" Link="Families\FamilyContents.cs" />
+    <Compile Include="..\RevitMCP.Addin\Families\FamilyContentsSpec.cs" Link="Families\FamilyContentsSpec.cs" />
+    <Compile Include="..\RevitMCP.Addin\Families\DetailFamilyTypes.cs" Link="Families\DetailFamilyTypes.cs" />
+    <Compile Include="..\RevitMCP.Addin\Families\DetailFamilyEdit.cs" Link="Families\DetailFamilyEdit.cs" />
     <Compile Include="..\RevitMCP.Addin\Parameters\ParameterSpecMap.cs" Link="Parameters\ParameterSpecMap.cs" />
     <Compile Include="..\RevitMCP.Addin\Parameters\ParameterCreatePlanner.cs" Link="Parameters\ParameterCreatePlanner.cs" />
   </ItemGroup>
@@ -314,6 +320,11 @@
     <Compile Include="..\RevitMCP.Addin\ViewFilters\ViewFilterRequests.cs" Link="ViewFilters\ViewFilterRequests.cs" />
     <Compile Include="..\RevitMCP.Addin\ViewFilters\ViewFilterMatching.cs" Link="ViewFilters\ViewFilterMatching.cs" />
     <Compile Include="..\RevitMCP.Addin\Approval\ViewFilterApprovalSummaries.cs" Link="Approval\ViewFilterApprovalSummaries.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- View templates: request parsing, from/to planning, approval texts (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\ViewTemplates\ViewTemplateRequests.cs" Link="ViewTemplates\ViewTemplateRequests.cs" />
+    <Compile Include="..\RevitMCP.Addin\ViewTemplates\ViewTemplatePlanner.cs" Link="ViewTemplates\ViewTemplatePlanner.cs" />
   </ItemGroup>
 
   <!-- #103 Schedules: spec parsing, planner, filter-type map, placement geometry, table paging/export names,
@@ -358,5 +369,19 @@
     <!-- Filled regions (#135): loop validation, rule expansion, type map, specs and summaries (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\FilledRegions\*.cs" Link="FilledRegions\%(Filename)%(Extension)" />
     <Compile Include="..\RevitMCP.Addin\Approval\FilledRegionApprovalSummaries.cs" Link="Approval\FilledRegionApprovalSummaries.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Line and fill patterns: segment and grid parsing, validation, comparison and summaries (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\Patterns\PatternDefinitions.cs" Link="Patterns\PatternDefinitions.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Object styles, style usage and delete planning (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\Styles\*.cs" Link="Styles\%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Legends and keynotes: type matching, grid, labels, clearExisting; keynote search, file parsing, diff, usage (no Revit API).
+         LegendPlanning uses FuzzyNameMatcher, which the schedules group already links. -->
+    <Compile Include="..\RevitMCP.Addin\Legends\LegendPlanning.cs" Link="Legends\LegendPlanning.cs" />
+    <Compile Include="..\RevitMCP.Addin\Keynotes\KeynoteLogic.cs" Link="Keynotes\KeynoteLogic.cs" />
   </ItemGroup>
 </Project>

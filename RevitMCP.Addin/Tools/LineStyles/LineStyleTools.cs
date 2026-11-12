@@ -5,6 +5,7 @@ using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Families;
 using RevitMCP.Addin.Interfaces;
 using RevitMCP.Addin.Services;
+using RevitMCP.Addin.Styles;
 using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Tools.LineStyles;
@@ -17,6 +18,12 @@ public static class LineStyleToolRegistration
         handler.RegisterTool(new ListLineStylesTool());
         handler.RegisterTool(new PreviewSetLineStylesTool());
         handler.RegisterTool(new SetLineStylesTool());
+        handler.RegisterTool(new ListObjectStylesTool());
+        handler.RegisterTool(new PreviewSetObjectStylesTool());
+        handler.RegisterTool(new SetObjectStylesTool());
+        handler.RegisterTool(new GetStyleUsageTool());
+        handler.RegisterTool(new PreviewDeleteStylesTool());
+        handler.RegisterTool(new DeleteStylesTool());
     }
 }
 
@@ -80,8 +87,8 @@ public sealed class PreviewSetLineStylesTool : IRevitMcpTool
 
     public string Description =>
         "Previews revit_set_line_styles without changing the model. Same arguments. Per style: action (create | edit | " +
-        "unchanged) and from/to for weight, color and pattern; problems lists what must be fixed first (a pattern the " +
-        "document does not have, a document that does not accept new line styles).";
+        "unchanged) and from/to for name, weight, color and pattern; problems lists what must be fixed first (a pattern the " +
+        "document does not have, a document that does not accept new line styles, a rename to a name in use).";
 
     public ToolPermission Permission => ToolPermission.ReadOnly;
     public ToolCategory Category => ToolCategory.Elements;
@@ -98,8 +105,9 @@ public sealed class SetLineStylesTool : IRevitMcpTool, IApprovalSummaryTool
     public string Description =>
         "Creates line styles, and edits the ones that already exist, in the document: a project or an open family. " +
         "Requires approval. styles [{name, weight? (line weight 1-16), color? (#RRGGBB), pattern? (a line pattern name of " +
-        "the document, or solid)}]. A name the document does not have is created (weight 1, black and solid unless given); " +
-        "an existing name gets only the fields given. One transaction, one undo; any problem leaves the document unchanged. " +
+        "the document, or solid), newName? (renames an existing style; not Revit's own)}]. A name the document does not have " +
+        "is created (weight 1, black and solid unless given); an existing name gets only the fields given. One transaction, " +
+        "one undo; any problem leaves the document unchanged. " +
         "Editing a style changes every line that uses it. Run revit_preview_set_line_styles first, and " +
         "revit_list_line_styles includePatterns=true for the pattern names.";
 
@@ -130,6 +138,8 @@ internal static class LineStyleExecutor
         /// <summary>The line pattern to set; null = leave the pattern as it is.</summary>
         public ElementId? PatternId { get; set; }
         public string Action { get; set; } = "create";
+        /// <summary>The name after the change: the new name when renamed.</summary>
+        public string FinalName => Definition.NewName ?? Existing?.Info.Name ?? Definition.Name;
         public Dictionary<string, object> Changes { get; } = new();
     }
 
@@ -147,7 +157,6 @@ internal static class LineStyleExecutor
         {
             var patternId = sub.GetLinePatternId(GraphicsStyleType.Projection);
             var pattern = patternId == ElementId.InvalidElementId || patternId == solid ? null : doc.GetElement(patternId) as LinePatternElement;
-            var color = sub.LineColor;
             result[sub.Name] = new ExistingStyle
             {
                 Id = sub.Id.Value,
@@ -157,12 +166,58 @@ internal static class LineStyleExecutor
                 {
                     Name = sub.Name,
                     Weight = sub.GetLineWeight(GraphicsStyleType.Projection),
-                    Color = color != null && color.IsValid ? $"#{color.Red:X2}{color.Green:X2}{color.Blue:X2}" : string.Empty,
+                    Color = Hex(sub.LineColor) ?? string.Empty,
                     Pattern = pattern?.Name ?? string.Empty
                 }
             };
         }
         return result;
+    }
+
+    /// <summary>The document's line patterns by name, ignoring case.</summary>
+    public static Dictionary<string, LinePatternElement> Patterns(Document doc) =>
+        new FilteredElementCollector(doc).OfClass(typeof(LinePatternElement)).Cast<LinePatternElement>()
+            .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The line pattern id for a definition's pattern (empty = solid), with the document's spelling in
+    /// <paramref name="name"/>; null with a problem added when the document has no such pattern.
+    /// </summary>
+    public static ElementId? ResolvePattern(Dictionary<string, LinePatternElement> patterns, string pattern, string source, string documentTitle,
+        List<string> problems, out string name)
+    {
+        name = string.Empty;
+        if (pattern.Length == 0) return LinePatternElement.GetSolidPatternId();
+        if (patterns.TryGetValue(pattern, out var found))
+        {
+            name = found.Name;
+            return found.Id;
+        }
+        problems.Add($"{source}.pattern '{pattern}' is not a line pattern of '{documentTitle}' (use a pattern name or solid)." +
+                     StyleUsagePlanner.DidYouMean(pattern, patterns.Keys));
+        return null;
+    }
+
+    public static string? Hex(Color? color) => color != null && color.IsValid ? $"#{color.Red:X2}{color.Green:X2}{color.Blue:X2}" : null;
+
+    /// <summary>A line pattern's name; empty for solid or none.</summary>
+    public static string PatternName(Document doc, ElementId patternId) =>
+        patternId == ElementId.InvalidElementId || patternId == LinePatternElement.GetSolidPatternId()
+            ? string.Empty
+            : (doc.GetElement(patternId) as LinePatternElement)?.Name ?? string.Empty;
+
+    /// <summary>
+    /// Renames a subcategory. Category.Name is read-only in the Revit 2024 and 2026 APIs, so the name is set on the
+    /// subcategory's projection GraphicsStyle element (Element.Name has a setter), which carries the subcategory's name.
+    /// Not verified in Revit: when Revit refuses it, this throws and the caller's transaction is rolled back; the caller
+    /// checks the name after the commit.
+    /// </summary>
+    public static void Rename(Category category, string newName)
+    {
+        var style = category.GetGraphicsStyle(GraphicsStyleType.Projection)
+                    ?? throw new InvalidOperationException($"'{category.Name}' has no graphics style to rename.");
+        style.Name = newName;
     }
 
     public static List<string> PatternNames(Document doc) =>
@@ -172,10 +227,10 @@ internal static class LineStyleExecutor
     public static string Summary(McpToolRequest request)
     {
         var errors = new List<string>();
-        var definitions = DetailFamilySpecParser.ReadLineStyleDefinitions(request.Arguments, "styles", errors);
+        var definitions = DetailFamilySpecParser.ReadLineStyleDefinitions(request.Arguments, "styles", errors, allowRename: true);
         var document = ToolArguments.GetString(request.Arguments, "document").Trim();
         var list = string.Join("; ", definitions.Take(8).Select(d =>
-            $"'{d.Name}'" + (d.HasValues
+            $"'{d.Name}'" + (d.NewName != null ? $" renamed to '{d.NewName}'" : string.Empty) + (d.HasValues
                 ? " (" + string.Join(", ", new[]
                 {
                     d.Weight != null ? $"weight {d.Weight}" : null,
@@ -199,14 +254,12 @@ internal static class LineStyleExecutor
 
         var problems = new List<string>();
         var warnings = new List<string>();
-        var definitions = DetailFamilySpecParser.ReadLineStyleDefinitions(request.Arguments, "styles", problems);
+        var definitions = DetailFamilySpecParser.ReadLineStyleDefinitions(request.Arguments, "styles", problems, allowRename: true);
         if (definitions.Count == 0 && problems.Count == 0)
-            problems.Add("Provide 'styles': an array of {name, weight?, color?, pattern?}.");
+            problems.Add("Provide 'styles': an array of {name, weight?, color?, pattern?, newName?}.");
 
         var existing = Read(doc, lines);
-        var patterns = new FilteredElementCollector(doc).OfClass(typeof(LinePatternElement)).Cast<LinePatternElement>()
-            .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        var patterns = Patterns(doc);
 
         var plan = new List<PlannedStyle>();
         foreach (var definition in definitions)
@@ -220,6 +273,28 @@ internal static class LineStyleExecutor
             };
             plan.Add(planned);
 
+            if (definition.NewName != null)
+            {
+                if (current == null)
+                {
+                    problems.Add($"{definition.Source}: '{doc.Title}' has no line style '{definition.Name}' to rename." +
+                                 StyleUsagePlanner.DidYouMean(definition.Name, existing.Keys));
+                    continue;
+                }
+                if (current.BuiltIn)
+                {
+                    problems.Add($"{definition.Source}: '{current.Info.Name}' is one of Revit's own line styles and cannot be renamed.");
+                    continue;
+                }
+                if (existing.TryGetValue(definition.NewName, out var taken) && taken.Id != current.Id)
+                {
+                    problems.Add($"{definition.Source}.newName: '{doc.Title}' already has a line style '{taken.Info.Name}'.");
+                    continue;
+                }
+                if (!string.Equals(definition.NewName, current.Info.Name, StringComparison.Ordinal))
+                    planned.Changes["name"] = new { from = current.Info.Name, to = definition.NewName };
+            }
+
             if (current == null && !lines.CanAddSubcategory)
             {
                 problems.Add($"{definition.Source}: '{doc.Title}' does not accept new line styles, and it has no style '{definition.Name}'.");
@@ -228,21 +303,9 @@ internal static class LineStyleExecutor
 
             if (definition.Pattern != null)
             {
-                if (definition.Pattern.Length == 0) planned.PatternId = LinePatternElement.GetSolidPatternId();
-                else if (patterns.TryGetValue(definition.Pattern, out var pattern))
-                {
-                    planned.PatternId = pattern.Id;
-                    planned.To.Pattern = pattern.Name;
-                }
-                else
-                {
-                    var close = patterns.Keys.Where(n => n.IndexOf(definition.Pattern, StringComparison.OrdinalIgnoreCase) >= 0
-                                                         || definition.Pattern.IndexOf(n, StringComparison.OrdinalIgnoreCase) >= 0)
-                        .OrderBy(n => n, StringComparer.OrdinalIgnoreCase).Take(5).ToList();
-                    problems.Add($"{definition.Source}.pattern '{definition.Pattern}' is not a line pattern of '{doc.Title}' (use a pattern name or solid)" +
-                                 $"{(close.Count > 0 ? $"; did you mean {string.Join(", ", close.Select(s => $"'{s}'"))}?" : ".")}");
-                    continue;
-                }
+                planned.PatternId = ResolvePattern(patterns, definition.Pattern, definition.Source, doc.Title, problems, out var patternName);
+                if (planned.PatternId == null) continue;
+                planned.To.Pattern = patternName;
             }
 
             if (current == null)
@@ -264,7 +327,7 @@ internal static class LineStyleExecutor
 
         object Describe(PlannedStyle p, long? id = null) => new
         {
-            name = p.Existing?.Info.Name ?? p.Definition.Name,
+            name = p.FinalName,
             id = id ?? p.Existing?.Id,
             action = p.Action,
             weight = p.To.Weight,
@@ -328,6 +391,8 @@ internal static class LineStyleExecutor
                         category.LineColor = ToColor(planned.To.Color);
                     if (planned.PatternId != null)
                         category.SetLinePatternId(planned.PatternId, GraphicsStyleType.Projection);
+                    if (planned.Changes.ContainsKey("name"))
+                        Rename(category, definition.NewName!);
                     ids[planned] = category.Id.Value;
                 }
                 catch (Exception ex)
@@ -352,6 +417,12 @@ internal static class LineStyleExecutor
             return Fail(request, $"Changing the line styles failed and nothing was changed: {ex.Message}", warnings);
         }
 
+        // The rename goes through the style's GraphicsStyle element: say so when Revit kept the old name.
+        var after = Read(doc, lines);
+        foreach (var renamed in plan.Where(p => p.Changes.ContainsKey("name")))
+            if (!after.TryGetValue(renamed.Definition.NewName!, out var now) || now.Id != renamed.Existing!.Id)
+                warnings.Add($"Revit did not rename '{renamed.Existing!.Info.Name}' to '{renamed.Definition.NewName}'; its other changes were made. Rename it in Manage > Additional Settings > Line Styles.");
+
         sw.Stop();
         return new McpToolResult
         {
@@ -373,16 +444,16 @@ internal static class LineStyleExecutor
         };
     }
 
-    private static object WithAction(object described, string action)
+    internal static object WithAction(object described, string action)
     {
         var body = Newtonsoft.Json.Linq.JObject.FromObject(described);
         body["action"] = action;
         return body;
     }
 
-    private static string PatternLabel(string pattern) => pattern.Length > 0 ? pattern : "Solid";
+    internal static string PatternLabel(string pattern) => pattern.Length > 0 ? pattern : "Solid";
 
-    private static Color ToColor(string hex) => new(
+    internal static Color ToColor(string hex) => new(
         Convert.ToByte(hex.Substring(1, 2), 16),
         Convert.ToByte(hex.Substring(3, 2), 16),
         Convert.ToByte(hex.Substring(5, 2), 16));

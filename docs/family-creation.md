@@ -4,12 +4,16 @@ The connector creates Detail Item families from a short spec (#147): geometry, l
 filled regions and their types, family and shared parameters, visibility parameters, text and parameter labels through
 nested Generic Annotation families, purge, save and load.
 
-Both tools are in the `edit` group (`--tool-groups edit`, or find them with `revit_tools_search`).
+The tools are in the `edit` group (`--tool-groups edit`, or find them with `revit_tools_search`).
 
 | Tool | Permission | Purpose |
 |---|---|---|
 | `revit_preview_create_detail_family` | Read-only | Checks the spec: save path, file access policy, template, geometry, line styles against the project, load status |
 | `revit_create_detail_family` | Requires approval | Creates the family from the template, draws it, purges it, saves it and optionally loads it |
+| `revit_preview_edit_detail_family` | Read-only | Opens an existing family read-only and checks an edit: what would be removed and added, and every problem |
+| `revit_edit_detail_family` | Requires approval | Removes from and adds to an existing family, then saves the file or reloads the family into the project |
+
+Editing is described in [Editing an existing family](#editing-an-existing-family).
 
 Run both from a **project** document. The project's line styles are the source the family copies, and the
 project is where the family can load. `document` targets an open project other than the active one.
@@ -147,7 +151,39 @@ Revit's own setting, which is restored after the call. Use `revit_list_shared_pa
 
 Values and formulas are set on the family's type. When the template has no type, the tool creates one named after
 the family, which is what Revit would create on load anyway. A parameter the template already has is kept, and only
-its value or formula is set (`status: existing`).
+its value or formula is set (`status: existing`). To give the family several types, use `types` (below).
+
+## Types
+
+`types` makes several family types, each with its own values:
+
+```json
+"parameters": [
+  { "name": "Laius", "dataType": "length", "value": 20 },
+  { "name": "Tähis", "dataType": "text", "instance": true },
+  { "name": "Pool", "dataType": "length", "formula": "Laius / 2" }
+],
+"types": [
+  { "name": "K600", "values": { "Laius": 600, "Tähis": "K6" } },
+  { "name": "K800", "values": { "Laius": 800 } }
+]
+```
+
+| Field | Notes |
+|---|---|
+| `name` | Required. Unique (case does not matter); no `\ / : * ? " < > \| { } [ ] ;` backtick or tilde |
+| `values` | `{"<parameter name>": value}`. Values use the units of `parameters[].value`: lengths in mm, areas in m², volumes in m³, angles in degrees, yes/no as `true`/`false` |
+
+- A type is created, or updated when the template (or, when editing, the family) already has that name. The result
+  lists each type with `action: created | updated` and per value `status: set | failed`.
+- A parameter named in `values` must be listed in `parameters` (or, when editing, be a parameter of the family) and
+  must not have a formula: a formula sets the value in every type. Instance parameters may take a value too; it is the
+  type's default for new instances.
+- A parameter's own `value` is the default for every listed type; a type's `values` override it.
+- Without `types`, values go on one type named after the family, as before.
+- The preview refuses duplicate names, names with forbidden characters, unknown parameters (with close names
+  suggested), parameters with a formula and values that do not convert; it lists each type with
+  `action: create | update`, its values and the defaults it takes.
 
 ## Labels (text)
 
@@ -238,6 +274,12 @@ The default is `Metric Detail Item.rft`. The tool looks in Revit's family templa
 `English_I` sub-folders, then anywhere below it. `templatePath` names another `.rft`. A template whose category is
 not Detail Items gives a warning but is used.
 
+## Reading a family back
+
+`revit_get_family_contents` reads an existing family (loaded in the project, or a `.rfa` file) without changing it,
+and with `asSpec=true` returns it as the arguments of `revit_create_detail_family`, so a symbol can be copied. See
+[family-contents.md](family-contents.md).
+
 ## Example
 
 ```json
@@ -264,3 +306,89 @@ not Detail Items gives a warning but is used.
 ```
 
 Check `ready` and `problems` in the preview, then call `revit_create_detail_family` with the same arguments.
+
+## Editing an existing family
+
+`revit_edit_detail_family` changes a Detail Item family that already exists; `revit_preview_edit_detail_family` takes
+the same arguments and checks them. Run both from a project document, as for creating: the project is the source of
+line styles, filled region types, text types and label families, and the place a loaded family is reloaded into.
+
+### Target
+
+Give exactly one of:
+
+| Argument | Target | Saved how |
+|---|---|---|
+| `family` | A family loaded in the project, by name or element id. Opened with `Document.EditFamily` | Loaded back into the project afterwards with `LoadFamily(Document, IFamilyLoadOptions)`: one undo step in the project. `savePath` also saves a copy, whose file name must be the family's name |
+| `path` | An `.rfa` file, opened with `Application.OpenDocumentFile` | Saved back to `path` only with `overwrite=true`; or to `savePath` (a folder or an `.rfa` path; another file name renames the family) |
+
+The family must be a Detail Item family, editable and not in-place. The tool refuses a family that is open in the
+Family Editor, and a file that is open in Revit: it opens its own copy and closes it without saving, so it must not
+touch a window the user has open. The file access policy applies to `path` (read, and write when saving back) and to
+`savePath` (write). A file from an older Revit gets a warning: it is upgraded on opening and saved in this version.
+
+The reload overwrites the loaded family and **keeps the project's parameter values** (Revit's "Overwrite the existing
+version"). So values set on types the project already has do not reach the project unless
+`overwriteParameterValues=true` ("…and its parameter values"); the preview warns when that applies. New types arrive
+with the family's values and are not activated by the reload; placing one activates it.
+
+### What is changed
+
+The edit runs in this order:
+
+1. **`remove`**, before anything is added:
+
+   ```json
+   "remove": { "curves": [123456, 123457], "filledRegions": true, "labels": [123470], "textNotes": true, "parameters": ["Vana"] }
+   ```
+
+   | Key | Removes |
+   |---|---|
+   | `curves` | Detail lines (and symbolic lines). Lines that belong to a sketch, such as a filled region's boundary, are not counted |
+   | `filledRegions` | Filled regions |
+   | `labels` | Nested annotation instances: text labels and parameter labels |
+   | `textNotes` | Text notes |
+   | `parameters` | Family parameters, by name. There is no `true`: name each one |
+
+   `true` removes every element of that kind; an array names element ids, each of which must be such an element (the
+   preview says what an id is otherwise). The preview lists the family's elements per kind and its parameters with
+   their formulas and linked elements, so the ids can be found there or with the Family Editor.
+
+   A parameter is refused when it is **built in** (never removed), when the **formula** of a parameter that stays
+   uses it (remove that one too, or change its formula), or when it is **linked to an element that stays**: an element
+   whose visibility it drives, a nested label that shows it, or a dimension it labels. Remove those elements in the same
+   edit (the preview then lists them under `linkedElementsRemoved`), or unlink them in the Family Editor first. When a
+   parameter and the one whose formula uses it are both removed, the one with the formula goes first. A parameter that
+   is removed and listed in `parameters` again is added anew.
+
+2. **Additions**, with the same arguments and the same code as creating: `lines`, `rectangles`, `arcs`, `circles`,
+   `lineStyle`, `lineStyles`, `filledRegions`, `filledRegionTypes`, `parameters`, `labels`, `labelFamily`, `types`,
+   `sharedParameterFile`, `annotationTemplatePath`. `visibleParameter`, a parameter label's `parameter` and the
+   parameters in `types[].values` may also name a parameter the family already has (not one this edit removes). A
+   parameter in `parameters` that the family already has is kept and only its value or formula set. New text-label
+   annotation families are numbered after the `{familyName}_TextN` names the family already nests, so existing labels
+   keep their text.
+
+3. **`purge`**, only when `purge=true` (the default is false for an edit: it keeps what the family had).
+
+4. **Save**: the family is saved to a temporary file first. A `path` target is then copied next to its destination and
+   swapped in, so the original file is replaced only by a complete file. A `family` target is loaded back into the
+   project; with `savePath` the copy is placed after the reload.
+
+If any step fails before the save, the family document is closed without saving: the file and the loaded family stay
+as they were. If the reload succeeds but the copy to `savePath` fails, the result has `status: partial` and says so.
+
+### Example
+
+```json
+{ "tool": "revit_preview_edit_detail_family", "arguments": {
+    "family": "EL_Kilp_Sümbol",
+    "remove": { "textNotes": true, "parameters": ["Vana tähis"] },
+    "lines": [ { "start": [-10, 0], "end": [10, 0], "lineStyle": "EL_Õhuke" } ],
+    "parameters": [ { "name": "Sügavus", "dataType": "length", "value": 200 } ],
+    "types": [ { "name": "K600", "values": { "Laius": 600, "Sügavus": 250 } } ]
+} }
+```
+
+Check `ready`, `problems`, `remove` and `types` in the preview, then call `revit_edit_detail_family` with the same
+arguments.

@@ -68,6 +68,8 @@ public sealed class DetailFamilySpec
     public List<DetailRegionSpec> FilledRegions { get; } = new();
     /// <summary>Filled region types created (or edited) in the family.</summary>
     public List<DetailRegionTypeSpec> FilledRegionTypes { get; } = new();
+    /// <summary>Family types created (or updated) with their values; empty = values go on one type named after the family.</summary>
+    public List<DetailFamilyTypeSpec> Types { get; } = new();
 
     /// <summary>Labels with fixed text: nested Generic Annotation families the tool builds.</summary>
     public IEnumerable<DetailLabelSpec> TextLabels => Labels.Where(l => l.Parameter.Length == 0);
@@ -121,8 +123,6 @@ public static partial class DetailFamilySpecParser
             AnnotationTemplatePath = Str(args, "annotationTemplatePath"),
             SharedParameterFile = Str(args, "sharedParameterFile")
         };
-        var defaultStyle = Str(args, "lineStyle");
-
         var (savePath, familyName, pathError) = ResolveSavePath(Str(args, "savePath"), spec.FamilyName);
         if (pathError != null) errors.Add(pathError);
         spec.SavePath = savePath ?? string.Empty;
@@ -132,6 +132,24 @@ public static partial class DetailFamilySpecParser
             && !string.Equals(spec.IfExists, "overwrite", StringComparison.OrdinalIgnoreCase))
             errors.Add($"ifExists '{spec.IfExists}' is not supported: skip | overwrite.");
 
+        ReadContent(args, spec, errors);
+        CheckParameterReferences(spec, errors);
+        CheckTypeValues(spec, errors);
+
+        if (spec.Curves.Count == 0 && spec.Labels.Count == 0 && spec.FilledRegions.Count == 0)
+            errors.Add("Nothing to draw: give lines, rectangles, arcs, circles, filledRegions or labels (millimetres, on the family's reference level).");
+        else if (spec.Curves.Count > MaxCurves)
+            errors.Add($"{spec.Curves.Count} curves were requested; at most {MaxCurves} per family.");
+        return spec;
+    }
+
+    /// <summary>
+    /// The family's content as revit_create_detail_family and revit_edit_detail_family both take it: curves, line
+    /// styles, filled regions and their types, parameters, labels and types.
+    /// </summary>
+    private static void ReadContent(IReadOnlyDictionary<string, object?> args, DetailFamilySpec spec, List<string> errors)
+    {
+        var defaultStyle = Str(args, "lineStyle");
         ReadLines(args, "lines", spec, defaultStyle, errors);
         ReadRectangles(args, "rectangles", spec, defaultStyle, errors);
         ReadArcs(args, "arcs", spec, defaultStyle, errors);
@@ -141,13 +159,7 @@ public static partial class DetailFamilySpecParser
         ReadFilledRegions(args, "filledRegions", spec, defaultStyle, errors);
         ReadParameters(args, "parameters", spec, errors);
         ReadLabels(args, "labels", spec, Str(args, "labelFamily"), errors);
-        CheckParameterReferences(spec, errors);
-
-        if (spec.Curves.Count == 0 && spec.Labels.Count == 0 && spec.FilledRegions.Count == 0)
-            errors.Add("Nothing to draw: give lines, rectangles, arcs, circles, filledRegions or labels (millimetres, on the family's reference level).");
-        else if (spec.Curves.Count > MaxCurves)
-            errors.Add($"{spec.Curves.Count} curves were requested; at most {MaxCurves} per family.");
-        return spec;
+        ReadTypes(args, "types", spec, errors);
     }
 
     /// <summary>

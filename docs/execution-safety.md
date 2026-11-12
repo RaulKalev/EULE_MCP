@@ -36,7 +36,7 @@ not count as a change. Filesystem, Excel,
 configuration, standards, and report tools in the background lane are not bound
 to a Revit document.
 
-Deletes (`revit_delete_elements`, `revit_delete_views`, `revit_delete_sheets`, `revit_delete_view_filters`) are
+Deletes (`revit_delete_elements`, `revit_delete_views`, `revit_delete_sheets`, `revit_delete_view_filters`, `revit_delete_styles`) are
 meant to wait for the user (#138). They read their targets by id again when they
 run and skip what is gone, so they implement `IApprovalRevalidatesTargets`:
 
