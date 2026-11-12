@@ -359,4 +359,11 @@
     <Compile Include="..\RevitMCP.Addin\FilledRegions\*.cs" Link="FilledRegions\%(Filename)%(Extension)" />
     <Compile Include="..\RevitMCP.Addin\Approval\FilledRegionApprovalSummaries.cs" Link="Approval\FilledRegionApprovalSummaries.cs" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Legends and keynotes: type matching, grid, labels, clearExisting; keynote search, file parsing, diff, usage (no Revit API).
+         LegendPlanning uses FuzzyNameMatcher, which the schedules group already links. -->
+    <Compile Include="..\RevitMCP.Addin\Legends\LegendPlanning.cs" Link="Legends\LegendPlanning.cs" />
+    <Compile Include="..\RevitMCP.Addin\Keynotes\KeynoteLogic.cs" Link="Keynotes\KeynoteLogic.cs" />
+  </ItemGroup>
 </Project>
