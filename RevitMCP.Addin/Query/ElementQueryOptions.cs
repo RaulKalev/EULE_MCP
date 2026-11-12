@@ -31,7 +31,8 @@ public class ElementQueryOptions
     // PageSize/Page are ignored.
     public bool CollectAll { get; set; } = false;
 
-    // Opt-in identity/value projection; the full DTO remains the default contract.
+    // Identity/value projection. The element read tools default it to true (compact=false asks for the full DTO);
+    // other users of the engine leave it off.
     public bool CompactResponse { get; set; } = false;
 
     // #109: add phase created/demolished, design option and workset names to each returned element.

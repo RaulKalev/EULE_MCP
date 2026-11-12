@@ -13,7 +13,8 @@ querying Revit:
    that must be re-verified against the live model.
 2. Use `revit_graph_summary` to orient yourself (panels, levels, categories, orphan circuits).
 3. Use `revit_graph_query` (`find`, `subtree`, `neighbors`, `path`) to narrow down the element ids
-   you need — for example `subtree id=<panelId> rel=fed_by` for everything a panel feeds.
+   you need — for example `subtree id=<panelId> rel=fed_by` for everything a panel feeds. Add
+   `read=["Mark","Level"]` to get those parameters' live values in the same call (`live.values`).
 4. Fetch actual values by id with the live tools (`revit_get_elements_info`,
    `revit_get_element_parameters`, `revit_get_circuit_info`, …).
 
