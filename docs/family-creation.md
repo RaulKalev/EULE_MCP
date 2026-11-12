@@ -238,6 +238,12 @@ The default is `Metric Detail Item.rft`. The tool looks in Revit's family templa
 `English_I` sub-folders, then anywhere below it. `templatePath` names another `.rft`. A template whose category is
 not Detail Items gives a warning but is used.
 
+## Reading a family back
+
+`revit_get_family_contents` reads an existing family (loaded in the project, or a `.rfa` file) without changing it,
+and with `asSpec=true` returns it as the arguments of `revit_create_detail_family`, so a symbol can be copied. See
+[family-contents.md](family-contents.md).
+
 ## Example
 
 ```json
