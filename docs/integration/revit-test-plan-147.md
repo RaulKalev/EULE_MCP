@@ -39,3 +39,47 @@ Use a project whose shared parameter file (Manage > Shared Parameters) holds a d
 | 21 | Place the family in plans at 1:50 and 1:100 | The text stays the same size on paper and stays at its anchor; the `textType` text uses the project type's font and size |
 | 22 | A family with only `labels`, no curves | Created; no "nothing to draw" error |
 | 23 | Revit 2024: steps 17 and 20 | Same results |
+
+## Filled regions, parameter labels and visibility parameters
+
+**Not yet run in Revit.** These were written with the feature, when no Revit was reachable; the pure checks are unit
+tested (`DetailFamilyRegionsTests`), the Revit calls are not. Use a project with a filled region type such as
+`Solid Black`, a drafting fill pattern such as `Diagonal up`, and a Generic Annotation family that holds one label
+bound to an instance text parameter (called `EULE_Silt` below, parameter `Tekst`, with a type `2.5 mm`).
+
+| # | Step | Expected |
+|---|---|---|
+| 24 | Preview with `filledRegions`: a polygon with `type: "Solid Black"`, a rectangle with a circular hole and no type, a circle with `lineStyle` | `ready: true`; `filledRegions.types` lists `Solid Black` with `status: project` and its pattern and colours; `defaultType` mentions the one region without a type |
+| 25 | Preview with a `type` the project does not have, and with a bow-tie polygon | `ready: false`; one problem names the type with suggestions, the other says the sides cross |
+| 26 | Create with step 24's regions | `filledRegions[].status = drawn`; in the Family Editor the regions are there, the hole is cut, the first uses a type `Solid Black` that looks like the project's, the circle's boundary has the line style |
+| 27 | Create with `filledRegionTypes`: `{name:"T_Hall", foregroundPattern:"Diagonal up", foregroundColor:"#808080", backgroundPattern:"solid", backgroundColor:"#FFFFFF", lineWeight:1}` and a region using it | `filledRegionTypes[0].action = created`; the family has the type with those values and a copied `Diagonal up` pattern. Load and place it: the region looks the same in the project |
+| 28 | Step 27 with `copyFrom: "Solid Black"` and only `foregroundColor` | The type has the project type's patterns with the new colour |
+| 29 | A type with `isMasking: true` over a line | The region hides the line in the project |
+| 30 | `visibleParameter` on a region, a line and a text label, with a yes/no instance parameter in `parameters` | `visibility[].linked` counts all three; in the project, unticking the parameter on an instance hides them |
+| 31 | `visibleParameter` naming a text parameter, and one that is not listed | `ready: false` for each, saying a yesNo parameter of `parameters` is needed |
+| 32 | Preview a label `{parameter:"Kilbi tähis", position:[0,-9], labelFamily:"EULE_Silt", labelType:"2.5 mm"}` with the text parameter in `parameters` | `ready: true`; `parameterLabels.families` shows `EULE_Silt` with `source: project` and its types |
+| 33 | Create with step 32 | `parameterLabels[0].status = placed`, `labelParameter = Tekst`; in the Family Editor the nested instance's `Tekst` shows the `=` link to `Kilbi tähis`. In the project the label shows the parameter's value and follows it when changed |
+| 34 | Step 33 with `labelFamily` as a `.rfa` path | Same result; `source: file` in the preview |
+| 35 | A `labelFamily` that is a Detail Item, one that is not loaded, and a label family with two text instance parameters and no `labelParameter` | The first two are problems in the preview; the third creates the family but reports the label `failed` with both parameter names, and no stray instance is left |
+| 36 | Two parameter labels showing different parameters through a label family whose label parameter is a **type** parameter, same `labelType` | The second is `failed`, saying the type already shows the other parameter |
+| 37 | Purge on (default) with steps 27 and 33 | The defined type, its patterns and the label family survive the purge |
+| 38 | Revit 2024: steps 26, 27, 30 and 33 | Same results |
+
+If step 26 fails for every region, check whether `FilledRegion.Create` accepts the template's reference level view;
+if step 33 fails with "Revit does not let … be linked", the label family's parameter is probably a type parameter or
+reporting parameter.
+
+## Line styles
+
+**Not yet run in Revit.** See [line-styles.md](../line-styles.md).
+
+| # | Step | Expected |
+|---|---|---|
+| 39 | `revit_list_line_styles includePatterns=true` in a project | Every line style with weight, colour and pattern; `<Thin Lines>` and the like have `builtIn: true`; `patterns` lists the line patterns |
+| 40 | `revit_preview_set_line_styles` with a new name (weight 3, `#FF0000`, pattern `Dash`), an existing name with only `weight`, and one with a pattern the project lacks | The first is `create`, the second `edit` with `changes.weight` from/to, the third a problem with suggestions; `ready: false` |
+| 41 | `revit_set_line_styles` with the first two | Approval prompt names both; afterwards Manage > Additional Settings > Line Styles shows the new style with those values and the edited weight; one Undo removes both changes |
+| 42 | Step 41 with one style Revit refuses (for example a change to a built-in style it does not allow) | Nothing changed; the message names the style |
+| 43 | Open a family in the Family Editor and run steps 39 to 41 with `document` naming it | The style is created in the family (or the problem says the family does not accept new line styles) |
+| 44 | `revit_create_detail_family` with `lineStyles: [{name:"T_Oma", weight:4, color:"#0000FF", pattern:"Dash"}]` and a line using `T_Oma`, which the project does not have | Preview `lineStyles[].status = defined`; the family has the style with those values and the line uses it; loaded into the project the line is blue, dashed, weight 4 |
+| 45 | Step 44 with a name the project has and only `weight` given | The family's style has the project's colour and pattern with the new weight |
+| 46 | Revit 2024: steps 41 and 44 | Same results |

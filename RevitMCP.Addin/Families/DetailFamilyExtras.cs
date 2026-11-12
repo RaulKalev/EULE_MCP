@@ -46,6 +46,19 @@ public sealed class DetailLabelSpec
     public string Alignment { get; set; } = "left";
     /// <summary>Degrees counter-clockwise.</summary>
     public double RotationDeg { get; set; }
+    /// <summary>
+    /// The family parameter the label shows; empty = fixed <see cref="Text"/>. A parameter label is an instance of
+    /// <see cref="LabelFamily"/>, whose own label parameter is linked to this one.
+    /// </summary>
+    public string Parameter { get; set; } = string.Empty;
+    /// <summary>A Generic Annotation family that already holds a label: a family loaded in the project, or a .rfa path.</summary>
+    public string LabelFamily { get; set; } = string.Empty;
+    /// <summary>The type of the label family to place; empty = its first type.</summary>
+    public string LabelType { get; set; } = string.Empty;
+    /// <summary>The label family's parameter its label shows; empty = its only parameter of the matching data type.</summary>
+    public string LabelParameter { get; set; } = string.Empty;
+    /// <summary>A yes/no family parameter that switches the label on and off; empty = always visible.</summary>
+    public string VisibleParameter { get; set; } = string.Empty;
 }
 
 /// <summary>One Generic Annotation family made for the labels: one per distinct text, size, text type and alignment.</summary>
@@ -150,7 +163,7 @@ public static partial class DetailFamilySpecParser
             errors.Add($"{spec.Parameters.Count} parameters were requested; at most {MaxParameters} per family.");
     }
 
-    private static void ReadLabels(IReadOnlyDictionary<string, object?> args, string key, DetailFamilySpec spec, List<string> errors)
+    private static void ReadLabels(IReadOnlyDictionary<string, object?> args, string key, DetailFamilySpec spec, string defaultLabelFamily, List<string> errors)
     {
         var index = 0;
         foreach (var item in Items(args, key, errors))
@@ -158,7 +171,13 @@ public static partial class DetailFamilySpecParser
             var source = $"{key}[{index++}]";
             if (item == null) continue;
             var text = item["text"] is JValue { Type: JTokenType.String } t ? ((string?)t ?? string.Empty) : Text(item["text"]);
-            if (text.Trim().Length == 0) { errors.Add($"{source}.text is empty."); continue; }
+            var parameterName = Text(item["parameter"]);
+            if (parameterName.Length > 0 && text.Trim().Length > 0)
+            {
+                errors.Add($"{source} has both text and parameter: fixed text takes text, a label that shows a parameter takes parameter.");
+                continue;
+            }
+            if (parameterName.Length == 0 && text.Trim().Length == 0) { errors.Add($"{source}.text is empty."); continue; }
             if (text.Length > 1000) { errors.Add($"{source}.text is longer than 1000 characters."); continue; }
             var position = Point(item["position"] ?? item["point"], source + ".position", errors);
             if (position == null) continue;
@@ -176,8 +195,17 @@ public static partial class DetailFamilySpecParser
                     "right" => "right",
                     var other => other
                 },
-                RotationDeg = Num(item["rotation"] ?? item["rotationDeg"]) ?? 0
+                RotationDeg = Num(item["rotation"] ?? item["rotationDeg"]) ?? 0,
+                Parameter = parameterName,
+                LabelType = Text(item["labelType"]),
+                LabelParameter = Text(item["labelParameter"]),
+                VisibleParameter = Visible(item)
             };
+            if (parameterName.Length > 0)
+            {
+                var family = Text(item["labelFamily"]);
+                label.LabelFamily = family.Length > 0 ? family : defaultLabelFamily;
+            }
             if (label.Alignment is not ("left" or "center" or "right"))
             {
                 errors.Add($"{source}.alignment '{label.Alignment}' is not supported: left | center | right.");
@@ -281,7 +309,7 @@ public static partial class DetailFamilySpecParser
     {
         var groups = new List<DetailLabelGroup>();
         var byKey = new Dictionary<string, DetailLabelGroup>(StringComparer.Ordinal);
-        foreach (var label in spec.Labels)
+        foreach (var label in spec.TextLabels)
         {
             var key = string.Join("\u001f", label.Text, label.TextType.ToLowerInvariant(),
                 label.SizeMm?.ToString("R", CultureInfo.InvariantCulture) ?? string.Empty, label.Alignment);
@@ -344,7 +372,7 @@ public static partial class DetailFamilySpecParser
     }
 
     /// <summary>Distinct project text types the labels ask for.</summary>
-    public static List<string> LabelTextTypeNames(DetailFamilySpec spec) => spec.Labels
+    public static List<string> LabelTextTypeNames(DetailFamilySpec spec) => spec.TextLabels
         .Select(l => l.TextType)
         .Where(n => n.Length > 0)
         .Distinct(StringComparer.OrdinalIgnoreCase)

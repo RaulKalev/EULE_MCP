@@ -31,7 +31,9 @@ public static class PlanToolClassification
         // Copying view filters creates the filters in the target (#134).
         "revit_copy_view_filters",
         // #135: a reshape creates a replacement region; a type spec can duplicate a type.
-        "revit_edit_filled_regions", "revit_set_filled_region_types"
+        "revit_edit_filled_regions", "revit_set_filled_region_types",
+        // A style the document does not have is created.
+        "revit_set_line_styles"
     };
 
     private static readonly string[] ModifyingPrefixes =

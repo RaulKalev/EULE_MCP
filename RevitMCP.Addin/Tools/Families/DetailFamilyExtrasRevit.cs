@@ -418,7 +418,7 @@ internal static class DetailFamilyExtrasRevit
     /// its rotation. Runs inside the caller's transaction.
     /// </summary>
     public static List<object> PlaceLabels(Document familyDoc, View view, IReadOnlyList<(DetailLabelGroup Group, string Path)> families,
-        HashSet<ElementId> protectedIds, List<string> warnings)
+        HashSet<ElementId> protectedIds, List<VisibilityLink> visibility, List<string> warnings)
     {
         var results = new List<object>();
         foreach (var (group, path) in families)
@@ -451,6 +451,8 @@ internal static class DetailFamilyExtrasRevit
                     if (Math.Abs(label.RotationDeg) > 1e-9)
                         ElementTransformUtils.RotateElement(familyDoc, instance.Id, Line.CreateBound(point, point + XYZ.BasisZ),
                             label.RotationDeg * Math.PI / 180);
+                    if (label.VisibleParameter.Length > 0)
+                        visibility.Add(new VisibilityLink { ElementId = instance.Id, Parameter = label.VisibleParameter, Source = label.Source });
                     placed++;
                 }
                 catch (Exception ex)
