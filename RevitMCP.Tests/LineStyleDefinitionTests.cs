@@ -107,12 +107,114 @@ public class LineStyleDefinitionTests
         Assert.Equal("Center", overridden.Project.Pattern);
     }
 
+    // ── Renaming ─────────────────────────────────────────────────────────────
+
+    private static (List<LineStyleDefinition> Styles, List<string> Errors) ReadWithRename(string json)
+    {
+        var errors = new List<string>();
+        var styles = DetailFamilySpecParser.ReadLineStyleDefinitions(
+            new Dictionary<string, object?> { ["styles"] = JToken.Parse(json) }, "styles", errors, allowRename: true);
+        return (styles, errors);
+    }
+
+    [Fact]
+    public void NewName_is_read_only_when_renaming_is_allowed()
+    {
+        const string json = "[{\"name\":\"EL_Vana\",\"newName\":\"EL_Uus\",\"weight\":2}]";
+        var (renamed, errors) = ReadWithRename(json);
+        Assert.Empty(errors);
+        Assert.Equal("EL_Uus", renamed[0].NewName);
+        Assert.Equal(2, renamed[0].Weight);
+
+        // revit_create_detail_family's lineStyles keep their behaviour: newName is not read there.
+        var (plain, plainErrors) = Read(json);
+        Assert.Empty(plainErrors);
+        Assert.Null(plain[0].NewName);
+    }
+
+    [Fact]
+    public void A_new_name_equal_to_the_name_is_no_rename_but_a_case_change_is()
+    {
+        var (styles, errors) = ReadWithRename("[{\"name\":\"A\",\"newName\":\"A\"},{\"name\":\"b\",\"newName\":\"B\"}]");
+        Assert.Empty(errors);
+        Assert.Null(styles[0].NewName);
+        Assert.Equal("B", styles[1].NewName);
+    }
+
+    [Theory]
+    [InlineData("[{\"name\":\"A\",\"newName\":\"X:Y\"}]", "characters Revit refuses")]
+    [InlineData("[{\"name\":\"A\",\"newName\":\" \"}]", "newName is empty")]
+    [InlineData("[{\"name\":\"A\",\"newName\":\"C\"},{\"name\":\"B\",\"newName\":\"c\"}]", "new name of another style")]
+    [InlineData("[{\"name\":\"A\",\"newName\":\"B\"},{\"name\":\"B\",\"weight\":2}]", "also listed as a style name")]
+    public void Refuses_bad_renames(string json, string expected)
+    {
+        var (_, errors) = ReadWithRename(json);
+        Assert.Contains(errors, e => e.Contains(expected));
+    }
+
+    // ── Object style definitions ─────────────────────────────────────────────
+
+    private static (List<ObjectStyleDefinition> Styles, List<string> Errors) ReadObject(string json)
+    {
+        var errors = new List<string>();
+        var styles = DetailFamilySpecParser.ReadObjectStyleDefinitions(
+            new Dictionary<string, object?> { ["styles"] = JToken.Parse(json) }, "styles", errors);
+        return (styles, errors);
+    }
+
+    [Fact]
+    public void Reads_object_styles()
+    {
+        var (styles, errors) = ReadObject(
+            "[{\"category\":\"Walls\",\"projectionWeight\":2,\"cutWeight\":5,\"color\":\"#0000ff\",\"material\":\"Concrete\"}," +
+            "{\"category\":\"Generic Annotations\",\"subcategory\":\"EL_Sümbol\",\"weight\":1,\"pattern\":\"solid\"}," +
+            "{\"category\":\"Walls\",\"subcategory\":\"Uus\"}," +
+            "{\"category\":\"Doors\",\"material\":\"none\"}]");
+
+        Assert.Empty(errors);
+        Assert.Equal(4, styles.Count);
+        Assert.Null(styles[0].Subcategory);
+        Assert.Equal(2, styles[0].ProjectionWeight);
+        Assert.Equal(5, styles[0].CutWeight);
+        Assert.Equal("#0000FF", styles[0].Color);
+        Assert.Equal("Concrete", styles[0].Material);
+        Assert.Equal("Generic Annotations / EL_Sümbol", styles[1].Label);
+        Assert.Equal(1, styles[1].ProjectionWeight);           // "weight" is the projection weight
+        Assert.Equal(string.Empty, styles[1].Pattern);         // solid
+        Assert.False(styles[2].HasValues);                     // a subcategory to create with Revit's defaults
+        Assert.Equal(string.Empty, styles[3].Material);        // none clears the material
+    }
+
+    [Theory]
+    [InlineData("[{\"projectionWeight\":2}]", "needs a category")]
+    [InlineData("[{\"category\":\"Walls\"}]", "nothing to change")]
+    [InlineData("[{\"category\":\"Walls\",\"cutWeight\":0}]", "cutWeight must be a whole number from 1 to 16")]
+    [InlineData("[{\"category\":\"Walls\",\"projectionWeight\":1.5}]", "projectionWeight must be a whole number")]
+    [InlineData("[{\"category\":\"Walls\",\"color\":\"blue\"}]", "not a colour")]
+    [InlineData("[{\"category\":\"Walls\",\"subcategory\":\"A|B\"}]", "subcategory name 'A|B' contains characters Revit refuses")]
+    [InlineData("[{\"category\":\"Walls\",\"subcategory\":\"X\"},{\"category\":\"walls\",\"subcategory\":\"x\"}]", "listed twice")]
+    public void Refuses_bad_object_styles(string json, string expected)
+    {
+        var (_, errors) = ReadObject(json);
+        Assert.Contains(errors, e => e.Contains(expected));
+    }
+
+    [Fact]
+    public void The_line_style_name_message_is_unchanged()
+        => Assert.Equal("The line style name ' A' starts or ends with a space.", DetailFamilySpecParser.CheckLineStyleName(" A"));
+
     // ── Tool surface ─────────────────────────────────────────────────────────
 
     [Theory]
     [InlineData("revit_list_line_styles", "ReadOnly")]
     [InlineData("revit_preview_set_line_styles", "ReadOnly")]
     [InlineData("revit_set_line_styles", "RequiresApproval")]
+    [InlineData("revit_list_object_styles", "ReadOnly")]
+    [InlineData("revit_preview_set_object_styles", "ReadOnly")]
+    [InlineData("revit_set_object_styles", "RequiresApproval")]
+    [InlineData("revit_get_style_usage", "ReadOnly")]
+    [InlineData("revit_preview_delete_styles", "ReadOnly")]
+    [InlineData("revit_delete_styles", "DestructiveRequiresManualApproval")]
     public void The_tools_match_on_both_sides(string tool, string permission)
     {
         Assert.Equal("tags", BridgeToolGroups.GroupOf(tool));
@@ -123,7 +225,28 @@ public class LineStyleDefinitionTests
         Assert.Contains("\"document\"", bridge.Source);
     }
 
+    [Theory]
+    [InlineData("revit_set_line_styles")]
+    [InlineData("revit_set_object_styles")]
+    [InlineData("revit_delete_styles")]
+    public void Write_tools_build_their_own_approval_summary(string tool)
+        => Assert.Contains("IApprovalSummaryTool", ToolSourceScan.Addin.Value[tool].Source);
+
     [Fact]
-    public void Plans_count_setting_line_styles_as_creating()
-        => Assert.Equal(PlanToolKind.Creates, PlanToolClassification.Classify("revit_set_line_styles"));
+    public void Deleting_styles_is_classified_like_the_other_deletes()
+    {
+        // Destructive on the bridge, manual approval in the add-in (plans never cover it), and it re-reads its
+        // targets by name when it runs, so its approval may wait for the user (docs/execution-safety.md).
+        Assert.Contains("[McpServerTool(Name = \"revit_delete_styles\", Destructive = true)", ToolSourceScan.Bridge.Value.Single(b => b.Name == "revit_delete_styles").Source);
+        Assert.Contains("IApprovalRevalidatesTargets", ToolSourceScan.Addin.Value["revit_delete_styles"].Source);
+        Assert.Equal(PlanToolKind.Modifies, PlanToolClassification.Classify("revit_delete_styles"));
+    }
+
+    [Fact]
+    public void Plans_count_setting_line_and_object_styles_as_creating_or_modifying()
+    {
+        Assert.Equal(PlanToolKind.Creates, PlanToolClassification.Classify("revit_set_line_styles"));
+        // A subcategory the category does not have is created.
+        Assert.Equal(PlanToolKind.Creates, PlanToolClassification.Classify("revit_set_object_styles"));
+    }
 }

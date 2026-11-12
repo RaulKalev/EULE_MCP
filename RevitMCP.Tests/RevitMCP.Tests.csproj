@@ -359,4 +359,9 @@
     <Compile Include="..\RevitMCP.Addin\FilledRegions\*.cs" Link="FilledRegions\%(Filename)%(Extension)" />
     <Compile Include="..\RevitMCP.Addin\Approval\FilledRegionApprovalSummaries.cs" Link="Approval\FilledRegionApprovalSummaries.cs" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- Object styles, style usage and delete planning (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\Styles\*.cs" Link="Styles\%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>
