@@ -480,6 +480,7 @@ public class App : IExternalApplication
             RevitMCP.Addin.Tools.ViewFilters.ViewFilterToolRegistration.Register(handler); // #134 view filters
             RevitMCP.Addin.Tools.FilledRegions.FilledRegionToolRegistration.Register(handler); // #135 filled regions
             RevitMCP.Addin.Tools.LineStyles.LineStyleToolRegistration.Register(handler); // line styles (project and family documents)
+            RevitMCP.Addin.Tools.AnnotationTypes.AnnotationTypeToolRegistration.Register(handler); // text types and dimension types
             RevitMCP.Addin.Tools.Mep.MepToolRegistration.Register(handler); // #106 cable tray and conduit runs
             RevitMCP.Addin.Tools.Geometry.GeometryToolRegistration.Register(handler); // #107 geometry queries
             RevitMCP.Addin.Tools.TransformsAndGroupsToolRegistration.Register(handler); // #108 mirror, array, groups

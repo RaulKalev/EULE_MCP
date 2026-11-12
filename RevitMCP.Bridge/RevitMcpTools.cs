@@ -2917,13 +2917,20 @@ internal sealed partial class RevitMcpTools(RevitPipeClient pipeClient)
     }
 
     [McpServerTool(Name = "revit_list_dimension_types", ReadOnly = true),
-     Description("Lists all dimension types in the model with their style (Linear, Angular, Radial, Diameter, ArcLength, SpotElevation, SpotCoordinate, SpotSlope). Use typeId as dimensionTypeId in revit_place_dimensions. Optional styleFilter narrows by style name.")]
+     Description("Lists all dimension types in the model with their style (Linear, Angular, Radial, Diameter, ArcLength, SpotElevation, SpotCoordinate, SpotSlope). Use typeId as dimensionTypeId in revit_place_dimensions. Optional styleFilter narrows by style name. details=true adds the fields revit_set_dimension_types edits (text size mm, font, colour, line weight, tick mark, witness lines, units format, …); includeUsage=true counts the dimensions of each type.")]
     public async Task<string> ListDimensionTypes(
         [Description("Optional style filter, e.g. 'Linear' or 'Spot'")] string? styleFilter = null,
+        [Description("Add each type's text, line, tick mark, witness line and units format values. Default false.")] bool details = false,
+        [Description("Count the dimensions of each type. Default false.")] bool includeUsage = false,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default)
     {
-        var args = new Dictionary<string, object?> { ["styleFilter"] = styleFilter ?? string.Empty };
+        var args = new Dictionary<string, object?>
+        {
+            ["styleFilter"] = styleFilter ?? string.Empty,
+            ["details"] = details,
+            ["includeUsage"] = includeUsage
+        };
         args["document"] = document ?? string.Empty;
         var result = await pipeClient.SendAsync("revit_list_dimension_types", args, cancellationToken);
         return FormatResult(result);
