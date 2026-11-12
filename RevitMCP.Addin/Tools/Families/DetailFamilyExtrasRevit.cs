@@ -205,11 +205,13 @@ internal static class DetailFamilyExtrasRevit
         var needsType = resolved.Items.Any(i => i.Value != null || i.Spec.Formula.Length > 0);
         if (needsType && manager.CurrentType == null)
         {
+            // With types, the first listed type is the one made; without, a type named after the family, as Revit makes on load.
             manager.CurrentType = manager.Types.Size > 0
                 ? manager.Types.Cast<FamilyType>().First()
-                : manager.NewType(spec.FamilyName);
+                : manager.NewType(spec.Types.Count > 0 ? spec.Types[0].Name : spec.FamilyName);
         }
-        if (needsType && manager.Types.Size > 1)
+        // With types, the values go on every listed type afterwards (DetailFamilyBuilder.ApplyTypes).
+        if (needsType && manager.Types.Size > 1 && spec.Types.Count == 0)
             warnings.Add($"The family has {manager.Types.Size} types; values were set on '{manager.CurrentType?.Name}' only.");
 
         foreach (var item in resolved.Items)

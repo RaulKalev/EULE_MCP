@@ -41,7 +41,9 @@ public static class PlanToolClassification
         // A subcategory the category does not have is created.
         "revit_set_object_styles",
         // Copies legend components and adds text notes and detail items to a legend.
-        "revit_populate_legend"
+        "revit_populate_legend",
+        // Editing a loaded family reloads it; new types and nested families appear in the project.
+        "revit_edit_detail_family"
     };
 
     private static readonly string[] ModifyingPrefixes =

@@ -73,6 +73,7 @@ public static class BridgeToolGroups
             "revit_preview_create_parameters", "revit_create_parameters", "revit_bind_parameter_categories",
             // Family creation (#147)
             "revit_preview_create_detail_family", "revit_create_detail_family", "revit_get_family_contents",
+            "revit_preview_edit_detail_family", "revit_edit_detail_family",
             // Label families
             "revit_list_label_families", "revit_preview_create_label_family", "revit_create_label_family",
             // Model state (#109)
