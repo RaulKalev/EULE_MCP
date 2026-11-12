@@ -83,3 +83,35 @@ reporting parameter.
 | 44 | `revit_create_detail_family` with `lineStyles: [{name:"T_Oma", weight:4, color:"#0000FF", pattern:"Dash"}]` and a line using `T_Oma`, which the project does not have | Preview `lineStyles[].status = defined`; the family has the style with those values and the line uses it; loaded into the project the line is blue, dashed, weight 4 |
 | 45 | Step 44 with a name the project has and only `weight` given | The family's style has the project's colour and pattern with the new weight |
 | 46 | Revit 2024: steps 41 and 44 | Same results |
+
+## Types and editing an existing family
+
+**Not yet run in Revit.** Written with the feature, when no Revit was reachable; the pure checks are unit tested
+(`DetailFamilyEditTests`), the Revit calls are not. See [family-creation.md](../family-creation.md) (*Types*, *Editing
+an existing family*). Use a project with `EL_Kilp` from step 17 loaded (parameters `Laius` length, `Tähis` text
+instance, a yes/no `Näita` linked to a line's visibility) and a copy of its `.rfa` in a folder the file access policy
+allows.
+
+| # | Step | Expected |
+|---|---|---|
+| 47 | `revit_preview_create_detail_family` with step 15's parameters and `types: [{name:"K600", values:{Laius:600}}, {name:"K800", values:{Laius:800, Tähis:"K8"}}]` | `ready: true`; `types` lists both with `action: create`, their values and the parameters whose own value is the default |
+| 48 | Create with step 47 | `types[].action = created`, every value `status: set`; the Family Types dialog shows exactly `K600` and `K800` (no type named after the family) with those values; an instance parameter's value is the type's default |
+| 49 | Step 47 with a type value for a formula parameter, an unknown name and `"Laius":"lai"` | `ready: false`; three problems: the formula, the name with a suggestion, the unit (mm) |
+| 50 | `revit_preview_edit_detail_family family:"EL_Kilp" remove:{textNotes:true}` | `ready: true`; `existing` lists the types, parameters (with formulas and linked element counts) and element counts per kind; the family is not left open (no Family Editor window, no extra document in `revit_list_open_documents`) |
+| 51 | Edit `family:"EL_Kilp"` with a line, `parameters:[{name:"Sügavus", dataType:"length", value:200}]` and `types:[{name:"K1000", values:{Laius:1000}}]` | One approval; the family in the project has the line, the parameter and the new type `K1000`; **one Undo** reverts the whole reload; placed instances keep their position and type |
+| 52 | Step 51 with `types:[{name:"K600", values:{Laius:650}}]` (an existing type), without and then with `overwriteParameterValues:true` | Without: the preview warns that the project keeps its values; in the project `K600` still has 600. With: 650 |
+| 53 | `remove:{parameters:["Näita"]}` | Refused: linked to the line that stays (its id is named). With `remove:{curves:[<that id>], parameters:["Näita"]}` it is allowed and `linkedElementsRemoved` names the line |
+| 54 | `remove:{parameters:["Laius"]}` while `Pool = Laius / 2`; then `["Laius","Pool"]`; then a built-in such as `Type Comments` | First refused naming `Pool` and its formula; second allowed (`Pool` removed first); third refused as built in |
+| 55 | `remove:{curves:[<a filled region id>]}` and `remove:{curves:[999999999]}` | Problems: "is a FilledRegion, not a detail line" and "has no element" |
+| 56 | `remove:{curves:true}` on a family with a filled region | Every detail line goes; the filled region and its boundary stay |
+| 57 | Edit with `labels:[{text:"Uus", position:[0,12]}]` on a family created with text labels | A new nested family `EL_Kilp_Text<n+1>`; the old labels keep their text |
+| 58 | `path:"…\EL_Kilp.rfa"` without `overwrite` | Problem asking for `overwrite=true` or `savePath` |
+| 59 | `path` with `overwrite:true` and a line | The file is replaced (timestamp changes), no `.tmp` file is left in its folder, the family is not open afterwards |
+| 60 | `path` with `savePath:"…\Out\EL_Kilp_2.rfa"` | The original file is unchanged; the new file opens as family `EL_Kilp_2` |
+| 61 | The same `.rfa` open in Revit, then edited by `path`; `EL_Kilp` open in the Family Editor, then edited by `family` | Both refused with "close it first"; the open windows are untouched |
+| 62 | An edit that fails in Revit (for example a label family that cannot be nested, forced by a bad `labelFamily` path after the preview) | Nothing saved or reloaded; the file timestamp and the project are unchanged; no family document stays open |
+| 63 | A Revit 2023 `.rfa` by `path` with `savePath` | Warning that the file is upgraded and saved in this version |
+| 64 | Revit 2024: steps 48, 51, 53 and 59 | Same results |
+
+If step 51 fails with a message about an open transaction, `LoadFamily(Document, IFamilyLoadOptions)` cannot run from
+the add-in's context as written; if Undo takes more than one step, Revit records the reload in several parts.

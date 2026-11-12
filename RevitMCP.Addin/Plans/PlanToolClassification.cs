@@ -33,7 +33,9 @@ public static class PlanToolClassification
         // #135: a reshape creates a replacement region; a type spec can duplicate a type.
         "revit_edit_filled_regions", "revit_set_filled_region_types",
         // A style the document does not have is created.
-        "revit_set_line_styles"
+        "revit_set_line_styles",
+        // Editing a loaded family reloads it; new types and nested families appear in the project.
+        "revit_edit_detail_family"
     };
 
     private static readonly string[] ModifyingPrefixes =

@@ -266,6 +266,14 @@ internal sealed partial class RevitMcpTools
         "Default label family for labels that show a parameter (labels[].parameter): a Generic Annotation family that already holds a label, loaded in the project or a .rfa path. " +
         "Revit's API cannot create a label, so this family is nested and its label parameter linked to the detail family's parameter.";
 
+    private const string DetailFamilyTypesDescription =
+        "Family types: [{name, values?: {\"<parameter name>\": value}}]. Each is created, or updated when the family already has the name. A parameter in values must be in parameters (or, when editing, in the family) and have no formula; values in the units of parameters[].value. " +
+        "A parameter's own value is the default for every listed type. Without types, values go on one type named after the family.";
+
+    private const string DetailFamilyRemoveDescription =
+        "Removed before anything is added: {curves?, filledRegions?, labels? (nested annotation instances), textNotes?: true (all) | [element ids], parameters?: [names]}. " +
+        "A parameter used in another parameter's formula, or linked to an element that stays (visibility, label, dimension), is refused; built-in parameters are never removed.";
+
     private const string DetailFamilyGeometryDescription =
         "Millimetres on the family's reference level; the origin is the insertion point. Points are [x, y] or {x, y}.";
 
@@ -292,11 +300,12 @@ internal sealed partial class RevitMcpTools
         [Description(DetailFamilyFilledRegionTypesDescription)] object[]? filledRegionTypes = null,
         [Description(DetailFamilyLabelFamilyDescription)] string? labelFamily = null,
         [Description(DetailFamilyLineStylesDescription)] object[]? lineStyles = null,
+        [Description(DetailFamilyTypesDescription)] object[]? types = null,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default) =>
         SendDetailFamily("revit_preview_create_detail_family", savePath, familyName, lines, rectangles, arcs, circles, lineStyle,
             overwrite, purge, templatePath, loadIntoProject, ifExists, parameters, labels, sharedParameterFile, annotationTemplatePath,
-            filledRegions, filledRegionTypes, labelFamily, lineStyles, document, cancellationToken);
+            filledRegions, filledRegionTypes, labelFamily, lineStyles, types, document, cancellationToken);
 
     [McpServerTool(Name = "revit_create_detail_family"),
      Description("Creates a Detail Item family (.rfa) from Metric Detail Item.rft and draws it. Requires approval. savePath is required (a folder with familyName, or the full .rfa path): ask the user where the family goes, there is no default. Geometry in mm on the reference level (origin = insertion point): lines, rectangles, arcs, circles. Each lineStyle must be a line style of the project: the family gets a line style of the same name, weight, colour and pattern, which merges with the project's on load. purge (default true) removes unused elements before saving. loadIntoProject loads it (ifExists: skip | overwrite). parameters adds family parameters, or assigns existing shared parameters from the shared parameter file (never creates one). labels places text through nested Generic Annotation families (fixed text; Revit's API cannot create parameter labels). Run revit_preview_create_detail_family first.")]
@@ -321,17 +330,18 @@ internal sealed partial class RevitMcpTools
         [Description(DetailFamilyFilledRegionTypesDescription)] object[]? filledRegionTypes = null,
         [Description(DetailFamilyLabelFamilyDescription)] string? labelFamily = null,
         [Description(DetailFamilyLineStylesDescription)] object[]? lineStyles = null,
+        [Description(DetailFamilyTypesDescription)] object[]? types = null,
         [Description(DocumentArgDescription)] string? document = null,
         CancellationToken cancellationToken = default) =>
         SendDetailFamily("revit_create_detail_family", savePath, familyName, lines, rectangles, arcs, circles, lineStyle,
             overwrite, purge, templatePath, loadIntoProject, ifExists, parameters, labels, sharedParameterFile, annotationTemplatePath,
-            filledRegions, filledRegionTypes, labelFamily, lineStyles, document, cancellationToken);
+            filledRegions, filledRegionTypes, labelFamily, lineStyles, types, document, cancellationToken);
 
     private async Task<string> SendDetailFamily(string toolName, string? savePath, string? familyName, object[]? lines,
         object[]? rectangles, object[]? arcs, object[]? circles, string? lineStyle, bool overwrite, bool purge,
         string? templatePath, bool loadIntoProject, string ifExists, object[]? parameters, object[]? labels,
         string? sharedParameterFile, string? annotationTemplatePath, object[]? filledRegions, object[]? filledRegionTypes,
-        string? labelFamily, object[]? lineStyles, string? document, CancellationToken cancellationToken)
+        string? labelFamily, object[]? lineStyles, object[]? types, string? document, CancellationToken cancellationToken)
     {
         var args = new Dictionary<string, object?>
         {
@@ -355,6 +365,112 @@ internal sealed partial class RevitMcpTools
             ["filledRegionTypes"] = ToJToken(filledRegionTypes),
             ["labelFamily"] = labelFamily ?? string.Empty,
             ["lineStyles"] = ToJToken(lineStyles),
+            ["types"] = ToJToken(types),
+            ["document"] = document ?? string.Empty
+        };
+        return FormatResult(await pipeClient.SendAsync(toolName, args, cancellationToken));
+    }
+
+    // ── Editing an existing detail family ────────────────────────────────────
+
+    private const string DetailFamilyEditTargetDescription =
+        "A Detail Item family loaded in the project: its name or element id. Opened with EditFamily and loaded back afterwards. Give family or path.";
+
+    private const string DetailFamilyEditPathDescription =
+        "An .rfa file to edit instead of a loaded family (never while it is open in Revit). Saved back only with overwrite=true, else give savePath.";
+
+    private const string DetailFamilyEditSavePathDescription =
+        "Save the edited family here (a folder, or the full .rfa path). For family it saves a copy, whose file name must be the family's name.";
+
+    [McpServerTool(Name = "revit_preview_edit_detail_family", ReadOnly = true),
+     Description("Previews editing an existing Detail Item family WITHOUT changing the model or any file. Same arguments as revit_edit_detail_family. Opens the family read-only (closed without saving) and returns ready, problems, the family's types, parameters (formulas, linked elements) and removable element counts, the element ids and parameters remove would delete, what would be added (line styles, parameters, regions, labels resolved against the project) and the types with their values.")]
+    public Task<string> PreviewEditDetailFamily(
+        [Description(DetailFamilyEditTargetDescription)] string? family = null,
+        [Description(DetailFamilyEditPathDescription)] string? path = null,
+        [Description(DetailFamilyEditSavePathDescription)] string? savePath = null,
+        [Description("Replace the file at path or savePath (default false).")] bool overwrite = false,
+        [Description("family only: load with the family's parameter values instead of keeping the project's (default false).")] bool overwriteParameterValues = false,
+        [Description("Remove unused elements before saving (default false for an edit).")] bool purge = false,
+        [Description(DetailFamilyRemoveDescription)] object? remove = null,
+        [Description("Lines to add: [{start:[x,y], end:[x,y], lineStyle?}]. " + DetailFamilyGeometryDescription)] object[]? lines = null,
+        [Description("Rectangles to add: [{min:[x,y], max:[x,y], lineStyle?}].")] object[]? rectangles = null,
+        [Description("Arcs to add: [{center, radius, startAngle, endAngle, lineStyle?}] or [{start, mid, end, lineStyle?}].")] object[]? arcs = null,
+        [Description("Circles to add: [{center:[x,y], radius, lineStyle?}].")] object[]? circles = null,
+        [Description("Default line style for added curves: a line style of the project.")] string? lineStyle = null,
+        [Description(DetailFamilyLineStylesDescription)] object[]? lineStyles = null,
+        [Description(DetailFamilyFilledRegionsDescription)] object[]? filledRegions = null,
+        [Description(DetailFamilyFilledRegionTypesDescription)] object[]? filledRegionTypes = null,
+        [Description(DetailFamilyParametersDescription)] object[]? parameters = null,
+        [Description(DetailFamilyLabelsDescription)] object[]? labels = null,
+        [Description(DetailFamilyLabelFamilyDescription)] string? labelFamily = null,
+        [Description(DetailFamilyTypesDescription)] object[]? types = null,
+        [Description("Shared parameter file for shared parameters. Default: the config's, else Revit's setting. Only read.")] string? sharedParameterFile = null,
+        [Description("Generic Annotation template (.rft) for text labels. Default: Metric Generic Annotation.rft.")] string? annotationTemplatePath = null,
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default) =>
+        SendEditDetailFamily("revit_preview_edit_detail_family", family, path, savePath, overwrite, overwriteParameterValues, purge, remove,
+            lines, rectangles, arcs, circles, lineStyle, lineStyles, filledRegions, filledRegionTypes, parameters, labels, labelFamily, types,
+            sharedParameterFile, annotationTemplatePath, document, cancellationToken);
+
+    [McpServerTool(Name = "revit_edit_detail_family"),
+     Description("Edits an existing Detail Item family. Requires approval. Target: family (loaded in the project; loaded back afterwards as one undo step, keeping the project's parameter values unless overwriteParameterValues) or path (an .rfa: saved back with overwrite=true, or to savePath). remove runs first, then the same additions as revit_create_detail_family (curves, line styles, filled regions and their types, parameters, labels, types), then purge (default false). The family is saved to a temporary file and copied into place, so a failed edit leaves the file and the loaded family as they were. Run revit_preview_edit_detail_family first.")]
+    public Task<string> EditDetailFamily(
+        [Description(DetailFamilyEditTargetDescription)] string? family = null,
+        [Description(DetailFamilyEditPathDescription)] string? path = null,
+        [Description(DetailFamilyEditSavePathDescription)] string? savePath = null,
+        [Description("Replace the file at path or savePath (default false).")] bool overwrite = false,
+        [Description("family only: load with the family's parameter values instead of keeping the project's (default false).")] bool overwriteParameterValues = false,
+        [Description("Remove unused elements before saving (default false for an edit).")] bool purge = false,
+        [Description(DetailFamilyRemoveDescription)] object? remove = null,
+        [Description("Lines to add: [{start:[x,y], end:[x,y], lineStyle?}]. " + DetailFamilyGeometryDescription)] object[]? lines = null,
+        [Description("Rectangles to add: [{min:[x,y], max:[x,y], lineStyle?}].")] object[]? rectangles = null,
+        [Description("Arcs to add: [{center, radius, startAngle, endAngle, lineStyle?}] or [{start, mid, end, lineStyle?}].")] object[]? arcs = null,
+        [Description("Circles to add: [{center:[x,y], radius, lineStyle?}].")] object[]? circles = null,
+        [Description("Default line style for added curves: a line style of the project.")] string? lineStyle = null,
+        [Description(DetailFamilyLineStylesDescription)] object[]? lineStyles = null,
+        [Description(DetailFamilyFilledRegionsDescription)] object[]? filledRegions = null,
+        [Description(DetailFamilyFilledRegionTypesDescription)] object[]? filledRegionTypes = null,
+        [Description(DetailFamilyParametersDescription)] object[]? parameters = null,
+        [Description(DetailFamilyLabelsDescription)] object[]? labels = null,
+        [Description(DetailFamilyLabelFamilyDescription)] string? labelFamily = null,
+        [Description(DetailFamilyTypesDescription)] object[]? types = null,
+        [Description("Shared parameter file for shared parameters. Default: the config's, else Revit's setting. Only read.")] string? sharedParameterFile = null,
+        [Description("Generic Annotation template (.rft) for text labels. Default: Metric Generic Annotation.rft.")] string? annotationTemplatePath = null,
+        [Description(DocumentArgDescription)] string? document = null,
+        CancellationToken cancellationToken = default) =>
+        SendEditDetailFamily("revit_edit_detail_family", family, path, savePath, overwrite, overwriteParameterValues, purge, remove,
+            lines, rectangles, arcs, circles, lineStyle, lineStyles, filledRegions, filledRegionTypes, parameters, labels, labelFamily, types,
+            sharedParameterFile, annotationTemplatePath, document, cancellationToken);
+
+    private async Task<string> SendEditDetailFamily(string toolName, string? family, string? path, string? savePath, bool overwrite,
+        bool overwriteParameterValues, bool purge, object? remove, object[]? lines, object[]? rectangles, object[]? arcs, object[]? circles,
+        string? lineStyle, object[]? lineStyles, object[]? filledRegions, object[]? filledRegionTypes, object[]? parameters, object[]? labels,
+        string? labelFamily, object[]? types, string? sharedParameterFile, string? annotationTemplatePath, string? document,
+        CancellationToken cancellationToken)
+    {
+        var args = new Dictionary<string, object?>
+        {
+            ["family"] = family ?? string.Empty,
+            ["path"] = path ?? string.Empty,
+            ["savePath"] = savePath ?? string.Empty,
+            ["overwrite"] = overwrite,
+            ["overwriteParameterValues"] = overwriteParameterValues,
+            ["purge"] = purge,
+            ["remove"] = ToJToken(remove),
+            ["lines"] = ToJToken(lines),
+            ["rectangles"] = ToJToken(rectangles),
+            ["arcs"] = ToJToken(arcs),
+            ["circles"] = ToJToken(circles),
+            ["lineStyle"] = lineStyle ?? string.Empty,
+            ["lineStyles"] = ToJToken(lineStyles),
+            ["filledRegions"] = ToJToken(filledRegions),
+            ["filledRegionTypes"] = ToJToken(filledRegionTypes),
+            ["parameters"] = ToJToken(parameters),
+            ["labels"] = ToJToken(labels),
+            ["labelFamily"] = labelFamily ?? string.Empty,
+            ["types"] = ToJToken(types),
+            ["sharedParameterFile"] = sharedParameterFile ?? string.Empty,
+            ["annotationTemplatePath"] = annotationTemplatePath ?? string.Empty,
             ["document"] = document ?? string.Empty
         };
         return FormatResult(await pipeClient.SendAsync(toolName, args, cancellationToken));
