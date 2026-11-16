@@ -19,7 +19,7 @@ public static class BridgeToolGroups
         [Discovery] = "Search, describe, load and call any connector tool",
         [Graph] = "Model graph: build, status, summary, query, route (cheap id-first discovery)",
         ["query"] = "Broad element queries, parameter filters, grouping, query presets, parameter QA, phases, design options, model health audit; geometry, boxes, ray casts",
-        ["edit"] = "Generic model edits: parameters, move/align/rotate/elevation, mirror/array, groups (list, create, ungroup, place), delete/duplicate/rename, family types, placement, families (list, load, reload, purge unused), project and shared parameters (list, create, bind categories), element and view phases",
+        ["edit"] = "Generic model edits: parameters, move/align/rotate/elevation, mirror/array, groups (list, create, ungroup, place), delete/duplicate/rename, family types, placement, families (list, load, reload, purge unused), project and shared parameters (list, create, bind categories), change the type of existing instances, element and view phases",
         ["devices"] = "Room geometry, device codes, room-based device placement and device/fire-alarm audits",
         ["electrical"] = "Circuits, panels, wires/cables, voltage drop, fire alarm circuits, patch panels, cable tray and conduit runs (containment)",
         ["panelschematics"] = "PanelSchematics plugin (Kilbiskeemid): panel tables, empty rows, circuit row parameters, its Extensible Storage data",
@@ -73,6 +73,8 @@ public static class BridgeToolGroups
             "revit_preview_create_parameters", "revit_create_parameters", "revit_bind_parameter_categories",
             // One value per element (#165)
             "revit_preview_set_parameter_values", "revit_set_parameter_values",
+            // Change the type of existing instances (#159)
+            "revit_preview_change_element_type", "revit_change_element_type",
             // Family creation (#147)
             "revit_preview_create_detail_family", "revit_create_detail_family", "revit_get_family_contents",
             "revit_preview_edit_detail_family", "revit_edit_detail_family",

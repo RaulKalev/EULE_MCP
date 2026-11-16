@@ -471,6 +471,7 @@ public class App : IExternalApplication
             handler.RegisterTool(new RevitMCP.Addin.Tools.Jobs.JobReportTool());
             // Domain gaps #102-#109: each area registers its own tools.
             RevitMCP.Addin.Tools.Families.FamiliesAndParametersToolRegistration.Register(handler); // #102 families and parameters
+            RevitMCP.Addin.Tools.Editing.ChangeElementTypeToolRegistration.Register(handler); // #159 change element type
             RevitMCP.Addin.Tools.Schedules.SchedulesToolRegistration.Register(handler); // #103 schedules
             RevitMCP.Addin.Tools.Views.ViewCreationToolRegistration.Register(handler); // #104 view creation
             handler.RegisterTool(new RevitMCP.Addin.Tools.SetLineGeometryTool()); // #140
