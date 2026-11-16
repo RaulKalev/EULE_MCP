@@ -71,6 +71,8 @@ public static class BridgeToolGroups
             "revit_list_families", "revit_preview_load_family", "revit_load_family", "revit_reload_family",
             "revit_preview_purge_unused", "revit_purge_unused", "revit_list_project_parameters", "revit_list_shared_parameters",
             "revit_preview_create_parameters", "revit_create_parameters", "revit_bind_parameter_categories",
+            // One value per element (#165)
+            "revit_preview_set_parameter_values", "revit_set_parameter_values",
             // Family creation (#147)
             "revit_preview_create_detail_family", "revit_create_detail_family", "revit_get_family_contents",
             "revit_preview_edit_detail_family", "revit_edit_detail_family",
