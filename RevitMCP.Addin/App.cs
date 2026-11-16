@@ -477,6 +477,7 @@ public class App : IExternalApplication
             RevitMCP.Addin.Tools.Schedules.SchedulesToolRegistration.Register(handler); // #103 schedules
             RevitMCP.Addin.Tools.Views.ViewCreationToolRegistration.Register(handler); // #104 view creation
             RevitMCP.Addin.Tools.ElementGraphics.ElementGraphicsToolRegistration.Register(handler); // #160 per-element view graphics
+            RevitMCP.Addin.Tools.Datums.DatumToolRegistration.Register(handler); // #164 model datums
             handler.RegisterTool(new RevitMCP.Addin.Tools.SetLineGeometryTool()); // #140
             handler.RegisterTool(new RevitMCP.Addin.Tools.CreateRectangleTool()); // #140
             handler.RegisterTool(new RevitMCP.Addin.Tools.CheckAnnotationOverlapsTool()); // #141
