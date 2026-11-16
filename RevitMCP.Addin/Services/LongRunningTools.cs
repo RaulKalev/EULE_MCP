@@ -34,7 +34,10 @@ public static class LongRunningTools
         "revit_delete_sheets",
         // Sheet and model export (#105): a 50-sheet PDF/DWG set, merged drawings through the ODA converter, IFC
         "revit_export",
-        "revit_export_and_check"
+        "revit_export_and_check",
+        // One value per element (#165): thousands of rows, and unique=true reads the targets' whole categories
+        "revit_preview_set_parameter_values",
+        "revit_set_parameter_values"
     };
 
     public static bool IsLongRunning(string? toolName) => toolName != null && Names.Contains(toolName);
