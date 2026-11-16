@@ -120,6 +120,8 @@ public static class BridgeToolGroups
         ("views", new[] { "revit_list_schedulable_fields", "revit_list_filterable_parameters" }),
         // Legends: "legend" matches no keyword.
         ("views", new[] { "revit_list_legends", "revit_preview_populate_legend", "revit_populate_legend" }),
+        // Per-element hide and graphic overrides in one view (#160): "graphics" matches no keyword.
+        ("views", new[] { "revit_get_element_graphics", "revit_preview_set_element_graphics", "revit_set_element_graphics" }),
         ("cad", new[] { "revit_create_panel_schematic_symbol_from_dwg" }),
         ("documents", new[]
         {
