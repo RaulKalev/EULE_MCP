@@ -285,9 +285,28 @@ public class RevitPipeClient
             RequestId = requestId,
             Success = false,
             Status = responding == false ? "revit_busy" : "request_timeout",
-            Message = message + diagnosis,
+            Message = message + diagnosis + LinkOperationNote(),
             Data = new { revitProcessId = processId, revitResponding = responding }
         };
+    }
+
+    /// <summary>
+    /// When a model link operation (#163) is converting, say so: other agents then wait for it instead of retrying or queueing
+    /// conflicting Revit work. Read from the operation files, so it works while Revit is blocked.
+    /// </summary>
+    private static string LinkOperationNote()
+    {
+        try
+        {
+            var running = new RevitMCP.Addin.LinkOperations.LinkOperationStore(RevitMCP.Addin.LinkOperations.LinkOperationStore.DefaultFolder())
+                .LoadAll().Where(o => RevitMCP.Addin.LinkOperations.LinkOperationStates.IsActive(o.State)).ToList();
+            var note = RevitMCP.Addin.LinkOperations.LinkOperationRules.BusyNote(running, DateTimeOffset.Now);
+            return string.IsNullOrEmpty(note) ? string.Empty : " " + note;
+        }
+        catch (Exception)
+        {
+            return string.Empty;
+        }
     }
 
     /// <summary>Process.Responding for the routed Revit instance; null when unknown.</summary>

@@ -37,7 +37,10 @@ public static class LongRunningTools
         "revit_export_and_check",
         // One value per element (#165): thousands of rows, and unique=true reads the targets' whole categories
         "revit_preview_set_parameter_values",
-        "revit_set_parameter_values"
+        "revit_set_parameter_values",
+        // IFC-first linking (#163): the run tool converts and links an IFC for minutes; reconcile reads linked documents
+        "revit_link_operation_run",
+        "revit_reconcile_link_operation"
     };
 
     public static bool IsLongRunning(string? toolName) => toolName != null && Names.Contains(toolName);

@@ -385,6 +385,10 @@
     <Compile Include="..\RevitMCP.Addin\Styles\*.cs" Link="Styles\%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
+    <!-- IFC-first link operations (#163): state machine, admission, store, planner, verification, service (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\LinkOperations\*.cs" Link="LinkOperations\%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- Legends and keynotes: type matching, grid, labels, clearExisting; keynote search, file parsing, diff, usage (no Revit API).
          LegendPlanning uses FuzzyNameMatcher, which the schedules group already links. -->
     <Compile Include="..\RevitMCP.Addin\Legends\LegendPlanning.cs" Link="Legends\LegendPlanning.cs" />

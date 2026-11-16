@@ -106,9 +106,27 @@ public class ExternalEventService
         var snapshot = _handler.GetBusySnapshot();
         item.TryCancelBeforeStart(
             $"Revit is busy and did not start {item.Request.ToolName}. " +
-            $"{RevitBusyDiagnosis.Describe(snapshot)} {RevitBusyDiagnosis.Hint(snapshot)} Nothing was executed.",
+            $"{RevitBusyDiagnosis.Describe(snapshot)} {RevitBusyDiagnosis.Hint(snapshot)} Nothing was executed." +
+            LinkOperationBusyNote(),
             RevitBusyDiagnosis.BusyStatus,
             BusyData(snapshot));
+    }
+
+    /// <summary>
+    /// The model link operation that holds Revit, as a sentence for busy messages (#163): tells other agents and jobs not to
+    /// retry or queue conflicting work. Empty when none runs. Reads the operation files; never touches the Revit API.
+    /// </summary>
+    public static string LinkOperationBusyNote()
+    {
+        try
+        {
+            var note = RevitMCP.Addin.LinkOperations.LinkOperationService.Current?.BusyNote();
+            return string.IsNullOrEmpty(note) ? string.Empty : " " + note;
+        }
+        catch (Exception)
+        {
+            return string.Empty;
+        }
     }
 
     /// <summary>Structured busy diagnostics shared by busy results and the connection status fallback.</summary>
@@ -124,7 +142,8 @@ public class ExternalEventService
         executingTool = s.ActiveTool,
         executingForSeconds = s.ActiveSeconds.HasValue ? Math.Round(s.ActiveSeconds.Value, 1) : (double?)null,
         queuedRequests = s.QueueLength,
-        secondsSinceLastProcessed = s.SecondsSinceLastExecute.HasValue ? Math.Round(s.SecondsSinceLastExecute.Value, 1) : (double?)null
+        secondsSinceLastProcessed = s.SecondsSinceLastExecute.HasValue ? Math.Round(s.SecondsSinceLastExecute.Value, 1) : (double?)null,
+        linkOperation = LinkOperationBusyNote().Trim() is { Length: > 0 } linkNote ? linkNote : null
     };
 
     private bool TryQueue(ExternalEventWorkItem item)

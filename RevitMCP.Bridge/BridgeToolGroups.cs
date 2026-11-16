@@ -136,6 +136,8 @@ public static class BridgeToolGroups
             "revit_activate_document", "revit_preview_reload_links_from", "revit_reload_links_from", "revit_preview_remove_links",
             "revit_remove_links", "revit_preview_set_link_visibility", "revit_set_link_visibility", "revit_save_document",
             "revit_preview_link_dwg", "revit_link_dwg",
+            "revit_preview_link_models", "revit_link_models", "revit_link_operation_status", "revit_list_link_operations",
+            "revit_request_link_cancel", "revit_reconcile_link_operation",
             "revit_sync_with_central",
             "revit_open_document", "revit_close_document", "revit_list_worksets", "revit_preview_set_workset", "revit_set_workset",
             "revit_get_ownership", "revit_checkout_elements", "revit_relinquish", "revit_reload_latest"
