@@ -231,6 +231,7 @@
     <Compile Include="..\RevitMCP.Addin\Annotation\TextRotationMath.cs" Link="Annotation\TextRotationMath.cs" />
     <!-- Lines, overlaps, image transform and title block checks (#139-#142, no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Annotation\LineShapePlanner.cs" Link="Annotation\LineShapePlanner.cs" />
+    <Compile Include="..\RevitMCP.Addin\Annotation\CurveShapePlanner.cs" Link="Annotation\CurveShapePlanner.cs" />
     <Compile Include="..\RevitMCP.Addin\Annotation\AnnotationOverlapMath.cs" Link="Annotation\AnnotationOverlapMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Export\ViewImageTransform.cs" Link="Export\ViewImageTransform.cs" />
     <Compile Include="..\RevitMCP.Addin\Documentation\Sheets\TitleBlockChecks.cs" Link="Documentation\Sheets\TitleBlockChecks.cs" />

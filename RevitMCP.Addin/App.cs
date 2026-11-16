@@ -365,6 +365,8 @@ public class App : IExternalApplication
             handler.RegisterTool(new PreviewSetTextNotesTool());
             handler.RegisterTool(new SetTextNotesTool());
             handler.RegisterTool(new CreateLinesTool());
+            handler.RegisterTool(new PreviewCreateCurvesTool()); // #161
+            handler.RegisterTool(new CreateCurvesTool());
             handler.RegisterTool(new PlaceDimensionsTool());
             handler.RegisterTool(new ListDimensionTypesTool());
 

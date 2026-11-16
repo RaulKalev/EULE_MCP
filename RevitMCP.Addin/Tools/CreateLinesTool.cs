@@ -157,7 +157,7 @@ public class CreateLinesTool : IRevitMcpTool
     /// A model curve must lie on a sketch plane. Any plane whose normal is perpendicular
     /// to the segment direction contains the segment, so one is derived per segment.
     /// </summary>
-    private static Plane PlaneContainingLine(XYZ start, XYZ end)
+    internal static Plane PlaneContainingLine(XYZ start, XYZ end)
     {
         var direction = (end - start).Normalize();
         var normal = direction.CrossProduct(XYZ.BasisZ);
