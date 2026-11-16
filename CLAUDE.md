@@ -78,6 +78,23 @@ To work beside the user instead of in their document, open your own local: `revi
 (a background `<central>_<user>_mcp.rvt`, never activated), then pass `document=<its title>` on every call, check out
 what you edit (`revit_get_ownership`, `revit_checkout_elements`), sync, `revit_relinquish` and `revit_close_document`.
 
+## Linking IFC and RVT models
+
+`revit_link_models` (after `revit_preview_link_models`, `documents` group, see [`docs/link-operations.md`](docs/link-operations.md))
+links IFC files first, RVT second, as durable operations. It returns an operation id at once; a large IFC then converts for
+minutes while Revit does not answer. Rules:
+
+- **Never repeat the request and never retry after a timeout.** A repeat for the same file returns the existing operation
+  (`already_in_progress`); a lost answer is `outcome_unknown`, not a failure. Settle it with `revit_reconcile_link_operation`
+  once Revit answers, or ask the user.
+- Follow the id with `revit_link_operation_status` (`waitSeconds` ≤ 25, no faster than every 15-30 s). It, `revit_list_link_operations`
+  and `revit_request_link_cancel` read the connector's files in the bridge, so they answer while Revit is blocked. They show
+  measured elapsed time and a phase, never a percentage. The link is usable only when `ready` is true (verified, not merely
+  a cache file).
+- While an operation converts, other Revit calls come back `revit_busy` naming it: wait, do not queue conflicting work or retry.
+- Cancel only drops queued work; a running conversion is never interrupted. `revit_reload_links_from` and `ifExists=refresh`
+  share the same lock and record.
+
 ## Exporting a delivery
 
 `revit_export` (`output` group, see [`docs/export.md`](docs/export.md)) writes PDF/DWG/DXF the way the EliteSheets

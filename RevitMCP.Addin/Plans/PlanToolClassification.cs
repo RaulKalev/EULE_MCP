@@ -28,6 +28,8 @@ public static class PlanToolClassification
         "revit_load_family",
         // Linking a DWG adds a CAD link type and its instance.
         "revit_link_dwg",
+        // Linking an IFC or RVT adds a link type and its instance (#163).
+        "revit_link_models", "revit_link_operation_run",
         // Copying view filters creates the filters in the target (#134).
         "revit_copy_view_filters",
         // #135: a reshape creates a replacement region; a type spec can duplicate a type.
@@ -53,7 +55,7 @@ public static class PlanToolClassification
         "revit_focus_", "revit_copy_cad_", "revit_activate_", "revit_save_", "revit_sync_", "revit_reload_", "revit_remove_",
         "revit_delete", "revit_checkpoint_", "revit_memory_", "revit_export", "revit_update_skill", "revit_plan_", "revit_job_",
         "revit_open_", "revit_close_", "revit_checkout_", "revit_relinquish", "revit_purge_", "revit_bind_parameter_", "revit_ungroup",
-        "revit_page_", "sync_ifc_", "config_", "file_", "excel_",
+        "revit_page_", "revit_reconcile_link_", "revit_request_link_", "sync_ifc_", "config_", "file_", "excel_",
         // Change connector files or records, not the model (H1).
         "standards_", "revit_usage_", "revit_propose_", "revit_manage_project_skill_", "revit_configure_"
         // "revit_export" (no underscore) also covers revit_export and revit_export_and_check (#105): they write files only.

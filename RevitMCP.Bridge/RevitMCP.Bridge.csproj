@@ -42,6 +42,16 @@
     <Compile Include="..\RevitMCP.Addin\FileSystem\BackupPathNaming.cs" Link="Memory\BackupPathNaming.cs" />
   </ItemGroup>
 
+  <!-- Link operation records (#163): status, list and cancel read the add-in's operation files here, so they answer while Revit's
+       API thread is blocked converting an IFC (no Revit API in these). -->
+  <ItemGroup>
+    <Compile Include="..\RevitMCP.Addin\LinkOperations\LinkOperationModels.cs" Link="LinkOperations\LinkOperationModels.cs" />
+    <Compile Include="..\RevitMCP.Addin\LinkOperations\LinkSourcePath.cs" Link="LinkOperations\LinkSourcePath.cs" />
+    <Compile Include="..\RevitMCP.Addin\LinkOperations\LinkOperationRules.cs" Link="LinkOperations\LinkOperationRules.cs" />
+    <Compile Include="..\RevitMCP.Addin\LinkOperations\LinkOperationStore.cs" Link="LinkOperations\LinkOperationStore.cs" />
+    <Compile Include="..\RevitMCP.Addin\LinkOperations\LinkOperationStatusView.cs" Link="LinkOperations\LinkOperationStatusView.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <None Update="appsettings.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>

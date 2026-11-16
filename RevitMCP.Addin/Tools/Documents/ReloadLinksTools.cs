@@ -4,6 +4,7 @@ using Autodesk.Revit.UI;
 using Newtonsoft.Json.Linq;
 using RevitMCP.Addin.Documents;
 using RevitMCP.Addin.Interfaces;
+using RevitMCP.Addin.LinkOperations;
 using RevitMCP.Core.Models;
 
 namespace RevitMCP.Addin.Tools.Documents;
@@ -97,12 +98,76 @@ internal static class ReloadLinksExecutor
         var blocked = DocumentToolSupport.CheckNoOpenTransaction(doc);
         if (blocked != null) return DocumentToolSupport.Fail(request, blocked);
 
-        var outcomes = new List<LinkReloadOutcome>();
-        foreach (var pair in pairs)
+        // Same long-running safety as revit_link_models (#163): every IFC / RVT reload is a recorded link operation, so the
+        // bridge can answer status while Revit is blocked, a second request for the same file is refused as already in
+        // progress, and a lost answer is outcome_unknown instead of an invitation to reload again.
+        var operations = new Dictionary<LinkReloadPair, string>();
+        var linkService = LinkOperationService.Current;
+        if (linkService != null)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var link = links.First(l => l.TypeId == pair.Link!.TypeId);
-            outcomes.Add(LinkReloadService.Reload(uiapp.Application, doc, link, pair.Path, placement, ifcMethod, regenerateIfcCache, cancellationToken));
+            foreach (var pair in pairs)
+            {
+                var link = links.First(l => l.TypeId == pair.Link!.TypeId);
+                if (link.Kind != LinkKind.Ifc && link.Kind != LinkKind.Rvt) continue;   // a DWG reload is quick
+                var admission = linkService.Admit(new LinkAdmitInput
+                {
+                    Type = LinkOperationTypes.Refresh,
+                    Kind = link.Kind == LinkKind.Ifc ? LinkKinds.Ifc : LinkKinds.Rvt,
+                    SourcePath = pair.Path,
+                    TargetSelector = LinkModelsExecutor.TargetSelectorOf(doc),
+                    TargetTitle = doc.Title,
+                    TargetKey = LinkModelsExecutor.TargetKeyOf(doc),
+                    Positioning = placement == LinkReloadService.PlacementShared ? "shared" : "origin",
+                    RegenerateCache = regenerateIfcCache,
+                    ExistingLinkTypeId = link.TypeId,
+                    RequestedBy = request.ClientName,
+                    RequestId = request.RequestId
+                }, inline: true);
+                if (!admission.Accepted)
+                {
+                    foreach (var started in operations.Values) linkService.WithdrawInline(started);
+                    return DocumentToolSupport.Fail(request,
+                        $"{Path.GetFileName(pair.Path)}: {admission.Message} Nothing was reloaded.",
+                        admission.Status == "queue_full" ? "queue_full" : admission.Status,
+                        new { operationId = admission.Operation?.Id, state = admission.Operation?.State });
+                }
+                operations[pair] = admission.Operation!.Id;
+            }
+        }
+
+        var outcomes = new List<LinkReloadOutcome>();
+        try
+        {
+            foreach (var pair in pairs)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var link = links.First(l => l.TypeId == pair.Link!.TypeId);
+                operations.TryGetValue(pair, out var operationId);
+                if (operationId != null)
+                    linkService!.BeginConversion(operationId, "reloading " + Path.GetFileName(pair.Path) + " (Revit does not answer meanwhile)");
+                LinkReloadOutcome outcome;
+                try
+                {
+                    outcome = LinkReloadService.Reload(uiapp.Application, doc, link, pair.Path, placement, ifcMethod, regenerateIfcCache, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    if (operationId != null) LinkModelsExecutor.FinishReload(linkService!, doc, operationId, null, ex.Message);
+                    operations.Remove(pair);
+                    throw;
+                }
+                if (operationId != null)
+                {
+                    LinkModelsExecutor.FinishReload(linkService!, doc, operationId, outcome, null);
+                    operations.Remove(pair);
+                }
+                outcomes.Add(outcome);
+            }
+        }
+        finally
+        {
+            // Files that never began (a cancel or an exception stopped the loop) are withdrawn; nothing is left "starting".
+            foreach (var pending in operations.Values) linkService?.WithdrawInline(pending);
         }
 
         sw.Stop();

@@ -37,6 +37,8 @@ public class ReadOnlyFlagTests
         "revit_select_elements", "revit_select_elements_by_query", "revit_select_linked_elements",
         "revit_select_circuit_elements", "revit_select_elements_by_panel", "revit_select_uncircuited_elements",
         "revit_select_clash_elements", "revit_plan_show_changes", "revit_focus_clash", "revit_select_instance",
+        // Link operations (#163): cancel writes a marker file, reconcile settles a record, link creates the operation.
+        "revit_request_link_cancel", "revit_reconcile_link_operation", "revit_link_models",
         // Config reads never create a file; the writers do.
         "config_write", "config_update", "config_set_project_config"
     };
