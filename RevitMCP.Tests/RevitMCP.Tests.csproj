@@ -384,5 +384,6 @@
          LegendPlanning uses FuzzyNameMatcher, which the schedules group already links. -->
     <Compile Include="..\RevitMCP.Addin\Legends\LegendPlanning.cs" Link="Legends\LegendPlanning.cs" />
     <Compile Include="..\RevitMCP.Addin\Keynotes\KeynoteLogic.cs" Link="Keynotes\KeynoteLogic.cs" />
+    <Compile Include="..\RevitMCP.Addin\Editing\ChangeElementTypePlanning.cs" Link="Editing\ChangeElementTypePlanning.cs" />
   </ItemGroup>
 </Project>
