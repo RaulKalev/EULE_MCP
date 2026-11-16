@@ -19,7 +19,7 @@ public static class BridgeToolGroups
         [Discovery] = "Search, describe, load and call any connector tool",
         [Graph] = "Model graph: build, status, summary, query, route (cheap id-first discovery)",
         ["query"] = "Broad element queries, parameter filters, grouping, query presets, parameter QA, phases, design options, model health audit; geometry, boxes, ray casts",
-        ["edit"] = "Generic model edits: parameters, move/align/rotate/elevation, mirror/array, groups (list, create, ungroup, place), delete/duplicate/rename, family types, placement, families (list, load, reload, purge unused), project and shared parameters (list, create, bind categories), element and view phases",
+        ["edit"] = "Generic model edits: parameters, move/align/rotate/elevation, pin/unpin and flip facing/hand, mirror/array, groups (list, create, ungroup, place), delete/duplicate/rename, family types, placement, families (list, load, reload, purge unused), project and shared parameters (list, create, bind categories), change the type of existing instances, element and view phases, model datums (list/create/edit levels, grids, reference planes)",
         ["devices"] = "Room geometry, device codes, room-based device placement and device/fire-alarm audits",
         ["electrical"] = "Circuits, panels, wires/cables, voltage drop, fire alarm circuits, patch panels, cable tray and conduit runs (containment)",
         ["panelschematics"] = "PanelSchematics plugin (Kilbiskeemid): panel tables, empty rows, circuit row parameters, its Extensible Storage data",
@@ -73,6 +73,12 @@ public static class BridgeToolGroups
             "revit_preview_create_parameters", "revit_create_parameters", "revit_bind_parameter_categories",
             // One value per element (#165)
             "revit_preview_set_parameter_values", "revit_set_parameter_values",
+            // Change the type of existing instances (#159)
+            "revit_preview_change_element_type", "revit_change_element_type",
+            // Pin and flip (#162)
+            "revit_preview_set_pin_state", "revit_set_pin_state", "revit_preview_flip_family_instances", "revit_flip_family_instances",
+            // Model datums (#164)
+            "revit_list_datums", "revit_preview_create_datums", "revit_create_datums", "revit_preview_edit_datums", "revit_edit_datums",
             // Family creation (#147)
             "revit_preview_create_detail_family", "revit_create_detail_family", "revit_get_family_contents",
             "revit_preview_edit_detail_family", "revit_edit_detail_family",
@@ -98,6 +104,8 @@ public static class BridgeToolGroups
             "revit_create_text_notes", "revit_get_text_notes", "revit_preview_set_text_notes", "revit_set_text_notes", "revit_annotate_detail_lines", "revit_preview_align_in_view", "revit_align_in_view",
             // Lines and overlaps (#140, #141)
             "revit_set_line_geometry", "revit_create_rectangle", "revit_check_annotation_overlaps",
+            // Arcs, circles and polylines (#161)
+            "revit_preview_create_curves", "revit_create_curves",
             // #135: filled region names match no keyword, and "preview" contains "view".
             "revit_list_filled_regions", "revit_list_filled_region_types", "revit_preview_create_filled_regions", "revit_create_filled_regions",
             "revit_preview_edit_filled_regions", "revit_edit_filled_regions", "revit_preview_set_filled_region_types", "revit_set_filled_region_types",
@@ -120,12 +128,16 @@ public static class BridgeToolGroups
         ("views", new[] { "revit_list_schedulable_fields", "revit_list_filterable_parameters" }),
         // Legends: "legend" matches no keyword.
         ("views", new[] { "revit_list_legends", "revit_preview_populate_legend", "revit_populate_legend" }),
+        // Per-element hide and graphic overrides in one view (#160): "graphics" matches no keyword.
+        ("views", new[] { "revit_get_element_graphics", "revit_preview_set_element_graphics", "revit_set_element_graphics" }),
         ("cad", new[] { "revit_create_panel_schematic_symbol_from_dwg" }),
         ("documents", new[]
         {
             "revit_activate_document", "revit_preview_reload_links_from", "revit_reload_links_from", "revit_preview_remove_links",
             "revit_remove_links", "revit_preview_set_link_visibility", "revit_set_link_visibility", "revit_save_document",
             "revit_preview_link_dwg", "revit_link_dwg",
+            "revit_preview_link_models", "revit_link_models", "revit_link_operation_status", "revit_list_link_operations",
+            "revit_request_link_cancel", "revit_reconcile_link_operation",
             "revit_sync_with_central",
             "revit_open_document", "revit_close_document", "revit_list_worksets", "revit_preview_set_workset", "revit_set_workset",
             "revit_get_ownership", "revit_checkout_elements", "revit_relinquish", "revit_reload_latest"

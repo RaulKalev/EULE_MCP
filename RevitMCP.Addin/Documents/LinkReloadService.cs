@@ -226,7 +226,7 @@ public static class LinkReloadService
         outcome.Notes.Add("The IFC link was replaced: element ids of the link type and instances changed.");
     }
 
-    private static void EnsureIfcCache(Application app, string ifcPath, string cachePath, bool regenerate, LinkReloadOutcome outcome)
+    internal static void EnsureIfcCache(Application app, string ifcPath, string cachePath, bool regenerate, LinkReloadOutcome outcome)
     {
         if (!regenerate && IsCacheFresh(ifcPath, cachePath))
         {
@@ -248,10 +248,10 @@ public static class LinkReloadService
         outcome.Notes.Add($"Converted the IFC to {cachePath}.");
     }
 
-    private static bool IsCacheFresh(string ifcPath, string cachePath) =>
+    internal static bool IsCacheFresh(string ifcPath, string cachePath) =>
         File.Exists(cachePath) && File.GetLastWriteTimeUtc(cachePath) >= File.GetLastWriteTimeUtc(ifcPath);
 
-    private static RevitLinkInstance CreateInstance(Document doc, ElementId typeId, string placement) =>
+    internal static RevitLinkInstance CreateInstance(Document doc, ElementId typeId, string placement) =>
         placement == PlacementShared
             ? RevitLinkInstance.Create(doc, typeId, ImportPlacement.Shared)
             : RevitLinkInstance.Create(doc, typeId, ImportPlacement.Origin);
@@ -369,7 +369,7 @@ public static class LinkReloadService
     /// Runs a link operation outside a transaction (link loads require that); when Revit reports that the
     /// operation needs an open transaction, runs it again inside one.
     /// </summary>
-    private static void RunLinkStep(Document doc, string name, Action action)
+    internal static void RunLinkStep(Document doc, string name, Action action)
     {
         try
         {

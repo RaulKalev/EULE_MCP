@@ -42,6 +42,37 @@ response's `coordinateFrame` says which (`modelXY`, `viewRightUp`).
 
 Both need approval, and Direct Edit allows them.
 
+## Arcs, circles and polylines: `revit_create_curves`, `revit_preview_create_curves`
+
+`revit_create_lines` still draws straight segments and is unchanged. `revit_create_curves` draws native Revit curves
+(`Line`, `Arc`, a full-circle `Arc`) as detail or model curves; `revit_preview_create_curves` (read-only, same arguments)
+validates and counts without touching the model. Arguments: `curves` (array), `kind` = `detail` (default) or `model`,
+`viewId` (detail; default the active view), `lineStyle` (all entries; an entry may name its own), `document`.
+
+| `shape` | Fields (mm, degrees) |
+|---|---|
+| `line` | `x1, y1, x2, y2` (model: `z1, z2`, default 0) |
+| `arc` by centre | `center {x, y[, z]}`, `radius`, `startAngleDeg`, and `endAngleDeg` (counter-clockwise) or `sweepDeg` (negative = clockwise) |
+| `arc` by points | `start`, `through`, `end` as `{x, y[, z]}` or `[x, y[, z]]` |
+| `circle` | `center`, `radius` |
+| `polyline` | `points` (at least 2), optional `closed` |
+
+Coordinates. Detail curves use the view-plane x, y of `revit_create_rectangle` (model x, y in a plan, drafting view or
+sheet; along the view's right and up in a section or elevation). A `z` on a detail entry is rejected, not projected, so
+every curve lies in the view's sketch plane. Model curves use x, y, z; centre arcs and circles lie in `plane`
+`xy` (default), `xz` or `yz` through the centre, angles measured from the plane's first axis (x, x, y). Each model curve
+gets its own sketch plane.
+
+A polyline is a chain of separate line elements, not one element; `elementIds` come back in order. A closed model
+polyline must be flat (0.2 mm tolerance); an open one may be 3D. A shape whose creation fails is rolled back on its own.
+
+Validation, per entry (the other entries still draw): collinear or repeated three-point arcs, radius <= 0, sweep of 0 or
+360 or more (use `circle`), segments, arcs and radii below Revit's short curve tolerance, a repeated closing point, off-plane
+points of a closed polyline, `z` on a detail curve, non-finite numbers, unknown shapes. A missing line style is a warning
+and the curves keep the default style. The result lists, per entry, `status` (`valid`/`created`/`error`), `error`,
+`curveCount`, `lengthMm`, `sweepDeg`, `radiusMm`, `center`, `lineStyle` and `elementIds`. Requires approval; one transaction,
+one undo.
+
 ## Text notes: `revit_set_text_notes`, `revit_get_text_notes`, `revit_check_annotation_overlaps`
 
 `formatting` on `revit_set_text_notes` and its preview:

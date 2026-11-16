@@ -77,6 +77,10 @@ public class App : IExternalApplication
             handler.RegisterTool(new SetLinkVisibilityTool());
             handler.RegisterTool(new PreviewLinkDwgTool()); // link DWG files into views
             handler.RegisterTool(new LinkDwgTool());
+            handler.RegisterTool(new PreviewLinkModelsTool()); // #163 IFC-first model linking
+            handler.RegisterTool(new LinkModelsTool());
+            handler.RegisterTool(new LinkOperationRunTool()); // internal: not advertised by the bridge
+            handler.RegisterTool(new ReconcileLinkOperationTool());
             handler.RegisterTool(new SaveDocumentTool());
             handler.RegisterTool(new SyncWithCentralTool());
             // Worker document (#101): the agent's own local, worksets, ownership
@@ -365,6 +369,8 @@ public class App : IExternalApplication
             handler.RegisterTool(new PreviewSetTextNotesTool());
             handler.RegisterTool(new SetTextNotesTool());
             handler.RegisterTool(new CreateLinesTool());
+            handler.RegisterTool(new PreviewCreateCurvesTool()); // #161
+            handler.RegisterTool(new CreateCurvesTool());
             handler.RegisterTool(new PlaceDimensionsTool());
             handler.RegisterTool(new ListDimensionTypesTool());
 
@@ -471,8 +477,11 @@ public class App : IExternalApplication
             handler.RegisterTool(new RevitMCP.Addin.Tools.Jobs.JobReportTool());
             // Domain gaps #102-#109: each area registers its own tools.
             RevitMCP.Addin.Tools.Families.FamiliesAndParametersToolRegistration.Register(handler); // #102 families and parameters
+            RevitMCP.Addin.Tools.Editing.ChangeElementTypeToolRegistration.Register(handler); // #159 change element type
             RevitMCP.Addin.Tools.Schedules.SchedulesToolRegistration.Register(handler); // #103 schedules
             RevitMCP.Addin.Tools.Views.ViewCreationToolRegistration.Register(handler); // #104 view creation
+            RevitMCP.Addin.Tools.ElementGraphics.ElementGraphicsToolRegistration.Register(handler); // #160 per-element view graphics
+            RevitMCP.Addin.Tools.Datums.DatumToolRegistration.Register(handler); // #164 model datums
             handler.RegisterTool(new RevitMCP.Addin.Tools.SetLineGeometryTool()); // #140
             handler.RegisterTool(new RevitMCP.Addin.Tools.CreateRectangleTool()); // #140
             handler.RegisterTool(new RevitMCP.Addin.Tools.CheckAnnotationOverlapsTool()); // #141
@@ -526,6 +535,22 @@ public class App : IExternalApplication
             catch (Exception ex)
             {
                 DiagLog($"Job service unavailable: {ex.Message}");
+            }
+
+            // Durable IFC / RVT link operations (LinkOperations\, docs/link-operations.md, #163). The record is written before Revit
+            // converts anything, so the bridge answers status from the files and a restart leaves something to reconcile.
+            try
+            {
+                var linkOperations = new RevitMCP.Addin.LinkOperations.LinkOperationService(
+                    new RevitMCP.Addin.LinkOperations.LinkOperationStore(RevitMCP.Addin.LinkOperations.LinkOperationStore.DefaultFolder()),
+                    (request, timeoutMs) => eventService.DispatchAsync(request, timeoutMs));
+                linkOperations.RecoverOrphans();
+                linkOperations.Start();
+                RevitMCP.Addin.LinkOperations.LinkOperationService.Current = linkOperations;
+            }
+            catch (Exception ex)
+            {
+                DiagLog($"Link operation service unavailable: {ex.Message}");
             }
 
             // Each add-in load hosts its own unique pipe. The load id is essential for

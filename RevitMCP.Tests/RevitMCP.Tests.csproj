@@ -225,12 +225,14 @@
     <Compile Include="..\RevitMCP.Addin\Placement\AlignmentMath.cs" Link="Placement\AlignmentMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Placement\ViewAlignmentMath.cs" Link="Placement\ViewAlignmentMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Placement\MoveElementsMath.cs" Link="Placement\MoveElementsMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Placement\ElementOrientationMath.cs" Link="Placement\ElementOrientationMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Placement\CopyElementsMath.cs" Link="Placement\CopyElementsMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Placement\FacePlacementMath.cs" Link="Placement\FacePlacementMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Annotation\TextNoteEditPlanner.cs" Link="Annotation\TextNoteEditPlanner.cs" />
     <Compile Include="..\RevitMCP.Addin\Annotation\TextRotationMath.cs" Link="Annotation\TextRotationMath.cs" />
     <!-- Lines, overlaps, image transform and title block checks (#139-#142, no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\Annotation\LineShapePlanner.cs" Link="Annotation\LineShapePlanner.cs" />
+    <Compile Include="..\RevitMCP.Addin\Annotation\CurveShapePlanner.cs" Link="Annotation\CurveShapePlanner.cs" />
     <Compile Include="..\RevitMCP.Addin\Annotation\AnnotationOverlapMath.cs" Link="Annotation\AnnotationOverlapMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Export\ViewImageTransform.cs" Link="Export\ViewImageTransform.cs" />
     <Compile Include="..\RevitMCP.Addin\Documentation\Sheets\TitleBlockChecks.cs" Link="Documentation\Sheets\TitleBlockChecks.cs" />
@@ -307,6 +309,8 @@
     <Compile Include="..\RevitMCP.Addin\Parameters\ParameterSpecMap.cs" Link="Parameters\ParameterSpecMap.cs" />
     <Compile Include="..\RevitMCP.Addin\Parameters\ParameterCreatePlanner.cs" Link="Parameters\ParameterCreatePlanner.cs" />
     <Compile Include="..\RevitMCP.Addin\Parameters\ParameterValueMapping.cs" Link="Parameters\ParameterValueMapping.cs" />
+    <Compile Include="..\RevitMCP.Addin\Datums\DatumSpec.cs" Link="Datums\DatumSpec.cs" />
+    <Compile Include="..\RevitMCP.Addin\Datums\DatumPlanner.cs" Link="Datums\DatumPlanner.cs" />
   </ItemGroup>
   <ItemGroup>
     <!-- #104 view creation: spec parsing, planning (fan-out, names, callout rules), section box and extent math (no Revit API) -->
@@ -319,6 +323,7 @@
     <!-- #134 view filters: rule trees, operator and value checks, requests, matching, routing, order, approval text (no Revit API) -->
     <Compile Include="..\RevitMCP.Addin\ViewFilters\ViewFilterRules.cs" Link="ViewFilters\ViewFilterRules.cs" />
     <Compile Include="..\RevitMCP.Addin\ViewFilters\ViewFilterRequests.cs" Link="ViewFilters\ViewFilterRequests.cs" />
+    <Compile Include="..\RevitMCP.Addin\ElementGraphics\ElementGraphicsModel.cs" Link="ElementGraphics\ElementGraphicsModel.cs" />
     <Compile Include="..\RevitMCP.Addin\ViewFilters\ViewFilterMatching.cs" Link="ViewFilters\ViewFilterMatching.cs" />
     <Compile Include="..\RevitMCP.Addin\Approval\ViewFilterApprovalSummaries.cs" Link="Approval\ViewFilterApprovalSummaries.cs" />
   </ItemGroup>
@@ -380,9 +385,14 @@
     <Compile Include="..\RevitMCP.Addin\Styles\*.cs" Link="Styles\%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
+    <!-- IFC-first link operations (#163): state machine, admission, store, planner, verification, service (no Revit API) -->
+    <Compile Include="..\RevitMCP.Addin\LinkOperations\*.cs" Link="LinkOperations\%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- Legends and keynotes: type matching, grid, labels, clearExisting; keynote search, file parsing, diff, usage (no Revit API).
          LegendPlanning uses FuzzyNameMatcher, which the schedules group already links. -->
     <Compile Include="..\RevitMCP.Addin\Legends\LegendPlanning.cs" Link="Legends\LegendPlanning.cs" />
     <Compile Include="..\RevitMCP.Addin\Keynotes\KeynoteLogic.cs" Link="Keynotes\KeynoteLogic.cs" />
+    <Compile Include="..\RevitMCP.Addin\Editing\ChangeElementTypePlanning.cs" Link="Editing\ChangeElementTypePlanning.cs" />
   </ItemGroup>
 </Project>
