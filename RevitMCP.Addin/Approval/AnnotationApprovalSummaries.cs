@@ -26,6 +26,15 @@ public static class AnnotationApprovalSummaries
                        (string.IsNullOrEmpty(text) ? string.Empty : $" with the text '{text}'") +
                        (ToolArguments.GetBool(request.Arguments, "asGroup") ? " as a detail group." : ".");
             }
+            case "revit_create_curves":
+            {
+                request.Arguments.TryGetValue("curves", out var raw);
+                var curves = raw as JArray ?? (raw is string s ? ToolArguments.TryParseJArray(s) : null);
+                var kind = ToolArguments.GetString(request.Arguments, "kind", "detail");
+                var style = ToolArguments.GetString(request.Arguments, "lineStyle");
+                return $"Draw {curves?.Count ?? 0} {kind} curve shape(s) (lines, arcs, circles, polylines as native Revit curves)" +
+                       (string.IsNullOrWhiteSpace(style) ? "." : $" with line style '{style}'.");
+            }
             default:
                 return null;
         }

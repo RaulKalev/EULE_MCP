@@ -98,6 +98,8 @@ public static class BridgeToolGroups
             "revit_create_text_notes", "revit_get_text_notes", "revit_preview_set_text_notes", "revit_set_text_notes", "revit_annotate_detail_lines", "revit_preview_align_in_view", "revit_align_in_view",
             // Lines and overlaps (#140, #141)
             "revit_set_line_geometry", "revit_create_rectangle", "revit_check_annotation_overlaps",
+            // Arcs, circles and polylines (#161)
+            "revit_preview_create_curves", "revit_create_curves",
             // #135: filled region names match no keyword, and "preview" contains "view".
             "revit_list_filled_regions", "revit_list_filled_region_types", "revit_preview_create_filled_regions", "revit_create_filled_regions",
             "revit_preview_edit_filled_regions", "revit_edit_filled_regions", "revit_preview_set_filled_region_types", "revit_set_filled_region_types",
