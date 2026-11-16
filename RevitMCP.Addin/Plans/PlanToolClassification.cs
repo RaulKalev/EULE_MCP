@@ -55,6 +55,7 @@ public static class PlanToolClassification
         "revit_open_", "revit_close_", "revit_checkout_", "revit_relinquish", "revit_purge_", "revit_bind_parameter_", "revit_ungroup",
         "revit_page_", "sync_ifc_", "config_", "file_", "excel_",
         // Change connector files or records, not the model (H1).
+        "revit_flip_",
         "standards_", "revit_usage_", "revit_propose_", "revit_manage_project_skill_", "revit_configure_"
         // "revit_export" (no underscore) also covers revit_export and revit_export_and_check (#105): they write files only.
     };

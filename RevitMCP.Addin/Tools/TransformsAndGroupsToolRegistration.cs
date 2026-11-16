@@ -12,6 +12,10 @@ public static class TransformsAndGroupsToolRegistration
     {
         handler.RegisterTool(new PreviewMirrorElementsTool());
         handler.RegisterTool(new MirrorElementsTool());
+        handler.RegisterTool(new RevitMCP.Addin.Tools.ElementEditing.PreviewSetPinStateTool()); // #162
+        handler.RegisterTool(new RevitMCP.Addin.Tools.ElementEditing.SetPinStateTool());
+        handler.RegisterTool(new RevitMCP.Addin.Tools.ElementEditing.PreviewFlipFamilyInstancesTool());
+        handler.RegisterTool(new RevitMCP.Addin.Tools.ElementEditing.FlipFamilyInstancesTool());
         handler.RegisterTool(new PreviewArrayElementsTool());
         handler.RegisterTool(new ArrayElementsTool());
         handler.RegisterTool(new ListGroupsTool());

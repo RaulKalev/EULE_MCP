@@ -225,6 +225,7 @@
     <Compile Include="..\RevitMCP.Addin\Placement\AlignmentMath.cs" Link="Placement\AlignmentMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Placement\ViewAlignmentMath.cs" Link="Placement\ViewAlignmentMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Placement\MoveElementsMath.cs" Link="Placement\MoveElementsMath.cs" />
+    <Compile Include="..\RevitMCP.Addin\Placement\ElementOrientationMath.cs" Link="Placement\ElementOrientationMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Placement\CopyElementsMath.cs" Link="Placement\CopyElementsMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Placement\FacePlacementMath.cs" Link="Placement\FacePlacementMath.cs" />
     <Compile Include="..\RevitMCP.Addin\Annotation\TextNoteEditPlanner.cs" Link="Annotation\TextNoteEditPlanner.cs" />
