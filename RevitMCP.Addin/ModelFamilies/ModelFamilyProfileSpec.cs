@@ -318,7 +318,7 @@ public sealed class ModelFamilyProfilePlan
         var forms = ModelFamilyJson.Objects(args, FormsKey, problems);
         for (var i = 0; i < forms.Count; i++)
             if (ModelFamilyProfileFormSpec.Parse(forms[i], $"{FormsKey}[{i}]", problems) is { } form) plan.Forms.Add(form);
-        if (forms.Count == 0 && ModelFamilyJson.Token(args, FormsKey) == null)
+        if (forms.Count == 0 && ModelFamilyJson.Token(args, FormsKey) is null or JArray { Count: 0 })
             problems.Add("forms is required: [{\"loop\": <index>, \"depth\": <mm>}, …]; revit_get_model_family_profiles lists the loops.");
         if (ModelFamilyJson.Token(args, RemoveSourceCurvesKey) is { } remove)
         {

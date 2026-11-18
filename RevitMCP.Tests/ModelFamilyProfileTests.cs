@@ -309,6 +309,132 @@ public class ModelFamilyProfileTests
         }
     }
 
+    // ── Review cases (#177) ──────────────────────────────────────────────────
+
+    [Fact]
+    public void At_a_branch_an_arc_leaves_along_its_tangent_not_its_chord()
+    {
+        // At V = (0, 0): a short line at 30°, an arc whose chord runs at 20° but whose tangent leaves at 40°, and a line
+        // west. Ordered by chord, the arc would come before the 30° line and the regions would be traced wrongly.
+        var q = new[] { 200 * Math.Cos(20 * Math.PI / 180), 200 * Math.Sin(20 * Math.PI / 180) };
+        var radius = 100 / Math.Sin(20 * Math.PI / 180);
+        var sagitta = radius * (1 - Math.Cos(20 * Math.PI / 180));
+        var mid = new[] { q[0] / 2 - sagitta * Math.Sin(20 * Math.PI / 180), q[1] / 2 + sagitta * Math.Cos(20 * Math.PI / 180) };
+        var p = new[] { 20 * Math.Cos(30 * Math.PI / 180), 20 * Math.Sin(30 * Math.PI / 180) };
+        var curves = new[]
+        {
+            L(0, 0, p[0], p[1], 1), A(0, 0, mid[0], mid[1], q[0], q[1], 2), L(0, 0, -100, 0, 3),
+            L(p[0], p[1], q[0], q[1], 4), L(q[0], q[1], 250, 200, 5), L(250, 200, -100, 200, 6), L(-100, 200, -100, 0, 7)
+        };
+        var outline = new List<ModelFamilyFormSegment>
+        {
+            ModelFamilyFormSegment.Line(new double[] { -100, 0, 0 }, new double[] { 0, 0, 0 }),
+            ModelFamilyFormSegment.Line(new double[] { 0, 0, 0 }, new[] { p[0], p[1], 0 }),
+            ModelFamilyFormSegment.Line(new[] { p[0], p[1], 0 }, new[] { q[0], q[1], 0 }),
+            ModelFamilyFormSegment.Line(new[] { q[0], q[1], 0 }, new double[] { 250, 200, 0 }),
+            ModelFamilyFormSegment.Line(new double[] { 250, 200, 0 }, new double[] { -100, 200, 0 }),
+            ModelFamilyFormSegment.Line(new double[] { -100, 200, 0 }, new double[] { -100, 0, 0 })
+        };
+
+        var analysis = Analyse(curves);
+
+        Assert.Equal(2, analysis.Loops.Count);
+        Assert.All(analysis.Loops, l => Assert.True(l.Usable, string.Join("; ", l.Reasons)));
+        Assert.Equal(ModelFamilyFormGeometry.SignedArea(outline), analysis.Loops.Sum(l => l.Area), 6);
+        Assert.DoesNotContain("crossing", Kinds(analysis));
+    }
+
+    [Fact]
+    public void A_hole_close_to_a_large_arc_is_still_a_child_of_the_loop_around_it()
+    {
+        // A 1 m radius disc and a 5 mm hole whose outer edge is 4 mm inside the rim, half way between two of the points
+        // the rim is drawn with: outside the coarse polygon of the rim, inside the true circle.
+        var angle = 95.625 * Math.PI / 180;
+        var curves = Circle(0, 0, 1000, 1).Concat(Circle(991 * Math.Cos(angle), 991 * Math.Sin(angle), 5, 2)).ToList();
+
+        var analysis = Analyse(curves);
+
+        Assert.Equal(2, analysis.Loops.Count);
+        Assert.Equal(0, analysis.Loops[1].Parent);
+        Assert.Equal(new[] { 1 }, analysis.Loops[0].Children);
+        Assert.Equal(1, analysis.LoopAt(new[] { 991 * Math.Cos(angle), 991 * Math.Sin(angle), 0 })!.Index);
+        Assert.Equal(0, analysis.LoopAt(new[] { 996 * Math.Cos(angle + 0.003), 996 * Math.Sin(angle + 0.003), 0 })!.Index);
+    }
+
+    [Fact]
+    public void A_slot_of_lines_and_semicircles_inside_a_rectangle_is_its_hole()
+    {
+        var curves = Rectangle(0, 0, 200, 100).Concat(new[] { L(60, 40, 140, 40, 11), A(140, 40, 150, 50, 140, 60, 12), L(140, 60, 60, 60, 13), A(60, 60, 50, 50, 60, 40, 14) });
+
+        var analysis = Analyse(curves);
+
+        Assert.Equal(2, analysis.Loops.Count);
+        Assert.Equal(0, analysis.Loops[1].Parent);
+        Assert.Equal(80 * 20 + Math.PI * 100, analysis.Loops[1].Area, 6);
+        Assert.Equal("mixed", analysis.Loops[1].Kind);
+    }
+
+    [Fact]
+    public void Circles_and_squares_nested_three_deep_with_arcs()
+    {
+        var curves = Circle(0, 0, 100, 1).Concat(Rectangle(-50, -50, 50, 50, 10)).Concat(Circle(0, 0, 20, 20)).ToList();
+
+        var analysis = Analyse(curves);
+
+        Assert.Equal(new int?[] { null, 0, 1 }, analysis.Loops.Select(l => l.Parent));
+        Assert.Equal(new[] { "circle", "rectangle", "circle" }, analysis.Loops.Select(l => l.Kind));
+    }
+
+    [Fact]
+    public void A_loop_touching_its_parent_at_one_vertex_leaves_a_region_that_touches_itself()
+    {
+        // The square's left edge is split at (0, 50), where a triangle starts: the region around the triangle passes
+        // through (0, 50) twice, which Revit cannot sketch; the triangle itself is usable.
+        var curves = new[]
+        {
+            L(0, 0, 100, 0), L(100, 0, 100, 100), L(100, 100, 0, 100), L(0, 100, 0, 50), L(0, 50, 0, 0),
+            L(0, 50, 50, 30), L(50, 30, 50, 70), L(50, 70, 0, 50)
+        };
+
+        var analysis = Analyse(curves);
+
+        Assert.Equal(2, analysis.Loops.Count);
+        Assert.False(analysis.Loops[0].Usable);
+        Assert.True(analysis.Loops[0].TouchesItself);
+        Assert.Equal(10000 - 1000, analysis.Loops[0].Area, 6);
+        Assert.True(analysis.Loops[1].Usable);
+    }
+
+    [Fact]
+    public void Mirrored_curves_give_the_mirrored_loops()
+    {
+        var curves = Rectangle(0, 0, 200, 100).Concat(new[] { L(60, 40, 140, 40, 11), A(140, 40, 150, 50, 140, 60, 12), L(140, 60, 60, 60, 13), A(60, 60, 50, 50, 60, 40, 14) }).ToList();
+        ModelFamilyProfileCurve Mirror(ModelFamilyProfileCurve c) => c.Kind == ModelFamilyFormSegmentKind.Line
+            ? ModelFamilyProfileCurve.Line(new[] { -c.Start[0], c.Start[1], 0 }, new[] { -c.End[0], c.End[1], 0 }, c.Layer, c.SourceId)
+            : ModelFamilyProfileCurve.Arc(new[] { -c.Start[0], c.Start[1], 0 }, new[] { -c.Mid![0], c.Mid[1], 0 }, new[] { -c.End[0], c.End[1], 0 }, c.Layer, c.SourceId);
+
+        var original = Analyse(curves);
+        var mirrored = Analyse(curves.Select(Mirror));
+
+        Assert.Equal(original.Loops.Select(l => Math.Round(l.Area, 6)), mirrored.Loops.Select(l => Math.Round(l.Area, 6)));
+        Assert.Equal(original.Loops.Select(l => l.Parent), mirrored.Loops.Select(l => l.Parent));
+        Assert.All(mirrored.Loops, l => Assert.True(ModelFamilyFormGeometry.SignedArea(l.Uv) > 0));
+        Assert.Equal(-original.Loops[1].Max[0], mirrored.Loops[1].Min[0], 6);
+    }
+
+    [Fact]
+    public void A_stray_line_is_no_gap_of_its_own()
+    {
+        var analysis = Analyse(new[] { L(0, 0, 100, 0, 1), L(100, 0, 100, 50, 2), L(100, 50, 0, 50, 3), L(0, 50, 0, 0.3, 4), L(300, 0, 300, 0.5, 9) });
+
+        Assert.Equal(2, analysis.Open.Count);
+        var stray = Assert.Single(analysis.Open, o => o.SourceIds.SequenceEqual(new long[] { 9 }));
+        Assert.All(stray.Ends, e => Assert.True(e.Gap > 199, e.Gap?.ToString()));
+        var problems = new List<string>();
+        ModelFamilyProfileSelection.Choose(analysis, Form("{\"loop\": 0, \"depth\": 10}"), problems);
+        Assert.Contains(problems, p => p.Contains("smallest gap 0.3 mm"));
+    }
+
     private static ModelFamilyProfileCurve Reverse(ModelFamilyProfileCurve c) => c.Kind == ModelFamilyFormSegmentKind.Line
         ? ModelFamilyProfileCurve.Line(c.End, c.Start, c.Layer, c.SourceId)
         : ModelFamilyProfileCurve.Arc(c.End, c.Mid!, c.Start, c.Layer, c.SourceId);
@@ -484,6 +610,7 @@ public class ModelFamilyProfileTests
 
     [Theory]
     [InlineData("[{\"loop\": 0}]", null, "depth is required")]
+    [InlineData("[]", null, "forms is required")]
     [InlineData("[{\"loop\": 0, \"depth\": 10, \"cut\": 5}]", null, "only a void")]
     [InlineData("[{\"loop\": 0, \"depth\": 10, \"solid\": false, \"cut\": {\"created\": \"forms[3]\"}}]", null, "forms[3] does not exist")]
     [InlineData("[{\"loop\": 0, \"depth\": 10, \"solid\": false, \"cut\": {\"created\": \"forms[0]\"}}]", null, "cannot cut itself")]

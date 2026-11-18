@@ -126,7 +126,9 @@ internal static class ModelFamilyProfileExecutor
 
     /// <summary>
     /// The work plane for fitted curves: the reference level when they all lie on it, else a reference plane they all
-    /// lie on (named planes first), else the fitted plane as {origin, normal}.
+    /// lie on (named planes first), else the fitted plane as {origin, normal}. "On" is every point within the off-plane
+    /// tolerance; the fitted normal is not compared, because it only snaps to an axis within 0.006°, and curves on the
+    /// level with a little z noise would otherwise be sketched on a slightly tilted free plane.
     /// </summary>
     private static (JToken? Token, ModelFamilyFormFrame Frame) Coinciding(Document doc, List<double[]> points, double[] origin, double[] normal,
         double tolerance, JObject plane)
@@ -134,7 +136,7 @@ internal static class ModelFamilyProfileExecutor
         bool AllOn(double[] planeOrigin, double[] planeNormal) =>
             points.All(p => Math.Abs(ModelFamilyFormGeometry.Dot(ModelFamilyFormGeometry.Sub(p, planeOrigin), ModelFamilyFormGeometry.Normalize(planeNormal))) <= tolerance);
 
-        if (ModelFamilyLookup.ReferenceLevel(doc) is { } level && ModelFamilyProfilePlane.Parallel(normal, new[] { 0.0, 0, 1 }))
+        if (ModelFamilyLookup.ReferenceLevel(doc) is { } level)
         {
             var levelOrigin = new[] { 0, 0, level.Elevation * MmPerFoot };
             if (AllOn(levelOrigin, new[] { 0.0, 0, 1 }))
@@ -153,7 +155,7 @@ internal static class ModelFamilyProfileExecutor
             catch { continue; }
             var planeNormal = Direction(geometry.Normal);
             var planeOrigin = ModelFamilyFormBuilder.Mm(geometry.Origin);
-            if (!ModelFamilyProfilePlane.Parallel(normal, planeNormal) || !AllOn(planeOrigin, planeNormal)) continue;
+            if (!AllOn(planeOrigin, planeNormal)) continue;
             plane["coincidesWith"] = new JObject { ["kind"] = "referencePlane", ["id"] = referencePlane.Id.Value, ["name"] = referencePlane.Name };
             plane["normal"] = ModelFamilyLookup.Direction(geometry.Normal);
             return (new JValue(referencePlane.Id.Value), ModelFamilyProfilePlane.FrameFor(planeOrigin, planeNormal));
