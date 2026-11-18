@@ -122,8 +122,9 @@ Family Editor window: left unsaved unless asked). Rules:
 - Always run the `revit_preview_…` twin first. It performs the edit and rolls it back, so `ready: false` with
   `revitFailures` is Revit's real answer (an over-constrained dimension, a form it cannot make).
 - A refused step rolls the whole call back: fix the item the message names, do not retry it unchanged.
-- Build in this order: category and settings, reference planes and dimensions, parameters and types, forms on the
-  planes, materials, nested components and visibility, connectors; then `revit_flex_model_family` before loading.
+- Build in this order: category and settings, reference planes, parameters and types, dimensions labelled with those
+  parameters, forms on the planes, materials, nested components and visibility, connectors; then
+  `revit_flex_model_family` before loading.
 - A hosted template cannot be made non-hosted: start a free-standing device from `Metric Generic Model.rft`.
 - Never save or close the user's open family document yourself; the `target` decides what is saved.
 
