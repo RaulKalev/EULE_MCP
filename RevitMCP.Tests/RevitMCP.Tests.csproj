@@ -306,6 +306,8 @@
     <Compile Include="..\RevitMCP.Addin\Families\FamilyContentsSpec.cs" Link="Families\FamilyContentsSpec.cs" />
     <Compile Include="..\RevitMCP.Addin\Families\DetailFamilyTypes.cs" Link="Families\DetailFamilyTypes.cs" />
     <Compile Include="..\RevitMCP.Addin\Families\DetailFamilyEdit.cs" Link="Families\DetailFamilyEdit.cs" />
+    <!-- #168: everything in RevitMCP.Addin\ModelFamilies is pure (no Revit API) and is compiled into the tests. -->
+    <Compile Include="..\RevitMCP.Addin\ModelFamilies\**\*.cs" Link="ModelFamilies\%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="..\RevitMCP.Addin\Parameters\ParameterSpecMap.cs" Link="Parameters\ParameterSpecMap.cs" />
     <Compile Include="..\RevitMCP.Addin\Parameters\ParameterCreatePlanner.cs" Link="Parameters\ParameterCreatePlanner.cs" />
     <Compile Include="..\RevitMCP.Addin\Parameters\ParameterValueMapping.cs" Link="Parameters\ParameterValueMapping.cs" />

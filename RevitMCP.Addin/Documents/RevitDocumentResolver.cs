@@ -39,6 +39,20 @@ public static class RevitDocumentResolver
         return result;
     }
 
+    /// <summary>The active document when it is a family document (#168: the Family Editor window the user is in), else null.</summary>
+    public static Document? ActiveFamilyDocument(UIApplication uiapp)
+    {
+        try
+        {
+            var active = uiapp.ActiveUIDocument?.Document;
+            return active != null && active.IsFamilyDocument ? active : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public static bool IsActive(UIApplication uiapp, Document doc)
     {
         var active = uiapp.ActiveUIDocument?.Document;
