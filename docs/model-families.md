@@ -18,6 +18,10 @@ Every name contains `model_family`.
 | Flex tests and placed-instance checks | [model-family-flex.md](model-family-flex.md) | #176 |
 | Forms from CAD profiles or family curves | [model-family-profiles.md](model-family-profiles.md) | #177 |
 
+[model-family-acceptance.md](model-family-acceptance.md) is the acceptance runbook of the tracker: one device built
+end to end, to be run in Revit 2024 and 2026. Until it has been run, treat every behaviour listed under "needs live
+verification" in the feature docs as unconfirmed.
+
 ## The `target` argument
 
 Every tool takes one `target` object that says which family document it works on and what happens to the result.
@@ -68,7 +72,8 @@ The shared layer is `RevitMCP.Addin/Tools/ModelFamilies` (Revit) and `RevitMCP.A
 into the tests by a wildcard, so **nothing in that folder may use the Revit API**).
 
 - `ModelFamilySession.Edit(uiapp, request, apply, what, body, cancellationToken)` opens the target, runs `body` in a
-  transaction group, and saves/loads/closes. `ModelFamilySession.Read(...)` only reads. A tool is a thin class:
+  transaction group, and saves/loads/closes. `ModelFamilySession.Read(...)` only reads; `ModelFamilySession.Trial(...)`
+  lets the body change the family and always rolls everything back (flex tests). A tool is a thin class:
 
   ```csharp
   public sealed class EditModelFamilyXTool : IRevitMcpTool, IApprovalSummaryTool

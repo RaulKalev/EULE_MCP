@@ -111,6 +111,22 @@ for the clash review tools), `revit_propose_clash_fixes` finds clearing moves fo
 `revit_apply_clash_fixes` (approval) moves and verifies each one, undoing a move that still clashes, breaks joined runs
 or creates new clashes. Clashes it marks `manual` need a reroute by hand — say so rather than forcing a move.
 
+## Authoring 3D families
+
+The `familyeditor` group (`revit_*model_family*`, see [`docs/model-families.md`](docs/model-families.md)) creates and
+edits loadable 3D families in the Family Editor. Every tool takes one `target`: `{family}` (loaded in the project:
+edited as a copy and loaded back), `{path}` (an .rfa: `overwrite` or `savePath`) or `{familyDocument}` (the user's open
+Family Editor window: left unsaved unless asked). Rules:
+
+- Start with `revit_get_model_family`; its element ids stay valid across save and reopen, and later calls take them.
+- Always run the `revit_preview_…` twin first. It performs the edit and rolls it back, so `ready: false` with
+  `revitFailures` is Revit's real answer (an over-constrained dimension, a form it cannot make).
+- A refused step rolls the whole call back: fix the item the message names, do not retry it unchanged.
+- Build in this order: category and settings, reference planes and dimensions, parameters and types, forms on the
+  planes, materials, nested components and visibility, connectors; then `revit_flex_model_family` before loading.
+- A hosted template cannot be made non-hosted: start a free-standing device from `Metric Generic Model.rft`.
+- Never save or close the user's open family document yourself; the `target` decides what is saved.
+
 ## PanelSchematics plugin data
 
 The `panelschematics` group (`revit_panelschematics_*`, see [`docs/panelschematics.md`](docs/panelschematics.md))
