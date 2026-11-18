@@ -1,0 +1,43 @@
+{
+  "Label": "model-families-168",
+  "Model": "",
+  "StartedAt": "2026-11-18 17:21:24 \u002B02:00",
+  "BridgePath": "C:\\Users\\RaulKalev\\Documents\\AntiGravity\\EULE_MCP\\.claude\\worktrees\\github-open-issues-3b83f4\\RevitMCP.Bridge\\bin\\Release\\net8.0\\RevitMCP.Bridge.exe",
+  "Schemas": [
+    {
+      "Profile": "full",
+      "ToolCount": 475,
+      "SchemaBytes": 755541,
+      "SchemaTokens": 188886,
+      "InstructionTokens": 718,
+      "Error": null
+    },
+    {
+      "Profile": "core",
+      "ToolCount": 21,
+      "SchemaBytes": 28924,
+      "SchemaTokens": 7231,
+      "InstructionTokens": 718,
+      "Error": null
+    },
+    {
+      "Profile": "query",
+      "ToolCount": 38,
+      "SchemaBytes": 50692,
+      "SchemaTokens": 12673,
+      "InstructionTokens": 718,
+      "Error": null
+    },
+    {
+      "Profile": "read-only",
+      "ToolCount": 296,
+      "SchemaBytes": 448967,
+      "SchemaTokens": 112242,
+      "InstructionTokens": 718,
+      "Error": null
+    }
+  ],
+  "GraphBuild": null,
+  "GraphIncremental": null,
+  "Scenarios": []
+}
