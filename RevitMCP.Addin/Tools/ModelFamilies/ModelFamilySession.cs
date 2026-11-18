@@ -206,6 +206,17 @@ internal static class ModelFamilySession
         Run(uiapp, request, apply: false, what, ModelFamilySessionMode.Read, body, cancellationToken);
 
     /// <summary>
+    /// Tries changes on a family and always undoes them (#176: flexing types and values). Like <see cref="Read"/> it
+    /// needs no save arguments and never saves or loads; unlike it, the body may call
+    /// <see cref="ModelFamilyContext.Transact"/>, and everything it did is rolled back before the call returns, also in
+    /// a family document the user has open. A step Revit refuses does not fail the call when the body uses
+    /// <see cref="ModelFamilyContext.TryTransact"/>.
+    /// </summary>
+    public static McpToolResult Trial(UIApplication uiapp, McpToolRequest request, string what,
+        Func<ModelFamilyContext, object?> body, CancellationToken cancellationToken) =>
+        Run(uiapp, request, apply: false, what, ModelFamilySessionMode.Read, body, cancellationToken, trial: true);
+
+    /// <summary>
     /// Edits a family (or, with <see cref="ModelFamilySessionMode.Create"/>, a new one from the template).
     /// <paramref name="apply"/> false is the preview: the body runs the same way and everything is rolled back.
     /// The body returns the tool's result data and reports what stops the edit in <see cref="ModelFamilyContext.Problems"/>.
@@ -219,7 +230,7 @@ internal static class ModelFamilySession
         request.Arguments != null && request.Arguments.TryGetValue(TargetArg, out var raw) ? raw : null;
 
     private static McpToolResult Run(UIApplication uiapp, McpToolRequest request, bool apply, string what,
-        ModelFamilySessionMode mode, Func<ModelFamilyContext, object?> body, CancellationToken cancellationToken)
+        ModelFamilySessionMode mode, Func<ModelFamilyContext, object?> body, CancellationToken cancellationToken, bool trial = false)
     {
         var sw = Stopwatch.StartNew();
         var problems = new List<string>();
@@ -402,7 +413,26 @@ internal static class ModelFamilySession
 
             // 2. The body, inside one group: a preview and a failure roll all of it back.
             object? data;
-            if (reading)
+            if (reading && trial)
+            {
+                // A trial changes the family to see what happens, then puts everything back.
+                if (familyDoc.IsReadOnly || familyDoc.IsModifiable)
+                    return Fail(request, "validation_failed", $"'{familyDoc.Title}' {(familyDoc.IsReadOnly ? "is read-only" : "has a transaction open (a sketch or command in progress); finish or cancel it first")}. Nothing was changed.", warnings, sw);
+                group = new TransactionGroup(familyDoc, $"Revit MCP - {what}");
+                group.Start();
+                try
+                {
+                    data = body(context);
+                }
+                catch (ModelFamilyStepException ex)
+                {
+                    RollBack(ref group);
+                    context.Failures.AddRange(ex.Failures.Where(f => !context.Failures.Contains(f)));
+                    return StepFailed(request, apply: false, what, spec, familyName, ex, context, sw);
+                }
+                RollBack(ref group);
+            }
+            else if (reading)
             {
                 data = body(context);
             }
