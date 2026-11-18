@@ -85,16 +85,26 @@ internal static class ModelFamilyComponentNested
                 }
 
                 Family? loaded = null;
+                var unchanged = false;
                 var options = new FamilyLoadOptions(spec.IfExists);
                 var path = loadPath;
                 var ok = context.TryTransact($"Load nested family {name}", () =>
                 {
-                    if (!doc.LoadFamily(path, options, out loaded) || loaded == null)
-                        throw new InvalidOperationException($"Revit did not load '{name}' into the family. Its category may not be allowed as a nested component of this family's category.");
+                    if (doc.LoadFamily(path, options, out loaded) && loaded != null) return;
+                    // Revit calls OnFamilyFound only when the loaded family differs from the file, and returns false
+                    // without loading when it is the same: that is "unchanged", not a failure.
+                    if (existing != null && !options.FamilyFound)
+                    {
+                        unchanged = true;
+                        loaded = existing;
+                        return;
+                    }
+                    throw new InvalidOperationException($"Revit did not load '{name}' into the family. Its category may not be allowed as a nested component of this family's category.");
                 }, out var error);
                 if (!ok) { context.Problems.Add($"{spec.Source}: {error}"); continue; }
                 var row = DescribeFamily(doc, loaded!);
-                row["status"] = existing != null ? "reloaded" : "loaded";
+                row["status"] = unchanged ? "unchanged" : existing != null ? "reloaded" : "loaded";
+                if (unchanged) row["note"] = "The file is the same as the family already loaded; Revit had nothing to reload.";
                 row["source"] = spec.Path.Length > 0 ? spec.Path : $"project family '{spec.FromProject}'";
                 if (options.SharedFamiliesFound.Count > 0) row["sharedFamiliesFound"] = new JArray(options.SharedFamiliesFound);
                 rows.Add(row);

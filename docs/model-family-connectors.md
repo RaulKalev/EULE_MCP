@@ -123,6 +123,7 @@ decides how the device behaves in systems.
       "isPrimary": true, "linkedConnector": null,
       "properties": { "Voltage": { "value": 230, "unit": "V", "builtIn": "RBS_ELEC_VOLTAGE" } },
       "associations": { "Voltage": "Voltage", "Apparent Load": "Apparent Load" },
+      "associable": [ "Apparent Load (RBS_ELEC_APPARENT_LOAD)", "Voltage (RBS_ELEC_VOLTAGE)", "…" ],
       "requestedHost": { "kind": "face", "element": 3010, "face": "back", "normal": [0, 1, 0], "reference": "…" },
       "applied": { "properties": { "Number of Poles": { "requested": 1, "stored": 1, "unit": null } },
                    "associations": { "RBS_ELEC_VOLTAGE": "Voltage" },
@@ -134,7 +135,9 @@ decides how the device behaves in systems.
 ```
 
 `host` is inferred from the connector's origin and direction (a face of a form, or a reference plane it lies on):
-Revit does not expose a connector's host. `revit_get_model_family` returns the same rows under `connectors`
+Revit does not expose a connector's host. `properties` lists the settable parameters and those a family parameter
+drives (with the current type's value); `associable` lists every connector parameter that can be associated with a
+family parameter (`name (BuiltInParameter)`). `revit_get_model_family` returns the same rows under `connectors`
 (`count`, `truncated`, `connectors`).
 
 ## Examples

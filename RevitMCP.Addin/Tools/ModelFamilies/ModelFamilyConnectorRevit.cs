@@ -553,7 +553,9 @@ internal static class ModelFamilyConnectorRevit
         {
             try
             {
-                if (parameter.IsReadOnly) continue;
+                // A parameter driven by a family parameter may read as read-only; its value (the current type's) is
+                // still what a flex check needs, so it stays in the row.
+                if (parameter.IsReadOnly && ModelFamilyAssociations.Associated(doc, parameter) == null) continue;
                 var name = NameOf(parameter);
                 if (name.Length == 0 || properties.ContainsKey(name)) continue;
                 var (value, unit) = ReadValue(doc, parameter);
@@ -568,10 +570,16 @@ internal static class ModelFamilyConnectorRevit
         row["properties"] = properties;
 
         var associations = new JObject();
+        var eligible = new List<string>();
         foreach (var associable in ModelFamilyAssociations.Associable(doc, connector))
-            if ((string?)associable["associatedWith"] is { } family && (string?)associable["name"] is { } name)
-                associations[name] = family;
+        {
+            if ((string?)associable["name"] is not { Length: > 0 } name) continue;
+            eligible.Add((string?)associable["builtIn"] is { } builtIn ? $"{name} ({builtIn})" : name);
+            if ((string?)associable["associatedWith"] is { } family) associations[name] = family;
+        }
         row["associations"] = associations;
+        // The issue asks for the eligible associations too: what this connector's parameters can be driven by.
+        row["associable"] = new JArray(eligible.Distinct().OrderBy(n => n, StringComparer.OrdinalIgnoreCase));
         return row;
     }
 

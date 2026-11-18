@@ -26,7 +26,7 @@ have is a problem before anything runs.
 |---|---|
 | `remove` | `[id, …]`: nested instances, symbolic lines or model lines. Forms, reference planes and reference lines are refused with the tool that owns them. |
 | `subcategories` | `{name, lineWeightProjection?: 1-16, lineWeightCut?: 1-16, color?: [r,g,b], linePattern?: "Solid" or a pattern in the family, material?: name}`. Creates the subcategory under the family's category, or edits it when it exists. The result has `before` and `after`. |
-| `nestedFamilies` | `{path: "C:\\X.rfa"}` or `{fromProject: "<family loaded in the project>"}`, plus `ifExists`: `skip` (default), `overwrite`, `overwriteParameters`. Result: id, category, placement type, `shared`, types. |
+| `nestedFamilies` | `{path: "C:\\X.rfa"}` or `{fromProject: "<family loaded in the project>"}`, plus `ifExists`: `skip` (default), `overwrite`, `overwriteParameters`. Result: id, category, placement type, `shared`, types, `status` (`loaded`, `reloaded`, `skipped`, or `unchanged` when the file equals the family already loaded). |
 | `instances` | see below |
 | `symbolicLines` | `{view?, curves, subcategory?, visibility?, visibleParameter?}` |
 | `modelLines` | `{workPlane?, curves, subcategory?, visibility?, visibleParameter?}` |

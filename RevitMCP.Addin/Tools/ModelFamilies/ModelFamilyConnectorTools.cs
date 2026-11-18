@@ -13,7 +13,7 @@ internal static class ModelFamilyConnectorTools
         handler.RegisterTool(new PreviewEditModelFamilyConnectorsTool());
         handler.RegisterTool(new EditModelFamilyConnectorsTool());
         ModelFamilyInspect.AddSection("connectors",
-            "MEP connectors: id, description, domain, systemType, shape, size (mm), origin (mm), direction, host, isPrimary, linkedConnector, properties, associations.",
+            "MEP connectors: id, description, domain, systemType, shape, size (mm), origin (mm), direction, host, isPrimary, linkedConnector, properties, associations, associable.",
             (context, limit) => ModelFamilyConnectorRevit.Inspect(context.FamilyDoc, limit));
     }
 }
