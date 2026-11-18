@@ -248,6 +248,25 @@ public class ModelFamilyParameterTests
     }
 
     [Fact]
+    public void RemoveAndReAddIsRefusedWhileAnUnchangedFormulaUsesIt()
+    {
+        // Revit deletes every formula that uses a removed parameter; re-adding the name does not bring the formula back.
+        var context = Family(P("Width"), P("Area", formula: "Width * 2"));
+        var plan = Plan(context, new { removeParameters = new[] { "Width" }, parameters = new object[] { new { name = "Width", dataType = "length" } } });
+        var problem = Assert.Single(plan.Problems);
+        Assert.Contains("'Area'", problem);
+        Assert.Contains("Width * 2", problem);
+
+        // Setting the formula again in the same call (it runs after the new parameter exists) is fine.
+        Assert.Empty(Plan(context, new
+        {
+            removeParameters = new[] { "Width" },
+            parameters = new object[] { new { name = "Width", dataType = "length" } },
+            formulas = new object[] { new { parameter = "Area", formula = "Width * 2" } }
+        }).Problems);
+    }
+
+    [Fact]
     public void RemovalReportsLabelsAndAssociationsAsWarnings()
     {
         var context = Family(P("Width"));
@@ -283,6 +302,14 @@ public class ModelFamilyParameterTests
         var plan = Plan(context, new { removeParameters = new[] { "Widht", "Default Elevation" } });
         Assert.Contains(plan.Problems, p => p.Contains("did you mean 'Width'"));
         Assert.Contains(plan.Problems, p => p.Contains("built-in"));
+    }
+
+    [Fact]
+    public void ATooltipOnABuiltInParameterIsAProblemBeforeRevitIsAsked()
+    {
+        // FamilyManager.SetDescription throws for a built-in parameter.
+        var plan = Plan(Family(P("Default Elevation", builtIn: true)), new { parameters = new object[] { new { name = "Default Elevation", tooltip = "Height" } } });
+        Assert.Contains(plan.Problems, p => p.Contains("built-in") && p.Contains("tooltip"));
     }
 
     [Fact]

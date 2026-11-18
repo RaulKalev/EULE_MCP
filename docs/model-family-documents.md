@@ -109,7 +109,7 @@ The result (inside the envelope's `result`):
 | `{path, savePath}` | Save as: a copy at `savePath`; the original file is untouched. `overwrite: true` replaces an existing file at `savePath`, otherwise an existing file is a problem. |
 | `{path, overwrite: true}` | Saves the file back in the running Revit version (a warning says when that upgrades it). |
 | `{family}` | Reloads the loaded family into the project as one undo step. The project's parameter values of existing types are kept; `overwriteParameterValues: true` uses the family's. `savePath` also saves a copy. |
-| `{familyDocument, save: true}` / `{familyDocument, savePath}` | Saves the open family document; it stays open. |
+| `{familyDocument, save: true}` / `{familyDocument, savePath}` | Saves the open family document; it stays open. After `savePath` the window edits the new file, as Save As does in Revit. If the save fails, the edit stays in the open document (one undo step) and the result is `partial`. |
 | `load: true` | Loads the result into the project (`document`); a family of that name already there is reloaded (`load.status` is `reloaded`), keeping the project's parameter values unless `overwriteParameterValues`. |
 
 Conflicts are explicit: an existing `savePath` needs `overwrite`, a file open in Revit is refused with the title to pass

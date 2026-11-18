@@ -490,16 +490,25 @@ internal static class ModelFamilySession
             object? load = null;
             if (spec.Kind == ModelFamilyTargetKind.OpenDocument)
             {
-                if (savePath != null)
+                // The edit is already in the user's document (one undo step): a failed save must say so, not "nothing changed".
+                try
                 {
-                    Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
-                    familyDoc.SaveAs(savePath, new SaveAsOptions { OverwriteExistingFile = spec.Overwrite });
-                    savedTo = savePath;
+                    if (savePath != null)
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(savePath)!);
+                        familyDoc.SaveAs(savePath, new SaveAsOptions { OverwriteExistingFile = spec.Overwrite });
+                        savedTo = savePath;
+                    }
+                    else if (spec.Save)
+                    {
+                        familyDoc.Save();
+                        savedTo = familyDoc.PathName;
+                    }
                 }
-                else if (spec.Save)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    familyDoc.Save();
-                    savedTo = familyDoc.PathName;
+                    return Partial(request, $"The edit was applied to '{familyDoc.Title}' (one undo step; Undo in that window reverts it), but saving it failed: " +
+                                            $"{ex.Message.TrimEnd('.')}. The document is left open and unsaved; nothing was loaded.", envelope, warnings, sw);
                 }
                 if (spec.Load)
                 {
