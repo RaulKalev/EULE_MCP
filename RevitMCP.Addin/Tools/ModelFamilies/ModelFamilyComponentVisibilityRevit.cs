@@ -44,7 +44,7 @@ internal static class ModelFamilyComponentVisibilityRevit
         }
     }
 
-    private static void WriteFlags(Element element, ComponentVisibilityFlags flags)
+    private static void WriteFlags(Element element, ComponentVisibilityFlags current, ComponentVisibilityFlags flags)
     {
         var visibility = element switch
         {
@@ -53,16 +53,20 @@ internal static class ModelFamilyComponentVisibilityRevit
             ModelCurve model => model.GetVisibility(),
             _ => throw new InvalidOperationException($"{ModelFamilyLookup.Describe(element)} has no detail-level or view settings in the Revit API.")
         };
-        visibility.IsShownInCoarse = flags.Coarse;
-        visibility.IsShownInMedium = flags.Medium;
-        visibility.IsShownInFine = flags.Fine;
-        if (flags.ViewSpecific) visibility.IsShownOnlyWhenCut = flags.OnlyWhenCut;
-        else
+        // Only what changes, levels turned on before levels turned off (see ComponentVisibilityFlags.Writes).
+        foreach (var (flag, value) in ComponentVisibilityFlags.Writes(current, flags))
         {
-            visibility.IsShownInTopBottom = flags.PlanRcp;
-            visibility.IsShownInFrontBack = flags.FrontBack;
-            visibility.IsShownInLeftRight = flags.LeftRight;
-            visibility.IsShownInPlanRCPCut = flags.PlanRcpCut;
+            switch (flag)
+            {
+                case "Coarse": visibility.IsShownInCoarse = value; break;
+                case "Medium": visibility.IsShownInMedium = value; break;
+                case "Fine": visibility.IsShownInFine = value; break;
+                case "OnlyWhenCut": visibility.IsShownOnlyWhenCut = value; break;
+                case "TopBottom": visibility.IsShownInTopBottom = value; break;
+                case "FrontBack": visibility.IsShownInFrontBack = value; break;
+                case "LeftRight": visibility.IsShownInLeftRight = value; break;
+                case "PlanRCPCut": visibility.IsShownInPlanRCPCut = value; break;
+            }
         }
         switch (element)
         {
@@ -137,9 +141,12 @@ internal static class ModelFamilyComponentVisibilityRevit
                          ?? throw new InvalidOperationException(mergeError);
             if (!merged.SameAs(current))
             {
-                WriteFlags(element, merged);
+                var written = new HashSet<string>(ComponentVisibilityFlags.Writes(current, merged).Select(w => w.Flag));
+                WriteFlags(element, current, merged);
                 var after = ReadFlags(element);
-                if (after == null || !after.SameAs(merged))
+                // Only what was written is checked: a flag Revit ties to it (the cut flag of a category cut in the
+                // instance follows planRcp) may change along with it.
+                if (after == null || ComponentVisibilityFlags.Writes(after, merged).Any(w => written.Contains(w.Flag)))
                     warnings.Add($"{source}: Revit kept different detail-level or view settings than asked on {label}; now {after?.ToJson().ToString(Newtonsoft.Json.Formatting.None)}.");
             }
         }

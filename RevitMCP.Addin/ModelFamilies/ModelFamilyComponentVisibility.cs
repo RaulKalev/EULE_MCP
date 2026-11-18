@@ -144,6 +144,29 @@ public sealed class ComponentVisibilityFlags
     }
 
     /// <summary>
+    /// The <c>FamilyElementVisibility</c> properties to write to go from <paramref name="current"/> to
+    /// <paramref name="target"/>, in order, as (IsShownIn… / IsShown… suffix, value). Only flags that change are written:
+    /// for categories cut in the instance Revit ties <c>IsShownInPlanRCPCut</c> to <c>IsShownInTopBottom</c>, so writing
+    /// an unchanged cut flag back would undo a planRcp change. Detail levels that turn on come before those that turn off,
+    /// because Revit refuses to turn a level off while the other two are off.
+    /// </summary>
+    public static List<(string Flag, bool Value)> Writes(ComponentVisibilityFlags current, ComponentVisibilityFlags target)
+    {
+        var levels = new[] { ("Coarse", current.Coarse, target.Coarse), ("Medium", current.Medium, target.Medium), ("Fine", current.Fine, target.Fine) }
+            .Where(l => l.Item2 != l.Item3).ToList();
+        var writes = levels.Where(l => l.Item3).Concat(levels.Where(l => !l.Item3)).Select(l => (l.Item1, l.Item3)).ToList();
+        var views = target.ViewSpecific
+            ? new[] { ("OnlyWhenCut", current.OnlyWhenCut, target.OnlyWhenCut) }
+            : new[]
+            {
+                ("TopBottom", current.PlanRcp, target.PlanRcp), ("FrontBack", current.FrontBack, target.FrontBack),
+                ("LeftRight", current.LeftRight, target.LeftRight), ("PlanRCPCut", current.PlanRcpCut, target.PlanRcpCut)
+            };
+        writes.AddRange(views.Where(v => v.Item2 != v.Item3).Select(v => (v.Item1, v.Item3)));
+        return writes;
+    }
+
+    /// <summary>
     /// Applies a request to the current flags. A flag that has no meaning for this kind of element is skipped with a
     /// warning; turning every detail level off is an error (Revit refuses it).
     /// </summary>

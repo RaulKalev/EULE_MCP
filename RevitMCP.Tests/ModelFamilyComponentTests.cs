@@ -418,6 +418,36 @@ public class ModelFamilyComponentTests
     }
 
     [Fact]
+    public void WritesTurnALevelOnBeforeTurningAnotherOff()
+    {
+        // Revit refuses IsShownInCoarse=false while medium and fine are still off, so medium must be written first.
+        var current = new ComponentVisibilityFlags { Coarse = true, Medium = false, Fine = false };
+        var target = ComponentVisibilityFlags.Merge(current, Request("""{"detailLevels":{"coarse":false,"medium":true}}"""), "v", new List<string>(), out var error)!;
+        Assert.Null(error);
+        var writes = ComponentVisibilityFlags.Writes(current, target);
+        Assert.Equal(new[] { ("Medium", true), ("Coarse", false) }, writes);
+    }
+
+    [Fact]
+    public void WritesOnlyTheFlagsThatChange()
+    {
+        // For categories cut in the instance, Revit ties IsShownInPlanRCPCut to IsShownInTopBottom: writing the old
+        // cut value back after planRcp=false would undo it, so unchanged flags are not written at all.
+        var current = new ComponentVisibilityFlags { PlanRcpCut = true };
+        var target = ComponentVisibilityFlags.Merge(current, Request("""{"views":{"planRcp":false}}"""), "v", new List<string>(), out _)!;
+        Assert.Equal(new[] { ("TopBottom", false) }, ComponentVisibilityFlags.Writes(current, target));
+        Assert.Empty(ComponentVisibilityFlags.Writes(current, current.Copy()));
+    }
+
+    [Fact]
+    public void WritesOfAViewSpecificElementUseOnlyWhenCut()
+    {
+        var current = new ComponentVisibilityFlags { ViewSpecific = true };
+        var target = ComponentVisibilityFlags.Merge(current, Request("""{"views":{"whenCut":true},"detailLevels":{"fine":false}}"""), "v", new List<string>(), out _)!;
+        Assert.Equal(new[] { ("Fine", false), ("OnlyWhenCut", true) }, ComponentVisibilityFlags.Writes(current, target));
+    }
+
+    [Fact]
     public void FlagsDescribeThemselves()
     {
         var model = new ComponentVisibilityFlags { PlanRcp = false }.ToJson();
