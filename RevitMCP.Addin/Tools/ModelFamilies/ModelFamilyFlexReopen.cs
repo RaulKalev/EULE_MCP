@@ -19,8 +19,59 @@ namespace RevitMCP.Addin.Tools.ModelFamilies;
 /// </summary>
 internal static class ModelFamilyFlexReopen
 {
-    public static JObject Run(UIApplication uiapp, McpToolRequest request, JObject firstResult, CancellationToken cancellationToken)
+    /// <summary>What is known about the target before the trial runs.</summary>
+    internal sealed class Before
     {
+        /// <summary>Why no copy can be compared, decided before the trial; null when a copy can be made.</summary>
+        public string? SkipReason { get; init; }
+        /// <summary>The target's file is open in Revit: the copy gets its own file name so it does not clash with it.</summary>
+        public bool OpenInRevit { get; init; }
+    }
+
+    /// <summary>
+    /// Called before the trial: whether the document the first pass reads has unsaved changes. Decided here, not
+    /// afterwards, so the trial's rolled-back transactions cannot be what makes the document look modified.
+    /// </summary>
+    public static Before Prepare(UIApplication uiapp, McpToolRequest request)
+    {
+        try
+        {
+            var problems = new List<string>();
+            var target = request.Arguments.TryGetValue(ModelFamilySession.TargetArg, out var raw) ? raw : null;
+            var spec = ModelFamilyTargetSpec.Parse(target, ModelFamilySessionMode.Read, problems);
+            if (problems.Count > 0) return new Before { SkipReason = string.Join(" ", problems) };
+            switch (spec.Kind)
+            {
+                case ModelFamilyTargetKind.File:
+                {
+                    var open = OpenAt(uiapp, spec.Path);
+                    if (open != null && SafeModified(open))
+                        return new Before { SkipReason = $"'{spec.Path}' is open in Revit with unsaved changes; the first pass read those, a copy of the file would not have them. Save it there, or run without reopenCopy." };
+                    return new Before { OpenInRevit = open != null };
+                }
+                case ModelFamilyTargetKind.OpenDocument:
+                {
+                    var document = OpenFamilyDocument(uiapp, spec.FamilyDocument);
+                    if (document == null) return new Before { SkipReason = $"the open family document '{spec.FamilyDocument}' was not found." };
+                    if (string.IsNullOrEmpty(document.PathName))
+                        return new Before { SkipReason = $"'{document.Title}' has never been saved, so there is no file to copy; it is never saved by this tool. Save it, or run without reopenCopy." };
+                    if (SafeModified(document))
+                        return new Before { SkipReason = $"'{document.Title}' has unsaved changes; the first pass read those, a copy of its file would not have them. It is never saved by this tool: save it there, or run without reopenCopy." };
+                    return new Before { OpenInRevit = true };
+                }
+                default:
+                    return new Before();
+            }
+        }
+        catch (Exception ex)
+        {
+            return new Before { SkipReason = $"the target could not be inspected: {ex.Message.TrimEnd('.')}." };
+        }
+    }
+
+    public static JObject Run(UIApplication uiapp, McpToolRequest request, JObject firstResult, Before before, CancellationToken cancellationToken)
+    {
+        if (before.SkipReason != null) return Skipped(before.SkipReason);
         var problems = new List<string>();
         var target = request.Arguments.TryGetValue(ModelFamilySession.TargetArg, out var raw) ? raw : null;
         var spec = ModelFamilyTargetSpec.Parse(target, ModelFamilySessionMode.Read, problems);
@@ -36,21 +87,16 @@ internal static class ModelFamilyFlexReopen
             {
                 case ModelFamilyTargetKind.File:
                 {
-                    if (OpenAt(uiapp, spec.Path) is { } open && SafeModified(open))
-                        return Skipped($"'{spec.Path}' is open in Revit with unsaved changes; the first pass read those, a copy of the file would not have them. Save it there, or run without reopenCopy.");
-                    (copyPath, location) = CopyFile(spec.Path, folder, policy, out var error);
+                    (copyPath, location) = CopyFile(spec.Path, folder, policy, before.OpenInRevit, out var error);
                     if (copyPath == null) return Skipped(error!);
                     break;
                 }
                 case ModelFamilyTargetKind.OpenDocument:
                 {
                     var document = OpenFamilyDocument(uiapp, spec.FamilyDocument);
-                    if (document == null) return Skipped($"the open family document '{spec.FamilyDocument}' was not found again.");
-                    if (string.IsNullOrEmpty(document.PathName))
-                        return Skipped($"'{document.Title}' has never been saved, so there is no file to copy; it is never saved by this tool. Save it, or run without reopenCopy.");
-                    if (SafeModified(document))
-                        return Skipped($"'{document.Title}' has unsaved changes; the first pass read those, a copy of its file would not have them. It is never saved by this tool: save it there, or run without reopenCopy.");
-                    (copyPath, location) = CopyFile(document.PathName, folder, policy, out var error);
+                    if (document == null || string.IsNullOrEmpty(document.PathName))
+                        return Skipped($"the open family document '{spec.FamilyDocument}' was not found again.");
+                    (copyPath, location) = CopyFile(document.PathName, folder, policy, before.OpenInRevit, out var error);
                     if (copyPath == null) return Skipped(error!);
                     break;
                 }
@@ -125,12 +171,14 @@ internal static class ModelFamilyFlexReopen
 
     /// <summary>
     /// Copies a family file for the second pass: into a temporary folder under its own name (the family name stays),
-    /// or, when the file access policy refuses that folder, beside the original as <c>&lt;name&gt;.flexcopy.&lt;guid&gt;.rfa</c>.
+    /// or as <c>&lt;name&gt;.flexcopy.rfa</c> when the original is open in Revit (two open documents with the same file
+    /// name may clash); when the file access policy refuses that folder, beside the original as
+    /// <c>&lt;name&gt;.flexcopy.&lt;guid&gt;.rfa</c>.
     /// </summary>
-    private static (string? Path, string Location) CopyFile(string source, string folder, FilePathPolicy policy, out string? error)
+    private static (string? Path, string Location) CopyFile(string source, string folder, FilePathPolicy policy, bool openInRevit, out string? error)
     {
         error = null;
-        var temp = Path.Combine(folder, Path.GetFileName(source));
+        var temp = Path.Combine(folder, openInRevit ? $"{Path.GetFileNameWithoutExtension(source)}.flexcopy.rfa" : Path.GetFileName(source));
         if (policy.ValidateRead(temp) == null)
         {
             Directory.CreateDirectory(folder);

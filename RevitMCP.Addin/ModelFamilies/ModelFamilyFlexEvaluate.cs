@@ -619,7 +619,12 @@ public static class ModelFamilyFlexRun
                 foreach (var id in failedB.Except(failedA)) differences.Add($"check '{id}' fails only after reopening");
                 foreach (var id in failedA.Except(failedB)) differences.Add($"check '{id}' fails only before reopening");
                 Diff(original["measurements"], match["measurements"], "measurements", tolerance, differences);
-                Diff(original["parameters"], match["parameters"], "parameters", tolerance, differences);
+                // Only the parameters both runs read: the first also reads those its ranges and cases set, which the
+                // copy (type cases only) does not.
+                if (original["parameters"] is JObject paramsA && match["parameters"] is JObject paramsB)
+                    foreach (var key in paramsA.Properties().Select(p => p.Name).Where(k => paramsB.ContainsKey(k)))
+                        Diff(paramsA[key], paramsB[key], $"parameters.{key}", tolerance, differences);
+                else Diff(original["parameters"], match["parameters"], "parameters", tolerance, differences);
             }
             rows.Add(new JObject
             {

@@ -29,7 +29,7 @@ public sealed class FlexModelFamilyTool : IRevitMcpTool
         "Flex-tests a model family: runs every type (or the named " + ModelFamilyFlexArgs.Types + "), each " + ModelFamilyFlexArgs.Ranges +
         " value and explicit " + ModelFamilyFlexArgs.Cases + ", regenerates, evaluates " + ModelFamilyFlexArgs.Checks +
         " (bounding box, planes, faces, centring, parameters, materials, connectors, nested symbols, cuts) and reports refused cases with " +
-        "the constraints Revit names. Restores every value after each case and rolls the trial back; " + ModelFamilyFlexArgs.ReopenCopy +
+        "the constraints Revit names. Rolls each case back, reads every value back and rolls the trial back; " + ModelFamilyFlexArgs.ReopenCopy +
         " repeats the type cases on a saved and reopened copy. Changes nothing.";
 
     public ToolPermission Permission => ToolPermission.ReadOnly;

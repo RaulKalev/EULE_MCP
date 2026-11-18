@@ -578,6 +578,22 @@ public class ModelFamilyFlexTests
     }
 
     [Fact]
+    public void A_parameter_only_the_first_run_reads_is_not_a_difference()
+    {
+        // The first run also reads the parameters its ranges set; the copy runs without ranges and does not.
+        var original = CaseJson("Small", "ok", 300);
+        original["parameters"]!["Depth"] = 80;
+        var rows = ModelFamilyFlexRun.Compare(new JArray(original), new JArray(CaseJson("Small", "ok", 300)));
+        Assert.True((bool)rows[0]["equal"]!, string.Join("; ", rows[0]["differences"]!));
+
+        // A parameter both runs read is still compared.
+        var changed = CaseJson("Small", "ok", 300);
+        changed["parameters"]!["Width"] = 310;
+        rows = ModelFamilyFlexRun.Compare(new JArray(CaseJson("Small", "ok", 300)), new JArray(changed));
+        Assert.Contains(rows[0]["differences"]!, d => ((string?)d)!.StartsWith("parameters.Width"));
+    }
+
+    [Fact]
     public void A_copy_that_behaves_differently_is_reported_with_the_differences()
     {
         var first = new JArray(CaseJson("Small", "ok", 300), CaseJson("Large", "ok", 400));
@@ -622,6 +638,12 @@ public class ModelFamilyFlexTests
         Assert.Contains("ModelFamilySession.Trial(", source);
         Assert.DoesNotContain("ModelFamilySession.Edit(", source);
         Assert.DoesNotContain(".Save(", source);
+        // Each case is undone by rolling back its own nested group, closed in a finally so the session's group can
+        // roll back after an exception or a cancellation.
+        Assert.Contains("new TransactionGroup(", source);
+        Assert.Matches(@"finally\s*\{[^}]*EndCase\(caseGroup\)", source);
+        Assert.DoesNotContain(".Commit()", source);
+        Assert.DoesNotContain(".Assimilate()", source);
     }
 
     [Fact]
