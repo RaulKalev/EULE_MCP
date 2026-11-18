@@ -178,6 +178,14 @@ public class ModelFamilyFormTests
     }
 
     [Fact]
+    public void A_hole_close_to_a_large_arc_is_accepted()
+    {
+        // 4 mm inside the rim of a 1 m disc, between two points of the coarse arc polygon, whose chord runs 4.8 mm inside the arc.
+        var profile = Valid("[{\"circle\": {\"center\": [0,0,0], \"radius\": 1000}}, {\"circle\": {\"center\": [988.716026,97.380029,0], \"radius\": 2.5}}]");
+        Assert.Equal(2, profile.Loops.Count);
+    }
+
+    [Fact]
     public void Holes_must_lie_inside_the_outer_loop_without_touching_it()
     {
         const string outer = "{\"rectangle\": {\"min\": [0,0], \"max\": [100,100]}}";

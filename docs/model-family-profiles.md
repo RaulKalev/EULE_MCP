@@ -132,6 +132,8 @@ The result lists each form under `created` (`id`, `loop`, `holes`, `measured` si
 - **Extrusions only.** Blends, revolves and sweeps from profiles are not built here; take the loop's `points` (or the
   curves) and use `revit_edit_model_family_forms`.
 - **Importing the DWG** into the family is manual (see above); there is no family-document import tool.
+- **The user's selection is not read.** Name the curves by element id (`source.curves`), by import and layer, or by
+  view and subcategory. The ids of a selection in the open family document come from `revit_get_selected_elements`.
 - **Units and scale** are reported from the import's parameters (`IMPORT_DISPLAY_UNITS`, `IMPORT_SCALE`,
   `IMPORT_INSTANCE_SCALE`) only where Revit exposes them; the curves are always read in family coordinates after the
   import's transform, so the measured sizes are what Revit shows. Use `expected` to catch a wrong scale.

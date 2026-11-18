@@ -470,7 +470,7 @@ public sealed class ModelFamilyFormPlanarLoop
     internal static ModelFamilyFormPlanarLoop? Create(string source, List<ModelFamilyFormSegment> uv, ModelFamilyFormFrame frame,
         ModelFamilyFormCheck check, List<string> problems)
     {
-        var polygon = ModelFamilyFormGeometry.Polygon(uv);
+        var polygon = ModelFamilyFormGeometry.FinePolygon(uv);
         var area = ModelFamilyFormGeometry.SignedArea(uv);
         if (Math.Abs(area) < check.MinAreaMm2)
         {

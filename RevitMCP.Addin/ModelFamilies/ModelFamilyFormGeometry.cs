@@ -113,6 +113,24 @@ public static class ModelFamilyFormGeometry
     public static List<double[]> Polygon(IEnumerable<ModelFamilyFormSegment> loop) => loop.SelectMany(s => Discretize(s)).ToList();
 
     /// <summary>
+    /// A closed 2D loop as a polygon whose chords stay within <paramref name="sagittaMm"/> of its arcs (at most 1024
+    /// chords per arc). The fixed step of <see cref="Polygon"/> cuts up to 0.5 % of the radius off an arc (5 mm on a
+    /// 1 m radius), which makes a hole near a large arc look as if it touched or left the outline.
+    /// </summary>
+    public static List<double[]> FinePolygon(IEnumerable<ModelFamilyFormSegment> loop, double sagittaMm = 0.01)
+    {
+        var points = new List<double[]>();
+        foreach (var segment in loop)
+        {
+            var step = Math.PI / 16;
+            if (segment.Kind == ModelFamilyFormSegmentKind.Arc && Arc2D(segment.Start, segment.Mid!, segment.End) is { } arc && arc.Item2 > sagittaMm)
+                step = Math.Min(step, Math.Max(2 * Math.Acos(1 - sagittaMm / arc.Item2), Math.Abs(arc.Item4) / 1024));
+            points.AddRange(Discretize(segment, step));
+        }
+        return points;
+    }
+
+    /// <summary>
     /// The signed area of a closed 2D loop (positive counter-clockwise), exact for arcs: Green's theorem over each
     /// line and arc.
     /// </summary>
