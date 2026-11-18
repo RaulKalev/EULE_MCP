@@ -49,7 +49,7 @@ containment). A loop is one of:
 | Loop | Example | Notes |
 |---|---|---|
 | Polygon | `{"points": [[0,0,0],[100,0,0],[100,50,0]]}` | Closed; do not repeat the first point (a repeat is dropped). At least 3 points. |
-| Rectangle | `{"rectangle": {"min": [-100,-50,0], "max": [100,50,0]}}` | Opposite corners, both on the work plane; edges follow the plane's axes. |
+| Rectangle | `{"rectangle": {"min": [-100,-50,0], "max": [100,50,0]}}` | Opposite corners, both on the work plane; edges follow the plane's axes (on a plane square to the family axes: x along family X, or family Y for a plane facing ±X; y = normal × x). |
 | Circle | `{"circle": {"center": [0,0,0], "radius": 15}}` | Made as two half arcs: blends and swept blends refuse a single closed curve in a loop, so the tools never send one. |
 | Segments | `{"segments": [{"line": {"start": p, "end": p}}, {"arc": {"start": p, "mid": p, "end": p}}]}` | Each segment must start where the previous ends and the last must end at the first start (gaps up to 0.01 mm are snapped shut). |
 

@@ -94,6 +94,22 @@ public sealed class ModelFamilyFormFrame
     /// <summary>The family's XY plane through the origin: plane coordinates equal family x and y.</summary>
     public static ModelFamilyFormFrame XY => new(Vec(0, 0, 0), Vec(1, 0, 0), Vec(0, 1, 0));
 
+    /// <summary>
+    /// A frame for a plane with <paramref name="normal"/> whose axes do not depend on how the plane was made. Revit
+    /// documents the X and Y axes of <c>Plane.CreateByNormalAndOrigin</c> as arbitrary, so a plane square to the family
+    /// axes gets fixed ones: x along family X (along family Y for a plane facing ±X) and y = normal × x, keeping the
+    /// plane's normal. Rectangles then follow the family axes and width/height are measured along them. Other planes
+    /// keep <paramref name="xAxis"/> and <paramref name="yAxis"/>.
+    /// </summary>
+    public static ModelFamilyFormFrame AlignedToFamily(double[] origin, double[] normal, double[] xAxis, double[] yAxis)
+    {
+        var n = Normalize(Copy(normal));
+        double[]? x = null;
+        if (Math.Abs(Math.Abs(n[2]) - 1) < 1e-9 || Math.Abs(Math.Abs(n[1]) - 1) < 1e-9) x = Vec(1, 0, 0);
+        else if (Math.Abs(Math.Abs(n[0]) - 1) < 1e-9) x = Vec(0, 1, 0);
+        return x == null ? new ModelFamilyFormFrame(origin, xAxis, yAxis) : new ModelFamilyFormFrame(origin, x, Cross(n, x));
+    }
+
     public double[] Origin { get; }
     public double[] XAxis { get; }
     public double[] YAxis { get; }

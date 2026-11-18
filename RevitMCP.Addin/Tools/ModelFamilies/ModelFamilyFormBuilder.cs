@@ -87,9 +87,14 @@ internal static class ModelFamilyFormBuilder
 
     public static XYZ Feet(double[] mm) => new(mm[0] / MmPerFoot, mm[1] / MmPerFoot, mm[2] / MmPerFoot);
 
-    /// <summary>A Revit plane as a millimetre frame (its own origin and axes), for <see cref="ModelFamilyFormProfile.OnPlane"/>.</summary>
+    /// <summary>
+    /// A Revit plane as a millimetre frame, for <see cref="ModelFamilyFormProfile.OnPlane"/>: its origin and normal, and
+    /// axes along the family axes when the plane is square to them (Revit's own X/Y axes of a plane made from a normal
+    /// are arbitrary), else the plane's own axes.
+    /// </summary>
     public static ModelFamilyFormFrame Frame(Plane plane) =>
-        new(Mm(plane.Origin), new[] { plane.XVec.X, plane.XVec.Y, plane.XVec.Z }, new[] { plane.YVec.X, plane.YVec.Y, plane.YVec.Z });
+        ModelFamilyFormFrame.AlignedToFamily(Mm(plane.Origin), new[] { plane.Normal.X, plane.Normal.Y, plane.Normal.Z },
+            new[] { plane.XVec.X, plane.XVec.Y, plane.XVec.Z }, new[] { plane.YVec.X, plane.YVec.Y, plane.YVec.Z });
 
     /// <summary>The checks with this Revit's short-curve tolerance.</summary>
     public static ModelFamilyFormCheck Check(ModelFamilyContext context)
@@ -226,10 +231,13 @@ internal static class ModelFamilyFormBuilder
         if (prepared?.Profile == null) return null;
         var doc = context.FamilyDoc;
         var sketchPlane = SketchPlaneFor(context, spec);
-        var extrusion = doc.FamilyCreate.NewExtrusion(spec.Solid, ToCurveArrArray(prepared.Profile), sketchPlane, spec.End / MmPerFoot)
+        // NewExtrusion makes start 0 and end = its length, which must not be 0. With end 0 (start below the plane) it is
+        // made to −start first; then start is set (never equal to that end on the way), then end.
+        var length = Math.Abs(spec.End) > 1e-9 ? spec.End : -spec.Start;
+        var extrusion = doc.FamilyCreate.NewExtrusion(spec.Solid, ToCurveArrArray(prepared.Profile), sketchPlane, length / MmPerFoot)
                         ?? throw new InvalidOperationException("Revit returned no extrusion");
-        extrusion.EndOffset = spec.End / MmPerFoot;
         extrusion.StartOffset = spec.Start / MmPerFoot;
+        extrusion.EndOffset = spec.End / MmPerFoot;
         ApplyCommon(extrusion, spec, prepared);
         return extrusion;
     }
