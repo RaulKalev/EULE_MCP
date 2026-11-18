@@ -135,11 +135,26 @@ internal static class ModelFamilyLookup
         {
             "plan" => PlanView(doc),
             "3d" => views.OfType<View3D>().FirstOrDefault(),
-            "front" or "back" or "left" or "right" => views.FirstOrDefault(v => v.ViewType == ViewType.Elevation && string.Equals(v.Name, name, StringComparison.OrdinalIgnoreCase)),
+            // Translated templates name their elevations differently: find the one that faces that way.
+            "front" => ElevationFacing(views, -XYZ.BasisY),
+            "back" => ElevationFacing(views, XYZ.BasisY),
+            "left" => ElevationFacing(views, -XYZ.BasisX),
+            "right" => ElevationFacing(views, XYZ.BasisX),
             _ => null
         };
         if (byKind != null) return byKind;
         problems.Add($"{source}: the family has no view '{name}'. Views: {string.Join(", ", views.Where(v => v.ViewType is ViewType.FloorPlan or ViewType.CeilingPlan or ViewType.Elevation or ViewType.ThreeD or ViewType.Section).Select(v => $"'{v.Name}'").Take(12))}.");
+        return null;
+    }
+
+    /// <summary>The elevation whose view direction (towards the viewer) is <paramref name="towardsViewer"/>.</summary>
+    private static View? ElevationFacing(List<View> views, XYZ towardsViewer)
+    {
+        foreach (var view in views.Where(v => v.ViewType == ViewType.Elevation))
+        {
+            try { if (view.ViewDirection.IsAlmostEqualTo(towardsViewer, 1e-6)) return view; }
+            catch { /* a view without a direction */ }
+        }
         return null;
     }
 
@@ -167,7 +182,8 @@ internal static class ModelFamilyLookup
                 problems.Add($"{source}: the family has no level; name a reference plane.");
                 return null;
             }
-            return Plane.CreateByNormalAndOrigin(XYZ.BasisZ, new XYZ(0, 0, level.Elevation));
+            // By basis, not by normal: CreateByNormalAndOrigin leaves the in-plane axes to Revit.
+            return Plane.CreateByOriginAndBasis(new XYZ(0, 0, level.Elevation), XYZ.BasisX, XYZ.BasisY);
         }
         if (token is JObject obj)
         {
@@ -196,8 +212,21 @@ internal static class ModelFamilyLookup
         if (plane == null) return null;
         if (referencePlane != null)
         {
+            // No fallback to a free plane here: a form that silently does not follow its reference plane defeats
+            // every constraint built on it, and nothing would say so.
             try { return Autodesk.Revit.DB.SketchPlane.Create(doc, referencePlane.Id); }
-            catch { /* fall back to the geometric plane */ }
+            catch (Exception ex)
+            {
+                problems.Add($"{source}: Revit could not make a work plane on reference plane '{referencePlane.Name}' ({referencePlane.Id.Value}): {ex.Message.TrimEnd('.')}.");
+                return null;
+            }
+        }
+        var onLevel = token == null || token.Type == JTokenType.String && string.Equals(((string?)token)?.Trim(), "level", StringComparison.OrdinalIgnoreCase);
+        if (onLevel && ReferenceLevel(doc) is { } level)
+        {
+            // Hosted on the level, as a sketch drawn in the Ref. Level plan is; a free plane is the fallback.
+            try { return Autodesk.Revit.DB.SketchPlane.Create(doc, level.Id); }
+            catch { /* below */ }
         }
         return Autodesk.Revit.DB.SketchPlane.Create(doc, plane);
     }
