@@ -278,7 +278,9 @@ internal static class ModelFamilyAssociations
             ForgeTypeId? elementType = null, familyType = null;
             try { elementType = elementParameter.Definition.GetDataType(); familyType = familyParameter.Definition.GetDataType(); }
             catch { /* compared by Revit below */ }
-            if (elementType != null && familyType != null && elementType.TypeId.Length > 0 && familyType.TypeId.Length > 0 && !elementType.Equals(familyType))
+            // Version-free, as everywhere else: a parameter from an older shared parameter file carries an older spec version.
+            if (elementType != null && familyType != null && elementType.TypeId.Length > 0 && familyType.TypeId.Length > 0 &&
+                !RevitMCP.Addin.Parameters.ParameterSpecMap.SameType(elementType.TypeId, familyType.TypeId))
                 return $"'{name}' is {LabelOf(elementType)}, but the family parameter '{familyParameter.Definition.Name}' is {LabelOf(familyType)}.";
         }
         try

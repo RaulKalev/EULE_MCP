@@ -245,8 +245,8 @@ public static class ModelFamilyParameterPlanner
         if (edit.Shared || edit.SharedFlag == false)
             PlanSharedOnExisting(plan, context, item, existing);
 
-        if (existing.BuiltIn && (edit.Instance != null || edit.Reporting != null || edit.Rename != null || edit.Shared))
-            problems.Add($"{source}: '{existing.Name}' is a built-in family parameter; its instance/type, reporting, name and sharing cannot be changed.");
+        if (existing.BuiltIn && (edit.Instance != null || edit.Reporting != null || edit.Rename != null || edit.Shared || edit.Tooltip != null))
+            problems.Add($"{source}: '{existing.Name}' is a built-in family parameter; its instance/type, reporting, name, sharing and tooltip cannot be changed.");
 
         if (edit.Instance != null && edit.Instance.Value != existing.Instance)
         {
@@ -520,12 +520,19 @@ public static class ModelFamilyParameterPlanner
             var mapped = refs.Parameters.Select(r => plan.RenamedFrom.TryGetValue(r, out var renamed) && !finalNames.Contains(r, StringComparer.Ordinal) ? renamed : r).Distinct(StringComparer.Ordinal).ToList();
             dependsOn[state.Name] = mapped.Where(r => finalNames.Contains(r, StringComparer.Ordinal)).ToList();
 
-            foreach (var gone in mapped.Where(r => removedNames.Contains(r, StringComparer.Ordinal) && !finalNames.Contains(r, StringComparer.Ordinal)))
-                problems.Add($"removeParameters: '{gone}' cannot be removed: the formula of '{state.Name}' ({state.Formula}) uses it. " +
-                             $"Revit would delete that formula along with the parameter. Change or clear the formula in this call " +
-                             $"(parameters: [{{\"name\": \"{state.Name}\", \"formula\": null}}]), or remove '{state.Name}' too.");
-
             var changed = plan.FormulaChanges.FirstOrDefault(c => string.Equals(c.Parameter, state.Name, StringComparison.Ordinal));
+            foreach (var gone in mapped.Where(r => removedNames.Contains(r, StringComparer.Ordinal)))
+            {
+                if (!finalNames.Contains(gone, StringComparer.Ordinal))
+                    problems.Add($"removeParameters: '{gone}' cannot be removed: the formula of '{state.Name}' ({state.Formula}) uses it. " +
+                                 $"Revit would delete that formula along with the parameter. Change or clear the formula in this call " +
+                                 $"(parameters: [{{\"name\": \"{state.Name}\", \"formula\": null}}]), or remove '{state.Name}' too.");
+                // Removed and added again: Revit deletes the formula with the old parameter, so an unchanged one would be lost.
+                else if (changed == null)
+                    problems.Add($"removeParameters: '{gone}' is removed and added again, but Revit deletes the formula of '{state.Name}' ({state.Formula}) " +
+                                 $"together with the old '{gone}'. Set it again in this call (formulas: [{{\"parameter\": \"{state.Name}\", \"formula\": \"{state.Formula}\"}}]), " +
+                                 "or clear it (formula: null).");
+            }
             if (changed?.Formula != null && unknownReported.Add(state.Name))
             {
                 foreach (var unknown in refs.Unknown)
