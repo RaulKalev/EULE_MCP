@@ -91,8 +91,10 @@ internal static class ModelFamilyFormFaces
         if (!ModelFamilyFormFaceLabels.IsLabel(label)) return null;
         var axis = ModelFamilyFormFaceLabels.NormalOf(label);
         var direction = new XYZ(axis[0], axis[1], axis[2]);
+        // Faces without a reference cannot be placed or dimensioned against; leave them out before choosing, as
+        // ModelFamilyReferenceResolver does, so both pick the same face.
         return PlanarFaces(element)
-            .Where(f => string.Equals(f.Label, label.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Where(f => f.Reference != null && string.Equals(f.Label, label.Trim(), StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(f => Math.Round(f.Point.DotProduct(direction) * ModelFamilyJson.MmPerFoot, 3))
             .ThenByDescending(f => f.AreaMm2)
             .FirstOrDefault();

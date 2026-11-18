@@ -65,6 +65,31 @@ public class ModelFamilyFormTests
     }
 
     [Fact]
+    public void A_plane_square_to_the_family_axes_gets_family_aligned_axes_whatever_revit_chose()
+    {
+        // The level plane as Plane.CreateByNormalAndOrigin may return it: x and y rotated 30° about Z (documented as arbitrary).
+        var c = Math.Cos(Math.PI / 6);
+        var s = Math.Sin(Math.PI / 6);
+        var level = ModelFamilyFormFrame.AlignedToFamily(new double[] { 0, 0, 0 }, new double[] { 0, 0, 1 }, new[] { c, s, 0 }, new[] { -s, c, 0 });
+        var profile = Valid("{\"rectangle\": {\"min\": [-100, -50, 0], \"max\": [100, 50, 0]}}", level);
+        Assert.Equal(200, profile.Width, 6);
+        Assert.Equal(100, profile.Height, 6);
+        Assert.Equal(new double[] { -100, -50, 0 }, profile.Outer.World[0].Start.Select(v => Math.Round(v, 9)).ToArray());
+        Assert.Equal(new double[] { 0, 0, 1 }, level.Normal.Select(v => Math.Round(v, 9)).ToArray());
+
+        // A plane facing −Y keeps its normal; x runs along family X and y along family Z.
+        var front = ModelFamilyFormFrame.AlignedToFamily(new double[] { 0, -50, 0 }, new double[] { 0, -1, 0 }, new double[] { 0, 0, 1 }, new double[] { 1, 0, 0 });
+        Assert.Equal(new double[] { 1, 0, 0 }, front.XAxis.Select(v => Math.Round(v, 9)).ToArray());
+        Assert.Equal(new double[] { 0, 0, 1 }, front.YAxis.Select(v => Math.Round(v, 9)).ToArray());
+        Assert.Equal(new double[] { 0, -1, 0 }, front.Normal.Select(v => Math.Round(v, 9)).ToArray());
+
+        // A tilted plane keeps the axes it was given.
+        var n = new[] { 0, -Math.Sqrt(0.5), Math.Sqrt(0.5) };
+        var tilted = ModelFamilyFormFrame.AlignedToFamily(new double[] { 0, 0, 0 }, n, new double[] { 1, 0, 0 }, new[] { 0, Math.Sqrt(0.5), Math.Sqrt(0.5) });
+        Assert.Equal(new double[] { 1, 0, 0 }, tilted.XAxis);
+    }
+
+    [Fact]
     public void A_rectangle_follows_the_work_plane_axes()
     {
         var level = Valid("[{\"rectangle\": {\"min\": [-50,-25,0], \"max\": [50,25,0]}}]");

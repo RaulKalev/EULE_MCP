@@ -159,8 +159,10 @@ internal static class ModelFamilyReferenceResolver
             problems.Add($"{selector.Source}: element {element.Id.Value} has no planar face within {FaceToleranceDegrees}° of {selector.Describe().Replace($" of element {element.Id.Value}", string.Empty)}. Its planar face normals: {string.Join(", ", normals)}; pass face as one of them.");
             return null;
         }
-        // Several faces facing that way (a stepped form, several solids): the outermost one, as documented.
-        var best = candidates.OrderByDescending(f => f.Origin.DotProduct(wanted)).First();
+        // Several faces facing that way (a stepped form, several solids): the outermost one, as documented, then the
+        // largest — the same choice as ModelFamilyFormFaces.Find, so a face the forms tool lists resolves to that face.
+        var best = candidates.OrderByDescending(f => Math.Round(f.Origin.DotProduct(wanted) * ModelFamilyJson.MmPerFoot, 3))
+            .ThenByDescending(f => f.Area).First();
         return new ModelFamilyResolvedReference
         {
             Reference = best.Reference,
@@ -178,6 +180,8 @@ internal static class ModelFamilyReferenceResolver
         public Reference Reference { get; init; } = null!;
         public XYZ Normal { get; init; } = XYZ.BasisZ;
         public XYZ Origin { get; init; } = XYZ.Zero;
+        /// <summary>Square feet; 0 when Revit cannot measure it.</summary>
+        public double Area { get; init; }
     }
 
     /// <summary>The element's planar faces that carry a reference (solids of forms; instance geometry of nested instances).</summary>
@@ -202,7 +206,10 @@ internal static class ModelFamilyReferenceResolver
                     foreach (Face face in solid.Faces)
                     {
                         if (face is not PlanarFace planar || planar.Reference == null) continue;
-                        result.Add(new FaceInfo { Reference = planar.Reference, Normal = planar.FaceNormal.Normalize(), Origin = planar.Origin });
+                        double area;
+                        try { area = planar.Area; }
+                        catch { area = 0; }
+                        result.Add(new FaceInfo { Reference = planar.Reference, Normal = planar.FaceNormal.Normalize(), Origin = planar.Origin, Area = area });
                     }
                     break;
                 case GeometryInstance instance:
