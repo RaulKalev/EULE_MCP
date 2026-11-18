@@ -184,13 +184,25 @@ public static class ModelFamilyJson
             .Take(max).Select(x => x.Name).ToList();
     }
 
+    private static readonly string[] MeaninglessPrefixes = { "OST_", "RBS_" };
+
+    private static int SharedPrefixLength(string wanted, string known)
+    {
+        foreach (var prefix in MeaninglessPrefixes)
+            if (wanted.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && known.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return prefix.Length;
+        return 0;
+    }
+
     private static int Score(string wanted, string known)
     {
         if (string.Equals(wanted, known, StringComparison.OrdinalIgnoreCase)) return 100;
         if (known.IndexOf(wanted, StringComparison.OrdinalIgnoreCase) >= 0 || wanted.IndexOf(known, StringComparison.OrdinalIgnoreCase) >= 0) return 50;
-        var common = 0;
+        // A shared built-in prefix (OST_, RBS_) says nothing: every such name would look close to every other.
+        var skip = SharedPrefixLength(wanted, known);
+        var common = skip;
         while (common < wanted.Length && common < known.Length &&
                char.ToLowerInvariant(wanted[common]) == char.ToLowerInvariant(known[common])) common++;
-        return common >= 3 ? common : 0;
+        return common - skip >= 3 ? common - skip : 0;
     }
 }

@@ -91,10 +91,10 @@ public sealed class ModelFamilyTargetSpec
         spec.TemplatePath = Str(obj, "templatePath");
         spec.FamilyName = Str(obj, "familyName");
         spec.SavePath = Str(obj, "savePath");
-        spec.Overwrite = Bool(obj, "overwrite");
-        spec.Save = Bool(obj, "save");
-        spec.Load = Bool(obj, "load");
-        spec.OverwriteParameterValues = Bool(obj, "overwriteParameterValues");
+        spec.Overwrite = Bool(obj, "overwrite", problems);
+        spec.Save = Bool(obj, "save", problems);
+        spec.Load = Bool(obj, "load", problems);
+        spec.OverwriteParameterValues = Bool(obj, "overwriteParameterValues", problems);
 
         var given = new List<string>();
         if (spec.Family.Length > 0) given.Add("family");
@@ -230,11 +230,14 @@ public sealed class ModelFamilyTargetSpec
         return (token.Type == JTokenType.String ? (string?)token : token.ToString())?.Trim() ?? string.Empty;
     }
 
-    private static bool Bool(JObject obj, string key)
+    private static bool Bool(JObject obj, string key, List<string> problems)
     {
         var token = obj.GetValue(key, StringComparison.OrdinalIgnoreCase);
-        if (token == null) return false;
+        if (token == null || token.Type == JTokenType.Null) return false;
         if (token.Type == JTokenType.Boolean) return (bool)token;
-        return token.Type == JTokenType.String && bool.TryParse((string?)token, out var parsed) && parsed;
+        if (token.Type == JTokenType.String && bool.TryParse(((string?)token)?.Trim(), out var parsed)) return parsed;
+        // A value that is not a boolean must not be read as false: "overwrite": 1 would silently not overwrite.
+        problems.Add($"target.{key}: must be true or false.");
+        return false;
     }
 }
