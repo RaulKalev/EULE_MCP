@@ -89,6 +89,8 @@ public sealed class ModelFamilyProfileLoop
     public List<int> Crosses { get; } = new();
     internal List<int> SegmentIds { get; set; } = new();
     internal List<int> VertexIds { get; set; } = new();
+    /// <summary>The outline with arcs split finely enough to stay within the join tolerance of the true arc: for containment.</summary>
+    internal List<double[]> Fine { get; set; } = new();
 
     /// <summary>Whether a form can be built from it: not crossing or touching itself, no segment shorter than Revit's minimum.</summary>
     public bool Usable => Reasons.Count == 0;
@@ -649,6 +651,7 @@ public sealed class ModelFamilyProfileAnalysis
                 Uv = uv,
                 World = uv.Select(s => s.Map(p => Frame.ToWorld(p))).ToList(),
                 Polygon = polygon,
+                Fine = FinePolygon(uv),
                 Area = area,
                 Min = min,
                 Max = max,
@@ -895,8 +898,8 @@ public sealed class ModelFamilyProfileAnalysis
             var strictlyInside = false;
             foreach (var p in inner.Polygon)
             {
-                if (OnEdge(p, outer.Polygon)) continue;
-                if (!Inside(p, outer.Polygon)) return false;
+                if (OnEdge(p, outer.Fine)) continue;
+                if (!Inside(p, outer.Fine)) return false;
                 strictlyInside = true;
             }
             return strictlyInside;
@@ -959,9 +962,11 @@ public sealed class ModelFamilyProfileAnalysis
                 Layers = chain.Select(s => s.Layer).Where(l => l.Length > 0).Distinct().OrderBy(l => l, StringComparer.Ordinal).ToList(),
                 SourceIds = chain.SelectMany(s => s.Ids()).Distinct().OrderBy(id => id).ToList()
             };
+            // A single curve's own other end is no gap: joining it would collapse the curve, not close anything.
+            var own = chain.Count == 1 ? vertices : new List<int>();
             foreach (var end in ends)
             {
-                var nearest = looseEnds.Where(v => v != end).OrderBy(v => Distance2D(_vertices[v], _vertices[end])).ThenBy(v => v).Select(v => (int?)v).FirstOrDefault();
+                var nearest = looseEnds.Where(v => v != end && !own.Contains(v)).OrderBy(v => Distance2D(_vertices[v], _vertices[end])).ThenBy(v => v).Select(v => (int?)v).FirstOrDefault();
                 row.Ends.Add((Copy(_vertices[end]), nearest == null ? null : Distance2D(_vertices[nearest.Value], _vertices[end]), nearest == null ? null : Copy(_vertices[nearest.Value])));
             }
             Open.Add(row);
@@ -989,6 +994,24 @@ public sealed class ModelFamilyProfileAnalysis
         foreach (var issue in Issues.Where(i => i.Kind == "approximated")) issue.Loops.AddRange(Loops.Where(l => l.Approximated).Select(l => l.Index));
     }
 
+    /// <summary>
+    /// A loop as a polygon whose chords stay within the join tolerance of its arcs (at most 1024 per arc). The coarse
+    /// <see cref="ModelFamilyProfileLoop.Polygon"/> cuts up to 0.5 % of the radius off an arc (5 mm on a 1 m radius), so a
+    /// hole near a large arc would fall outside it and lose its parent.
+    /// </summary>
+    private List<double[]> FinePolygon(List<ModelFamilyFormSegment> uv)
+    {
+        var points = new List<double[]>();
+        foreach (var s in uv)
+        {
+            var step = Math.PI / 16;
+            if (s.Kind == ModelFamilyFormSegmentKind.Arc && Arc2D(s.Start, s.Mid!, s.End) is { } arc && arc.Radius > Tol)
+                step = Math.Min(step, Math.Max(2 * Math.Acos(1 - Tol / arc.Radius), Math.Abs(arc.Sweep) / 1024));
+            points.AddRange(Discretize(s, step));
+        }
+        return points;
+    }
+
     private static List<long> Ids(long? id) => id == null ? new List<long>() : new List<long> { id.Value };
 
     private static List<string> Layers(params string[] layers) =>
@@ -1000,7 +1023,7 @@ public sealed class ModelFamilyProfileAnalysis
     public ModelFamilyProfileLoop? LoopAt(double[] familyPoint)
     {
         var uv = Frame.ToUv(familyPoint);
-        return Loops.Where(l => Inside(uv, l.Polygon)).OrderByDescending(l => l.Depth).ThenBy(l => l.Area).ThenBy(l => l.Index).FirstOrDefault();
+        return Loops.Where(l => Inside(uv, l.Fine)).OrderByDescending(l => l.Depth).ThenBy(l => l.Area).ThenBy(l => l.Index).FirstOrDefault();
     }
 
     /// <summary>The analysis as the read tool returns it; <paramref name="limit"/> caps each list.</summary>
