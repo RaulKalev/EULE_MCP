@@ -273,6 +273,7 @@ internal static class ModelFamilyAssociations
         var name = SafeName(elementParameter);
         if (!CanAssociate(familyDoc, elementParameter))
             return $"'{name}' cannot be associated with a family parameter on this element.";
+        var typeNote = string.Empty;
         if (familyParameter != null)
         {
             ForgeTypeId? elementType = null, familyType = null;
@@ -281,7 +282,16 @@ internal static class ModelFamilyAssociations
             // Version-free, as everywhere else: a parameter from an older shared parameter file carries an older spec version.
             if (elementType != null && familyType != null && elementType.TypeId.Length > 0 && familyType.TypeId.Length > 0 &&
                 !RevitMCP.Addin.Parameters.ParameterSpecMap.SameType(elementType.TypeId, familyType.TypeId))
-                return $"'{name}' is {LabelOf(elementType)}, but the family parameter '{familyParameter.Definition.Name}' is {LabelOf(familyType)}.";
+            {
+                typeNote = $" '{name}' is {LabelOf(elementType)}, the family parameter '{familyParameter.Definition.Name}' is {LabelOf(familyType)}.";
+                // Different kinds of value (a number against a material) can never be associated. Two numeric specs are
+                // Revit's call: it accepts some pairs (a connector's size against a length), and refuses the rest below.
+                StorageType elementStorage, familyStorage;
+                try { elementStorage = elementParameter.StorageType; familyStorage = familyParameter.StorageType; }
+                catch { elementStorage = familyStorage = StorageType.None; }
+                if (elementStorage != familyStorage)
+                    return typeNote.TrimStart();
+            }
         }
         try
         {
@@ -289,7 +299,7 @@ internal static class ModelFamilyAssociations
         }
         catch (Exception ex)
         {
-            return $"Revit refused to {(familyParameter == null ? "dissociate" : "associate")} '{name}': {ex.Message.TrimEnd('.')}.";
+            return $"Revit refused to {(familyParameter == null ? "dissociate" : "associate")} '{name}': {ex.Message.TrimEnd('.')}.{typeNote}";
         }
         var now = Associated(familyDoc, elementParameter);
         if (familyParameter == null) return now == null ? null : $"'{name}' is still associated with '{now.Definition.Name}'.";
