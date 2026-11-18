@@ -20,6 +20,7 @@ public static class BridgeToolGroups
         [Graph] = "Model graph: build, status, summary, query, route (cheap id-first discovery)",
         ["query"] = "Broad element queries, parameter filters, grouping, query presets, parameter QA, phases, design options, model health audit; geometry, boxes, ray casts",
         ["edit"] = "Generic model edits: parameters, move/align/rotate/elevation, pin/unpin and flip facing/hand, mirror/array, groups (list, create, ungroup, place), delete/duplicate/rename, family types, placement, families (list, load, reload, purge unused), project and shared parameters (list, create, bind categories), change the type of existing instances, element and view phases, model datums (list/create/edit levels, grids, reference planes)",
+        ["familyeditor"] = "Family Editor authoring of loadable 3D families: create from a template, inspect, reference planes and constraints, solid and void forms, parameters and types, materials, MEP connectors, nested components and visibility, flex tests, forms from CAD profiles",
         ["devices"] = "Room geometry, device codes, room-based device placement and device/fire-alarm audits",
         ["electrical"] = "Circuits, panels, wires/cables, voltage drop, fire alarm circuits, patch panels, cable tray and conduit runs (containment)",
         ["panelschematics"] = "PanelSchematics plugin (Kilbiskeemid): panel tables, empty rows, circuit row parameters, its Extensible Storage data",
@@ -166,6 +167,8 @@ public static class BridgeToolGroups
     private static readonly (string Keyword, string Group)[] Rules =
     {
         ("revit_graph_", Graph),
+        // #168: before every other rule, since these names contain "preview", "dimension" and "connector".
+        ("model_family", "familyeditor"),
         // Before the electrical rules: these names contain "panel" and "circuit".
         ("revit_panelschematics_", "panelschematics"),
         ("config_", "office"), ("file_", "office"), ("excel_", "office"), ("standards_", "office"), ("delivery_", "office"),

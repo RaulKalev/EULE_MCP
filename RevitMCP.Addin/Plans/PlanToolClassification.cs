@@ -45,7 +45,9 @@ public static class PlanToolClassification
         // Copies legend components and adds text notes and detail items to a legend.
         "revit_populate_legend",
         // Editing a loaded family reloads it; new types and nested families appear in the project.
-        "revit_edit_detail_family"
+        "revit_edit_detail_family",
+        // #168: a model-family edit creates forms, parameters and types, and a loaded family is loaded back.
+        "revit_edit_model_family"
     };
 
     private static readonly string[] ModifyingPrefixes =
