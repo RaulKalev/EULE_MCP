@@ -19,18 +19,21 @@ internal static class ModelFamilyFlexExecutor
     /// <summary>The tool: the trial, then (reopenCopy) the same type cases on a saved and reopened copy.</summary>
     public static McpToolResult Execute(UIApplication uiapp, McpToolRequest request, CancellationToken cancellationToken)
     {
-        var result = ModelFamilySession.Trial(uiapp, request, What, Body, cancellationToken);
         var reopen = ModelFamilyJson.Token(request.Arguments, ModelFamilyFlexArgs.ReopenCopy);
         var wanted = reopen?.Type == JTokenType.Boolean ? (bool)reopen
             : reopen?.Type == JTokenType.String && bool.TryParse(((string?)reopen)?.Trim(), out var parsed) && parsed;
+        // Whether the user's document has unsaved changes is decided before the trial: the trial's rolled-back
+        // transactions must not be what makes a document look modified.
+        var before = wanted ? ModelFamilyFlexReopen.Prepare(uiapp, request) : null;
+        var result = ModelFamilySession.Trial(uiapp, request, What, Body, cancellationToken);
         if (!wanted || !result.Success || result.Data is not JObject envelope || envelope["result"] is not JObject data) return result;
-        data["reopen"] = ModelFamilyFlexReopen.Run(uiapp, request, data, cancellationToken);
+        data["reopen"] = ModelFamilyFlexReopen.Run(uiapp, request, data, before!, cancellationToken);
         if (data["reopen"]?["equal"]?.Type == JTokenType.Boolean && !(bool)data["reopen"]!["equal"]!)
             result.Warnings.Add("The reopened copy does not behave like the family: see result.reopen.");
         return result;
     }
 
-    /// <summary>A raw value of a family type, as Revit stores it, so a restore puts back exactly what was there.</summary>
+    /// <summary>A raw value of a family type, as Revit stores it, so the read-back after a case compares exactly.</summary>
     private sealed class RawValue
     {
         public bool Has { get; init; }
@@ -52,18 +55,6 @@ internal static class ModelFamilyFlexExecutor
             };
         }
 
-        public void Write(FamilyManager manager, FamilyParameter parameter)
-        {
-            if (!Has) return;
-            switch (parameter.StorageType)
-            {
-                case StorageType.Double when Double != null: manager.Set(parameter, Double.Value); break;
-                case StorageType.Integer when Integer != null: manager.Set(parameter, Integer.Value); break;
-                case StorageType.String: manager.Set(parameter, Text ?? string.Empty); break;
-                case StorageType.ElementId when Id != null: manager.Set(parameter, new ElementId(Id.Value)); break;
-            }
-        }
-
         public bool SameAs(RawValue other) =>
             Has == other.Has &&
             (Double == null && other.Double == null || Double != null && other.Double != null && Math.Abs(Double.Value - other.Double.Value) <= 1e-9 * Math.Max(1, Math.Abs(Double.Value))) &&
@@ -80,14 +71,15 @@ internal static class ModelFamilyFlexExecutor
 
         var spec = ModelFamilyFlexSpec.Parse(context.Args, problems);
         var typeNames = ModelFamilyParameterRead.TypeNames(doc);
-        var originalType = manager.CurrentType;
-        var plan = ModelFamilyFlexCases.Build(spec, typeNames, originalType?.Name, problems);
+        // By name: FamilyType objects are not relied on across the rolled-back case groups.
+        var originalTypeName = manager.CurrentType?.Name;
+        var plan = ModelFamilyFlexCases.Build(spec, typeNames, originalTypeName, problems);
         var parameters = ModelFamilyParameterRead.Parameters(doc)
             .Select(p => (Parameter: p, State: ModelFamilyParameterRead.State(p)))
             .ToList();
         var inputs = ValidateInputs(context, plan, parameters.ToDictionary(p => p.Parameter.Id.Value, p => p.State));
         var targets = ModelFamilyFlexMeasure.Resolve(doc, spec.Checks, problems);
-        if (originalType == null && plan.Cases.Any(c => c.Values.Count > 0))
+        if (originalTypeName == null && plan.Cases.Any(c => c.Values.Count > 0))
             problems.Add("The family has no type, so no value can be set: add a type with revit_edit_model_family_parameters, or flex without ranges and cases.");
         if (problems.Count > 0)
             return new JObject { ["plannedCases"] = plan.Cases.Count, ["types"] = new JArray(plan.Types) };
@@ -98,8 +90,11 @@ internal static class ModelFamilyFlexExecutor
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
         // 1. Snapshot: the current type and every value a case will set, per type, exactly as stored.
-        FamilyType? Find(string name) => name.Length == 0 ? originalType
-            : manager.Types.Cast<FamilyType>().FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
+        FamilyType? Find(string name)
+        {
+            var wanted = name.Length == 0 ? originalTypeName : name;
+            return wanted == null ? null : manager.Types.Cast<FamilyType>().FirstOrDefault(t => string.Equals(t.Name, wanted, StringComparison.OrdinalIgnoreCase));
+        }
         var snapshot = new Dictionary<string, Dictionary<long, RawValue>>(StringComparer.OrdinalIgnoreCase);
         foreach (var group in plan.Cases.Where(c => c.Values.Count > 0).GroupBy(c => c.Type, StringComparer.OrdinalIgnoreCase))
         {
@@ -111,7 +106,11 @@ internal static class ModelFamilyFlexExecutor
             snapshot[group.Key] = values;
         }
 
-        // 2. The cases, each in its own transaction: a case Revit refuses is rolled back alone.
+        // 2. The cases. Each runs in its own transaction group nested in the session's: the case's transaction is
+        // committed (Revit raises constraint failures only at commit) or refused and rolled back alone, the checks
+        // measure the committed state, and then the case's group is rolled back. That undoes the case exactly: the
+        // values it set, the formula results and geometry Revit derived from them and the current type, so every case
+        // starts from the original state and no case depends on the order of the others.
         var results = new List<ModelFamilyFlexCaseResult>();
         var restored = true;
         string? restoreError = null;
@@ -119,82 +118,81 @@ internal static class ModelFamilyFlexExecutor
         {
             context.CancellationToken.ThrowIfCancellationRequested();
             var result = new ModelFamilyFlexCaseResult { Case = flexCase };
-            var failureStart = context.Failures.Count;
-            result.Committed = context.TryTransact($"Flex case '{flexCase.Name}'", () =>
+            var caseGroup = new TransactionGroup(doc, $"Revit MCP - flex case {results.Count + 1}");
+            caseGroup.Start();
+            try
             {
-                var type = Find(flexCase.Type) ?? throw new InvalidOperationException($"the family has no type '{flexCase.Type}'");
-                manager.CurrentType = type;
-                foreach (var (name, value) in flexCase.Values.Select(v => (v.Key, v.Value)))
+                var failureStart = context.Failures.Count;
+                result.Committed = context.TryTransact($"Flex case '{flexCase.Name}'", () =>
                 {
-                    var parameter = inputs[name];
-                    var friendly = ParameterRevitTypes.FriendlyOf(parameter.Definition.GetDataType());
-                    var (converted, error) = ModelFamilyParameterValues.ToInternal(friendly, value);
-                    if (converted == null) throw new InvalidOperationException($"{name}: {error}");
-                    SetValue(doc, manager, parameter, converted);
-                }
-            }, out var caseError);
-            result.Error = caseError;
-            var caseFailures = context.Failures.Skip(failureStart).ToList();
-            context.Failures.RemoveRange(failureStart, context.Failures.Count - failureStart);
-            result.RevitFailures = ModelFamilyFlexMeasure.DescribeFailures(doc, caseFailures);
+                    // A family without types has no type to make current: its current state is flexed as it is.
+                    if (flexCase.Type.Length > 0 || originalTypeName != null)
+                        manager.CurrentType = Find(flexCase.Type) ?? throw new InvalidOperationException($"the family has no type '{flexCase.Type}'");
+                    foreach (var (name, value) in flexCase.Values.Select(v => (v.Key, v.Value)))
+                    {
+                        var parameter = inputs[name];
+                        var friendly = ParameterRevitTypes.FriendlyOf(parameter.Definition.GetDataType());
+                        var (converted, error) = ModelFamilyParameterValues.ToInternal(friendly, value);
+                        if (converted == null) throw new InvalidOperationException($"{name}: {error}");
+                        SetValue(doc, manager, parameter, converted);
+                    }
+                }, out var caseError);
+                result.Error = caseError;
+                var caseFailures = context.Failures.Skip(failureStart).ToList();
+                context.Failures.RemoveRange(failureStart, context.Failures.Count - failureStart);
+                result.RevitFailures = ModelFamilyFlexMeasure.DescribeFailures(doc, caseFailures);
 
-            if (result.Committed)
-            {
-                var values = ReadValues(doc, parameters);
-                foreach (var name in readNames)
-                    if (ModelFamilyFlexExpr.TryGet(values, name, out var value)) result.Parameters[name] = value?.DeepClone();
-                foreach (var check in spec.Checks)
+                if (result.Committed)
                 {
-                    var observation = ModelFamilyFlexMeasure.Measure(doc, check, targets[check.Id], values);
-                    result.Observations[check.Id] = observation;
-                    result.Failures.AddRange(ModelFamilyFlexEvaluator.Evaluate(check, observation, values));
+                    var values = ReadValues(doc, parameters);
+                    foreach (var name in readNames)
+                        if (ModelFamilyFlexExpr.TryGet(values, name, out var value)) result.Parameters[name] = value?.DeepClone();
+                    foreach (var check in spec.Checks)
+                    {
+                        var observation = ModelFamilyFlexMeasure.Measure(doc, check, targets[check.Id], values);
+                        result.Observations[check.Id] = observation;
+                        result.Failures.AddRange(ModelFamilyFlexEvaluator.Evaluate(check, observation, values));
+                    }
                 }
+            }
+            finally
+            {
+                // Always closed here, also on an exception or cancellation, so the session's group can roll back.
+                if (!EndCase(caseGroup)) restoreError ??= $"Revit did not roll back case '{flexCase.Name}'.";
             }
             results.Add(result);
 
-            // 3. Restore the type's values and read them back; a failed restore stops the run.
-            if (flexCase.Values.Count > 0 && snapshot.TryGetValue(flexCase.Type, out var originals) && Find(flexCase.Type) is { } touched)
+            // 3. First net: the case is undone; read the current type and the values back.
+            if (restoreError == null && !string.Equals(manager.CurrentType?.Name, originalTypeName, StringComparison.Ordinal))
+                restoreError = $"After case '{flexCase.Name}', the current type is '{manager.CurrentType?.Name}' instead of '{originalTypeName}'.";
+            if (restoreError == null && flexCase.Values.Count > 0 && snapshot.TryGetValue(flexCase.Type, out var originals) && Find(flexCase.Type) is { } touchedType)
             {
-                if (result.Committed)
+                foreach (var pair in originals)
                 {
-                    context.TryTransact($"Restore type '{touched.Name}'", () =>
+                    var parameter = inputs.Values.FirstOrDefault(p => p.Id.Value == pair.Key);
+                    if (parameter != null && !RawValue.Read(touchedType, parameter).SameAs(pair.Value))
                     {
-                        manager.CurrentType = touched;
-                        foreach (var pair in originals)
-                            if (inputs.Values.FirstOrDefault(p => p.Id.Value == pair.Key) is { } parameter) pair.Value.Write(manager, parameter);
-                    }, out var error);
-                    if (error != null) restoreError = $"Restoring type '{touched.Name}' after case '{flexCase.Name}' failed: {error}";
-                }
-                if (restoreError == null)
-                {
-                    var touchedType = Find(flexCase.Type)!;
-                    foreach (var pair in originals)
-                    {
-                        var parameter = inputs.Values.FirstOrDefault(p => p.Id.Value == pair.Key);
-                        if (parameter != null && !RawValue.Read(touchedType, parameter).SameAs(pair.Value))
-                        {
-                            restoreError = $"After case '{flexCase.Name}', '{parameter.Definition.Name}' of type '{touchedType.Name}' did not read back as its original value.";
-                            break;
-                        }
+                        restoreError = $"After case '{flexCase.Name}', '{parameter.Definition.Name}' of type '{touchedType.Name}' did not read back as its original value.";
+                        break;
                     }
                 }
-                if (restoreError != null)
-                {
-                    restored = false;
-                    problems.Add(restoreError + " The run stopped; the session rolls every change back, so the family is unchanged. Check it with revit_get_model_family include=[\"types\"].");
-                    break;
-                }
+            }
+            if (restoreError != null)
+            {
+                restored = false;
+                problems.Add(restoreError + " The run stopped; the session rolls every change back, so the family is unchanged. Check it with revit_get_model_family include=[\"types\"].");
+                break;
             }
         }
 
-        // 4. Put the original current type back.
-        if (restored && originalType != null && !string.Equals(manager.CurrentType?.Name, originalType.Name, StringComparison.Ordinal))
+        // 4. The original current type (the case groups already put it back; this only acts if one did not).
+        if (restored && originalTypeName != null && !string.Equals(manager.CurrentType?.Name, originalTypeName, StringComparison.Ordinal))
         {
-            var ok = context.TryTransact("Restore the current type", () => manager.CurrentType = originalType, out var error);
-            if (!ok || !string.Equals(manager.CurrentType?.Name, originalType.Name, StringComparison.Ordinal))
+            var ok = context.TryTransact("Restore the current type", () => manager.CurrentType = Find(string.Empty), out var error);
+            if (!ok || !string.Equals(manager.CurrentType?.Name, originalTypeName, StringComparison.Ordinal))
             {
                 restored = false;
-                problems.Add($"The current type could not be set back to '{originalType.Name}'{(error != null ? $": {error}" : string.Empty)}. The session rolls every change back.");
+                problems.Add($"The current type could not be set back to '{originalTypeName}'{(error != null ? $": {error}" : string.Empty)}. The session rolls every change back.");
             }
         }
 
@@ -205,15 +203,34 @@ internal static class ModelFamilyFlexExecutor
         return new JObject
         {
             ["types"] = new JArray(plan.Types.Select(t => t.Length == 0 ? null : t)),
-            ["originalType"] = originalType?.Name,
+            ["originalType"] = originalTypeName,
             ["casesRequested"] = plan.Requested,
             ["duplicatesDropped"] = plan.Duplicates,
             ["cases"] = new JArray(results.Select(r => r.ToJson())),
             ["summary"] = summary,
             ["restored"] = restored,
             ["units"] = "lengths in mm in family coordinates, angles in degrees, yes/no as true/false, materials by name, electrical values in the document's display unit",
-            ["note"] = "Each case ran in its own transaction and its values were set back and read back afterwards; the whole trial was then rolled back, so the family is unchanged."
+            ["note"] = "Each case ran in its own transaction group that was rolled back after measuring, and the values were read back; the whole trial was then rolled back, so the family is unchanged."
         };
+    }
+
+    /// <summary>Rolls a case's transaction group back and disposes it; false when Revit did not roll it back.</summary>
+    private static bool EndCase(TransactionGroup group)
+    {
+        try
+        {
+            if (group.GetStatus() != TransactionStatus.Started) return group.GetStatus() == TransactionStatus.RolledBack;
+            return group.RollBack() == TransactionStatus.RolledBack;
+        }
+        catch
+        {
+            return false;
+        }
+        finally
+        {
+            try { group.Dispose(); }
+            catch { /* already disposed */ }
+        }
     }
 
     /// <summary>

@@ -110,9 +110,49 @@ revit_edit_model_family_forms
 Check: `created[0].sizeCheck` is `ok`; the cut's `volumeAfter` is smaller than `volumeBefore`. Note the enclosure id
 (`<enclosure>`) and the void id (`<void>`).
 
-**Variant (#177):** build the enclosure from a DWG profile or from family curves instead; see
-[model-family-profiles.md](model-family-profiles.md) for the tool and its arguments, then continue with step 6 using
-the id of the form it created.
+**Variant (#177): the enclosure from a DWG profile or from family curves.** Run it on a second copy of the family
+made after step 4 (for example `C:\temp\fam\ELV_Device_dwg.rfa`), or instead of the first extrusion above, then
+continue with the alignments below and step 6 using the id it created as `<enclosure>`. See
+[model-family-profiles.md](model-family-profiles.md).
+
+1. No tool imports a DWG into a family document. Open the `.rfa` in Revit, go to the plan of the reference level,
+   **Insert > Import CAD** a DWG whose outline layer is a 200 × 80 mm rectangle drawn from (−100, −80) to (100, 0)
+   (positioning origin to origin), then save and close the family so the path target can open it.
+2. Analyse the outline (`<dwg name>` and `<outline layer>` as the import shows them):
+
+```json
+revit_get_model_family_profiles
+{ "target": { "path": "C:\\temp\\fam\\ELV_Device.rfa" },
+  "source": { "import": "<dwg name>", "layers": ["<outline layer>"] }, "workPlane": "level" }
+```
+
+   Check: `workPlane.coincidesWith.kind` is `level`; a usable loop (`<loop>`, usually 0) has `width` 200, `height` 80
+   and `centre` `[0, -40, 0]`; `issues` is empty (or explain each one).
+3. Preview with `revit_preview_create_model_family_form_from_profile`, then create (same `source` and `workPlane`):
+
+```json
+revit_create_model_family_form_from_profile
+{ "target": { "path": "C:\\temp\\fam\\ELV_Device.rfa", "overwrite": true },
+  "source": { "import": "<dwg name>", "layers": ["<outline layer>"] }, "workPlane": "level",
+  "forms": [ { "loop": <loop>, "holes": "none", "depth": 150, "name": "Enclosure",
+               "expected": { "width": 200, "height": 80, "centre": [0, -40, 0] } } ] }
+```
+
+   Check: `created[0].sizeCheck` is `ok`; `created[0].id` is the new `<enclosure>`. Make the cutout void on it with the
+   forms tool (the second extrusion of step 5 with `"cuts": [ { "void": { "created": "extrusions[0]" }, "solid": <enclosure> } ]`).
+4. Family curves instead of a DWG: draw the outline as model lines, then use their ids as the source and remove them:
+
+```json
+revit_edit_model_family_components
+{ "target": { "path": "C:\\temp\\fam\\ELV_Device.rfa", "overwrite": true },
+  "modelLines": [ { "workPlane": "level", "curves": [
+    { "line": { "start": [-100, -80, 0], "end": [100, -80, 0] } }, { "line": { "start": [100, -80, 0], "end": [100, 0, 0] } },
+    { "line": { "start": [100, 0, 0], "end": [-100, 0, 0] } },     { "line": { "start": [-100, 0, 0], "end": [-100, -80, 0] } } ] } ] }
+```
+
+   Then `revit_get_model_family_profiles` and `revit_create_model_family_form_from_profile` as above with
+   `"source": { "curves": [<the four line ids from the result>] }` and `"removeSourceCurves": true`: the form is created
+   and the lines are gone.
 
 Lock the enclosure's faces to the planes (#170):
 
@@ -196,7 +236,9 @@ revit_flex_model_family
       "max": [ { "parameter": "Width", "factor": 0.5 }, 0, { "parameter": "Height" } ] },
     { "id": "centredX", "kind": "centred", "element": <enclosure>, "axis": "x" },
     { "id": "rearPlane", "kind": "plane", "plane": "Rear", "at": { "axis": "y", "value": 0 }, "fixed": true },
+    { "id": "centrePlane", "kind": "plane", "plane": "Center (Left/Right)", "at": { "axis": "x", "value": 0 }, "fixed": true },
     { "id": "rearFace", "kind": "face", "element": <enclosure>, "face": "back", "onPlane": "Rear", "fixed": true },
+    { "id": "mounting", "kind": "face", "element": <enclosure>, "face": "bottom", "at": { "axis": "z", "value": 0 }, "fixed": true },
     { "id": "symbol", "kind": "symbol", "instance": <symbol>, "at": [0, 0, 0], "fixed": true },
     { "id": "housing", "kind": "material", "element": <enclosure>, "equals": { "parameter": "Housing Material" } },
     { "id": "power", "kind": "connector", "connector": "Power",
@@ -209,14 +251,18 @@ revit_flex_model_family
     { "id": "exists", "kind": "exists", "elements": [<enclosure>, <void>, <symbol>] } ] }
 ```
 
-Check: `summary.refused` is 0 and every case is `ok`; `restored` is true. Record any `failedChecks` with their
-`expected`/`actual`/`difference`: a `power` `origin.z` failure means the connector does not follow Height/2 (constrain it,
-see [model-family-connectors.md](model-family-connectors.md), or record it as a limitation). Then
-`revit_get_model_family {"target": {"path": "C:\\temp\\fam\\ELV_Device.rfa"}, "include": ["types"]}`: the current type
-and every value are as after step 6.
+Check: `summary.refused` is 0 and every case is `ok`; `restored` is true. The insertion point and the mounting plane
+(#170) hold while flexing: `rearPlane`, `centrePlane`, `rearFace`, `mounting` and `symbol` have no `fixed` failure in
+any case. Record any `failedChecks` with their `expected`/`actual`/`difference`: a `power` `origin.z` failure means the
+connector does not follow Height/2 (constrain it, see [model-family-connectors.md](model-family-connectors.md), or
+record it as a limitation). Then `revit_get_model_family {"target": {"path": "C:\\temp\\fam\\ELV_Device.rfa"}, "include": ["types"]}`:
+the current type and every value are as before this step (Undo in Revit has nothing new either).
 
-Refusal: run the flex again with only `"ranges": [ { "parameter": "Width", "min": 0.5, "max": 1 } ]`. Both range cases
-are `refused`, `revitFailures[].constraints` names the dimension with `label: "Width"`, and `restored` is true.
+Refusal: run the flex again with only `"ranges": [ { "parameter": "Width", "min": 0.5, "max": 1 } ]` (no `checks`).
+Expected: the range cases are `refused`, `error` quotes Revit, `revitFailures[].constraints` names the dimension with
+`label: "Width"`, the type cases `ELV 200` and `ELV 300` are still `ok` (a refused case does not leak into the
+next), and `restored` is true. If Revit regenerates a 0.5 mm enclosure
+without complaint, record the case as accepted and repeat with a value below a locked inner dimension.
 
 ### 10. Save, reopen and inspect
 
@@ -276,16 +322,17 @@ revit_check_model_family_instances
     { "id": "notHosted", "kind": "hosted" },
     { "id": "housing", "kind": "material", "equals": { "parameter": "Housing Material" } },
     { "id": "power", "kind": "connector", "connector": "Power", "origin": [0, 0, { "parameter": "Height", "factor": 0.5 }],
-      "direction": [0, 1, 0], "domain": "electrical", "systemType": "powerBalanced",
+      "direction": [0, 1, 0], "domain": "electrical",
       "values": { "RBS_ELEC_VOLTAGE": { "parameter": "Voltage" }, "RBS_ELEC_APPARENT_LOAD": { "parameter": "Apparent Load" } } },
-    { "id": "data", "kind": "connector", "connector": "Data", "direction": [0, 1, 0], "systemType": "data" },
+    { "id": "data", "kind": "connector", "connector": "Data", "direction": [0, 1, 0], "domain": "electrical" },
     { "id": "one200", "kind": "count", "type": "ELV 200", "min": 1, "max": 1 },
     { "id": "one300", "kind": "count", "type": "ELV 300", "min": 1, "max": 1 } ] }
 ```
 
 Check: both instances `ok` (the rotated one too: geometry is read in family coordinates), `missingTypes` is empty,
 both counts `ok`. Note each instance's connector ids from `measurements.power.connectorId` and
-`measurements.data.connectorId`.
+`measurements.data.connectorId`. `systemType` is left out here: Revit documents the system type of an unconnected
+placed connector as undefined, so it is checked after step 14 (the family's classification was checked in step 9).
 
 ### 14. Connect power and data to their systems (#174)
 
@@ -299,11 +346,14 @@ revit_create_electrical_circuit
 { "elementIds": [<i200>], "connectorId": <data connectorId of i200>, "systemType": "Data", "panelName": "<data panel>", "document": "<test project>" }
 ```
 
-Repeat for `<i300>`. Then step 13 again with `"connected": true` added to the `power` and `data` checks: both pass and
-`measurements.power.system` and `measurements.data.system` name two different circuits; also
-`revit_get_circuit_info {"includeElements": true}` with each circuit selected, or
-`revit_get_electrical_circuits {"panelName": "<power panel>", "includeElements": true}` and the same for the data panel,
-lists each instance once.
+Repeat for `<i300>`. Then step 13 again with `"connected": true` and the system type added to the `power` check
+(`"systemType": "powerBalanced"`) and the `data` check (`"systemType": "data"`): both pass and
+`measurements.power.system` and `measurements.data.system` name two different circuits (#174: independent power and
+data connections on one device). If `measurements.power.systemType` is `powerCircuit` rather than `powerBalanced`,
+Revit reports the circuit's type on a connected connector: record it. Also
+`revit_get_circuit_info {"circuitId": <circuit id from the create result>, "includeElements": true, "document": "<test project>"}`
+for each circuit, or `revit_get_electrical_circuits {"panelName": "<power panel>", "includeElements": true, "document": "<test project>"}`
+and the same for the data panel, lists each instance once.
 
 ### 15. The company shared parameter in a schedule (and a tag)
 
@@ -337,13 +387,13 @@ Compiled from the feature docs' "Limitations" sections.
 | Category | `partType` only for MEP categories, `roomCalculationPoint` and `alwaysVertical` only where the category has them; a category change can drop parameters and reset the part type. Placement type is derived by Revit, never set. | [documents](model-family-documents.md) |
 | Category | A Generic Model category gives a warning for connectors: placed instances of that category may not join systems. Set the ELV category and part type first. | [connectors](model-family-connectors.md) |
 | References | Linear and angular dimensions only; an alignment never moves geometry (references must coincide within 0.1 mm); a labelled dimension cannot be locked; `isReference` values 12–14 are from Revit's behaviour, not the API docs. | [references](model-family-references.md) |
-| Forms | Profile replacement is not supported in a family document; blends' vertex mapping is Revit's choice; sweeps take sketched profiles only; in non-conceptual families a cut is made by combining, and `unjoin` deletes the combination. | [forms](model-family-forms.md) |
-| Profiles | DWG profiles and family curves (#177): see its doc. | [profiles](model-family-profiles.md) |
-| Parameters | Shared parameter definitions are read, never created; a parameter's group cannot be changed; formula parsing is name matching; `NewType` starting values are Revit's choice; built-in parameters cannot be removed or renamed. | [parameters](model-family-parameters.md) |
-| Materials | Created from colour, transparency, shininess, smoothness and class only (no appearance or physical assets); not deleted or renamed; a reloaded family keeps the project's per-type values unless `overwriteParameterValues`. | [materials](model-family-materials.md) |
-| Connectors | Hosted on planar faces of forms only; the initial position is Revit's choice and a connector is not guaranteed to be a dimension target; the host is inferred; load classifications must exist in the family. | [connectors](model-family-connectors.md) |
-| Components | Nested instance visibility is `visible` and `visibleParameter` only; nested type selection depends on Revit allowing the association; symbolic lines take one subcategory per group and lines, arcs and circles only. | [components](model-family-components.md) |
-| Flex | Bounding boxes come from tessellated solid edges; formula results and associated element values are read from the regenerated current type (Revit behaviour, verified live); `onFace` expects a connector to point out of its face. | [flex](model-family-flex.md) |
+| Forms | 3D model families only (annotation and detail families refused; conceptual mass and adaptive not covered); profile replacement is not supported in a family document; blends' vertex mapping is Revit's choice; sweeps take sketched profiles only and a path on one work plane; size checks are skipped on tilted planes; in non-conceptual families a cut is made by combining, and `unjoin` deletes the combination. | [forms](model-family-forms.md) |
+| Profiles | Extrusions only; no tool imports a DWG into a family (Insert > Import CAD by hand); units and scale are reported only where Revit exposes them (use `expected`); splines and ellipses are approximated by straight segments; overlapping or crossing curves are reported, not repaired; curves that divide an outline make minimal regions, not the outline; pair checks are skipped above 4000 segments; `removeSourceCurves` also deletes curves shared with other loops. | [profiles](model-family-profiles.md) |
+| Parameters | Shared parameter definitions are read, never created; a parameter's group cannot be changed; some refusals (a formula unit mismatch, an association Revit cannot make) show only when Revit is asked and roll the edit back; formula parsing is name matching; `NewType` starting values are Revit's choice; built-in parameters cannot be removed or renamed. | [parameters](model-family-parameters.md) |
+| Materials | Created from colour, transparency, shininess, smoothness and class only (no appearance or physical assets); not deleted or renamed; only forms are listed in `materialAssignments` (voids normally have no Material property); `defaults` changes the current type while it runs and restores it; a reloaded family keeps the project's per-type values unless `overwriteParameterValues`. | [materials](model-family-materials.md) |
+| Connectors | Hosted on planar faces of forms only; the initial position is Revit's choice and a connector is not guaranteed to be a dimension target; the host is inferred; `systemType` and `shape` of an existing connector change only where Revit accepts it; load classifications must exist in the family. | [connectors](model-family-connectors.md) |
+| Components | Nested instance visibility is `visible` and `visibleParameter` only; nested type selection depends on Revit allowing the association; locked alignments to non-centre instance references cannot be checked in advance; `fromProject` refuses a family open in the Family Editor; symbolic lines take one subcategory per group and lines, arcs and circles only. | [components](model-family-components.md) |
+| Flex | Bounding boxes come from tessellated solid edges (forms hidden by a visibility parameter still count); formula results and associated element values are read from the regenerated current type (Revit behaviour, verified live); `onFace` expects a connector to point out of its face; `reopenCopy` skips a document with unsaved changes and needs the file access policy to allow `%TEMP%` or the original's folder. | [flex](model-family-flex.md) |
 | Instances | A placed electrical connector's system type is undefined until connected; connector values by BuiltInParameter are converted to V, VA, A, W only; a level host does not count as a host. | [flex](model-family-flex.md) |
 | Revit 2024 / 2026 | The same API members are used in both versions; no version branches in any feature. `RBS_ELEC_APPARENT_LOAD` is labelled "Apparent Load" in 2024 and "Apparent Power" in 2026: use BuiltInParameter names. An `.rfa` saved by Revit 2026 cannot be opened by Revit 2024: build the 2024 run's family in 2024. | all |
 

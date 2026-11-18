@@ -24,7 +24,7 @@ internal sealed partial class RevitMcpTools
     [McpServerTool(Name = "revit_flex_model_family", ReadOnly = true),
      Description("Flex-tests a model family: runs every type (or types), each value of ranges (min/max of writable parameters, steps 2-5) and explicit cases, " +
                  "regenerates each case, evaluates checks and reports per case status ok|failed|refused, failedChecks (expected, actual, difference), " +
-                 "Revit's failures with the dimensions and alignments it names, and measurements. Restores and reads back every value after each case, " +
+                 "Revit's failures with the dimensions and alignments it names, and measurements. Rolls each case back and reads every value back, " +
                  "and rolls the whole trial back: changes nothing. reopenCopy repeats the type cases on a saved and reopened temporary copy and compares. " +
                  ModelFamilyUnitsNote)]
     public async Task<string> FlexModelFamily(

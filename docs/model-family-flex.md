@@ -35,13 +35,16 @@ A material value must be a material of the family.
 
 1. Before the first case the tool records the current type and, for every type a case changes, the stored value of
    every parameter it sets (raw, in Revit's internal units).
-2. Each case is **one transaction**: set the current type, set the values, regenerate, commit. Revit raises constraint
-   failures at commit ("Constraints are not satisfied"), so a case must be committed to learn whether it is valid. A case
-   Revit refuses is rolled back alone and reported as `refused`; the next case starts from the original state.
+2. Each case runs in its own **transaction group** inside the session's, holding **one transaction**: set the current
+   type, set the values, regenerate, commit. Revit raises constraint failures at commit ("Constraints are not
+   satisfied"), so a case must be committed to learn whether it is valid. A case Revit refuses is rolled back alone and
+   reported as `refused`.
 3. A committed case is measured: the checks read the regenerated family, then the case's status is `ok` or `failed`.
-4. **First net:** after every case that changed values, the original values of that type are written back in another
-   transaction and **read back**; a value that does not read back as it was is a hard problem that stops the run. At the
-   end the original current type is set back. `restored` says whether all of this held.
+4. **First net:** after measuring, the case's transaction group is rolled back. That undoes the case exactly: the
+   values it set, formula results, geometry Revit moved to satisfy constraints, and the current type. Every case starts
+   from the original state, so results do not depend on the order of the cases. The current type and the recorded
+   values are then **read back**; anything that does not read back as it was is a hard problem that stops the run.
+   `restored` says whether all of this held.
 5. **Second net:** the whole run happens inside a transaction group of `ModelFamilySession.Trial`, which is always rolled
    back before the tool returns, also in a family document the user has open. Nothing survives the call, even when a
    restore failed or Revit threw.
@@ -109,12 +112,14 @@ After the first trial has returned (never inside its transaction group):
 | `{family}` | The loaded family opened as a copy (`EditFamily`), `SaveAs` to the temporary folder, closed. Skipped when it is open in the Family Editor. |
 | `{familyDocument}` | `File.Copy` of its file, only when it has one and has no unsaved changes; the user's document is never saved. |
 
-The copy goes to `%TEMP%\RevitMCP\ModelFamilyFlex\<guid>\<name>.rfa` under its own name. When the file access policy
-does not allow that folder, a path or open-document copy goes beside the original as `<name>.flexcopy.<guid>.rfa`. The
-copy is opened as a path target, flexed with the same `types` and `checks` (not the ranges and explicit cases), and
-deleted afterwards. `reopen.types[]` says per type whether status, failed checks, measurements and parameter values are
-the same (0.01 tolerance) or lists the differences. `reopen.status` is `skipped` with the reason when no copy can be
-made.
+Whether the document has unsaved changes is decided before the first trial, so the trial itself can never be the
+reason. The copy goes to `%TEMP%\RevitMCP\ModelFamilyFlex\<guid>\<name>.rfa` under its own name, or as
+`<name>.flexcopy.rfa` there when the original is open in Revit (so two open documents do not share a file name). When
+the file access policy does not allow that folder, a path or open-document copy goes beside the original as
+`<name>.flexcopy.<guid>.rfa`. The copy is opened as a path target, flexed with the same `types` and `checks` (not the
+ranges and explicit cases), closed and deleted afterwards. `reopen.types[]` says per type whether status, failed
+checks, measurements and the parameter values both runs read are the same (0.01 tolerance) or lists the differences.
+`reopen.status` is `skipped` with the reason when no copy can be made.
 
 ### Example: the ELV device
 
