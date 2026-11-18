@@ -275,7 +275,8 @@ internal static class ModelFamilySession
                 familyName = FamilyTypeSupport.SafeName(family);
                 if (SafeInPlace(family)) problems.Add($"target.family: '{familyName}' is an in-place family; only loadable families can be edited.");
                 else if (!family.IsEditable) problems.Add($"target.family: '{familyName}' cannot be opened for editing.");
-                if (FindOpenFamilyDocument(uiapp, familyName) is { } openTitle)
+                // A read falls through to the open window (below); an edit must not touch it behind the user's back.
+                if (!reading && FindOpenFamilyDocument(uiapp, familyName) is { } openTitle)
                     problems.Add($"target.family: '{familyName}' is open in the Family Editor ('{openTitle}'). Close it first, or edit that window with familyDocument='{openTitle}'.");
                 break;
 
